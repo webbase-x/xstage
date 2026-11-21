@@ -921,12 +921,12 @@ html.xstage-native-auth-pending .android-tv-auth-panel{visibility:visible!import
 @media(max-width:700px){#video-original-toggle{top:99px;right:7px;padding:6px 7px;font-size:.64rem}}
 
 /* MIDI synth controls are shown only for MIDI/XMID playback. */
-#midi-transpose-control,#midi-instrument-control{display:inline-flex;align-items:center;gap:5px;max-width:100%}
-#midi-transpose-control[hidden],#midi-instrument-control[hidden]{display:none!important}
+#midi-transpose-control{display:inline-flex;align-items:center;gap:5px;max-width:100%}
+#midi-transpose-control[hidden]{display:none!important}
 #midi-transpose-control button{min-width:30px;min-height:30px;border-radius:8px;border:1px solid #397693;background:#163f58;color:#fff;cursor:pointer}
 #midi-transpose-label{min-width:24px;text-align:center;font-weight:700;white-space:nowrap}
 #midi-instrument{max-width:118px;font:inherit;background:#102e48;color:#fff;border:1px solid #3a7894;border-radius:6px;padding:5px}
-@media(max-width:650px){#midi-transpose-control,#midi-instrument-control{font-size:.72rem}#midi-instrument{max-width:100px}}
+@media(max-width:650px){#midi-transpose-control{font-size:.72rem}#midi-instrument{max-width:130px}}
 
 /* Public browser-side MIDI renderer status; never expose private file paths. */
 .xstage-midi-engine-status{
@@ -936,15 +936,8 @@ html.xstage-native-auth-pending .android-tv-auth-panel{visibility:visible!import
 }
 .xstage-midi-engine-status[hidden]{display:none!important}
 
-/* PC-style live MIDI keyboard. Based on the Windows Karaoke overlay;
-   independent of the existing text-search onscreen keyboard. */
-#midi-instrument-control.midi-instrument-control{display:inline-flex;align-items:center;gap:5px;max-width:100%;font-size:.7rem;color:#aac9da;white-space:nowrap}
-#midi-instrument-control[hidden],.midi-piano-panel[hidden]{display:none!important}
-.midi-instrument-trigger{display:inline-flex;align-items:center;gap:5px;max-width:145px;min-height:31px;padding:4px 7px;
-  border:1px solid #4386a0;border-radius:8px;color:#e3faff;background:linear-gradient(145deg,#193c56,#0d263d);
-  font-size:.73rem;cursor:pointer;white-space:nowrap}
-.midi-instrument-trigger span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis}
-.midi-instrument-trigger[aria-expanded="true"]{border-color:#54efd2;background:#185166}
+/* PC-style live MIDI keyboard; independent of the song-search keyboard. */
+.midi-piano-panel[hidden]{display:none!important}
 .midi-piano-panel{position:absolute;z-index:27;top:clamp(48px,8vh,78px);left:50%;transform:translateX(-50%);
   width:min(1010px,calc(100% - 20px));max-height:min(56vh,292px);
   display:flex;flex-direction:column;box-sizing:border-box;padding:9px 10px 7px;gap:6px;
@@ -975,7 +968,7 @@ html.xstage-native-auth-pending .android-tv-auth-panel{visibility:visible!import
 .midi-piano-key.sounding{background:#ff354b!important;border-color:#f9a8b3!important;color:#fff!important}
 .midi-piano-key.preview{background:#42d9c3!important;border-color:#c2ffef!important;color:#06343e!important}
 .midi-piano-key:focus-visible,.midi-piano-toolbar button:focus-visible,
-.midi-instrument-trigger:focus-visible{outline:2px solid #6df2da;outline-offset:2px}
+ .midi-keyboard-top-toggle:focus-visible{outline:2px solid #6df2da;outline-offset:2px}
 .midi-piano-info{min-height:13px;margin:0;color:#9cbacd;font-size:.65rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:750px){
   .midi-piano-panel{top:52px;max-height:min(67vh,310px);padding:7px 6px;gap:5px;width:calc(100% - 10px)}
