@@ -13,6 +13,30 @@ from karaoke.smf import MidiEvent, MidiSong
 
 
 class FullSongMedleyTests(unittest.TestCase):
+    def test_optional_drum_fill_analysis_failure_keeps_next_song_preloaded(self):
+        from pathlib import Path
+        from karaoke.medley_decks import build
+
+        class FakeMidiPlayer:
+            def __init__(self, output=None):
+                self.load = Mock()
+                self.set_channel = Mock()
+                self.set_key = Mock()
+                self.set_speed = Mock()
+                self.set_volume = Mock()
+                self.close = Mock()
+                self.speed = 1.0
+
+        with patch('karaoke.bass.BassSynth'), \
+             patch('karaoke.playback.MidiPlayer', FakeMidiPlayer), \
+             patch('karaoke.medley_full.source_bounds', return_value=TrimBounds(0, 5, 6, 1)), \
+             patch('karaoke.medley_full.drum_fill', side_effect=ValueError('invalid drum events')):
+            engine, rhythm = build(Path('native'), {}, Path('queued.mid'), 0, 100,
+                                   False, None, full_song=True, fill=True)
+        self.assertIsInstance(engine, FakeMidiPlayer)
+        self.assertIsNone(rhythm)
+        engine.close.assert_not_called()
+
     def test_midi_wrapper_constructor_failure_releases_soundfont_device(self):
         from pathlib import Path
         from karaoke.medley_decks import build
