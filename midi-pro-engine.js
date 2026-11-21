@@ -423,7 +423,10 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           // A failed/no-network next song must never leave SoundFont
           // playback or an AudioContext running indefinitely.
           bridgeTimer=setInterval(tick,75);
-          bridgeDeadline=setTimeout(releaseEngine,16000);
+          // When Google Drive is temporarily slow, keep the outgoing
+          // SoundFont beat alive while the next track prepares. Still bound
+          // the worklet lifetime to avoid an endless unattended drum loop.
+          bridgeDeadline=setTimeout(releaseEngine,60000);
           tick();
           const prepareNextMidi=async(nextSource,bank,{signal:nextSignal=null}={})=>{
             if(fullyReleased||disposed||transferred)
