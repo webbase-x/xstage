@@ -101,13 +101,15 @@ const nextEnd=app.indexOf('// Release the finished media and lyrics',nextBegin);
 assert.ok(nextBegin>=0&&nextEnd>nextBegin);
 const runner=new Function('state','scheduleQueuePreload','renderQueue',
   'playSong','clearIdleStage','nextMedleyCandidate','MEDLEY_RECENT_LIMIT','releaseFinishedMedia',
+  'getFileId','window',
   app.slice(nextBegin,nextEnd)+'\nreturn playNext;');
 const active={song,token:'token-001',promise:Promise.resolve({blob:audio,
   lyrics:mimeDoc,song,token:'token-001'}),controller:new AbortController()};
 let accepted=null;
 const transition=runner(state,()=>{},()=>{},(picked,opts)=>{
   accepted={picked,opts};
-},()=>{},()=>null,10,()=>{});
+},()=>{},()=>null,10,()=>{},file=>file?.fileId||null,
+  {XStageIOSMidiAudio:{keepPlayingBetweenSongs(){}}});
 state.queue=[song,{code:'00002',title:'ถัดไป'}];
 state.queuePreload=active;state.queuePrepared=null;
 transition();
