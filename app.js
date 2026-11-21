@@ -1214,8 +1214,10 @@ $('gate-shared-library')?.addEventListener('click',openSharedLibraryPicker);
 // Older snapshots contain songs[]; newer pointers may include immutable deltas.
 // Catalog media URLs remain private and are never exposed outside this account.
 async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
-  if(pointer?.schemaVersion!==1 || typeof pointer.catalogFileId!=='string' || !pointer.catalogFileId)
-    throw Error('รูปแบบ current.json ไม่รองรับ');
+  if(pointer?.schemaVersion!==1||pointer?.layoutVersion!==5||
+     pointer?.format!=='xstage-sqlite3-v1'||typeof pointer.catalogFileId!=='string'||
+     !pointer.catalogFileId)
+    throw Error('ฐานเพลงต้องเป็น SQLite3 · ไม่รองรับ catalog JSON เดิม');
   const deltaIds=pointer.deltaFileIds||[];
   if(!Array.isArray(deltaIds)||deltaIds.length>32||new Set(deltaIds).size!==deltaIds.length)
     throw Error('รายการอัปเดตฐานเพลงบน Drive ไม่ถูกต้อง');
@@ -1237,7 +1239,12 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
       report(label+' · ใช้ส่วนที่โหลดไว้แล้ว',true);
       return persisted;
     }
-    const data=await privateJson(id,token);
+    const codec=window.XStageDriveSQLite;
+    if(!codec)throw Error('ไม่พบตัวอ่าน SQLite3 กรุณาโหลดหน้าเว็บใหม่');
+    const response=await privateFile(id,token);
+    const buffer=await response.arrayBuffer();
+    if(buffer.byteLength>192*1048576)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกิน 192 MB');
+    const data=await codec.read(new Uint8Array(buffer));
     state.catalogCache.set(id,data);
     await saveCatalogPiece(sub,id,data);
     if(state.catalogCache.size>40){
@@ -1248,8 +1255,8 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
     return data;
   }
   const base=await fetchImmutable(pointer.catalogFileId,'ฐานหลัก');
-  if(base?.schemaVersion!==1||!Array.isArray(base.songs))
-    throw Error('ฐานเพลงหลักบน Drive ไม่รองรับ');
+  if(base?.schemaVersion!==1||base.kind!=='snapshot'||!Array.isArray(base.songs))
+    throw Error('ฐานข้อมูล SQLite3 หลักบน Drive ไม่รองรับ');
   if(!deltaIds.length){
     if(Number.isSafeInteger(pointer.songCount)&&base.songs.length!==pointer.songCount)
       throw Error('ฐานเพลงชุดนี้มีจำนวนเพลงไม่ตรงกับข้อมูลเผยแพร่');
@@ -1262,8 +1269,9 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
   for(let deltaIndex=0;deltaIndex<deltaIds.length;deltaIndex++){
     const id=deltaIds[deltaIndex];
     const delta=await fetchImmutable(id,'ส่วนอัปเดต '+(deltaIndex+1)+'/'+deltaIds.length);
-    if(delta?.schemaVersion!==1 || !Array.isArray(delta.upserts)||!Array.isArray(delta.removes))
-      throw Error('ข้อมูลอัปเดตเพลงบางชุดไม่ถูกต้อง');
+    if(delta?.schemaVersion!==1||delta.kind!=='delta'||
+       !Array.isArray(delta.upserts)||!Array.isArray(delta.removes))
+      throw Error('ฐานข้อมูลอัปเดต SQLite3 ไม่ถูกต้อง');
     for(const key of delta.removes){
       if(typeof key!=='string')throw Error('ข้อมูลลบเพลงไม่ถูกต้อง');
       songs.delete(key);
@@ -3868,7 +3876,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1131';
+    script.src='./assets/vendor/qrcode.min.js?v=1132';
     script.async=true;
     let done=false;
     const finish=error=>{
