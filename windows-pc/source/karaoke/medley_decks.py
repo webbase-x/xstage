@@ -224,12 +224,26 @@ class Decks:
         if not active.playing:return
         self.elapsed+=dt
         if self.rhythm:
-            from .medley import bpm_at
-            bpm=bpm_at(active)
-            if bpm:
-                speed=max(.5,min(1.5,bpm/self.rhythm.song.initial_bpm))
-                if abs(speed-self.rhythm.speed)>.0001:self.rhythm.set_speed(speed)
-            self.rhythm.set_volume(base)
+            try:
+                from .medley import bpm_at
+                bpm=bpm_at(active)
+                if bpm:
+                    speed=max(.5,min(1.5,bpm/self.rhythm.song.initial_bpm))
+                    if abs(speed-self.rhythm.speed)>.0001:
+                        self.rhythm.set_speed(speed)
+                self.rhythm.set_volume(base)
+            except (OSError, ValueError, RuntimeError, ZeroDivisionError):
+                failed, self.rhythm = self.rhythm, None
+                try:
+                    failed.close()
+                except Exception:
+                    pass
+                target, self.rhythm_target = self.rhythm_target, None
+                if target is not None:
+                    try:
+                        target.set_channel(9, muted=self.drum_was_muted)
+                    except (OSError, ValueError, RuntimeError):
+                        pass
         if self.tail:
             ratio=min(1,self.elapsed/self.fade)
             self.tail.set_volume(base*math.sqrt(1-ratio));active.set_volume(base*math.sqrt(ratio))
