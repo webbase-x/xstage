@@ -21,6 +21,9 @@ assert.equal(info.fileBytes,0);
 assert.equal(ctx.XStageMemory.plan().queueLimit,2);
 assert.ok(midi.includes("fontCache?.bytes===fontBytes&&fontCache.parsed"),
   'Selected SF2/SF3 must be parsed only once and reused for later songs');
+assert.ok(midi.includes('warmRealtimeSamples')&&
+  midi.includes('await sampleBuffer(font,index,ctx)'),
+  'Cold MIDI sample prewarm must happen before the first song');
 assert.ok(midi.includes("font.cacheBytes+weight>limit")&&
   midi.includes("font.cacheBytes-=removed.length*removed.numberOfChannels*4"),
   'Decoded AudioBuffer samples must have a hard memory budget');
