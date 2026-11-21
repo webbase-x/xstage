@@ -37,7 +37,7 @@ class ContextMenuTests(unittest.TestCase):
         methods = ('search_popup save_settings stage_settings schedule_search choose_background background_options clear_background '
             'insert_queue_window history_window media_audio_window soundfont_mapping_window stage_fx_window medley_window record_window equalizer_window audio_diagnostics_window remote_window choose_lyrics lyric_editor show_controls backup_data restore_data help capabilities connect_catalog '
             'manage_songs add_folder add_files rebuild_library show_import_report song_details edit_song favorite_selected current_song_details choose_midi_output open_mixer '
-            'open_midi_keyboard audio_settings play_pause next_song cancel_current_song stop apply_melody mark_loop_start mark_loop_end clear_loop '
+            'open_midi_keyboard audio_settings instrument_tone_window play_pause next_song cancel_current_song stop apply_melody mark_loop_start mark_loop_end clear_loop '
             'show_queue browse_queue add_selected play_search_now import_queue export_queue set_stage_enabled '
             'set_stage_fullscreen choose_stage_monitor attributes pin_transport dismiss_overlays minimize_main about_program close_app '
             'random_medley_window popular_medley_window start_continuous_medley stop_continuous_medley cancel_random_medley '
