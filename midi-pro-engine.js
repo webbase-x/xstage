@@ -261,9 +261,12 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           if(stopped||disposed||player.paused)return;
           const t=Number(sequencer.currentTime)||0;
           // Never layer the beat under the actual MIDI arrangement.
-          const leading=firstNote>1.35&&t<firstNote-.12;
-          const trailing=parsed.duration-finalNote>0.85&&
-            t>finalNote+.08&&t<parsed.duration-.08;
+          // Many SMFs deliberately start one beat after time zero or leave
+          // an automatic 1s padding at the tail. Fill those short silent
+          // spaces too, but never overlap the recorded MIDI notes.
+          const leading=firstNote>.48&&t<firstNote-.10;
+          const trailing=parsed.duration-finalNote>.38&&
+            t>finalNote+.07&&t<parsed.duration-.04;
           if(!leading&&!trailing){lastGapBeat=-1;return;}
           const seconds=leading?introBeat:bridgeBeat;
           const beatIndex=Math.floor(t/seconds);
