@@ -5,9 +5,13 @@ on:
     branches: [main]
     paths:
       - "index.html"
+      - "karaoke.html"
       - "stage.html"
       - "config.js"
       - "version.json"
+      - "package.json"
+      - "browser-midi.js"
+      - "midi-keyboard-ui.js"
       - "app.js"
       - "pc-extensions.js"
       - "stage-controls.js"
@@ -19,13 +23,19 @@ on:
       - "xstage-ux.css"
       - "package.json"
       - "scripts/regression.mjs"
+      - "scripts/karaoke-responsive-search-test.mjs"
+      - "scripts/midi-keyboard-ui-test.mjs"
       - ".github/workflows/xstage-regression.yml"
   pull_request:
     paths:
       - "index.html"
+      - "karaoke.html"
       - "stage.html"
       - "config.js"
       - "version.json"
+      - "package.json"
+      - "browser-midi.js"
+      - "midi-keyboard-ui.js"
       - "app.js"
       - "pc-extensions.js"
       - "stage-controls.js"
@@ -37,6 +47,8 @@ on:
       - "xstage-ux.css"
       - "package.json"
       - "scripts/regression.mjs"
+      - "scripts/karaoke-responsive-search-test.mjs"
+      - "scripts/midi-keyboard-ui-test.mjs"
       - ".github/workflows/xstage-regression.yml"
   workflow_dispatch:
 
