@@ -174,17 +174,18 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
       // Prefer audio-thread sequencing. No UI-thread note scheduler runs in
       // this mode. A clock event loop in the app is for lyrics only.
       if(sequencer){
-        let stopped=false,started=false,completionPending=false;
+        let stopped=false,started=false,completionPending=false,completionDelivered=false;
         let shiftApplied=null,programApplied=null;
         const finishListenerId='xstage-midi-natural-finish';
         const naturalEnd=()=>{
-          if(stopped||!started||player.paused||completionPending)return;
-          completionPending=true;
+          if(stopped||!started||player.paused||completionPending||completionDelivered)return;
+          completionPending=true;completionDelivered=true;
           // Avoid destroying an AudioWorklet inside its own event dispatch.
           void Promise.resolve().then(()=>{
             completionPending=false;
             if(stopped||!started||player.paused)return;
             if(player.loop){
+              completionDelivered=false;
               sequencer.currentTime=0;
               player.currentTime=0;
               sequencer.play();
@@ -229,7 +230,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
         };
         const play=()=>{
           if(stopped||started)return;
-          started=true;
+          started=true;completionDelivered=false;
           updateVolume();applyKey();applyProgram();
           sequencer.playbackRate=clamp(Number(player.playbackRate)||1,.25,2);
           sequencer.currentTime=clamp(Number(player.currentTime)||0,0,parsed.duration);
