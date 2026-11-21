@@ -279,3 +279,8 @@
 
 - [`853f7ecd`](https://github.com/webbase-x/xstage/commit/853f7ecda3805ba269bcab0a0e18dab83046a3c4) adds validated per-note drum bus overrides on MIDI channel 9 (zero-based), with per-channel fallback and stereo-compatible defaults; [`72ef31e1`](https://github.com/webbase-x/xstage/commit/72ef31e18e6793ec6cb5fc07c1abfb768a42b2d6) adds unit coverage for overrides and malformed mappings.
 - **P1.2 IN PROGRESS, PENDING-QA:** route resolution is implemented but no multichannel native audio backend is connected; ASIO and real-device acceptance remain pending. Continue source implementation without waiting for intermediate tests as requested.
+
+## 2026-11-21 — P1 native device selection foundation (PENDING-QA)
+
+- [`8acef6b0`](https://github.com/webbase-x/xstage/commit/8acef6b04ba3f41f3cc99f94f0d2fafa136c2578) adds optional explicit native BASS device IDs to the reference-counted device manager while preserving the existing default and offline decode behavior. [`8c9e13ca`](https://github.com/webbase-x/xstage/commit/8c9e13ca1ac1bcf27ae132c3396bb7a459285b6f) adds contract tests for separate device ownership, reentrant acquisition and invalid selection.
+- **PENDING-QA:** native bus-to-device renderer and ASIO are still not connected; test results deferred to consolidated verification as requested. No stable release.
