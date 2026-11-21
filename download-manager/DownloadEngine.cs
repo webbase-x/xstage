@@ -721,6 +721,9 @@ public sealed class DownloadEngine
             job.SegmentsUsed = 0;
             job.SegmentDownloadedBytes = Array.Empty<long>();
             Interlocked.Exchange(ref job.DownloadedBytes, 0);
+            // Do not carry the previous source's speed/ETA baseline into
+            // the newly probed file.
+            job.PreviousBytes = 0;
         }
         Directory.CreateDirectory(work);
         job.TotalBytes = probe.Total;
