@@ -1,0 +1,133 @@
+"""Verify isolated 31-band SoundFont EQ per MIDI channel (no live hardware)."""
+import copy
+import threading
+import unittest
+from types import SimpleNamespace as NS
+from unittest.mock import Mock, patch, call
+
+from karaoke.bass import BassSynth
+from karaoke.graphic_eq import flat
+from karaoke.midi_channel_eq import normalized, changed, get, apply_to_player
+from karaoke.playback import MidiPlayer
+
+
+class FakeOutput:
+    def __init__(self):
+        self.fx = []
+    def send(self, data):
+        pass
+    def reset(self):
+        pass
+    def close(self):
+        pass
+    def set_channel_eq(self, channel, state):
+        self.fx.append((channel, copy.deepcopy(state)))
+
+
+class ChannelEQPresetTests(unittest.TestCase):
+    def test_sparse_presets_and_stable_channel_lookup(self):
+        self.assertEqual(normalized(None), {})
+        state = flat()
+        state['bands'][17]['gain_db'] = 6
+        new = changed({}, 0, state)
+        self.assertEqual(new['0'], state)
+        self.assertEqual(get(new, 0)['bands'][17]['gain_db'], 6)
+        self.assertEqual(get(new, 1), flat())
+        empty = changed(new, 0, flat())
+        self.assertEqual(empty, {})
+        self.assertIn('0', new)
+
+    def test_rejects_bad_channel_and_curve(self):
+        for value in ([], {'16': flat()}, {'-1': flat()}, {'foo': flat()},
+                      {'1': {}}, {True: flat()}):
+            with self.subTest(data=value), self.assertRaises(ValueError):
+                normalized(value)
+
+    def test_channel_eq_reaches_only_selected_native_channel(self):
+        state = flat()
+        state['bands'][15]['gain_db'] = 4
+        player = MidiPlayer(output=FakeOutput())
+        apply_to_player(player, {'5': state})
+        self.assertEqual(player.output.fx, [(5, state)])
+        self.assertIsNone(player.channel_eq[4])
+        self.assertEqual(player.channel_eq[5], state)
+        player._reset_state()
+        self.assertEqual(len(player.output.fx), 1, 'Seek must not reallocate FX')
+
+    def test_windows_midi_does_not_claim_independent_eq(self):
+        player = MidiPlayer(output=Mock(spec=['send','reset','close']))
+        with self.assertRaises(OSError):
+            apply_to_player(player, {'0': changed({},0,flat())['0']} if False else
+                            {'0': dict(flat(), output_db=-3)})
+        self.assertEqual(player.channel_eq, [None] * 16)
+
+
+class ChannelEQNativeTests(unittest.TestCase):
+    @staticmethod
+    def fake():
+        synth = BassSynth.__new__(BassSynth)
+        synth.stream = 44
+        synth.lock = threading.RLock()
+        synth._channel_processors = {}
+        synth._fx_library = object()
+        synth._load_fx_library = Mock(return_value=synth._fx_library)
+        synth.dll = NS(BASS_StreamFree=Mock(return_value=1),
+                       BASS_ErrorGetCode=Mock(return_value=5))
+        synth.midi = NS(BASS_MIDI_StreamGetChannel=Mock(return_value=77))
+        return synth
+
+    def test_fx_processor_installs_on_selected_midi_channel_only(self):
+        synth = self.fake()
+        state = flat()
+        state['bands'][10]['gain_db'] = 5
+        with patch('karaoke.parametric_eq.Processor') as processor:
+            synth.set_channel_eq(6, state)
+            synth.midi.BASS_MIDI_StreamGetChannel.assert_called_once_with(44, 6)
+            args, kwargs = processor.call_args
+            self.assertEqual(args[0].stream, 77)
+            self.assertTrue(kwargs['graphic'])
+            self.assertEqual(kwargs['rate_override'], 48000)
+            processor.return_value.set.assert_called_once_with(state)
+            again = copy.deepcopy(state)
+            again['bands'][10]['gain_db'] = -6
+            synth.set_channel_eq(6, again)
+            synth.midi.BASS_MIDI_StreamGetChannel.assert_called_once()
+            self.assertEqual(processor.return_value.set.call_count, 2)
+            # Flat must remove FX/channel stream and free CPU.
+            synth.set_channel_eq(6, flat())
+            processor.return_value.close.assert_called_once()
+            synth.dll.BASS_StreamFree.assert_called_once_with(77)
+            self.assertEqual(synth._channel_processors, {})
+
+    def test_bypass_unhooks_channel_but_keeps_stored_curve_outside_native(self):
+        synth = self.fake()
+        state = flat()
+        state['bands'][0]['gain_db'] = 8
+        with patch('karaoke.parametric_eq.Processor') as processor:
+            synth.set_channel_eq(0, state)
+            bypass = copy.deepcopy(state)
+            bypass['bypass'] = True
+            synth.set_channel_eq(0, bypass)
+            processor.return_value.close.assert_called_once()
+            self.assertEqual(synth._channel_processors, {})
+            self.assertEqual(synth.dll.BASS_StreamFree.call_count, 1)
+
+    def test_native_failure_releases_stream_and_does_not_cache(self):
+        synth = self.fake()
+        state = flat()
+        state['bands'][0]['gain_db'] = 8
+        with patch('karaoke.parametric_eq.Processor', side_effect=OSError('bad FX')):
+            with self.assertRaisesRegex(OSError, 'bad FX'):
+                synth.set_channel_eq(1, state)
+        synth.dll.BASS_StreamFree.assert_called_once_with(77)
+        self.assertEqual(synth._channel_processors, {})
+
+    def test_no_stream_created_for_default_flat_eq(self):
+        synth = self.fake()
+        synth.set_channel_eq(2, flat())
+        synth._load_fx_library.assert_not_called()
+        synth.midi.BASS_MIDI_StreamGetChannel.assert_not_called()
+
+
+if __name__ == '__main__':
+    unittest.main()
