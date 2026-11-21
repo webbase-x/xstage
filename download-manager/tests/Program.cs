@@ -291,7 +291,7 @@ try
     // A queued job canceled while another host owns all slots must never
     // consume capacity when that host finishes. Check both slot and host counts.
     var cancelledBehindHost = new TransferSlotQueue(1, 1);
-    using (var busy = await cancelledBehindHost.EnterAsync("busy", "busy.test", 1, CancellationToken.None))
+    using (var occupiedSlot = await cancelledBehindHost.EnterAsync("busy", "busy.test", 1, CancellationToken.None))
     {
         using var cancelledToken = new CancellationTokenSource();
         var abandoned = cancelledBehindHost.EnterAsync("abandoned", "waiting.test", 0, cancelledToken.Token);
@@ -305,7 +305,7 @@ try
         catch (OperationCanceledException) { }
         if (cancelledBehindHost.WaitingCount != 1 || survivor.IsCompleted)
             throw new Exception("Canceling a waiting transfer changed active capacity.");
-        busy.Dispose();
+        occupiedSlot.Dispose();
         using var resumed = await survivor.WaitAsync(TimeSpan.FromSeconds(3));
         if (cancelledBehindHost.ActiveCount != 1)
             throw new Exception("Surviving queued transfer failed to acquire released capacity.");
