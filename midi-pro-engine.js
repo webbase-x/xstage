@@ -213,8 +213,13 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
         // This keeps the outgoing synth alive only until the new track begins,
         // preventing repeated SF2 downloads or an endless waiting loop.
         const tempoMap=parsed.tempoMap||[];
-        const firstNote=Math.min(...parsed.notes.map(note=>note.start));
-        const finalNote=Math.max(...parsed.notes.map(note=>note.end));
+        // Hundreds of thousands of notes must not overflow function arguments.
+        const silenceBounds=parsed.notes.reduce((bounds,note)=>{
+          bounds.first=Math.min(bounds.first,note.start);
+          bounds.last=Math.max(bounds.last,note.end);
+          return bounds;
+        },{first:Infinity,last:0});
+        const firstNote=silenceBounds.first,finalNote=silenceBounds.last;
         const beatAt=time=>{
           let tempo=500000;
           for(const point of tempoMap){
