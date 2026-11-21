@@ -124,3 +124,9 @@
 
 - Code commit [`5e6de970`](https://github.com/webbase-x/xstage/commit/5e6de97079c30f824921090e7ee9b63eb5f7828e): `karaoke/bass.py` now attempts all cleanup stages after an EQ processor raises, preserving the first exception. Test commit [`ffe512b0`](https://github.com/webbase-x/xstage/commit/ffe512b09b784efc98bef9cf0905bebb7ee2668e): injected failing EQ close verifies stream/font/device/DLL cleanup and idempotent repeat close.
 - Regression/Windows Actions result **PENDING**, no test count or hardware pass claimed. P0.5.1 remains IN PROGRESS; 24/27 outstanding.
+
+## 2026-11-21 — P0.5.1 additional teardown failure regression
+
+- Added injected stream-free and SoundFont-free failures to `tests/test_midi_channel_eq.py` in [`27a2baaf`](https://github.com/webbase-x/xstage/commit/27a2baafa11734d87602e8ffc07855e4f585903b); refined explicit assertion in [`74bf795a`](https://github.com/webbase-x/xstage/commit/74bf795a4816b2b777cc771e8241b67cb5235299). Test expects first stream error, attempts both font releases, releases device and clears DLL directory.
+- GitHub commit workflow lookup returned no runs for `74bf795a`; **Windows CI NOT VERIFIED**, full regression count unavailable, physical audio not tested. P0.5.1 remains IN PROGRESS; P0.4 deferred; 24/27 outstanding.
+- Next: execute relevant unit test and complete Windows CI on exact commit, fix any failures before marking PASS or proceeding to SoundFont memory work.
