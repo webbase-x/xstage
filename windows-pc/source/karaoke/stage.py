@@ -63,6 +63,9 @@ class StageCanvas(LyricsCanvas):
         self._line_boxes = ()
 
     def show_frame(self, current, upcoming, prefix='', title='', word='', fraction=0., preferences=None):
+        # The legacy two-line playback API must not retain lines from a previous
+        # opt-in 3/4-line timeline (e.g. after switching songs or display modes).
+        self.extra_lines = ()
         self.state = current, upcoming, prefix, title
         self.progress_word, self.progress_fraction = word, fraction
         self.preferences = preferences or {}
