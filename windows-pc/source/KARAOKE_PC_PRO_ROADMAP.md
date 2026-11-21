@@ -268,3 +268,9 @@
 
 - [`2387ff36`](https://github.com/webbase-x/xstage/commit/2387ff36cdba9b82690b3dd16411423723a61d5a) rejects non-object restore journal state and unknown statuses before indexing, instead of raising an uncontrolled TypeError/KeyError. [`266ea432`](https://github.com/webbase-x/xstage/commit/266ea43246c299178ba8d951d9d4cf8152478d3f) tests list/null/string/unknown status while preserving live data.
 - New regression is PENDING-QA; continue independent work without waiting. Stable release requires actual CI and hardware acceptance evidence.
+
+## 2026-11-21 — P1.1 engineering started (PENDING-QA)
+
+- User requested continuous P0–P6 engineering without waiting for interim tests; retain all release and real-device gates for final consolidated verification.
+- [`35026576`](https://github.com/webbase-x/xstage/commit/35026576572a1ea69a5b1b6d00f95053b3030393) introduces immutable, validated 2/4/8/16 logical output-bus routing for MIDI channels 0–15, with backwards-compatible stereo default. [`6de61f68`](https://github.com/webbase-x/xstage/commit/6de61f68a823af3b5da606d9d35e179a8c85a57e) adds model contract tests.
+- **P1.1 IN PROGRESS, PENDING-QA**: model only; physical multichannel output graph, device selection and ASIO backend are not implemented by these commits. P0.4/P0.5/P0.6 verification remains outstanding; stable release blocked.
