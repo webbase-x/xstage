@@ -44,6 +44,19 @@ if (DownloadFileNaming.CleanName("company.txt") != "company.txt" ||
     DownloadFileNaming.CleanName("LPT10.txt") != "LPT10.txt")
     throw new Exception("Filename sanitization must not rename ordinary files.");
 
+// A pre-existing directory with the same name is also a collision on Windows.
+var collisionRoot = Path.Combine(Path.GetTempPath(), "xstage-dm-name-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(collisionRoot);
+try
+{
+    Directory.CreateDirectory(Path.Combine(collisionRoot, "archive.zip"));
+    File.WriteAllText(Path.Combine(collisionRoot, "archive (1).zip"), "existing");
+    var unique = DownloadFileNaming.UniqueOutput(collisionRoot, "archive.zip");
+    if (Path.GetFileName(unique) != "archive (2).zip")
+        throw new Exception("UniqueOutput must skip existing directories and files.");
+}
+finally { Directory.Delete(collisionRoot, true); }
+
 var bytes = new byte[9 * 1024 * 1024];
 for (int i = 0; i < bytes.Length; i++) bytes[i] = (byte)(i % 251);
 using var server = new FileServer(bytes);
