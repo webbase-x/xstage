@@ -101,7 +101,7 @@ const nextEnd=app.indexOf('// Release the finished media and lyrics',nextBegin);
 assert.ok(nextBegin>=0&&nextEnd>nextBegin);
 const runner=new Function('state','scheduleQueuePreload','renderQueue',
   'playSong','clearIdleStage','nextMedleyCandidate','MEDLEY_RECENT_LIMIT','releaseFinishedMedia',
-  'getFileId','window',
+  'getFileId','window','stopSoundFontFill',
   app.slice(nextBegin,nextEnd)+'\nreturn playNext;');
 const active={song,token:'token-001',promise:Promise.resolve({blob:audio,
   lyrics:mimeDoc,song,token:'token-001'}),controller:new AbortController()};
@@ -109,7 +109,7 @@ let accepted=null;
 const transition=runner(state,()=>{},()=>{},(picked,opts)=>{
   accepted={picked,opts};
 },()=>{},()=>null,10,()=>{},file=>file?.fileId||null,
-  {XStageIOSMidiAudio:{keepPlayingBetweenSongs(){}}});
+  {XStageIOSMidiAudio:{keepPlayingBetweenSongs(){}}},()=>{});
 state.queue=[song,{code:'00002',title:'ถัดไป'}];
 state.queuePreload=active;state.queuePrepared=null;
 transition();
@@ -119,7 +119,7 @@ assert.equal(accepted.opts.pending,active,'Playback must consume same in-flight 
 assert.equal(active.controller.signal.aborted,false,'Do not abort promoted XSK pre-render');
 assert.equal(state.queue.length,1);
 
-assert.ok(app.includes('song.midi||song.xsk'),
-  'Medley must not accidentally fetch XSK as an ordinary audio file');
+assert.ok(app.includes('task.promise=prepareQueuedSong(song,token,controller.signal)'),
+  'Medley must prepare XMID/XSK2 with the same format-aware preloader as the queue');
 
 console.log('PASS: XSK queue-first pre-render, on-demand fallback, code/title/artist integrity, bounded memory and cleanup');
