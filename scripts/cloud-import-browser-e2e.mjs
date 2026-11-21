@@ -257,7 +257,9 @@ try{
   await page.click('#cloud-import-video-save');
   await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='4');
   assert.equal(await page.locator('#cloud-import-blocked').textContent(),'1');
+  await page.click('#cloud-import-select-all');
   await page.check('#cloud-import-allow-create');
+  await page.locator('#cloud-import-start:not([disabled])').waitFor({timeout:15000});
   await page.click('#cloud-import-start');
   try{
     await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น'),
@@ -310,6 +312,7 @@ try{
   await page.locator('#mobile-stage-menu').waitFor({state:'visible'});
   await page.click('#cloud-import-open');
   await page.locator('#cloud-import-dialog[open]').waitFor();
+  await page.click('#cloud-import-select-all');
   await page.click('#cloud-import-start');
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น')&&
     document.getElementById('cloud-import-status').textContent.includes('ข้ามซ้ำ 4'),{timeout:60000});
@@ -321,6 +324,7 @@ try{
   fs.writeFileSync(path.join(dir,'K300.lrc'),'[00:01.00]เพลงที่หยุดกลางทาง\n');
   await page.locator('#cloud-import-input').setInputFiles(dir);
   await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='5');
+  await page.click('#cloud-import-select-all');
   await page.click('#cloud-import-start');
   await page.locator('#cloud-import-pause:not([disabled])').waitFor();
   await page.click('#cloud-import-pause');
