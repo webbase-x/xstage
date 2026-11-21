@@ -141,3 +141,8 @@
 
 - [`80a509d5`](https://github.com/webbase-x/xstage/commit/80a509d5ed7a04d2045d2c72b42d975d8e2fab56) changes `_release_channel_eq()` to attempt cleanup of all MIDI channel processors after the first failure, then re-raise the first error. [`5a2b08e2`](https://github.com/webbase-x/xstage/commit/5a2b08e29e1b78d3eafc7c712418050a6125d34d) adds a two-channel failure regression asserting both channels and master stream free.
 - **No test execution verified:** container cannot resolve github.com for a checkout, and available GitHub connector has no workflow dispatch/list-push-runs action. Do not mark PASS based only on committed tests. P0.5.1 IN PROGRESS, 24/27 outstanding.
+
+## 2026-11-21 — P0.5 SoundFont long-batch handle regression
+
+- [`d5c5e1dd`](https://github.com/webbase-x/xstage/commit/d5c5e1ddbe77c7fbc56afecb3683518e3c5f5709) adds a 100-song offline batch mock regression in `tests/test_soundfont.py`: one SoundFont initialization, 101 MIDI streams, 100 stream frees during transitions, final stream/font/device free at shutdown.
+- This is a resource-handle lifecycle assertion, **not** a Windows RAM measurement or 30-minute live-audio soak. Test execution and CI remain unverified; P0.5 IN PROGRESS, P0.4 deferred, 24/27 outstanding.
