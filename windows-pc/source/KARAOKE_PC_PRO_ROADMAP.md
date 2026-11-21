@@ -289,3 +289,8 @@
 
 - [`f663b89f`](https://github.com/webbase-x/xstage/commit/f663b89fe91275e5ae1b500fcb4bcb268eb2b032) forwards an optional selected output device ID through `BassSynth` to reference-counted BASS acquisition; [`9c052d9a`](https://github.com/webbase-x/xstage/commit/9c052d9a0af0f236d12f8f5b77b969342ed76566) adds a native-API mock regression confirming the selected device is initialized.
 - **P1.1/P1.2 still IN PROGRESS**: this is device selection for a synthesizer, not multi-bus stream splitting, 4/8/16 channel audio rendering or ASIO. Consolidated test evidence pending. Stable release remains gated.
+
+## 2026-11-21 — P1 MIDI bus dispatch (PENDING-QA / DEFERRED-HARDWARE)
+
+- [`9452d785`](https://github.com/webbase-x/xstage/commit/9452d7859dea2f5b05a75204c4edf8d8900dbe56) adds injectable, validated MIDI channel-voice dispatch to configured bus sinks; note-on/note-off/percussion polyphonic aftertouch share the same per-note bus. [`1313b64c`](https://github.com/webbase-x/xstage/commit/1313b64ca60fbb49ad3ed8e877a57b1867533b59) adds routing and malformed-message regressions.
+- User requests skipping physical tests now. **PENDING-QA / DEFERRED-HARDWARE**, not PASS. This is a MIDI message dispatcher, not PCM splitting, native multi-output rendering or ASIO; these remain to implement. No stable release claim.
