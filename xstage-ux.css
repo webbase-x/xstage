@@ -4536,3 +4536,70 @@ body.xstage-ui-v2 .stage #tv-refresh-window:focus-visible{outline:3px solid #aef
     padding-right:max(12px,env(safe-area-inset-right))!important;
   }
 }
+
+/* MIDI instrument and PC-style piano now live at the TOP, not in transport.
+   No other music control, search keyboard, or TV interface is moved. */
+body.xstage-ui-v2 .stage #midi-keyboard-control{
+  display:flex;align-items:center;justify-content:center;flex:none;min-width:0
+}
+body.xstage-ui-v2 .stage #midi-keyboard-control[hidden]{display:none!important}
+body.xstage-ui-v2 .stage #midi-keyboard-toggle{
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  min-height:42px;padding:7px 12px;border:1px solid #4bbfd0;
+  background:linear-gradient(145deg,#14516c,#0c263f);color:#eafcff;
+  border-radius:12px;white-space:nowrap;cursor:pointer
+}
+body.xstage-ui-v2 .stage #midi-keyboard-toggle[aria-expanded="true"]{
+  border-color:#65f0ca;box-shadow:0 0 0 1px #45b89a55 inset
+}
+body.xstage-ui-v2 .stage #midi-keyboard-panel{
+  position:absolute!important;z-index:108!important;
+  top:calc(var(--xs-top) + 6px)!important;left:50%!important;right:auto!important;
+  transform:translateX(-50%)!important;
+  width:min(1020px,calc(100% - 14px))!important;
+  max-height:min(48dvh,280px)!important;min-width:0;
+  overflow-y:auto;overscroll-behavior:contain
+}
+body.xstage-ui-v2 .stage .stage-toolbar{z-index:120!important}
+body.xstage-ui-v2 .stage .mobile-stage-menu{z-index:125!important}
+body.xstage-ui-v2 .stage #midi-keyboard-panel .midi-piano-toolbar select{
+  max-width:160px;min-width:0
+}
+body.xstage-ui-v2 .stage #midi-keyboard-panel .midi-piano-scroll{
+  flex:0 0 auto;min-height:105px
+}
+@media(max-width:910px){
+  body.xstage-ui-v2 .stage #midi-keyboard-toggle{min-height:40px;padding:6px 9px}
+  body.xstage-ui-v2 .stage #midi-keyboard-toggle span{display:none}
+}
+@media(max-width:620px){
+  body.xstage-ui-v2 .stage #midi-keyboard-toggle{
+    min-width:36px;min-height:36px;padding:5px 6px;border-radius:9px
+  }
+  body.xstage-ui-v2 .stage #midi-keyboard-panel{
+    width:calc(100% - 8px)!important;
+    top:calc(var(--xs-top) + 3px)!important;
+    max-height:min(49dvh,270px)!important;padding:7px!important
+  }
+  body.xstage-ui-v2 .stage #midi-keyboard-panel .midi-piano-toolbar{
+    display:flex;flex-wrap:wrap;gap:4px
+  }
+  body.xstage-ui-v2 .stage #midi-keyboard-panel .midi-piano-title{
+    width:100%;font-size:.75rem
+  }
+  body.xstage-ui-v2 .stage #midi-keyboard-panel .midi-piano-toolbar label{
+    flex:0 1 auto;max-width:calc(50% - 3px)
+  }
+  body.xstage-ui-v2 .stage #midi-keyboard-panel .midi-piano-toolbar select{
+    max-width:min(135px,29vw)
+  }
+  body.xstage-ui-v2 .stage #midi-keyboard-panel .midi-piano-scroll{
+    min-height:94px
+  }
+}
+@media(max-height:480px) and (orientation:landscape){
+  body.xstage-ui-v2 .stage #midi-keyboard-panel{
+    max-height:calc(100dvh - var(--xs-top) - var(--xs-bottom) - 7px)!important;
+    min-height:0
+  }
+}
