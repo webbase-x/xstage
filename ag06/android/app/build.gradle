@@ -14,6 +14,14 @@ android {
         versionName '0.1.0'
     }
     signingConfigs {
+        testPreview {
+            // Public test key already used by X-Stage Android TV previews.
+            // Stable across CI builds, but NOT a production identity.
+            storeFile rootProject.file('../../android-tv/test-signing/xstage-test-update.jks')
+            storePassword 'xstage-test-update'
+            keyAlias 'xstage-test'
+            keyPassword 'xstage-test-update'
+        }
         if (signingReady) {
             release {
                 storeFile file(signingPath)
@@ -30,6 +38,7 @@ android {
         }
         debug {
             applicationIdSuffix '.debug'
+            signingConfig signingConfigs.testPreview
             versionNameSuffix '-preview'
         }
     }
