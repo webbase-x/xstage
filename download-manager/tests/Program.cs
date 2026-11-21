@@ -222,6 +222,15 @@ try
             AdaptiveSegmentPlanner.Recommend(parts, 1L << 40, double.NaN, false) != parts)
             throw new Exception("Adaptive planner changed user cap or persisted geometry.");
     }
+    // First transfer has no measured rate: do not silently override a user's
+    // requested 1/8/32 connections. On resume, even slow throughput must
+    // preserve the existing byte-boundary geometry.
+    foreach (var parts in new[] { 1, 8, 32 })
+    {
+        if (AdaptiveSegmentPlanner.Recommend(parts, 1L << 40, 0, false) != parts ||
+            AdaptiveSegmentPlanner.Recommend(parts, 1L << 40, 128 * 1024, true) != parts)
+            throw new Exception("Unmeasured or resumed transfer must preserve requested Range geometry.");
+    }
     if (AdaptiveSegmentPlanner.Recommend(32, 1024, 64 * 1024 * 1024, false) != 1 ||
         AdaptiveSegmentPlanner.Recommend(32, 1L << 40, 128 * 1024, false) != 1 ||
         AdaptiveSegmentPlanner.Recommend(32, 1L << 40, 2 * 1024 * 1024, false) != 4 ||
