@@ -57,10 +57,12 @@ class FailoverMidiOutput:
         try:
             for message in self._state.values():
                 replacement.send(message)
-            for message in self._notes.values():
-                replacement.send(message)
+            # Restore EQ/tone before retriggering active notes, so attack
+            # envelopes use the selected instrument's current processing.
             for (method, key), (args, kwargs) in self._fx.items():
                 getattr(replacement, method)(*args, **kwargs)
+            for message in self._notes.values():
+                replacement.send(message)
         except Exception:
             replacement.close()
             raise
