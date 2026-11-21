@@ -149,8 +149,8 @@ assert.ok(importLayout.includes('#view-import>.two-col{')&&
 assert.ok(importLayout.includes('.top-actions{')&&
           importLayout.includes('flex-wrap:wrap'),
  'Windows toolbar must wrap instead of overlapping when resized');
-assert.ok(source.includes('id="activity-heartbeat"')&&
-          source.includes('id="activity-open-log"')&&
+assert.ok(html.includes('id="activity-heartbeat"')&&
+          html.includes('id="activity-open-log"')&&
           js.includes('const activityAgeBucket=')&&
           js.includes('Number(job.progress_age||0)'),
   'Running imports must visibly report the age of their last real progress');
