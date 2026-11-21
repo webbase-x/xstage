@@ -2845,8 +2845,10 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       };
       // Keep the synthesizer and selected GM bank high quality when ready,
       // but don't hold the Play button for a large sound-bank load on iPhone.
+      const startupFontId=window.XStageBrowserMidi?.fontStatus?.().selectedId;
       const isStillPlaying=()=>request===state.requestId&&
         token===state.token&&!controller.signal.aborted&&
+        startupFontId===window.XStageBrowserMidi?.fontStatus?.().selectedId&&
         state.current===song&&state.liveMidiSource===liveMidiBytes;
       const upgradeWhenReady=async prepared=>{
         let professional=null;
