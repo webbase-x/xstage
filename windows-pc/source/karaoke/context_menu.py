@@ -75,6 +75,7 @@ def populate_context_menu(app, menu, factory, screens):
 
     command(menu, 'เลือกมิดิขาออก…', app.choose_midi_output)
     command(menu, 'มิกเซอร์ MIDI / ชิ้นกลอง…', app.open_mixer, 'F9')
+    command(menu, 'ปรับโทนเครื่องดนตรี / กลอง (SoundFont)…', app.instrument_tone_window)
     command(menu, 'คีย์บอร์ด MIDI…', app.open_midi_keyboard, 'F4')
     command(menu, 'ซาวด์ฟอนท์…', app.audio_settings)
     playback = submenu(menu, 'ตัวควบคุมเสียง / การเล่น')
