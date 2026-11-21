@@ -33,7 +33,7 @@ def changed(settings, channel, state):
     if type(channel) is not int or not 0 <= channel < 16:
         raise ValueError('หมายเลขช่อง EQ ไม่ถูกต้อง')
     good = validate(state)
-    if good == flat() or good['bypass']:
+    if good == flat():
         result.pop(str(channel), None)
     else:
         result[str(channel)] = good
