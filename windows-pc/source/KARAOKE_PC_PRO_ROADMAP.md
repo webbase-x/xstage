@@ -263,3 +263,8 @@
 
 - [`6a05bd02`](https://github.com/webbase-x/xstage/commit/6a05bd02a9057433ee50a0dcc98f510bef30b04c) removes unused restore-safety snapshot if persisting the applying journal fails before live-file replacement. Regression [`b1d8c059`](https://github.com/webbase-x/xstage/commit/b1d8c05965c563bbf665d493a0afeb59a8f63f3f) injects journal disk-full and checks original song data, prepared state and absence of safety orphans.
 - Test execution/results PENDING-QA, not PASS. Continue engineering without blocking on test latency; stable release still gated on verified results.
+
+## 2026-11-21 — P0.6 malformed restore state (PENDING-QA)
+
+- [`2387ff36`](https://github.com/webbase-x/xstage/commit/2387ff36cdba9b82690b3dd16411423723a61d5a) rejects non-object restore journal state and unknown statuses before indexing, instead of raising an uncontrolled TypeError/KeyError. [`266ea432`](https://github.com/webbase-x/xstage/commit/266ea43246c299178ba8d951d9d4cf8152478d3f) tests list/null/string/unknown status while preserving live data.
+- New regression is PENDING-QA; continue independent work without waiting. Stable release requires actual CI and hardware acceptance evidence.
