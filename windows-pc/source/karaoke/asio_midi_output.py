@@ -25,6 +25,13 @@ class AsioMidiOutput:
         self._error = None
         self._chunk = chunk_frames
         self._target = target_frames
+        config = (settings or {}).get('asio_output')
+        config = config if isinstance(config, dict) else {}
+        if config.get('limiter') is True:
+            from .pcm_dynamics import StereoPeakLimiter
+            self._limiter = StereoPeakLimiter()
+        else:
+            self._limiter = None
         try:
             self.synth = synth_factory(native, settings=settings, decode=True)
             self.output = output_factory(native, device=device, channel=channel)
@@ -51,6 +58,8 @@ class AsioMidiOutput:
                     continue
                 if not pending:
                     pcm = self.synth.render(min(self._chunk, self._target - buffered))
+                    if self._limiter is not None:
+                        pcm = self._limiter.process(pcm)
                     if len(pcm) % 8:
                         raise OSError('BASSMIDI ส่ง PCM ที่ไม่ตรงขนาดเฟรม Stereo Float32')
                     pending = pcm
