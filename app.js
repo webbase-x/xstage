@@ -2650,7 +2650,7 @@ function clearIdleStage(message){
   state.medleyUpcoming=null;
   releaseQueuePreload();
   if(midiKeyControl)midiKeyControl.hidden=true;
-  if($('midi-instrument-control'))$('midi-instrument-control').hidden=true;
+  if($('midi-keyboard-control'))$('midi-keyboard-control').hidden=true;
   window.XStageMIDIPiano?.setSong({bytes:null});
   ui.nowPlaying.textContent='ยังไม่มีเพลงกำลังเล่น';
   ui.nowArtist.textContent='';
@@ -2866,7 +2866,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     if(ui.songKey)ui.songKey.textContent='คีย์ '+(musicalKey||'—');
     ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
     if(midiKeyControl)midiKeyControl.hidden=!liveMidiBytes;
-    if($('midi-instrument-control'))$('midi-instrument-control').hidden=!liveMidiBytes;
+    if($('midi-keyboard-control'))$('midi-keyboard-control').hidden=!liveMidiBytes;
     if($('midi-instrument'))$('midi-instrument').value='';
     if(midiKeyValue){midiKeyValue.value='0';$('midi-transpose-label').textContent='0';}
     if(liveMidiBytes){
