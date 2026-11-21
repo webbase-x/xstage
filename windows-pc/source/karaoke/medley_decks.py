@@ -196,15 +196,30 @@ class Decks:
             self.tail.set_volume(base*math.sqrt(1-ratio));active.set_volume(base*math.sqrt(ratio))
             if ratio>=1:self.tail.close();self.tail=None
     def stop_tail(self):
-        if self.rhythm_target:
-            try:self.rhythm_target.set_channel(9,muted=self.drum_was_muted)
-            except OSError:pass
-            self.rhythm_target=None
-        for name in ('tail','rhythm'):
-            engine=getattr(self,name);setattr(self,name,None)
-            if engine:engine.close()
+        first_error = None
+        target, self.rhythm_target = self.rhythm_target, None
+        if target is not None:
+            try:
+                target.set_channel(9, muted=self.drum_was_muted)
+            except OSError as exc:
+                first_error = exc
+        for name in ('tail', 'rhythm'):
+            engine = getattr(self, name)
+            setattr(self, name, None)
+            if engine is not None:
+                try:
+                    engine.close()
+                except Exception as exc:
+                    if first_error is None:
+                        first_error = exc
+        if first_error is not None:
+            raise first_error
     def close(self):
-        self.discard();self.stop_tail();self.pool.shutdown(wait=False,cancel_futures=True)
+        self.discard()
+        try:
+            self.stop_tail()
+        finally:
+            self.pool.shutdown(wait=False, cancel_futures=True)
 
 def cleanup(app):
     from .medley import cancel_random_fill
