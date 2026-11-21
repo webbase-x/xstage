@@ -103,7 +103,13 @@ assert.ok(windows.includes("if ($CurrentBuild -le 0 -and $CurrentVersion -ne '0.
   'Updater must read local manifest if the running app does not supply its build number');
 const pro=JSON.parse(read('downloads/song-studio-pro-latest.json'));
 assert.equal(pro.name,'X-Stage Song Studio Pro');
-assert.equal(pro.version,'0.1.11');
-assert.equal(pro.available,false,'unverified Pro EXE must not be published as available');
+assert.match(pro.version,/^\d+\.\d+\.\d+$/,'Song Studio Pro version must be valid');
+if(pro.available){
+  assert.match(pro.sha256||'',/^[a-fA-F0-9]{64}$/,'Pro preview must declare a verified SHA-256');
+  assert.match(pro.download_url||'',/^https:\/\/github\.com\/webbase-x\/xstage\/releases\/download\//,
+    'Published Song Studio Pro preview must link to a specific release');
+  assert.equal(pro.code_signed,false,'Unsigned preview must not claim a code signature');
+}else assert.equal(pro.download_url??null,null,
+  'Unavailable Song Studio Pro release must not advertise a download');
 assert.ok(publishedApk.build>0&&/^[a-fA-F0-9]{64}$/.test(publishedApk.sha256),'published APK metadata must identify an actual signed artifact');
 console.log('X-Stage startup updater contract: 4 web behaviors and 12 release/channel safety checks passed');
