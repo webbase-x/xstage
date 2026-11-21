@@ -17,6 +17,7 @@ class Bindings:
         for name in ('Init', 'Free', 'ChannelEnable', 'ChannelJoin',
                      'ChannelSetFormat', 'ChannelSetRate', 'Start', 'Stop', 'IsStarted', 'SetDevice'):
             setattr(self, 'BASS_ASIO_' + name, Function(0 if name == fail else 1))
+        self.BASS_ASIO_GetVersion = Function(0x1040300)
         self.BASS_ASIO_ErrorGetCode = Function(7)
 
 
@@ -44,6 +45,13 @@ class AsioHostTests(unittest.TestCase):
         self.assertEqual(len(dll.BASS_ASIO_Stop.calls), 1)
         self.assertEqual(len(dll.BASS_ASIO_Free.calls), 1)
         self.assertTrue(Bridge.instances[-1].closed)
+
+    def test_wrong_asio_abi_rejected_before_driver_init(self):
+        dll = Bindings()
+        dll.BASS_ASIO_GetVersion.value = 0x2040000
+        with self.assertRaises(OSError):
+            AsioOutput('unused', device=0, bindings=dll, bridge_factory=Bridge)
+        self.assertFalse(dll.BASS_ASIO_Init.calls)
 
     def test_early_driver_stop_reports_failure(self):
         dll = Bindings()
