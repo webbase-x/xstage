@@ -13,6 +13,28 @@ from karaoke.smf import MidiEvent, MidiSong
 
 
 class FullSongMedleyTests(unittest.TestCase):
+    def test_optional_drum_fill_cleanup_failure_keeps_preloaded_song(self):
+        from pathlib import Path
+        from karaoke.medley_decks import build
+        from karaoke.medley_trim import TrimBounds
+        engine, rhythm = Mock(), Mock()
+        engine.medley_bounds = TrimBounds(0, 5, 6, 1)
+        engine.speed = 1.0
+        rhythm.seek.side_effect = ValueError('fill seek failed')
+        rhythm.close.side_effect = OSError('fill close failed')
+        song = MidiSong([], 1, Lyrics())
+        with patch('karaoke.bass.BassSynth'), \
+             patch('karaoke.playback.MidiPlayer', side_effect=[engine, rhythm]), \
+             patch('karaoke.medley_full.source_bounds', return_value=engine.medley_bounds), \
+             patch('karaoke.medley_full.drum_fill', return_value=song), \
+             patch('karaoke.medley_full.can_play_fill', return_value=True):
+            prepared, fill = build(Path('native'), {}, Path('next.mid'), 0, 100,
+                                   False, None, full_song=True, fill=True)
+        self.assertIs(prepared, engine)
+        self.assertIsNone(fill)
+        rhythm.close.assert_called_once()
+        engine.close.assert_not_called()
+
     def test_stop_tail_closes_both_decks_even_if_first_fails(self):
         decks = Decks()
         first, second = Mock(), Mock()
