@@ -35,6 +35,28 @@ class FullSongMedleyTests(unittest.TestCase):
         rhythm.close.assert_called_once()
         engine.close.assert_not_called()
 
+    def test_finished_tail_close_failure_does_not_repeat_or_stop_active_song(self):
+        decks = Decks()
+        tail = Mock()
+        tail.close.side_effect = OSError('native tail close failed')
+        tail.playing = True
+        active = Mock()
+        active.playing = True
+        app = NS(engine=active, system_volume=1.0)
+        decks.tail = tail
+        decks.elapsed = 1.0
+        decks.fade = 1.0
+        decks.stamp = 10.0
+        try:
+            with patch('karaoke.transition_report.record'):
+                decks.update(app, 10.1)
+                decks.update(app, 10.2)
+            tail.close.assert_called_once()
+            self.assertIsNone(decks.tail)
+            self.assertTrue(active.playing)
+        finally:
+            decks.close()
+
     def test_stop_tail_closes_both_decks_even_if_first_fails(self):
         decks = Decks()
         first, second = Mock(), Mock()
