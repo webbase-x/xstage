@@ -23,7 +23,7 @@
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
   <link rel="stylesheet" href="style.css?v=1152-midi-top-keyboard">
-  <link rel="stylesheet" href="xstage-ux.css?v=1130-intro-search-safe-area">
+  <link rel="stylesheet" href="xstage-ux.css?v=1131-intro-search-safe-area">
   <link rel="stylesheet" href="cloud-import.css?v=1137-individual-select">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
@@ -35,7 +35,7 @@
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
-        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1130" alt="" width="48" height="48">
+        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1131" alt="" width="48" height="48">
         <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small><small id="karaoke-release-label">Karaoke Web v1.0.127 · Build 1127</small></span>
       </a>
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
@@ -73,7 +73,7 @@
             <div class="stage-brand-scene">
               <canvas id="stage-viz-left" class="stage-brand-side-viz" width="320" height="190"></canvas>
               <div class="stage-brand-lockup">
-                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1130" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
+                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1131" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
               </div>
               <canvas id="stage-viz-right" class="stage-brand-side-viz" width="320" height="190"></canvas>
             </div>
@@ -323,7 +323,7 @@
             <div class="share-library-warning">
               <strong>คำเตือนเรื่องลิขสิทธิ์</strong>
               <p>แชร์เฉพาะเพลงที่คุณมีสิทธิ์ครอบครอง ใช้งาน หรือได้รับอนุญาตให้แบ่งปันเท่านั้น เจ้าของบัญชีผู้แชร์เป็นผู้รับผิดชอบต่อสิทธิ์ในไฟล์ที่แชร์</p>
-              <p>ผู้รับจะได้รับสิทธิ์ดูและเล่นไฟล์ในโฟลเดอร์ XStageSong แบบอ่านอย่างเดียว ไม่สามารถแก้ไขหรือลบไฟล์ของเจ้าของผ่าน X-Stage ได้</p>
+              <p>ผู้รับจะได้รับสิทธิ์ดูและเล่นไฟล์ในโฟลเดอร์ XStageKaraoke แบบอ่านอย่างเดียว ไม่สามารถแก้ไขหรือลบไฟล์ของเจ้าของผ่าน X-Stage ได้</p>
             </div>
             <label class="share-library-email">อีเมล Google ของผู้รับ
               <input id="share-library-email" type="email" inputmode="email" autocomplete="email" placeholder="name@gmail.com">
@@ -361,7 +361,7 @@
         <div><span class="cloud-import-label">PRIVATE GOOGLE DRIVE</span><h2 id="cloud-import-title">นำเข้าเพลงและ SoundFont</h2></div>
         <button type="button" id="cloud-import-close" aria-label="ปิดหน้าต่างนำเข้า">✕</button>
       </header>
-      <p class="cloud-import-lead">เลือกโฟลเดอร์เพลงบนเครื่อง ตรวจและแก้ข้อมูลวิดีโอ ก่อนส่งเข้า XStageSong พร้อมเก็บไฟล์ต้นฉบับส่วนตัว · ไม่ลบหรือแก้ไฟล์บนเครื่อง</p>
+      <p class="cloud-import-lead">เลือกโฟลเดอร์เพลงบนเครื่อง ตรวจและแก้ข้อมูลวิดีโอ ก่อนส่งเข้า XStageKaraoke พร้อมเก็บไฟล์ต้นฉบับส่วนตัว · ไม่ลบหรือแก้ไฟล์บนเครื่อง</p>
       <p class="cloud-import-note" id="cloud-import-ios-help">iPhone/iPad: Safari 18.4 ขึ้นไปสามารถเลือกโฟลเดอร์ในแอป Files ได้โดยแตะ “เลือกโฟลเดอร์เพลง” หากเบราว์เซอร์รุ่นเก่าแสดงเฉพาะไฟล์รายตัว อาจไม่ส่งโครงสร้างโฟลเดอร์ครบ ระบบจะตรวจรายการก่อนนำเข้า และจะไม่อัปโหลดชุดเพลงที่องค์ประกอบไม่ครบ</p>
       <div class="cloud-import-actions">
         <button id="cloud-import-pick" type="button">📁 เลือกโฟลเดอร์เพลง</button>
@@ -419,7 +419,7 @@
         <p id="cloud-import-video-hint" class="cloud-import-video-hint" aria-live="polite"></p>
       </section>
       <p class="cloud-import-note">รองรับ XMID จาก Song Studio Pro และ XSK2 จาก Song Studio PC โดยตรง ไม่ต้องใช้ไฟล์กุญแจหรือรหัสผ่าน · XSK1 รุ่นเก่าต้องสร้างใหม่เป็น XSK2</p>
-      <label class="cloud-import-consent"><input type="checkbox" id="cloud-import-allow-create"> หากไม่มี XStageSong ที่บัญชีนี้เข้าถึงได้ ยืนยันว่าเป็นคลังใหม่ว่างและอนุญาตให้สร้าง (ไม่ลบคลังเดิม)</label>
+      <label class="cloud-import-consent"><input type="checkbox" id="cloud-import-allow-create"> หากไม่มี XStageKaraoke ที่บัญชีนี้เข้าถึงได้ ยืนยันว่าเป็นคลังใหม่ว่างและอนุญาตให้สร้าง (ไม่ลบคลังเดิม)</label>
       <div class="cloud-import-progress">
         <progress id="cloud-import-progress" value="0" max="100"></progress>
         <span id="cloud-import-progress-label">0%</span>
@@ -442,7 +442,7 @@
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
 <script>
-window.XSTAGE_RELEASE={version:'1.0.130',build:1130};
+window.XSTAGE_RELEASE={version:'1.0.131',build:1131};
 document.addEventListener('DOMContentLoaded',function(){
   const label=document.getElementById('karaoke-release-label');
   if(!label)return;
@@ -456,26 +456,26 @@ document.addEventListener('DOMContentLoaded',function(){
   }catch(error){/* Native bridge may be unavailable in normal web browsers. */}
 });
 </script>
-<script src="config.js?v=1130"></script>
+<script src="config.js?v=1131"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="cloud-import-core.js?v=1130" defer></script>
-  <script src="xsk-browser.js?v=1130" defer></script>
-  <script src="xmid-browser.js?v=1130" defer></script>
-  <script src="memory-budget.js?v=1130" defer></script>
+  <script src="cloud-import-core.js?v=1131" defer></script>
+  <script src="xsk-browser.js?v=1131" defer></script>
+  <script src="xmid-browser.js?v=1131" defer></script>
+  <script src="memory-budget.js?v=1131" defer></script>
   <script src="ios-midi-audio.js?v=1151-queue-handoff" defer></script>
-  <script src="browser-midi.js?v=1130-fast-gm-start" defer></script>
-  <script src="midi-pro-engine.js?v=1130-playback-restore" defer></script>
-  <script src="video-metadata-editor.js?v=1130" defer></script>
-  <script src="video-transcode.js?v=1130" defer></script>
+  <script src="browser-midi.js?v=1131-fast-gm-start" defer></script>
+  <script src="midi-pro-engine.js?v=1131-playback-restore" defer></script>
+  <script src="video-metadata-editor.js?v=1131" defer></script>
+  <script src="video-transcode.js?v=1131" defer></script>
   <script src="cloud-import.js?v=1137-individual-select" defer></script>
-  <script src="tv-refresh.js?v=1130" defer></script>
-  <script src="app.js?v=1130-title-key-intro" defer></script><script src="pc-extensions.js?v=1130" defer></script>
-  <script src="midi-keyboard-ui.js?v=1130-clean-title-1157-top-song-key-single-menu" defer></script>
-  <script src="native-audio-meter.js?v=1130" defer></script>
-  <script src="stage-controls.js?v=1130" defer></script>
-  <script src="mobile-layout.js?v=1130" defer></script>
-  <script src="android-apk-download.js?v=1130" defer></script>
+  <script src="tv-refresh.js?v=1131" defer></script>
+  <script src="app.js?v=1131-title-key-intro" defer></script><script src="pc-extensions.js?v=1131" defer></script>
+  <script src="midi-keyboard-ui.js?v=1131-clean-title-1157-top-song-key-single-menu" defer></script>
+  <script src="native-audio-meter.js?v=1131" defer></script>
+  <script src="stage-controls.js?v=1131" defer></script>
+  <script src="mobile-layout.js?v=1131" defer></script>
+  <script src="android-apk-download.js?v=1131" defer></script>
 
-  <script src="stage-ui.js?v=1130-title-key-intro" defer></script>
+  <script src="stage-ui.js?v=1131-title-key-intro" defer></script>
 </body>
 </html>

@@ -6,4 +6,9 @@ window.XSTAGE_CONFIG = {
   // and to Google Picker API + Google Drive API.
   googlePickerApiKey: 'AIzaSyDbFTXZX8GuWMct5KhkviVg5t1Iff2nYoY'
 };
-window.XSTAGE_RELEASE = { version: '1.0.130', build: 1130 };
+window.XSTAGE_DRIVE_LAYOUT=Object.freeze({
+  root:'XStageKaraoke',songs:'SONGS',db:'DB',
+  soundfont:'SOUNDFONT',backup:'BACKUP',cache:'CACHE',logs:'LOGS',
+  legacyRoot:'XStageSong'
+});
+window.XSTAGE_RELEASE = { version: '1.0.131', build: 1131 };
