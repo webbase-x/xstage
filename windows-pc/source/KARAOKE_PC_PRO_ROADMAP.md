@@ -242,3 +242,8 @@
 - [`475ddb7f`](https://github.com/webbase-x/xstage/commit/475ddb7f38779d88e019c54e57fb3e9218856c3f) validates interrupted restore safety-folder name, symlink/junction state, rollback target allowlist and backup file existence before rollback mutates user data.
 - [`2e51ebe7`](https://github.com/webbase-x/xstage/commit/2e51ebe78ea823db0d8c7a59515dce536c7cf1a5) additionally rejects non-string and duplicate journal entries before set operations. Regression tests [`e7477058`](https://github.com/webbase-x/xstage/commit/e74770581c9e973edd26295e2655417d52e6367f), [`88dfc640`](https://github.com/webbase-x/xstage/commit/88dfc640308626721112e8811e15effe7e865f17).
 - Source commits recorded; automated CI execution/results still PENDING-QA, not PASS. Continue independent engineering tasks under user-authorized nonblocking QA; do not release Stable before required gates pass.
+
+## 2026-11-21 — P0.6 interrupted copy cleanup (PENDING-QA)
+
+- [`b4f28564`](https://github.com/webbase-x/xstage/commit/b4f2856403ac6e28a1823f7a7658d357fb26c4b0) cleans up the `.restore-tmp` file if restore copy/rename raises, preserving the original exception and not replacing the destination with a partial copy. [`5b6a4157`](https://github.com/webbase-x/xstage/commit/5b6a41575a2cec1328674ca40e9c48bbfd231c2b) adds a simulated disk-full regression.
+- Test execution remains PENDING-QA, not PASS; user authorized continuing other engineering work without waiting for results. Hardware tests remain deferred and stable release blocked.
