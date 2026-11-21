@@ -54,7 +54,7 @@ class OpenCVFrameSource:
                     self.capture.seek_seconds(float(seconds))
             else:
                 index = int(float(seconds) * self.fps) if self.fps else None
-                if index != self.last_index:
+                if index is None or index != self.last_index:
                     self.capture.set(self.cv2.CAP_PROP_POS_MSEC, float(seconds) * 1000)
                     self.last_index = index
                 else:
