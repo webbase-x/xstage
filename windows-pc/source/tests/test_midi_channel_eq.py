@@ -56,9 +56,10 @@ class ChannelEQPresetTests(unittest.TestCase):
 
     def test_windows_midi_does_not_claim_independent_eq(self):
         player = MidiPlayer(output=Mock(spec=['send','reset','close']))
+        state = flat()
+        state['output_db'] = -3
         with self.assertRaises(OSError):
-            apply_to_player(player, {'0': changed({},0,flat())['0']} if False else
-                            {'0': dict(flat(), output_db=-3)})
+            apply_to_player(player, {'0': state})
         self.assertEqual(player.channel_eq, [None] * 16)
 
 
