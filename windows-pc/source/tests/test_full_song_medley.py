@@ -13,6 +13,30 @@ from karaoke.smf import MidiEvent, MidiSong
 
 
 class FullSongMedleyTests(unittest.TestCase):
+    def test_auxiliary_rhythm_failure_restores_drums_and_keeps_song(self):
+        decks = Decks()
+        rhythm = Mock()
+        rhythm.playing = True
+        rhythm.pump.side_effect = OSError('rhythm device error')
+        rhythm.close.side_effect = OSError('rhythm cleanup error')
+        active = Mock()
+        active.playing = True
+        app = NS(engine=active, system_volume=1.0)
+        decks.rhythm = rhythm
+        decks.rhythm_target = active
+        decks.drum_was_muted = False
+        decks.stamp = 10.
+        try:
+            with patch('karaoke.transition_report.record'):
+                decks.update(app, 10.1)
+            self.assertIsNone(decks.rhythm)
+            self.assertIsNone(decks.rhythm_target)
+            active.set_channel.assert_called_with(9, muted=False)
+            rhythm.close.assert_called_once()
+            self.assertTrue(active.playing)
+        finally:
+            decks.close()
+
     def test_optional_drum_fill_cleanup_failure_keeps_preloaded_song(self):
         from pathlib import Path
         from karaoke.medley_decks import build
