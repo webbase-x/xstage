@@ -213,6 +213,27 @@ try
     if (resizing.ActiveCount != 0 || resizing.WaitingCount != 0)
         throw new Exception("Repeated lease disposal must not leak scheduler slots.");
 
+    // Adaptive recommendations are bounded by requested parts, file size and
+    // measured throughput; existing checkpoint geometry is immutable.
+    foreach (var parts in DownloadEngine.AllowedParts)
+    {
+        if (AdaptiveSegmentPlanner.Recommend(parts, 1L << 40, 64 * 1024 * 1024, false) != parts ||
+            AdaptiveSegmentPlanner.Recommend(parts, 1L << 40, 64 * 1024 * 1024, true) != parts ||
+            AdaptiveSegmentPlanner.Recommend(parts, 1L << 40, double.NaN, false) != parts)
+            throw new Exception("Adaptive planner changed user cap or persisted geometry.");
+    }
+    if (AdaptiveSegmentPlanner.Recommend(32, 1024, 64 * 1024 * 1024, false) != 1 ||
+        AdaptiveSegmentPlanner.Recommend(32, 1L << 40, 128 * 1024, false) != 1 ||
+        AdaptiveSegmentPlanner.Recommend(32, 1L << 40, 2 * 1024 * 1024, false) != 4 ||
+        AdaptiveSegmentPlanner.Recommend(32, 1L << 40, 64 * 1024 * 1024, false) != 32)
+        throw new Exception("Adaptive segment caps do not reflect size and throughput.");
+    try
+    {
+        AdaptiveSegmentPlanner.Recommend(3, 1L << 40, 64 * 1024 * 1024, false);
+        throw new Exception("Unsupported part count must be rejected.");
+    }
+    catch (ArgumentOutOfRangeException) { }
+
     // Very large files previously overflowed long when computing size * index.
     // Verify exact coverage and continuity for 1, 8 and 32 segments.
     foreach (var size in new long[] { 1, 256 * 1024, 1L << 40, long.MaxValue })
