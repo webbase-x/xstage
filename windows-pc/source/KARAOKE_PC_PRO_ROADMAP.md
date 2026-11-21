@@ -247,3 +247,8 @@
 
 - [`b4f28564`](https://github.com/webbase-x/xstage/commit/b4f2856403ac6e28a1823f7a7658d357fb26c4b0) cleans up the `.restore-tmp` file if restore copy/rename raises, preserving the original exception and not replacing the destination with a partial copy. [`5b6a4157`](https://github.com/webbase-x/xstage/commit/5b6a41575a2cec1328674ca40e9c48bbfd231c2b) adds a simulated disk-full regression.
 - Test execution remains PENDING-QA, not PASS; user authorized continuing other engineering work without waiting for results. Hardware tests remain deferred and stable release blocked.
+
+## 2026-11-21 — P0.6 linked pending directory / live data guard (PENDING-QA)
+
+- [`83dff647`](https://github.com/webbase-x/xstage/commit/83dff647eddc2c0d0f3cf7c8c3c16cd0903c9196) refuses symlink/junction `restore-pending` at staging/startup, and refuses linked/non-file current-data inputs before snapshotting for rollback. Regression [`318994e0`](https://github.com/webbase-x/xstage/commit/318994e0c0cef1860185a15ec4d5dbe15bd9f9c2) checks external targets remain unchanged.
+- CI execution not verified yet: **PENDING-QA, not PASS**. Continue implementation on independent tasks under user-approved nonblocking policy. Physical QA deferred; stable release still blocked.
