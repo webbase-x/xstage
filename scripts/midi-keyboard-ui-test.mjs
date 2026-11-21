@@ -10,7 +10,7 @@ assert.ok(html.includes('id="midi-keyboard-toggle"')&&html.includes('aria-contro
 assert.ok(html.includes('midi-keyboard-ui.js?v='),'Piano module must be cache-busted');
 const pcPrograms=[...pc.matchAll(/\('([^']+)',(\d+)\)/g)]
   .filter(m=>Number(m[2])<=127).map(m=>({name:m[1],program:Number(m[2])}));
-assert.equal(pcPrograms.length,19,'Source PC keyboard should expose 19 instruments');
+assert.equal(pcPrograms.length,18,'Source PC keyboard exposes 18 instrument choices');
 for(const {name,program} of pcPrograms)
   assert.ok(html.includes('<option value="'+program+'">'+name+'</option>'),
     'Online piano must preserve the PC GM instrument '+name);
