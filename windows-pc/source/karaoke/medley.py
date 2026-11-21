@@ -207,7 +207,10 @@ def end_random_medley(app):
     except (OSError, ValueError, RuntimeError):
         logging.warning('Medley fill bypassed', exc_info=True)
         if player.playing:
-            player.pause()
+            try:
+                player.pause()
+            except (OSError, ValueError, RuntimeError):
+                logging.warning('Medley fill pause also failed', exc_info=True)
         return False
 
     app._random_medley_fill = (item, player)
