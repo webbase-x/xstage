@@ -494,7 +494,6 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
         };
         return {
           engine:'SpessaSynth',scheduler:'audio-worklet',duration:parsed.duration,
-          audioState:()=>ctx.state,resumeAudio:()=>ctx.resume(),
           beginTransitionFill,
           currentTime:()=>Number(sequencer.currentTime),
           finished:()=>!!sequencer.isFinished,previewNote,
@@ -590,8 +589,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           for(const [name,fn] of listeners)player.removeEventListener(name,fn);
           releasePreview();dispose();
         },
-        duration:parsed.duration,engine:'SpessaSynth',previewNote,
-        audioState:()=>ctx.state,resumeAudio:()=>ctx.resume()
+        duration:parsed.duration,engine:'SpessaSynth',previewNote
       };
     },
     dispose

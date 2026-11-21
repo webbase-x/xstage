@@ -1622,18 +1622,7 @@ function login({automatic=false} = {}) {
   if(!automatic&&!popupPreflightForTv())return;
   if(!navigator.onLine){setStatus('อุปกรณ์ออฟไลน์ · กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่','error');return;}
   if (typeof google === 'undefined' || !google.accounts?.oauth2?.initTokenClient) {
-    // GIS is async so an unreachable Google server cannot delay the stage.
-    const gis=$('xstage-gis-script');
-    if(gis&&!gis.dataset.xstageNoticeBound){
-      gis.dataset.xstageNoticeBound='1';
-      gis.addEventListener('load',()=>{
-        if(!state.token)setStatus('Google Sign-In พร้อมแล้ว · กดเข้าสู่ระบบอีกครั้ง');
-      },{once:true});
-      gis.addEventListener('error',()=>setStatus(
-        'Google Sign-In โหลดไม่สำเร็จ · ตรวจเครือข่ายหรือส่วนขยายบล็อกโฆษณาแล้วลองใหม่','error'),{once:true});
-    }
-    setStatus('กำลังโหลด Google Sign-In · รอข้อความพร้อม แล้วกดเข้าสู่ระบบอีกครั้ง');
-    return;
+    setStatus('ไม่สามารถโหลด Google Sign-In ได้ กรุณาตรวจอินเทอร์เน็ตและรีเฟรชหน้า', 'error'); return;
   }
   if (!cfg.googleClientId || !String(cfg.googleClientId).endsWith('.apps.googleusercontent.com')) {
     setStatus('ยังไม่ได้กำหนด Google OAuth Web Client ID สำหรับเว็บไซต์นี้', 'error'); return;
