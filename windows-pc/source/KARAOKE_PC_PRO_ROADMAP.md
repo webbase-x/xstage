@@ -309,3 +309,8 @@
 
 - [`0c66e0e2`](https://github.com/webbase-x/xstage/commit/0c66e0e2493d7d8c47d89decb3022f43f7e7dbc6) adds Tk Multi-Out routing dialog for enabling buses, assigning 16 MIDI channels and optional BASS device IDs; [`a9c15499`](https://github.com/webbase-x/xstage/commit/a9c154997de6afc09595316a7c6291c7dc27406f) wires it into Settings and persistence; [`f2a26873`](https://github.com/webbase-x/xstage/commit/f2a26873cf5431a79dfc94cc81d2b08caee2718f) adjusts dialog action placement.
 - **PENDING-QA:** no runtime/GUI/device tests performed at user's request. ASIO backend, real multi-output hardware matrix, and complete drum-key routing UI remain outstanding; no stable release claim.
+
+## 2026-11-21 — P1.3 ASIO driver discovery foundation (PENDING-QA)
+
+- [`5f13be7f`](https://github.com/webbase-x/xstage/commit/5f13be7fff5f566d46b95987a1f2c0a0bc568939) introduces read-only BASSASIO 2.4 driver discovery, validates addon version and handles absent DLL without affecting existing BASS stereo output. [`46e6904f`](https://github.com/webbase-x/xstage/commit/46e6904f4dbaccaca243f6f0e1c1ba195182b4b6) adds mocked enumeration and version-contract tests.
+- **P1.3 IN PROGRESS, PENDING-QA**: ASIO initialization, PCM callback/output bridge, channel assignment, fallback, UI selection and hardware verification remain. No ASIO playback claim or stable release.
