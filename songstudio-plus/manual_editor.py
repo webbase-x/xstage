@@ -96,7 +96,9 @@ def approved_build_ids(workspace,exclude=None):
     with core.connect(workspace) as db:
         rows=db.execute("""SELECT s.id """+BASE+"""
             WHERE v.id IS NOT NULL AND v.timing_status!='incomplete'
-              AND """+_status_expr()+"""='ready' ORDER BY s.code""").fetchall()
+              AND """+_status_expr()+"""='ready'
+              AND (e.version_id IS NULL OR e.version_id!=v.id
+                   OR COALESCE(e.output_path,'')='') ORDER BY s.code""").fetchall()
     return [x[0] for x in rows if x[0] not in excluded]
 
 
@@ -119,7 +121,9 @@ def approved_selected_ids(workspace, song_ids):
             matches=db.execute("""SELECT s.id """+BASE+"""
                 WHERE s.id IN ("""+",".join("?" for _ in part)+""")
                   AND v.id IS NOT NULL AND v.timing_status!='incomplete'
-                  AND """+_status_expr()+"""='ready'""",part)
+                  AND """+_status_expr()+"""='ready'
+                  AND (e.version_id IS NULL OR e.version_id!=v.id
+                       OR COALESCE(e.output_path,'')='')""",part)
             ready.update(row[0] for row in matches)
     return ready
 
@@ -476,13 +480,16 @@ def build_catalog(workspace, status="ready", offset=0, limit=40, query=""):
     Readiness is computed from the current lyric version and explicit
     approval, never from client-side state or a stale downloaded page.
     """
-    if status not in ("ready", "attention"):
+    if status not in ("ready", "converted", "attention"):
         raise ValueError("สถานะกลุ่มเพลงไม่ถูกต้อง")
     init(workspace)
     offset=max(0,int(offset))
     limit=max(1,min(int(limit),80))
     term="%"+str(query).strip()[:100].replace("\\","\\\\").replace("%","\\%").replace("_","\\_")+"%"
     expr=_status_expr()
+    converted="(e.version_id=v.id AND COALESCE(e.output_path,'')!='')"
+    condition=("("+expr+")!='ready'" if status=="attention" else
+        "("+expr+")='ready' AND "+(converted if status=="converted" else "NOT "+converted))
     sql="""SELECT s.id,s.code,s.title,s.artist,s.original_code,
        m.extension,v.id AS version_id,v.timing_status,
        d.reason AS draft_reason,e.output_path,
@@ -490,7 +497,7 @@ def build_catalog(workspace, status="ready", offset=0, limit=40, query=""):
        """+expr+""" AS manual_status """+BASE+"""
        WHERE (s.title LIKE ? ESCAPE '\\' OR s.artist LIKE ? ESCAPE '\\'
            OR s.original_code LIKE ? ESCAPE '\\')
-       AND ("""+expr+""") """+("='ready'" if status=="ready" else "!='ready'")+"""
+       AND """+condition+"""
        ORDER BY s.code DESC LIMIT ? OFFSET ?"""
     with core.connect(workspace) as db:
         rows=[dict(row) for row in db.execute(
@@ -505,4 +512,6 @@ def ready_count(workspace):
     with core.connect(workspace) as db:
         return db.execute("""SELECT COUNT(*) """+BASE+"""
           WHERE v.id IS NOT NULL AND v.timing_status!='incomplete'
-            AND """+_status_expr()+"""='ready'""").fetchone()[0]
+            AND """+_status_expr()+"""='ready'
+            AND (e.version_id IS NULL OR e.version_id!=v.id
+                 OR COALESCE(e.output_path,'')='')""").fetchone()[0]
