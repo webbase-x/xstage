@@ -82,7 +82,7 @@ def edit_multi_bus(parent, settings, save):
             return
         dialog.destroy()
 
-    ttk.Button(frame, text='บันทึก', command=apply).grid(row=13, column=2, sticky='e', pady=(16, 0))
-    ttk.Button(frame, text='ยกเลิก', command=dialog.destroy).grid(row=13, column=3, sticky='e', pady=(16, 0))
+    ttk.Button(frame, text='บันทึก', command=apply).grid(row=17, column=2, sticky='e', pady=(16, 0))
+    ttk.Button(frame, text='ยกเลิก', command=dialog.destroy).grid(row=17, column=3, sticky='e', pady=(16, 0))
     dialog.grab_set()
     return dialog
