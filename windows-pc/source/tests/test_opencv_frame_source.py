@@ -82,6 +82,27 @@ class OpenCVFrameSourceTests(unittest.TestCase):
             self.assertIsNone(bridge.render_virtual(VirtualDisplay(320, 240)))
         self.assertEqual(capture.reads, 0)
 
+    def test_paused_mci_clock_reuses_last_rgb_frame(self):
+        class FakeCV:
+            CAP_PROP_POS_MSEC = 1
+        class TimedCapture(FakeCapture):
+            def set(self, prop, value):
+                self.seeks.append((prop, value))
+                return True
+        capture = TimedCapture("video.mp4")
+        source = OpenCVFrameSource("video.mp4", capture_factory=lambda _: capture)
+        with source:
+            source.cv2 = FakeCV()
+            source.fps = 30
+            first = source.read_frame(1.25)
+            second = source.read_frame(1.25)
+            self.assertIs(first, second)
+            self.assertEqual(capture.reads, 1)
+            self.assertEqual(capture.seeks, [(1, 1250.0)])
+            source.read_frame(1.30)
+            self.assertEqual(capture.reads, 2)
+        self.assertIsNone(source.last_frame)
+
     def test_invalid_clock_is_rejected(self):
         source = OpenCVFrameSource("video.mp4", capture_factory=FakeCapture)
         with source:
