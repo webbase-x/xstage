@@ -195,22 +195,23 @@ public sealed class TransferRateGate
             return Task.CompletedTask;
         double delay;
         double reservedUntil;
+        double reservedFrom;
         long version;
         lock (_mutex)
         {
             var limit = _limitKib;
             if (limit == 0) return Task.CompletedTask;
             var now = Environment.TickCount64;
-            var start = Math.Max(now, _nextDueMs);
-            _nextDueMs = start + bytes * 1000.0 / (limit * 1024.0);
+            reservedFrom = Math.Max(now, _nextDueMs);
+            _nextDueMs = reservedFrom + bytes * 1000.0 / (limit * 1024.0);
             reservedUntil = _nextDueMs;
             version = _configurationVersion;
             delay = Math.Max(0, reservedUntil - now);
         }
-        return WaitReservedAsync(delay, reservedUntil, version, cancellation);
+        return WaitReservedAsync(delay, reservedFrom, reservedUntil, version, cancellation);
     }
 
-    private async Task WaitReservedAsync(double delay, double reservedUntil, long version, CancellationToken cancellation)
+    private async Task WaitReservedAsync(double delay, double reservedFrom, double reservedUntil, long version, CancellationToken cancellation)
     {
         try
         {
@@ -223,7 +224,7 @@ public sealed class TransferRateGate
             lock (_mutex)
             {
                 if (_configurationVersion == version && _nextDueMs == reservedUntil)
-                    _nextDueMs = Environment.TickCount64;
+                    _nextDueMs = Math.Max(Environment.TickCount64, reservedFrom);
             }
             throw;
         }
