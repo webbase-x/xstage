@@ -243,3 +243,19 @@ public static class TransferRateMath
         return double.IsFinite(smoothed) ? Math.Max(0, smoothed) : measured;
     }
 }
+
+/// <summary>
+/// Overflow-safe byte boundaries for very large ranged downloads. The final
+/// segment ends at size - 1 and every byte belongs to exactly one segment.
+/// </summary>
+public static class TransferSegmentGeometry
+{
+    public static long Boundary(long size, int index, int count)
+    {
+        if (size < 0) throw new ArgumentOutOfRangeException(nameof(size));
+        if (count < 1 || index < 0 || index > count)
+            throw new ArgumentOutOfRangeException(nameof(index));
+        // Avoid size * index, which overflows long for multi-terabyte files.
+        return (size / count) * index + (size % count) * index / count;
+    }
+}
