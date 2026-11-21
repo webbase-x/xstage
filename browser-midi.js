@@ -699,6 +699,10 @@ async function selectedFont(token,signal){
         if(selected!==id||context?.token!==token||context?.sub!==sub)
           throw new DOMException('เปลี่ยนบัญชีหรือชุดเสียง','AbortError');
         fontCache={id,sub,bytes,parsed:null,label:'TimGM6mb · General MIDI'};
+        // Keep the public 6 MB bank available even if the listener later
+        // selects a 243 MB bank. This avoids downloading fallback twice.
+        quickGmBytes=bytes;
+        quickGmPromise=Promise.resolve(bytes);
         builtinRetryAfter=0;
         fontWarning='';fontStatusChanged();
         return bytes;
