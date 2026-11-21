@@ -59,9 +59,9 @@ class ContextMenuTests(unittest.TestCase):
         populate_context_menu(app, menu, Menu, [(0,0,1920,1080)])
         labels = [e['label'] for e in menu.entries if e['type']!='separator']
         self.assertFalse(any(e.get('label','').startswith('ค้นหาเพลง') for e in menu.find('ตัวเลือก')['menu'].entries))
-        self.assertEqual(labels[:4], ['ตัวเลือก','พื้นหลัง','เครื่องมือ','จัดการข้อมูลเพลง'])
+        self.assertEqual(labels[:5], ['เมนูหลัก · 6 หมวด','ตัวเลือก','พื้นหลัง','เครื่องมือ','จัดการข้อมูลเพลง'])
         self.assertEqual(labels[-2:], ['รายละเอียดโปรแกรม…','ออกจากโปรแกรม'])
-        self.assertEqual(len(menu.children),6)
+        self.assertEqual(len(menu.children),7)
         self.assertLessEqual(len(menu.entries),20)
         menu.find('ซาวด์ฟอนท์')['command']()
         app.audio_settings.assert_called_once()
@@ -95,7 +95,7 @@ class ContextMenuTests(unittest.TestCase):
         app,menu=self.app(),Menu()
         screens=[(0,0,1920,1080),(-1280,0,1280,720)]
         for _ in range(4): populate_context_menu(app,menu,Menu,screens)
-        self.assertEqual(len(menu.children),6)
+        self.assertEqual(len(menu.children),7)
         display=menu.find('ระบบ 2')['menu']
         self.assertEqual(len([e for e in display.entries if e['type']=='radio']),2)
         self.assertEqual(display.find('จอร้องเต็ม')['state'],'disabled')
