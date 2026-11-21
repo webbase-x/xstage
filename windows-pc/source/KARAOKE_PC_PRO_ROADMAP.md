@@ -314,3 +314,9 @@
 
 - [`5f13be7f`](https://github.com/webbase-x/xstage/commit/5f13be7fff5f566d46b95987a1f2c0a0bc568939) introduces read-only BASSASIO 2.4 driver discovery, validates addon version and handles absent DLL without affecting existing BASS stereo output. [`46e6904f`](https://github.com/webbase-x/xstage/commit/46e6904f4dbaccaca243f6f0e1c1ba195182b4b6) adds mocked enumeration and version-contract tests.
 - **P1.3 IN PROGRESS, PENDING-QA**: ASIO initialization, PCM callback/output bridge, channel assignment, fallback, UI selection and hardware verification remain. No ASIO playback claim or stable release.
+
+## 2026-11-21 17:12 Asia/Bangkok — P1 percussion state routing hardening
+
+- [510a2818](https://github.com/webbase-x/xstage/commit/510a2818569867225a1cff5914c981339da7f9b2) broadcasts MIDI channel 10 controller/program/pitch state to every bus hosting overridden drum keys, while retaining per-note routing. This addresses loss of drum kit/volume state and incomplete all-notes-off on redirected percussion.
+- [daf7ad43](https://github.com/webbase-x/xstage/commit/daf7ad43daca45d57c21e54da4d8e536a007a433) adds independent regression cases for broadcast deduplication, note-on/note-off and state messages. [fff43647](https://github.com/webbase-x/xstage/commit/fff43647d2b136acde3ca71104438dff04332934) constrains channel selectors to active bus count when routing count changes.
+- **PENDING-QA:** New regressions not yet executed; run full Windows suite and integration gate after remaining independent implementation. Physical ASIO and multi-output tests **DEFERRED-HARDWARE**. Existing P0 checklist evidence does not validate these new commits; do not publish Stable.
