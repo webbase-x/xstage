@@ -119,6 +119,8 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           // isLoading=true and later signals songChange *after* the worklet
           // parses MIDI and preloads its instruments. Starting playback
           // before songChange can lose the first GM patches or notes.
+          if(typeof sequencer.eventHandler?.addEvent!=='function')
+            throw Error('SpessaSynth ยังไม่รองรับสัญญาณพร้อมของ Sequencer');
           await new Promise((resolve,reject)=>{
             const id='xstage-midi-initial-song-ready';
             let settled=false,timeout=null;
@@ -147,6 +149,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           sequencer.loopCount=0;
         }
       }catch(error){
+        if(error?.name==='AbortError')throw error;
         console.warn('AudioWorklet MIDI sequencer unavailable:',error);
         try{sequencer?.pause();}catch{}
         sequencer=null;
