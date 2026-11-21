@@ -11,6 +11,8 @@ on:
       - "version.json"
       - "package.json"
       - "browser-midi.js"
+      - "midi-pro-engine.js"
+      - "memory-budget.js"
       - "midi-keyboard-ui.js"
       - "app.js"
       - "pc-extensions.js"
@@ -26,6 +28,11 @@ on:
       - "scripts/karaoke-responsive-search-test.mjs"
       - "scripts/midi-keyboard-ui-test.mjs"
       - "scripts/midi-transpose-toolbar-test.mjs"
+      - "scripts/medley-next-preload-test.mjs"
+      - "scripts/midi-medley-handoff-test.mjs"
+      - "scripts/midi-background-playback-test.mjs"
+      - "scripts/midi-queue-auto-next-test.mjs"
+      - "scripts/midi-startup-budget-test.mjs"
       - ".github/workflows/xstage-regression.yml"
   pull_request:
     paths:
@@ -36,6 +43,8 @@ on:
       - "version.json"
       - "package.json"
       - "browser-midi.js"
+      - "midi-pro-engine.js"
+      - "memory-budget.js"
       - "midi-keyboard-ui.js"
       - "app.js"
       - "pc-extensions.js"
@@ -51,6 +60,11 @@ on:
       - "scripts/karaoke-responsive-search-test.mjs"
       - "scripts/midi-keyboard-ui-test.mjs"
       - "scripts/midi-transpose-toolbar-test.mjs"
+      - "scripts/medley-next-preload-test.mjs"
+      - "scripts/midi-medley-handoff-test.mjs"
+      - "scripts/midi-background-playback-test.mjs"
+      - "scripts/midi-queue-auto-next-test.mjs"
+      - "scripts/midi-startup-budget-test.mjs"
       - ".github/workflows/xstage-regression.yml"
   workflow_dispatch:
 
