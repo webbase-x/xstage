@@ -4977,7 +4977,7 @@ html body.xstage-ui-v2 .stage .transport-song-info .transport-song-title #toolba
     top:calc(var(--xs-toolbar-offset) + var(--xs-toolbar-height) + 5px)!important;
     left:max(8px,env(safe-area-inset-left,0px))!important;
     right:max(8px,env(safe-area-inset-right,0px))!important;
-    inset:auto max(8px,env(safe-area-inset-right,0px)) auto max(8px,env(safe-area-inset-left,0px))!important;
+    bottom:auto!important;
     width:auto!important;min-width:0!important;max-width:none!important;
     height:auto!important;
     max-height:min(53dvh,calc(100dvh - var(--xs-top) - var(--xs-bottom) - 12px))!important;
