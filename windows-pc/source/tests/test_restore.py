@@ -116,3 +116,17 @@ class RestoreTests(unittest.TestCase):
             restore.apply_pending(self.data)
         self.assertEqual(self.title(), 'ปัจจุบัน')
 
+
+    def test_failed_restore_copy_removes_incomplete_staging_file(self):
+        source=self.source/'settings.json'
+        target=self.data/'settings.json'
+        original=target.read_bytes()
+        def partial_copy(src,dst):
+            Path(dst).write_bytes(b'incomplete')
+            raise OSError('disk full')
+        with patch.object(restore.shutil,'copyfile',side_effect=partial_copy):
+            with self.assertRaisesRegex(OSError,'disk full'):
+                restore.replace_file(source,target)
+        self.assertEqual(target.read_bytes(),original)
+        self.assertFalse((self.data/'settings.json.restore-tmp').exists())
+
