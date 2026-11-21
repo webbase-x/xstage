@@ -219,3 +219,9 @@
 
 - [`2020cc42`](https://github.com/webbase-x/xstage/commit/2020cc424dc54c10f880c1960a182146696b2036) restores incoming deck volume to base after outgoing tail play/pause/pump failure, avoiding silent incoming audio at the beginning of crossfade. [`bc2fd625`](https://github.com/webbase-x/xstage/commit/bc2fd625cf7c91f008abdcbe28b4377d40d27aa7) adds a regression test.
 - Changes committed but automated tests not executed in this session; P0.5 IN PROGRESS. Hardware playback and soak checks remain DEFERRED-HARDWARE.
+
+## 2026-11-21 — P0.5 preload resource ownership and optional-fill isolation
+
+- [`928d710f`](https://github.com/webbase-x/xstage/commit/928d710fbadf59a36b7441a3f3dad6ce299576ad), [`4044cf5d`](https://github.com/webbase-x/xstage/commit/4044cf5d944899073568c38efe4f689cfffb42c3): MIDI preload and auxiliary rhythm constructors now release the BASS synth if MidiPlayer construction raises; regression [`09834552`](https://github.com/webbase-x/xstage/commit/09834552f9da47e580024f64a7dadbcf2fc16ff9).
+- [`bdeebc3c`](https://github.com/webbase-x/xstage/commit/bdeebc3c109e770c6bfa9dc50ea3f3be3ae3ac8d): optional drum-fill analysis/inspection failures no longer abort next-song preload; regression [`3738bf13`](https://github.com/webbase-x/xstage/commit/3738bf13c85a47e9e79893554b69dbf451f40ecd).
+- **Gate status: IN PROGRESS, NOT PASS.** No successful automated test run on these commits has been observed; local git checkout cannot reach github.com (DNS). MIDI/NCN/EMK-legacy/video coverage still requires independent verification. User explicitly deferred real-machine and audio soak tests; those remain DEFERRED-HARDWARE, not PASS. Do not advance P0.6 or publish stable on unverified evidence.
