@@ -7,7 +7,7 @@
 'use strict';
 const $=id=>document.getElementById(id);
 const panel=$('midi-keyboard-panel'),trigger=$('midi-keyboard-toggle');
-const control=$('midi-keyboard-control');
+// The manual MIDI piano trigger now lives in the upper menu.
 if(!panel||!trigger)return;
 const close=$('midi-keyboard-close'),range=$('midi-keyboard-range');
 const channel=$('midi-keyboard-channel'),instrument=$('midi-instrument');
@@ -220,11 +220,11 @@ function setSong({bytes=null,getCurrentTime=null,isPlaying=null,previewNote=null
   preview=typeof previewNote==='function'?previewNote:()=>false;
   if(!bytes){
     toggle(false);
-    if(control)control.hidden=true;
+    trigger.hidden=true;
     label.textContent='ตามเพลง MIDI';
     return;
   }
-  if(control)control.hidden=false;
+  trigger.hidden=false;
   label.textContent=instrument.selectedOptions[0]?.textContent||'ตามเพลง MIDI';
   // A newly loaded MIDI opens the top PC-style piano automatically unless
   // the listener explicitly closed it; changing songs preserves that choice.
