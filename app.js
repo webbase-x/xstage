@@ -550,11 +550,22 @@ function rememberLogin(enabled){try{if(enabled)localStorage.setItem(REMEMBERED_L
 // surface for lyrics, queue, media controls and existing non-MIDI tracks.
 const nativePlayer=ui.player;
 const midiTransport={
-  active:false,position:0,duration:0,paused:true,ended:false,seeking:false,
+  active:false,position:0,duration:0,paused:true,ended:false,seeking:false,audioSeekUntil:0,
   volume:1,rate:1,loop:false,startedAt:0,interval:null,
   emit(name){nativePlayer.dispatchEvent(new Event(name));},
   time(){
     if(this.paused||this.seeking)return this.position;
+    // The worklet acknowledges seek messages asynchronously. Hold the
+    // requested position briefly so Pause/Resume cannot jump backward.
+    if(this.audioSeekUntil){
+      const audioTime=Number(state.liveMidiPlayback?.currentTime?.());
+      if(Number.isFinite(audioTime)&&Math.abs(audioTime-this.position)<.25)
+        this.audioSeekUntil=0;
+      else if(performance.now()<this.audioSeekUntil)
+        return Math.min(this.duration,
+          this.position+(performance.now()-this.startedAt)/1000*this.rate);
+      else this.audioSeekUntil=0;
+    }
     // Follow the audible sequencer clock, not a wall clock that keeps
     // advancing when a mobile OS temporarily suspends WebAudio.
     const audioTime=state.liveMidiPlayback?.scheduler==='audio-worklet'
@@ -589,6 +600,7 @@ const midiTransport={
   seek(value){
     this.position=Math.max(0,Math.min(this.duration,Number(value)||0));
     this.startedAt=performance.now();this.ended=false;
+    this.audioSeekUntil=performance.now()+1200;
     this.seeking=true;
     try{this.emit('seeking');this.emit('seeked');}
     finally{this.seeking=false;}
@@ -596,7 +608,7 @@ const midiTransport={
   },
   clear(){
     this.pause();this.active=false;this.position=0;this.duration=0;
-    this.ended=false;this.seeking=false;clearInterval(this.interval);this.interval=null;
+    this.ended=false;this.seeking=false;this.audioSeekUntil=0;clearInterval(this.interval);this.interval=null;
   },
   begin(duration){
     nativePlayer.pause();nativePlayer.removeAttribute('src');
