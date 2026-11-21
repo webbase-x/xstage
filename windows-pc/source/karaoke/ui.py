@@ -157,6 +157,9 @@ class KaraokeApp(tk.Tk):
         self.stage = None
         self.stage_canvas = None
         self.stage_video = None
+        self.stage_chroma = None
+        self._chroma_bridge = None
+        self._chroma_path = None
         self.stage_fullscreen = False
         self.messages = queue.Queue()
         self.cancel_scan = threading.Event()
@@ -279,6 +282,9 @@ class KaraokeApp(tk.Tk):
         ttk.Spinbox(line, from_=-10000, to=10000, increment=100, width=7, textvariable=self.offset_var,
                     command=self.save_offset).pack(side="left")
         ttk.Button(line, text="บันทึก", command=self.save_offset).pack(side="left", padx=5)
+        self.chroma_enabled = tk.BooleanVar(value=False)
+        ttk.Checkbutton(line, text="Chromakey (ทดลอง)", variable=self.chroma_enabled,
+                        command=self.toggle_chroma_video).pack(side="left", padx=6)
 
         queue_heading = ttk.Frame(right)
         queue_heading.pack(fill="x", pady=(4, 6))
@@ -1307,6 +1313,7 @@ class KaraokeApp(tk.Tk):
         self.stage_canvas = self.canvas_class(self.stage)
         self.stage_canvas.pack(fill="both", expand=True)
         self.stage_video = tk.Frame(self.stage, bg="black")
+        self.stage_chroma = tk.Canvas(self.stage, bg="black", highlightthickness=0)
         self.stage_video.bind("<Configure>", lambda _: self.resize_video())
         self.stage.bind("<F11>", lambda _: self.toggle_stage())
         self.stage.bind("<Escape>", lambda _: self.exit_stage_fullscreen())
@@ -1329,7 +1336,8 @@ class KaraokeApp(tk.Tk):
                 self.show_error(error)
         if self.stage:
             self.stage.destroy()
-        self.stage = self.stage_canvas = self.stage_video = None
+        self._stop_chroma_video()
+        self.stage = self.stage_canvas = self.stage_video = self.stage_chroma = None
         self.stage_fullscreen = False
         self.resize_video()
 
@@ -1337,14 +1345,87 @@ class KaraokeApp(tk.Tk):
         if not self.stage or not self.stage.winfo_exists():
             return
         video = isinstance(self.engine, MediaPlayer) and self.engine.has_video
-        if video:
+        chroma = video and self._ensure_chroma_video()
+        if video and chroma:
+            self.stage_canvas.pack_forget()
+            self.stage_video.pack_forget()
+            self.stage_chroma.pack(fill="both", expand=True)
+            # Keep the native MCI output on its original preview surface;
+            # the optional decoder only draws on the secondary stage canvas.
+            self.engine.set_window(self.video_frame.winfo_id())
+        elif video:
+            self.stage_chroma.pack_forget()
             self.stage_canvas.pack_forget()
             self.stage_video.pack(fill="both", expand=True)
             self.stage.update_idletasks()
             self.engine.set_window(self.stage_video.winfo_id())
         else:
+            self._stop_chroma_video()
+            self.stage_chroma.pack_forget()
             self.stage_video.pack_forget()
             self.stage_canvas.pack(fill="both", expand=True)
+
+    def _stop_chroma_video(self):
+        bridge = getattr(self, "_chroma_bridge", None)
+        self._chroma_bridge = None
+        self._chroma_path = None
+        if bridge is not None:
+            try:
+                bridge.source.close()
+            except Exception:
+                logging.exception("CHROMA_DECODER_CLOSE_FAILED")
+
+    def _ensure_chroma_video(self):
+        if not getattr(self, "chroma_enabled", None) or not self.chroma_enabled.get():
+            self._stop_chroma_video()
+            return False
+        if not isinstance(self.engine, MediaPlayer) or not self.engine.has_video:
+            self._stop_chroma_video()
+            return False
+        song = getattr(self, "current_song", None)
+        path = str(song.get("path", "")) if isinstance(song, dict) else ""
+        if not path:
+            return False
+        if self._chroma_bridge is not None and self._chroma_path == path and self._chroma_bridge.player is self.engine:
+            return True
+        self._stop_chroma_video()
+        try:
+            from .opencv_frame_source import OpenCVFrameSource, MCIChromaPreview
+            from .chroma_video_renderer import VideoFrame
+            source = OpenCVFrameSource(path).open()
+            try:
+                # Solid black is the safe default backing for keyed pixels.
+                # A custom background source can be added without altering MCI.
+                frame = source.read_frame(0)
+                if frame is None:
+                    raise ValueError("No decodable video frames")
+                background = VideoFrame(frame.width, frame.height, bytes(frame.width * frame.height * 3))
+                self._chroma_bridge = MCIChromaPreview(self.engine, source, background)
+                self._chroma_path = path
+                return True
+            except Exception:
+                source.close()
+                raise
+        except Exception as error:
+            logging.warning("CHROMA_FALLBACK_TO_MCI: %s", error)
+            self.chroma_enabled.set(False)
+            return False
+
+    def toggle_chroma_video(self):
+        if not self.chroma_enabled.get():
+            self._stop_chroma_video()
+        self.update_stage_mode()
+
+    def _paint_chroma_video(self):
+        if self._chroma_bridge is None or self.stage_chroma is None:
+            return
+        try:
+            self._chroma_bridge.paint_tk(self.stage_chroma)
+        except Exception as error:
+            logging.warning("CHROMA_RENDER_FALLBACK_TO_MCI: %s", error)
+            self.chroma_enabled.set(False)
+            self._stop_chroma_video()
+            self.update_stage_mode()
 
     def resize_video(self):
         if isinstance(self.engine, MediaPlayer) and self.engine.has_video:
@@ -1449,6 +1530,7 @@ class KaraokeApp(tk.Tk):
                     self.engine.ended = False
                     self.on_song_ended()
             self.paint_lyrics()
+            self._paint_chroma_video()
         except Exception as error:
             logging.exception("Playback error")
             if self.engine:
