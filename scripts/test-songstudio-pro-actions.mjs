@@ -203,10 +203,10 @@ assert.ok(js.includes('if(lyricDialogLoading||$("lyrics-dialog").open)return;')&
           stylesheet.includes('backdrop-filter:none!important')&&
           !stylesheet.includes('::backdrop{background:#02050ccf;backdrop-filter:blur(5px)'),
   'Native dialogs must guard async double-opening and disable GPU backdrop blur');
-const picker=read('songstudio-plus/windows_picker.py');
-assert.ok(picker.includes("XSTAGE_PICKER_PARENT_PID")&&
-          picker.includes("GetForegroundWindow()")&&
-          picker.includes("_PICKER_LOCK.acquire(blocking=False)")&&
-          !picker.includes("$null=$owner.Show()"),
+const popupPickerSource=read('songstudio-plus/windows_picker.py');
+assert.ok(popupPickerSource.includes("XSTAGE_PICKER_PARENT_PID")&&
+          popupPickerSource.includes("GetForegroundWindow()")&&
+          popupPickerSource.includes("_PICKER_LOCK.acquire(blocking=False)")&&
+          !popupPickerSource.includes("$null=$owner.Show()"),
   'Windows file picker must use a stable owner and serialize competing requests');
 console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs, Windows picker, Desktop Standalone and diagnostic log');
