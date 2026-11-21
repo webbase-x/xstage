@@ -2,6 +2,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from karaoke.restore import stage_restore, validate_backup
 
@@ -31,8 +32,10 @@ class RestoreRootSafetyTests(unittest.TestCase):
                 link.symlink_to(real, target_is_directory=True)
             except (OSError, NotImplementedError):
                 self.skipTest("symlink creation not permitted")
-            with self.assertRaises(ValueError):
-                stage_restore(base / "nonexistent-backup", link)
+            with patch('karaoke.restore.validate_backup', return_value={'settings': {}}), \
+                    patch('karaoke.first_run.settings_for_restore', return_value={}):
+                with self.assertRaisesRegex(ValueError, 'ลิงก์'):
+                    stage_restore(base / 'backup', link)
             self.assertEqual(list(real.iterdir()), [])
 
     def test_missing_backup_root_rejected(self):
