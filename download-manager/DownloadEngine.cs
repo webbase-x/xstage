@@ -763,8 +763,8 @@ public sealed class DownloadEngine
         long existingTotal = 0;
         for (int i = 0; i < count; i++)
         {
-            var begin = job.TotalBytes * i / count;
-            var end = job.TotalBytes * (i + 1) / count - 1;
+            var begin = TransferSegmentGeometry.Boundary(job.TotalBytes, i, count);
+            var end = TransferSegmentGeometry.Boundary(job.TotalBytes, i + 1, count) - 1;
             var path = PartPath(work, i);
             if (File.Exists(path) && new FileInfo(path).Length > end - begin + 1)
                 File.Delete(path);
@@ -786,8 +786,8 @@ public sealed class DownloadEngine
         Interlocked.Exchange(ref job.DownloadedBytes, existingTotal);
         var tasks = Enumerable.Range(0, count).Select(i =>
         {
-            var begin = job.TotalBytes * i / count;
-            var end = job.TotalBytes * (i + 1) / count - 1;
+            var begin = TransferSegmentGeometry.Boundary(job.TotalBytes, i, count);
+            var end = TransferSegmentGeometry.Boundary(job.TotalBytes, i + 1, count) - 1;
             return DownloadPartAsync(job, PartPath(work, i), begin, end, i, ct);
         }).ToArray();
         try { await Task.WhenAll(tasks); }
