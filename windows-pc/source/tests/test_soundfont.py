@@ -205,6 +205,19 @@ class SoundFontTests(unittest.TestCase):
                 dll.BASS_ChannelPlay.assert_not_called()
                 dll.BASS_Free.assert_called_once()
 
+    def test_initialization_error_is_preserved_when_native_cleanup_raises(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = make_font(Path(folder)/'test.sf2')
+            dll, midi = self.fake_api()
+            midi.BASS_MIDI_StreamSetFonts.return_value = 0
+            dll.BASS_StreamFree.side_effect = OSError('secondary cleanup failure')
+            with self.assertRaisesRegex(OSError, 'จัดลำดับ SoundFont'):
+                BassSynth(Path(folder), settings={'soundfont': str(path)},
+                          bindings=(dll, midi))
+            dll.BASS_StreamFree.assert_called_once_with(50)
+            midi.BASS_MIDI_FontFree.assert_called_once_with(101)
+            dll.BASS_Free.assert_called_once()
+
     def test_offline_render_does_not_change_live_buffer_configuration(self):
         with tempfile.TemporaryDirectory() as folder:
             path = make_font(Path(folder)/'test.sf2')
