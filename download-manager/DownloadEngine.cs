@@ -795,7 +795,11 @@ public sealed class DownloadEngine
 
     private async Task ParallelDownloadAsync(DownloadJob job, string work, CancellationToken ct)
     {
-        var count = SegmentCount(job.TotalBytes, job.Parts);
+        // Never re-partition an existing resumable transfer. Throughput-driven
+        // selection applies only before the first segment is created.
+        var count = job.SegmentsUsed > 0
+            ? SegmentCount(job.TotalBytes, job.SegmentsUsed)
+            : SegmentCount(job.TotalBytes, job.Parts);
         // Save the actual geometry with the job so resumption never reuses a segment
         // written for different byte boundaries. Older jobs default to zero (unknown).
         // A zero/unknown geometry cannot validate pre-existing chunks. This
