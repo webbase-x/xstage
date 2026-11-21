@@ -46,6 +46,7 @@ function setup({ios=true,allowPlay=true,bridge=true}={}){
   out.pause();
   assert.equal(fake.audio.paused,true);
   out.dispose();
+  fake.ios.release();
   assert.equal(fake.audio.srcObject,null);
   assert.ok(fake.calls.includes('disconnect-stream'));
 }
