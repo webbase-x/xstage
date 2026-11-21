@@ -4,7 +4,6 @@ Explicit opt-in only. The producer renders PCM on a worker thread; the ASIO
 callback remains native and never invokes Python. Not a verified release path.
 """
 import threading
-import time
 
 from .bass import BassSynth
 from .asio_output import AsioOutput
