@@ -986,7 +986,10 @@ public sealed class DownloadEngine
             idle.CancelAfter(TimeSpan.FromSeconds(DownloadRetryPolicy.InactivitySeconds));
             try
             {
+                // A non-Range retry restarts from byte zero; reset the speed
+                // sample baseline too, otherwise ETA can use stale bytes.
                 Interlocked.Exchange(ref job.DownloadedBytes, 0);
+                job.PreviousBytes = 0;
                 using var req = Request(HttpMethod.Get, job.Url);
                 using var res = await Http.SendAsync(req,
                     HttpCompletionOption.ResponseHeadersRead, idle.Token);
