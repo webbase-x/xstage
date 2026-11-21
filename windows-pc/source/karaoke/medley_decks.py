@@ -246,7 +246,19 @@ class Decks:
                         pass
         if self.tail:
             ratio=min(1,self.elapsed/self.fade)
-            self.tail.set_volume(base*math.sqrt(1-ratio));active.set_volume(base*math.sqrt(ratio))
+            try:
+                self.tail.set_volume(base*math.sqrt(1-ratio))
+            except (OSError, ValueError, RuntimeError):
+                failed, self.tail = self.tail, None
+                try:
+                    failed.close()
+                except Exception:
+                    pass
+                # The incoming song must remain audible even when the old
+                # deck can no longer be faded.
+                active.set_volume(base)
+                return
+            active.set_volume(base*math.sqrt(ratio))
             if ratio>=1:
                 # Clear ownership before native teardown; a failed close must
                 # not leave the stale tail pumping on subsequent UI ticks.
