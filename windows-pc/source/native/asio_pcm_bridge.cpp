@@ -5,10 +5,11 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
-#include <mutex>
 #include <new>
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #define XSTAGE_API extern "C" __declspec(dllexport)
 #else
 #define XSTAGE_API extern "C"
@@ -79,3 +80,21 @@ XSTAGE_API uint64_t xstage_pcm_underruns(const XStagePcmBridge* q) noexcept {
 XSTAGE_API uint64_t xstage_pcm_overruns(const XStagePcmBridge* q) noexcept {
     return q ? q->overruns.load(std::memory_order_relaxed) : 0;
 }
+
+// BASSASIO ASIOPROC: length is bytes. This callback does not touch Python,
+// allocate, acquire a lock or call BASSMIDI. Requires float32 stereo output
+// (8 bytes/frame) and a host-managed lifecycle: stop ASIO before destroy.
+#ifdef _WIN32
+XSTAGE_API DWORD CALLBACK xstage_asio_callback(BOOL input, DWORD channel,
+                                               void* buffer, DWORD length,
+                                               void* user) noexcept {
+    (void)channel;
+    if (!buffer || input || (length % 8) != 0 || !user) {
+        if (buffer && length) std::memset(buffer, 0, length);
+        return 0;
+    }
+    auto* queue = static_cast<XStagePcmBridge*>(user);
+    xstage_pcm_pop(queue, static_cast<float*>(buffer), length / 8);
+    return length;
+}
+#endif
