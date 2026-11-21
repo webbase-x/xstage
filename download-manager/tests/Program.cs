@@ -199,6 +199,30 @@ try
     if (resizing.ActiveCount != 0 || resizing.WaitingCount != 0)
         throw new Exception("Repeated lease disposal must not leak scheduler slots.");
 
+    // Very large files previously overflowed long when computing size * index.
+    // Verify exact coverage and continuity for 1, 8 and 32 segments.
+    foreach (var size in new long[] { 1, 256 * 1024, 1L << 40, long.MaxValue })
+    foreach (var count in new[] { 1, 8, 32 })
+    {
+        long last = 0;
+        for (var i = 0; i < count; i++)
+        {
+            var begin = TransferSegmentGeometry.Boundary(size, i, count);
+            var next = TransferSegmentGeometry.Boundary(size, i + 1, count);
+            if (begin != last || next < begin || next > size)
+                throw new Exception("Large-file Range geometry has a gap, overlap or overflow.");
+            last = next;
+        }
+        if (last != size)
+            throw new Exception("Large-file Range geometry did not cover the full file.");
+    }
+    try
+    {
+        TransferSegmentGeometry.Boundary(long.MaxValue, 33, 32);
+        throw new Exception("Out-of-range segment indices must be rejected.");
+    }
+    catch (ArgumentOutOfRangeException) { }
+
     // Backpressure under 32 contending transfers: only eight may run, and
     // canceled waiters must not consume slots when active transfers finish.
     var saturated = new TransferSlotQueue(8, 8);
