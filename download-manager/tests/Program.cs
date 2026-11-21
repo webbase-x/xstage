@@ -1010,6 +1010,9 @@ try
     if (reopenedParts.Parts != 16 || reopenedParts.DownloadedBytes != 0 ||
         reopenedParts.SegmentsUsed != 0)
         throw new Exception("Repartition must persist new geometry before download resumes.");
+    if (reopenedParts.Status != "Paused" ||
+        reopenedParts.SegmentDownloadedBytes.Any(value => value != 0))
+        throw new Exception("Repartition must persist a paused, zero-progress checkpoint.");
     if (job.Parts != 16 || job.SegmentsUsed != 0 || Interlocked.Read(ref job.DownloadedBytes) != 0)
         throw new Exception("Repartition must reset temporary pieces and progress.");
     // Simulate a locked-file cleanup failure from the prior process: the
