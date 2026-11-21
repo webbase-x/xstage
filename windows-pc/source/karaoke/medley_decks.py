@@ -46,7 +46,18 @@ def build(native,settings,path,key,speed,melody,pattern,full_song=False,fill=Fal
     engine=rhythm=None
     try:
         if path.suffix.lower() in MIDI_EXT:
-            engine=MidiPlayer(output=BassSynth(native,settings=settings));engine.load(path)
+            # Own the synth before constructing the MIDI wrapper: a failing
+            # wrapper constructor must not leak its already-open BASS device.
+            output = BassSynth(native, settings=settings)
+            try:
+                engine = MidiPlayer(output=output)
+            except BaseException:
+                try:
+                    output.close()
+                except Exception:
+                    pass
+                raise
+            engine.load(path)
             engine.set_channel(3,muted=melody)
         else:engine=PcmPlayer(native);engine.load(path)
         engine.set_key(key);engine.set_speed(speed/100);engine.set_volume(0)
