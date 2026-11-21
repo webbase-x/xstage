@@ -51,6 +51,8 @@ def normalized(raw):
                 raise ValueError('หมายเลขช่อง/กลองไม่ถูกต้อง') from None
             if isinstance(key, bool) or str(number) != str(key) or not 0 <= number <= limit:
                 raise ValueError('หมายเลขช่อง/กลองเกินช่วงที่รองรับ')
+            if str(number) in result[group]:
+                raise ValueError('ช่อง MIDI หรือกลองซ้ำกัน')
             if not isinstance(state, dict) or set(state) != set(defaults):
                 raise ValueError('ค่าปรับโทนเสียงไม่ครบ')
             result[group][str(number)] = {
