@@ -203,3 +203,9 @@
 
 - [`a8a388d3`](https://github.com/webbase-x/xstage/commit/a8a388d3586df08d68adb92157e020b85b30ba35) isolates play/pause/pump failures on auxiliary tail/rhythm decks, closes the affected deck best-effort, and restores drum channel 9 when rhythm fails. [`26c0d7ab`](https://github.com/webbase-x/xstage/commit/26c0d7ab3f2d20dbd0f3ec45c014887f92cf7225) adds a mocked rhythm failure regression.
 - Source and test committed; test execution not verified. P0.5 remains IN PROGRESS; real hardware checks DEFERRED at user request.
+
+## 2026-11-21 — P0.5 rhythm volume/tempo fault isolation and verification limitation
+
+- [`f45f3078`](https://github.com/webbase-x/xstage/commit/f45f3078661d6015d509b098edc26ee65072bd06) guards rhythm tempo/gain adjustment; on failure, closes only the auxiliary rhythm and restores the main MIDI drum channel. [`8738dcf3`](https://github.com/webbase-x/xstage/commit/8738dcf31677cfdd61a42a98223d5d6d1052bfd4) adds a volume-failure regression.
+- **Verification blocked:** local checkout is unavailable because github.com DNS resolution fails; available GitHub connector cannot trigger a fresh workflow run on the new main commit. Consequently neither these regression tests nor full Windows CI have been executed/verified for this revision. No PASS claim. Physical machine and live-audio soak explicitly DEFERRED by user.
+- **P0.5 remains IN PROGRESS**, pending automated test execution and comprehensive MIDI/NCN/EMK-legacy/video route verification. Do not publish a stable EXE on this evidence.
