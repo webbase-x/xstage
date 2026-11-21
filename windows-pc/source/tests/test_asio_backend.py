@@ -17,7 +17,8 @@ class BackendTests(unittest.TestCase):
             'native', {'asio_output': {'enabled': True, 'device': 2, 'channel': 0}},
             bass_factory=self.bass,
             asio_factory=lambda native, device, channel, settings: ('asio', device, channel))
-        self.assertEqual(result, ('asio', 2, 0))
+        self.assertEqual(result.primary, ('asio', 2, 0))
+        self.assertIs(result.active, result.primary)
 
     def test_failed_asio_falls_back_and_reports(self):
         def failed(**kwargs):
