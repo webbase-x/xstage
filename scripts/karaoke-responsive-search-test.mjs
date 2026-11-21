@@ -23,7 +23,7 @@ assert.match(patch,/\.voice-search-button\s*\{[\s\S]*?flex-shrink:0!important/);
 assert.match(html,/meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/);
 assert.match(html,/id="search" type="search"/);
 assert.match(html,/id="voice-search" class="voice-search-button"/);
-assert.match(html,/xstage-ux\.css\?v=1157-top-song-key-single-menu/);
+assert.match(html,/xstage-ux\.css\?v=1158-key-toolbar-release/);
 for(const [viewport,leftSafe,rightSafe] of [
   [320,0,0],[375,0,0],[390,0,0],[402,0,0],[430,0,0],[440,0,0],
   [667,44,44],[844,59,59],[932,59,59],[1024,0,0]
