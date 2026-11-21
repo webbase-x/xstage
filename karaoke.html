@@ -113,7 +113,7 @@
             <button type="button" id="cloud-import-open" hidden>☁ นำเข้าเพลง / SoundFont</button>
              <label class="xstage-font-control" for="xstage-soundfont-select"><span>ซาวด์ฟอนต์ MIDI</span>
                <select id="xstage-soundfont-select" aria-label="เลือก SoundFont สำหรับเพลง MIDI">
-                 <option value="">เสียง MIDI พื้นฐานในเว็บ (ไม่ใช้ SoundFont)</option>
+                 <option value="builtin:TimGM6mb">เสียงเครื่องดนตรี GM · TimGM6mb (6 MB)</option>
                </select>
                <output id="xstage-font-memory" class="xstage-memory-indicator" data-level="low" role="status" aria-live="polite">SoundFont · ยังไม่โหลด</output>
              </label>
@@ -449,13 +449,13 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="xmid-browser.js?v=1122" defer></script>
   <script src="memory-budget.js?v=1119" defer></script>
   <script src="ios-midi-audio.js?v=1151-queue-handoff" defer></script>
-  <script src="browser-midi.js?v=1154-prime-first-midi" defer></script>
-  <script src="midi-pro-engine.js?v=1154-wait-sequencer-ready" defer></script>
+  <script src="browser-midi.js?v=1155-first-midi-ready" defer></script>
+  <script src="midi-pro-engine.js?v=1155-first-midi-ready" defer></script>
   <script src="video-metadata-editor.js?v=1119" defer></script>
   <script src="video-transcode.js?v=1119" defer></script>
   <script src="cloud-import.js?v=1137-individual-select" defer></script>
   <script src="tv-refresh.js?v=1119" defer></script>
-  <script src="app.js?v=1154-prime-first-midi" defer></script><script src="pc-extensions.js?v=1119" defer></script>
+  <script src="app.js?v=1155-first-midi-ready" defer></script><script src="pc-extensions.js?v=1119" defer></script>
   <script src="midi-keyboard-ui.js?v=1152-midi-top-keyboard" defer></script>
   <script src="native-audio-meter.js?v=1119" defer></script>
   <script src="stage-controls.js?v=1119" defer></script>
