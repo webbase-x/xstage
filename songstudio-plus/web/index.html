@@ -37,7 +37,7 @@
   </aside>
   <main class="main">
     <header class="topbar">
-      <div class="breadcrumb">X-STAGE <span>/</span> STUDIO PLUS <span>/</span> <strong id="breadcrumb">นำเข้าเพลง</strong></div>
+      <div class="breadcrumb"><strong id="breadcrumb">นำเข้าเพลง</strong></div>
       <div class="top-actions"><button type="button" class="update-quick-btn" id="pro-update-quick" hidden>↑ อัปเดต</button><button type="button" class="quiet-btn" id="settings-open" title="ตั้งค่าและเครื่องมือระบบ">⚙ ตั้งค่า</button><button type="button" class="quiet-btn workspace-open-btn" id="workspace-open" title="เปิดโฟลเดอร์ฐานข้อมูลและคลังเพลงใน Windows Explorer">▤ เปิดคลังเพลง</button><span class="chip chip-soft" id="workspace-chip">LOCAL WORKSPACE</span><span class="avatar">X<span>+</span></span></div>
     </header>
     <div class="update-notice" id="pro-update-notice" hidden role="status" aria-live="polite">
@@ -52,87 +52,72 @@
     </div>
     <div class="content">
       <section class="view is-visible" id="view-import" aria-labelledby="import-title">
-        <div class="page-eyebrow"><span class="eyebrow-line"></span> YOUR MUSIC, FULLY ORGANIZED</div>
         <div class="hero">
-          <div class="hero-copy">
-            <span class="hero-pill"><span class="small-dot"></span> NEW GENERATION KARAOKE STUDIO</span>
-            <h1 id="import-title">เพลงของคุณ<br><span class="gradient-text">เป็นระเบียบในที่เดียว</span></h1>
-            <p>เลือกโฟลเดอร์ต้นทางครั้งเดียว ระบบตรวจ SHA-256 แล้วบันทึกข้อมูลและเวลาปาดสีลง SQLite โดยไม่คัดลอก ไม่สำรอง และไม่แก้ไฟล์เพลงต้นฉบับ</p>
-            <div class="hero-trust"><span>✓ ไม่สำรองต้นฉบับ</span><span>✓ ตัดสื่อซ้ำ</span><span>✓ ทำต่อได้</span></div>
-          </div>
-          <div class="hero-art" aria-hidden="true">
-            <div class="vinyl-disc"><div class="vinyl-inner"><span>+</span></div></div>
-            <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
-            <div class="audio-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-          </div>
+          <div class="hero-copy"><h1 id="import-title">จัดการคลังเพลง</h1></div>
         </div>
         <div class="stat-grid" id="stat-grid">
-          <article class="stat"><span>เพลงในคลัง</span><strong id="stat-songs">—</strong><small>Song IDs ที่ลงทะเบียน</small></article>
-          <article class="stat"><span>เพลงมีเนื้อร้องที่บันทึกได้</span><strong id="stat-with-text">—</strong><small>รวมฉบับรอ Timing</small></article>
-          <article class="stat"><span>เพลงมีเนื้อร้องพร้อมเวลา</span><strong id="stat-ready">—</strong><small>พร้อมสร้างไฟล์ X-Stage</small></article>
-          <article class="stat stat-attention"><span>เพลงยังไม่มีเนื้อร้องพร้อมเวลา</span><strong id="stat-pending">—</strong><small>ต้องตรวจข้อมูลประกอบ</small></article>
-          <article class="stat"><span>สื่อไม่ซ้ำ</span><strong id="stat-media">—</strong><small>SHA-256 Registry</small></article>
-          <article class="stat"><span>ชุดเนื้อร้องทุกเวอร์ชัน</span><strong id="stat-lyrics">—</strong><small>Lyrics Versions (ไม่ใช่จำนวนเพลง)</small></article>
-          <article class="stat"><span>ไฟล์ X-Stage ที่สร้างแล้ว</span><strong id="stat-exports">—</strong><small>Embedded Outputs</small></article>
+          <article class="stat"><span>เพลงในคลัง</span><strong id="stat-songs">—</strong></article>
+          <article class="stat"><span>พร้อมสร้าง X-Stage</span><strong id="stat-ready">—</strong></article>
+          <article class="stat stat-attention"><span>รอเนื้อร้องพร้อมเวลา</span><strong id="stat-pending">—</strong></article>
+          <article class="stat"><span>ไฟล์ที่สร้างแล้ว</span><strong id="stat-exports">—</strong></article>
         </div>
-        <div class="two-col">
+        <details class="import-disclosure import-extra-stats">
+          <summary>สถิติเพิ่มเติม</summary>
+          <div class="stat-grid stat-grid-secondary">
+            <article class="stat"><span>มีเนื้อร้อง</span><strong id="stat-with-text">—</strong></article>
+            <article class="stat"><span>สื่อไม่ซ้ำ</span><strong id="stat-media">—</strong></article>
+            <article class="stat"><span>เวอร์ชันเนื้อร้อง</span><strong id="stat-lyrics">—</strong></article>
+          </div>
+        </details>
+        <div class="two-col import-main-panels">
           <article class="panel feature-panel">
-            <div class="panel-head"><div><span class="label-top">START HERE</span><h2>นำเข้าเพลงจากโฟลเดอร์</h2></div><span class="count-pill">01 / 08</span></div>
-            <label class="field-label" for="source-folder">โฟลเดอร์ต้นทาง (PC / USB / HDD)</label>
-            <div class="input-wrap"><span class="folder-glyph">▤</span><input id="source-folder" type="text" spellcheck="false" autocomplete="off" placeholder="เช่น D:\NCN หรือ E:\My Music"><button id="source-browse" class="browse-btn" type="button">เลือกโฟลเดอร์</button></div>
-            <div class="toolbar folder-actions"><button id="source-open" class="quiet-btn" type="button">↗ เปิดโฟลเดอร์ใน Explorer</button><span class="field-hint" id="folder-picker-status" aria-live="polite">เลือกโฟลเดอร์ด้วย Windows โดยตรง หรือวางพาธภาษาไทยได้</span></div>
-            <p class="field-hint">ค้นหาโฟลเดอร์ย่อยอัตโนมัติ รองรับ MID, KAR, MP3, M4A, WAV, FLAC, MP4, MKV และ WEBM</p>
-            <button class="primary-btn full" id="import-start" type="button">ตรวจ SHA-256 และลงทะเบียน SQLite <span>↗</span></button>
-            <div class="recover-action">
-              <div><strong>มีเพลงในคลังแล้ว แต่ยังขาดเนื้อร้อง?</strong><small>อ่าน LYR/CUR/LRC จากพาธเดิมอีกครั้ง ไม่สแกน Hash เพลงซ้ำ ไม่คัดลอกต้นฉบับ และรักษาเวอร์ชันเดิม</small></div>
-              <button class="quiet-btn recover-btn" id="recover-lyrics" type="button"><span>↺</span> ตรวจซ่อมเนื้อร้องและเวลาปาดสี</button>
-            </div>
-            <div class="divider-inline"><span>ตรวจสอบแบบปลอดภัย</span></div>
-            <div class="step-list"><div><b>01</b><span>SHA-256 ของไฟล์สื่อก่อน</span><span class="step-check">✓</span></div><div><b>02</b><span>เทียบ Hash ใน SQLite</span><span class="step-check">✓</span></div><div><b>03</b><span>ดึง LYR/CUR เฉพาะที่จำเป็น</span><span class="step-check">✓</span></div></div>
+            <div class="panel-head"><h2>นำเข้าเพลง</h2></div>
+            <label class="field-label" for="source-folder">โฟลเดอร์เพลง</label>
+            <div class="input-wrap"><span class="folder-glyph">▤</span><input id="source-folder" type="text" spellcheck="false" autocomplete="off" placeholder="เลือกโฟลเดอร์บน PC / USB / HDD"><button id="source-browse" class="browse-btn" type="button">เลือกโฟลเดอร์</button></div>
+            <div class="toolbar folder-actions"><button id="source-open" class="quiet-btn" type="button">เปิดโฟลเดอร์</button><span class="field-hint" id="folder-picker-status" aria-live="polite"></span></div>
+            <button class="primary-btn full" id="import-start" type="button">นำเข้าเพลง <span>↗</span></button>
+            <div class="recover-action"><button class="quiet-btn recover-btn" id="recover-lyrics" type="button">↺ ตรวจซ่อมเนื้อร้อง</button></div>
           </article>
           <article class="panel progress-panel">
-            <div class="panel-head"><div><span class="label-top">LIVE ACTIVITY</span><h2>สถานะการทำงาน</h2></div><span class="status-badge" id="activity-status">พร้อมทำงาน</span></div>
-            <div class="progress-symbol">↻</div>
+            <div class="panel-head"><h2>สถานะการทำงาน</h2><span class="status-badge" id="activity-status">พร้อมทำงาน</span></div>
             <h3 id="activity-title">พร้อมเริ่มงานใหม่</h3>
-            <p id="activity-subtitle">อ่านไฟล์ต้นฉบับเฉพาะเท่าที่จำเป็น บันทึก SQLite เป็นชุด โดยไม่คัดลอกไฟล์เพลง</p>
+            <p id="activity-subtitle"></p>
             <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
             <div class="progress-numbers"><span id="progress-detail">ยังไม่มีงาน</span><span id="progress-count">—</span></div>
-            <p id="import-resume-status" class="field-hint" aria-live="polite">โปรแกรมบันทึก Checkpoint ลง SQLite ระหว่างนำเข้า เพื่อเปิดกลับมาทำต่อได้</p>
-            <div class="toolbar"><button type="button" class="quiet-btn" id="refresh-summary">↻ รีเฟรชยอดสรุปและงาน</button><button type="button" class="quiet-btn" id="cancel-job" hidden>หยุดหลังไฟล์ปัจจุบัน</button></div>
-            <p id="summary-refreshed" class="field-hint">ยอดสรุปจาก SQLite · ไม่ต้องเริ่มนำเข้าใหม่เพื่อรีเฟรช</p>
+            <p id="import-resume-status" class="field-hint" aria-live="polite"></p>
+            <div class="toolbar"><button type="button" class="quiet-btn" id="refresh-summary">↻ รีเฟรช</button><button type="button" class="quiet-btn" id="cancel-job" hidden>หยุดหลังไฟล์ปัจจุบัน</button></div>
+            <p id="summary-refreshed" class="field-hint" aria-live="polite"></p>
           </article>
         </div>
-        <section class="panel pro-update-panel" aria-labelledby="pro-update-title">
-          <div class="panel-head"><div><span class="label-top">SAFE WINDOWS AUTO-UPDATE</span><h2 id="pro-update-title">อัปเดต X-Stage Song Studio Pro</h2></div><span class="count-pill" id="pro-update-version">v0.1.34</span></div>
-          <p class="field-hint" id="pro-update-status" aria-live="polite">ตรวจรุ่นล่าสุดจาก GitHub และ SHA-256 · ข้ามรุ่นได้ในครั้งเดียว · คลังเพลงและประวัติเนื้อร้องไม่ถูกลบ</p>
-          <div class="toolbar">
-            <button id="pro-update-check" class="quiet-btn" type="button">↻ ตรวจสอบอัปเดต</button>
-            <button id="pro-update-direct" class="quiet-btn" type="button">ดาวน์โหลดตัวติดตั้ง EXE</button>
-            <button id="pro-update-install" class="primary-btn" type="button" disabled>ดาวน์โหลด ติดตั้ง แล้วเปิดใหม่ทันที</button>
+        <details class="import-disclosure import-advanced">
+          <summary>อัปเดตและเครื่องมือเพิ่มเติม</summary>
+          <div class="import-advanced-content">
+            <section class="panel pro-update-panel" aria-labelledby="pro-update-title">
+              <div class="panel-head"><h2 id="pro-update-title">อัปเดตโปรแกรม</h2><span class="count-pill" id="pro-update-version">v0.1.34</span></div>
+              <p class="field-hint" id="pro-update-status" aria-live="polite"></p>
+              <div class="toolbar">
+                <button id="pro-update-check" class="quiet-btn" type="button">ตรวจสอบอัปเดต</button>
+                <button id="pro-update-direct" class="quiet-btn" type="button">ดาวน์โหลด EXE</button>
+                <button id="pro-update-install" class="primary-btn" type="button" disabled>ติดตั้งและเปิดใหม่</button>
+              </div>
+            </section>
+            <section class="panel issues-panel" aria-labelledby="db-health-title">
+              <div class="panel-head"><h2 id="db-health-title">จัดการฐานข้อมูล</h2></div>
+              <p class="field-hint" id="db-health-summary" aria-live="polite"></p>
+              <div class="toolbar">
+                <button class="quiet-btn" id="db-health-check" type="button">ตรวจสอบ SQLite</button>
+                <button class="quiet-btn" id="db-detail-audit" type="button" disabled>วิเคราะห์ฐานข้อมูล</button>
+                <button class="quiet-btn" id="db-history-clean" type="button" disabled>ล้างประวัติงานเสร็จ</button>
+                <button class="quiet-btn" id="db-compact" type="button" disabled>คืนพื้นที่ SQLite</button>
+              </div>
+              <pre class="field-hint" id="db-audit-detail" aria-live="polite" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:330px;overflow:auto"></pre>
+            </section>
+            <section class="panel issues-panel" aria-labelledby="issues-title">
+              <div class="panel-head"><h2 id="issues-title">รายการนำเข้าไม่สมบูรณ์</h2><button class="quiet-btn" type="button" id="issues-load">ตรวจสอบรายการ</button></div>
+              <p class="field-hint" id="issues-summary"></p>
+            </section>
           </div>
-          <p class="field-hint">เมื่อมีงานนำเข้า ระบบจะหยุดหลังไฟล์ปัจจุบันและบันทึก Checkpoint ก่อนติดตั้งลง Program Files · Windows จะขอสิทธิ์ผู้ดูแลระบบ (UAC) · ข้อมูล SQLite ไม่ถูกลบ</p>
-        </section>
-        <section class="panel issues-panel" aria-labelledby="db-health-title">
-          <div class="panel-head"><div><span class="label-top">SQLITE MAINTENANCE</span><h2 id="db-health-title">ตรวจสอบและจัดการพื้นที่ฐานข้อมูล</h2></div></div>
-          <p class="field-hint" id="db-health-summary" aria-live="polite">ตรวจพื้นที่ SQLite, ประวัติการนำเข้า และ Checkpoint โดยไม่แก้ไขไฟล์เพลงต้นฉบับ</p>
-          <div class="toolbar">
-            <button class="quiet-btn" id="db-health-check" type="button">ตรวจสอบ SQLite</button>
-            <button class="quiet-btn" id="db-detail-audit" type="button" disabled>วิเคราะห์ทุกตารางและดัชนี</button>
-            <button class="quiet-btn" id="db-history-clean" type="button" disabled>ล้างประวัติงานเสร็จแล้ว</button>
-            <button class="quiet-btn" id="db-compact" type="button" disabled>คืนพื้นที่ไฟล์ SQLite</button>
-          </div>
-          <p class="field-hint">ล้างเฉพาะข้อมูลชั่วคราวของงานเสร็จแล้ว รายงานรายละเอียดการตรวจความเสี่ยงรอบเก่า (เหลือ 2 รอบล่าสุด) แคชไร้เจ้าของ และดัชนีที่ไม่มีการใช้งาน โดยไม่ลบเพลง เนื้อร้อง ประวัติแก้ไข ผลยืนยันของผู้ใช้ หรือ Checkpoint ของงานค้าง ส่วนการคืนพื้นที่ใช้ VACUUM แยกต่างหาก</p>
-          <pre class="field-hint" id="db-audit-detail" aria-live="polite" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:330px;overflow:auto">ยังไม่ได้วิเคราะห์ขนาดแต่ละตาราง</pre>
-        </section>
-        <section class="panel issues-panel" aria-labelledby="issues-title">
-          <div class="panel-head">
-            <div><span class="label-top">IMPORT DIAGNOSTICS</span><h2 id="issues-title">รายการที่นำเข้าไม่สมบูรณ์</h2></div>
-            <button class="quiet-btn" type="button" id="issues-load">ตรวจสอบรายการผิดพลาด</button>
-          </div>
-          <p class="field-hint" id="issues-summary">เพลงที่ยังไม่มีเนื้อร้องอาจเกิดจากไม่มีไฟล์ LYR/CUR หรือมี Timing ที่อ่านไม่ได้ ไม่จำเป็นต้องเป็นไฟล์เพลงเสีย</p>
-          <p class="field-hint issues-launch-hint">กดปุ่มด้านบนเพื่อดูรายการตามหน้า</p>
-        </section>
-        <div class="panel tip-panel"><span class="tip-icon">✦</span><div><strong>นำเข้าหลายเครื่องได้ ไม่ต้องเปลี่ยนชื่อไฟล์ก่อน</strong><p>ชื่อไฟล์ต้นฉบับซ้ำกันไม่เป็นปัญหา ระบบใช้ SHA-256 แยกไฟล์และเก็บเนื้อร้องต่างเวอร์ชัน · ตอนส่งออกต้องเข้าถึงไฟล์ต้นฉบับได้</p></div></div>
+        </details>
       </section>
       <section class="view" id="view-lyrics" aria-labelledby="lyrics-title">
         <div class="page-eyebrow"><span class="eyebrow-line"></span> SMART LYRICS EDITOR</div>
