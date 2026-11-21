@@ -130,6 +130,47 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
   }catch(error){dispose();throw error;}
   return {
     attach(player,{getTranspose=()=>0,getProgram=()=>null}={}){
+      // The PC keyboard previews notes on an independent voice. In the Web
+      // synth, reserve an unused MIDI channel so touching piano keys cannot
+      // change an instrument or suppress notes of the playing song.
+      const usedChannels=new Set(parsed.notes.map(note=>note.channel));
+      const previewChannel=Array.from({length:16},(_,i)=>15-i)
+        .find(ch=>ch!==9&&!usedChannels.has(ch));
+      const previewHeld=new Set();
+      let previewProgram=null;
+      const previewNote=(pitch,on,programOverride=null)=>{
+        if(disposed||previewChannel===undefined||
+           !Number.isInteger(pitch)||pitch<0||pitch>127||
+           typeof synth.noteOn!=='function'||typeof synth.noteOff!=='function')
+          return false;
+        try{
+          if(on){
+            const program=programOverride===''||programOverride===null
+              ?0:clamp(Number(programOverride)||0,0,127);
+            if(previewProgram!==program){
+              for(const key of previewHeld)synth.noteOff(previewChannel,key);
+              previewHeld.clear();
+              synth.controllerChange(previewChannel,0,0);
+              synth.controllerChange(previewChannel,7,100);
+              synth.controllerChange(previewChannel,11,127);
+              synth.controllerChange(previewChannel,10,64);
+              synth.programChange(previewChannel,program);
+              previewProgram=program;
+            }
+            void ctx.resume().catch(()=>{});
+            if(!previewHeld.has(pitch)){
+              synth.noteOn(previewChannel,pitch,100);previewHeld.add(pitch);
+            }
+          }else if(previewHeld.delete(pitch))synth.noteOff(previewChannel,pitch);
+          return true;
+        }catch(error){console.warn('MIDI keyboard preview:',error);return false;}
+      };
+      const releasePreview=()=>{
+        for(const key of previewHeld){
+          try{synth.noteOff(previewChannel,key);}catch{}
+        }
+        previewHeld.clear();
+      };
       // Prefer audio-thread sequencing. No UI-thread note scheduler runs in
       // this mode. A clock event loop in the app is for lyrics only.
       if(sequencer){
@@ -142,7 +183,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           const shift=clamp(Math.trunc(Number(getTranspose())||0),-12,12);
           if(shift===shiftApplied)return;
           for(let ch=0;ch<16;ch++){
-            if(ch===9)continue; // Do not shift GM percussion note mappings.
+            if(ch===9||ch===previewChannel)continue; // Percussion and separate preview.
             try{synth.midiChannels?.[ch]?.setSystemParameter?.('keyShift',shift);}
             catch(error){onStatus('การปรับคีย์ไม่รองรับในเครื่องเสียงนี้');}
           }
@@ -152,7 +193,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           const program=getProgram();
           if(program===programApplied)return;
           for(let ch=0;ch<16;ch++){
-            if(ch===9)continue;
+            if(ch===9||ch===previewChannel)continue;
             const channel=synth.midiChannels?.[ch];
             try{
               if(program===null||program===undefined||program===''){
@@ -211,9 +252,9 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
         if(!player.paused)play();
         return {
           engine:'SpessaSynth',scheduler:'audio-worklet',duration:parsed.duration,
-          currentTime:()=>Number(sequencer.currentTime),
+          currentTime:()=>Number(sequencer.currentTime),previewNote,
           dispose(){
-            if(stopped)return;stopped=true;pause();
+            if(stopped)return;stopped=true;pause();releasePreview();
             for(const [name,fn] of listeners)player.removeEventListener(name,fn);
             scope.document?.removeEventListener?.('visibilitychange',visibility);
             scope.removeEventListener?.('focus',visibility);
@@ -309,9 +350,9 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           if(disposed)return;
           pause();
           for(const [name,fn] of listeners)player.removeEventListener(name,fn);
-          dispose();
+          releasePreview();dispose();
         },
-        duration:parsed.duration,engine:'SpessaSynth'
+        duration:parsed.duration,engine:'SpessaSynth',previewNote
       };
     },
     dispose
