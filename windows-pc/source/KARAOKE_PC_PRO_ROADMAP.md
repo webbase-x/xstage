@@ -452,3 +452,10 @@ The user requested batched coding without physical QA. **This is a coding update
 - Regression commit `c966ccc9c5cc9de8efba9fd1a685f4e6b788190a`: verify missing later source and linked later source both reject without changing earlier live settings; external linked target remains untouched.
 - **PENDING-QA:** run `python -m unittest discover -s tests -p 'test_restore_rollback_source_preflight.py'` from `windows-pc/source`, then full Windows regression, installer smoke and integrity checks on this commit. Do not mark PASS until exact CI SHA and test evidence are available.
 - **DEFERRED-HARDWARE:** physical audio interfaces, long-duration playback, multi-monitor and remote device matrix remain unverified. No stable publication authorized.
+
+## 2026-11-22 — Hardware-free simulation acceptance policy (user-directed)
+
+- **Scope:** P0–P6 may use virtual audio devices, mock ASIO failures, synthetic PCM, MIDI fixtures, virtual display, fake plugin hosts and Windows CI where suitable. Do not block independent coding solely because a physical device is unavailable.
+- **Evidence labels:** `CODE COMPLETE` means implementation complete; `PASS-SIMULATION` requires an executed, passing simulated test; `PASS-CI` requires an observed passing Windows workflow at the relevant commit; `DEFERRED-HARDWARE` means physical verification is unavailable. Simulation does **not** certify real ASIO drivers, audio interfaces, monitors or live-stage performance.
+- **New test coverage:** `tests/test_p1_virtual_acceptance.py`, `tests/test_virtual_bus_mixer.py`, `tests/test_virtual_audio_integration.py` cover virtual 4/8/16-bus routing, percussion control routing, stereo PCM bus strips, gain/pan/mute/solo/meters/peak bounds, ASIO startup and runtime fallback.
+- **Current verification:** test files committed; no passing Windows CI result for the latest changes has been independently confirmed in this update. Keep P1/P2 acceptance PENDING-QA; hardware items DEFERRED-HARDWARE. Do not mark stable release PASS.
