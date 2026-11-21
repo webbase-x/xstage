@@ -1432,7 +1432,7 @@ class KaraokeApp(tk.Tk):
                     'limiter_output_peak': 'พีคหลัง Limiter',
                     'fallback_reason': 'เหตุผลที่ใช้ BASS สำรอง',
                 }
-                detail = '\\n'.join(f'{labels.get(key,key)}: {value}' for key, value in data.items())
+                detail = '\n'.join(f'{labels.get(key,key)}: {value}' for key, value in data.items())
             except Exception as exc:
                 detail = 'อ่านสถานะระบบเสียงไม่สำเร็จ: ' + str(exc)
         messagebox.showinfo('สถานะระบบเสียง · X-Stage', detail, parent=self)
