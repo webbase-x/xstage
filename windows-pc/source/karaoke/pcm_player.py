@@ -55,7 +55,12 @@ class PcmPlayer:
             self.initialized=True;self.device=self.dll.BASS_GetDevice()
             self.check(self.dll.BASS_SetConfig(0,500),'เตรียมบัฟเฟอร์')
             self.check(self.dll.BASS_SetConfig(1,10),'ตั้งรอบเติมเสียง')
-        except Exception:self.close();raise
+        except Exception:
+            try:
+                self.close()
+            except Exception:
+                pass  # Preserve the original initialization error.
+            raise
     def check(self,result,label):
         if not result:raise OSError(f'{label} ไม่สำเร็จ (BASS {self.dll.BASS_ErrorGetCode()})')
         return result
@@ -170,11 +175,32 @@ class PcmPlayer:
     def pump(self):
         if self.playing and self.dll.BASS_ChannelIsActive(self.stream)==0:self.playing=False;self.ended=True
     def close(self):
-        if hasattr(self,'router'):self.router.close()
-        if self.stream:self.dll.BASS_StreamFree(self.stream);self.stream=0
-        elif self.source:self.dll.BASS_StreamFree(self.source);self.source=0
+        first_error = None
+
+        def cleanup(operation):
+            nonlocal first_error
+            try:
+                operation()
+            except Exception as exc:
+                if first_error is None:
+                    first_error = exc
+
+        router = self.__dict__.pop('router', None)
+        if router is not None:
+            cleanup(router.close)
+        stream, source = self.stream, self.source
+        self.stream = self.source = 0
+        if stream:
+            cleanup(lambda: self.dll.BASS_StreamFree(stream))
+        elif source:
+            cleanup(lambda: self.dll.BASS_StreamFree(source))
         if self.initialized:
+            self.initialized = False
             from .audio_device import release
-            release(self.dll,self._device_key);self.initialized=False
-        if self.directory:self.directory.close();self.directory=None
-        self.playing=False
+            cleanup(lambda: release(self.dll, self._device_key))
+        directory, self.directory = self.directory, None
+        if directory is not None:
+            cleanup(directory.close)
+        self.playing = False
+        if first_error is not None:
+            raise first_error
