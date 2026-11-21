@@ -80,3 +80,26 @@ class RestoreTests(unittest.TestCase):
         self.assertFalse((self.data/'restore-pending').exists())
         self.assertEqual(self.title(), 'ปัจจุบัน')
 
+
+    def test_interrupted_restore_rejects_untrusted_rollback_path(self):
+        pending=self.data/'restore-pending'
+        pending.mkdir()
+        write_json(pending/'state.json', {
+            'status':'applying', 'safety':'../outside',
+            'existed':['songs.sqlite3'], 'replaced':['songs.sqlite3']})
+        with self.assertRaisesRegex(ValueError, 'ไม่ถูกต้อง'):
+            restore.apply_pending(self.data)
+        self.assertEqual(self.title(), 'ปัจจุบัน')
+
+    def test_interrupted_restore_rejects_unlisted_target(self):
+        pending=self.data/'restore-pending'
+        pending.mkdir()
+        safety=self.data/'restore-safety-test'
+        safety.mkdir()
+        write_json(pending/'state.json', {
+            'status':'applying', 'safety':safety.name,
+            'existed':[], 'replaced':['../settings.json']})
+        with self.assertRaisesRegex(ValueError, 'รายการไฟล์'):
+            restore.apply_pending(self.data)
+        self.assertEqual(self.title(), 'ปัจจุบัน')
+
