@@ -24,7 +24,9 @@ const sandbox={
   state,navigator:{deviceMemory:4},document:{getElementById:()=>null},
   AbortController,DOMException,Uint8Array,Blob,
   console:{warn:()=>{failed=true}},setTimeout(fn){timers.push(fn);return timers.length;},
-  clearTimeout(){},getFileId:record=>record?.fileId||'',
+  clearTimeout(){},
+  getStartupSoundFont:async()=>({bytes:null,pending:null}),
+  getFileId:record=>record?.fileId||'',
   privateFile:async(id,token,{signal})=>{
     assert.equal(id,'file-001');assert.equal(token,'token-001');
     assert.equal(signal.aborted,false);fetched++;
