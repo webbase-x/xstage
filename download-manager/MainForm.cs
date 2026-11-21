@@ -316,35 +316,124 @@ public sealed partial class MainForm : Form
             return;
         }
 
+        // Let the content determine each row's height instead of relying on
+        // fixed Top/Height coordinates. Thai instructions wrap at larger DPI
+        // and must never overlap the folder or save buttons.
         using var dialog = new Form
         {
-            Text = "ตั้งค่าดาวน์โหลดอัตโนมัติจาก Chrome / Edge", Width = 590, Height = 340,
-            StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false, MinimizeBox = false, BackColor = Color.White
+            Text = "ตั้งค่าดาวน์โหลดอัตโนมัติจาก Chrome / Edge",
+            ClientSize = new Size(680, 390),
+            MinimumSize = new Size(540, 390),
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.Sizable,
+            MaximizeBox = false, MinimizeBox = false,
+            ShowInTaskbar = false,
+            AutoScaleMode = AutoScaleMode.Font,
+            Font = new Font("Segoe UI", 10),
+            BackColor = Color.White
         };
+        var content = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            ColumnCount = 1, RowCount = 4,
+            Padding = new Padding(20, 18, 20, 18),
+            BackColor = Color.White
+        };
+        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        for (var row = 0; row < content.RowCount; row++)
+            content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
         var instructions = new Label
         {
-            Left = 20, Top = 15, Width = 540, Height = 140,
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, 18),
             Text = "ตั้งค่าดาวน์โหลดอัตโนมัติ: ส่งลิงก์จาก Chrome / Edge เข้า X-Stage\n" +
                    "1. เปิด chrome://extensions หรือ edge://extensions\n" +
                    "2. เปิดโหมดผู้พัฒนา (Developer mode) แล้วกด Load unpacked\n" +
                    "3. เลือกโฟลเดอร์ส่วนขยายของ X-Stage ด้านล่าง\n" +
                    "4. คัดลอก Extension ID (อักษร a–p 32 ตัว) มาวาง แล้วกดบันทึก",
-            Font = new Font("Segoe UI", 10), ForeColor = Color.FromArgb(35, 55, 83)
+            ForeColor = Color.FromArgb(35, 55, 83)
         };
-        var openFolder = new Button { Left = 20, Top = 155, Width = 260, Height = 36,
-            Text = "เปิดโฟลเดอร์ส่วนขยาย", BackColor = Color.FromArgb(231, 239, 250) };
+
+        var folderActions = new TableLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Dock = DockStyle.Top,
+            ColumnCount = 2, RowCount = 1,
+            Margin = new Padding(0, 0, 0, 18)
+        };
+        folderActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        folderActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        var openFolder = new Button
+        {
+            Dock = DockStyle.Fill, MinimumSize = new Size(0, 40),
+            Margin = new Padding(0, 0, 6, 0),
+            Text = "เปิดโฟลเดอร์ส่วนขยาย", BackColor = Color.FromArgb(231, 239, 250)
+        };
         openFolder.Click += (_, _) =>
             Process.Start(new ProcessStartInfo(extensionFolder) { UseShellExecute = true });
-        var copyFolder = new Button { Left = 292, Top = 131, Width = 265, Height = 36,
-            Text = "คัดลอกตำแหน่งโฟลเดอร์", BackColor = Color.FromArgb(231, 239, 250) };
+        var copyFolder = new Button
+        {
+            Dock = DockStyle.Fill, MinimumSize = new Size(0, 40),
+            Margin = new Padding(6, 0, 0, 0),
+            Text = "คัดลอกตำแหน่งโฟลเดอร์", BackColor = Color.FromArgb(231, 239, 250)
+        };
         copyFolder.Click += (_, _) => Clipboard.SetText(extensionFolder);
-        var id = new TextBox { Left = 20, Top = 214, Width = 385, Font = new Font("Segoe UI", 11),
-            PlaceholderText = "วาง Extension ID จากหน้าเบราว์เซอร์" };
-        var register = new Button { Left = 417, Top = 211, Width = 140, Height = 35,
+        folderActions.Controls.Add(openFolder, 0, 0);
+        folderActions.Controls.Add(copyFolder, 1, 0);
+
+        var idCaption = new Label
+        {
+            AutoSize = true, Text = "Extension ID จาก Chrome / Edge",
+            Margin = new Padding(0, 0, 0, 6),
+            ForeColor = Color.FromArgb(35, 55, 83)
+        };
+        var idActions = new TableLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Dock = DockStyle.Top,
+            ColumnCount = 2, RowCount = 1,
+            Margin = Padding.Empty
+        };
+        idActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
+        idActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
+        var id = new TextBox
+        {
+            Dock = DockStyle.Fill, Margin = new Padding(0, 4, 8, 4),
+            Font = new Font("Segoe UI", 11),
+            PlaceholderText = "วาง Extension ID จากหน้าเบราว์เซอร์"
+        };
+        var register = new Button
+        {
+            Dock = DockStyle.Fill, MinimumSize = new Size(0, 40),
+            Margin = Padding.Empty,
             Text = "บันทึกการเชื่อมต่อ", DialogResult = DialogResult.OK,
-            BackColor = Color.FromArgb(0, 111, 221), ForeColor = Color.White };
-        dialog.Controls.AddRange(new Control[] { instructions, openFolder, copyFolder, id, register });
+            BackColor = Color.FromArgb(0, 111, 221), ForeColor = Color.White
+        };
+        idActions.Controls.Add(id, 0, 0);
+        idActions.Controls.Add(register, 1, 0);
+
+        content.Controls.Add(instructions, 0, 0);
+        content.Controls.Add(folderActions, 0, 1);
+        content.Controls.Add(idCaption, 0, 2);
+        content.Controls.Add(idActions, 0, 3);
+        dialog.Controls.Add(content);
+
+        // Label.AutoSize + MaximumSize wraps reliably in WinForms. Keep the
+        // available width in sync when a user resizes the dialog or changes DPI;
+        // AutoScroll keeps every action reachable on small displays.
+        void UpdateInstructionWidth()
+        {
+            var available = Math.Max(220, content.ClientSize.Width -
+                content.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - 6);
+            if (instructions.MaximumSize.Width != available)
+                instructions.MaximumSize = new Size(available, 0);
+        }
+        content.ClientSizeChanged += (_, _) => UpdateInstructionWidth();
+        UpdateInstructionWidth();
         dialog.AcceptButton = register;
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         try
