@@ -79,9 +79,12 @@ class AsioHostTests(unittest.TestCase):
             host.close()
         self.assertFalse(owned.closed)
         self.assertTrue(host.initialized)
+        from karaoke.asio_output import _failed_free_hosts
+        self.assertTrue(any(item is host for item in _failed_free_hosts))
         dll.BASS_ASIO_Free.value = 1
         host.close()
         self.assertTrue(owned.closed)
+        self.assertFalse(any(item is host for item in _failed_free_hosts))
 
     def test_rejects_odd_stereo_channel(self):
         with self.assertRaises(ValueError):
