@@ -179,6 +179,7 @@ class KaraokeApp(tk.Tk):
         settings_menu = tk.Menu(menu, tearoff=False)
         menu.add_cascade(label="ตั้งค่า", menu=settings_menu)
         settings_menu.add_command(label="Multi-Out · MIDI Routing", command=self.open_multi_bus_settings)
+        settings_menu.add_command(label="ASIO Output · ทดลองใช้", command=self.open_asio_settings)
         settings_menu.add_command(label="นโยบายความเป็นส่วนตัวของ X-Stage Karaoke PC", command=self.open_privacy_policy)
         outer = ttk.Frame(self, padding=(24, 18))
         outer.pack(fill="both", expand=True)
@@ -1413,6 +1414,10 @@ class KaraokeApp(tk.Tk):
     def show_error(self, error):
         self.status_var.set(str(error).splitlines()[0])
         messagebox.showerror("X-Stage Karaoke PC", str(error), parent=self)
+
+    def open_asio_settings(self):
+        from .asio_settings import edit_asio_output
+        edit_asio_output(self, self.settings, self.save_settings)
 
     def open_multi_bus_settings(self):
         from .multi_bus_settings import edit_multi_bus
