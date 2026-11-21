@@ -849,6 +849,9 @@ public sealed class DownloadEngine
             // Every segment was discarded: reset the corresponding UI/SQLite
             // progress counters as well, not only the aggregate byte count.
             Array.Clear(job.SegmentDownloadedBytes);
+            // Discard the previous EWMA sampling baseline with the rejected
+            // chunks; otherwise the first post-recovery ETA can be negative.
+            job.PreviousBytes = 0;
         }
         Interlocked.Exchange(ref job.DownloadedBytes, existingTotal);
         // Commit the exact byte-boundary geometry before any Range worker writes
