@@ -506,6 +506,60 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null,
 const BUILTIN_GM_ID='builtin:TimGM6mb';
 const BUILTIN_GM_URL='https://raw.githubusercontent.com/craffel/pretty-midi/main/pretty_midi/TimGM6mb.sf2';
 const BUILTIN_GM_MAX_BYTES=8*1048576;
+// Only the public, redistributable default bank is stored persistently.
+// Private Drive SoundFonts remain in per-account session RAM exclusively.
+const PUBLIC_GM_CACHE='xstage-public-timgm6mb-v1';
+let builtinDownload=null;
+async function requestBuiltinGm(){
+  let store=null;
+  try{store=await scope.caches?.open?.(PUBLIC_GM_CACHE)||null;}catch{}
+  if(store){
+    try{
+      const hit=await store.match(BUILTIN_GM_URL);
+      if(hit){
+        const bytes=new Uint8Array(await hit.arrayBuffer());
+        if(bytes.byteLength>=100000&&bytes.byteLength<=BUILTIN_GM_MAX_BYTES){
+          validateFontContainer(bytes);
+          return bytes;
+        }
+        await store.delete(BUILTIN_GM_URL);
+      }
+    }catch(error){
+      // Corrupt public cache entries may be evicted; private files are never
+      // written here, and a cache failure must not prevent online playback.
+      try{await store.delete(BUILTIN_GM_URL);}catch{}
+    }
+  }
+  const response=await fetch(BUILTIN_GM_URL,{cache:'force-cache'});
+  if(!response.ok)fail('โหลดชุดเสียง GM เริ่มต้นไม่สำเร็จ HTTP '+response.status);
+  const length=Number(response.headers.get('Content-Length')||0);
+  if(length>BUILTIN_GM_MAX_BYTES)fail('ชุดเสียง GM เริ่มต้นใหญ่เกินขอบเขต');
+  const bytes=new Uint8Array(await response.arrayBuffer());
+  if(bytes.byteLength<100000||bytes.byteLength>BUILTIN_GM_MAX_BYTES)
+    fail('ขนาดไฟล์เสียง GM ไม่ถูกต้อง');
+  validateFontContainer(bytes);
+  if(store&&typeof Response!=='undefined'){
+    try{
+      // CacheStorage is best-effort. Never block playback on disk writes.
+      void store.put(BUILTIN_GM_URL,new Response(bytes,{
+        headers:{'Content-Type':'application/octet-stream'}
+      })).catch(()=>{});
+    }catch{}
+  }
+  return bytes;
+}
+function loadBuiltinGm(signal=null){
+  if(signal?.aborted)return Promise.reject(new DOMException('ยกเลิก','AbortError'));
+  if(!builtinDownload){
+    builtinDownload=requestBuiltinGm().catch(error=>{
+      builtinDownload=null;throw error;
+    });
+  }
+  return builtinDownload.then(bytes=>{
+    if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
+    return bytes;
+  });
+}
 let context=null,selected=BUILTIN_GM_ID,fontCache=null,fontRefreshSequence=0,fontRefreshPromise=null;
 let fontLoadPromise=null, fontWarning='',builtinRetryAfter=0;
 function fontStatus(){
@@ -539,6 +593,18 @@ async function refreshFonts(auth){
   select.replaceChildren(new Option('กำลังตรวจสอบ SoundFont…',''));
   const pending=(async()=>{
     const sub=auth?.sub||'',rootId=auth?.rootId||'';
+    // Overlap public GM download with Google Drive's folder scan rather than
+    // waiting for the scan to finish before the first audible MIDI note.
+    // Do not compete for bandwidth on slow/metered connections or prefetch a
+    // private bank: its authorization and lifetime remain account-scoped.
+    const key='xstage-font-pref:'+sub+':'+rootId;
+    let remembered='';
+    try{remembered=localStorage.getItem(key)||'';}catch{}
+    const connection=scope.navigator?.connection;
+    if(auth?.token&&rootId&&(!remembered||remembered===BUILTIN_GM_ID)&&
+       !connection?.saveData&&!/2g/i.test(connection?.effectiveType||'')&&
+       Number(scope.navigator?.deviceMemory||4)>2)
+      void loadBuiltinGm().catch(()=>{});
     const choices=[
       new Option('เสียงเครื่องดนตรี GM · TimGM6mb (6 MB)',BUILTIN_GM_ID)
     ];
@@ -642,14 +708,7 @@ async function selectedFont(token,signal){
       return fontLoadPromise.promise;
     const task=(async()=>{
       try{
-        const response=await fetch(BUILTIN_GM_URL,{cache:'force-cache',signal});
-        if(!response.ok)fail('โหลดชุดเสียง GM เริ่มต้นไม่สำเร็จ HTTP '+response.status);
-        const length=Number(response.headers.get('Content-Length')||0);
-        if(length>BUILTIN_GM_MAX_BYTES)fail('ชุดเสียง GM เริ่มต้นใหญ่เกินขอบเขต');
-        const bytes=new Uint8Array(await response.arrayBuffer());
-        if(bytes.length<100000||bytes.length>BUILTIN_GM_MAX_BYTES)
-          fail('ขนาดไฟล์เสียง GM ไม่ถูกต้อง');
-        validateFontContainer(bytes);
+        const bytes=await loadBuiltinGm(signal);
         if(selected!==id||context?.token!==token||context?.sub!==sub)
           throw new DOMException('เปลี่ยนบัญชีหรือชุดเสียง','AbortError');
         fontCache={id,sub,bytes,parsed:null,label:'TimGM6mb · General MIDI'};

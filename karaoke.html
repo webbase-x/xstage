@@ -456,13 +456,15 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 </script>
 <script src="config.js?v=1127"></script>
-  <script src="https://accounts.google.com/gsi/client" defer></script>
+  <!-- Google OAuth must not hold DOMContentLoaded or the private-song UI hostage
+       on a slow or filtered network. The browser loads GIS independently. -->
+  <script id="xstage-gis-script" src="https://accounts.google.com/gsi/client" async></script>
   <script src="cloud-import-core.js?v=1127" defer></script>
   <script src="xsk-browser.js?v=1127" defer></script>
   <script src="xmid-browser.js?v=1127" defer></script>
   <script src="memory-budget.js?v=1127" defer></script>
   <script src="ios-midi-audio.js?v=1151-queue-handoff" defer></script>
-  <script src="browser-midi.js?v=1127-channel-mixer" defer></script>
+  <script src="browser-midi.js?v=1127-fast-gm-cache" defer></script>
   <script src="midi-pro-engine.js?v=1127-channel-mixer-live-mute" defer></script>
   <script src="video-metadata-editor.js?v=1127" defer></script>
   <script src="video-transcode.js?v=1127" defer></script>
