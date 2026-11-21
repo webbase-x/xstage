@@ -19,9 +19,38 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 65
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - name: Resolve and cross-check release identity
+        id: version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $checker = Get-Content 'download-manager/UpdateChecker.cs' -Raw
+          $installer = Get-Content 'download-manager/installer/XStageDownloadManager.iss' -Raw
+          $versionMatch = [regex]::Match($checker, 'CurrentVersion\s*=\s*"(?<v>\d+\.\d+\.\d+)"')
+          $buildMatch = [regex]::Match($checker, 'CurrentBuild\s*=\s*(?<b>\d+)')
+          $issVersion = [regex]::Match($installer, '#define MyAppVersion "(?<v>\d+\.\d+\.\d+)"')
+          $issBuild = [regex]::Match($installer, '#define MyAppBuild "(?<b>\d+)"')
+          if (-not ($versionMatch.Success -and $buildMatch.Success -and $issVersion.Success -and $issBuild.Success)) {
+            throw 'Could not resolve Download Manager version/build metadata.'
+          }
+          $version = $versionMatch.Groups['v'].Value
+          $build = [int]$buildMatch.Groups['b'].Value
+          if ($issVersion.Groups['v'].Value -cne $version -or [int]$issBuild.Groups['b'].Value -ne $build) {
+            throw "Version mismatch: UpdateChecker=$version Build $build; installer=$($issVersion.Groups['v'].Value) Build $($issBuild.Groups['b'].Value)"
+          }
+          $file = "X-Stage-Download-Manager-v$version-build$build-win-x64-Setup.exe"
+          $artifact = "X-Stage-Download-Manager-v$version-build$build-Windows-EXE-ONLY"
+          $tag = "xstage-download-manager-v$version-build$build-preview"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "build=$build" >> $env:GITHUB_OUTPUT
+          "file=$file" >> $env:GITHUB_OUTPUT
+          "artifact=$artifact" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "Resolved Download Manager v$version Build $build"
+
       - name: Prepare .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
       - name: Test actual HTTP Range resume and fallback
@@ -34,7 +63,7 @@ jobs:
         run: |
           node download-manager/tests/portal-contract.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Portal contract test failed' }
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Generate X-Stage app icon
@@ -183,7 +212,7 @@ jobs:
           if ($hash -notmatch '^[a-f0-9]{64}$') { throw 'Invalid installer checksum' }
           Write-Host "Installer EXE SHA-256: $hash"
       - name: Upload Windows installer EXE only
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: X-Stage-Download-Manager-v0.2.20-build23-Windows-EXE-ONLY
           path: download-manager/installer/output/X-Stage-Download-Manager-v0.2.20-build23-win-x64-Setup.exe
