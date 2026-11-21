@@ -192,11 +192,35 @@ class Decks:
         if active is None:self.stop_tail();return
         dt=max(0,now-self.stamp);self.stamp=now
         base=1. if getattr(app,'system_volume',None) is not None else app.volume_var.get()/100
-        for player in (self.tail,self.rhythm):
-            if player:
-                if not active.playing and player.playing:player.pause()
-                elif active.playing and not player.playing and not player.ended:player.play()
+        for name in ('tail', 'rhythm'):
+            player = getattr(self, name)
+            if player is None:
+                continue
+            try:
+                if not active.playing and player.playing:
+                    player.pause()
+                elif active.playing and not player.playing and not player.ended:
+                    player.play()
                 player.pump()
+            except (OSError, ValueError, RuntimeError):
+                # Auxiliary decks must not break playback of the active song.
+                setattr(self, name, None)
+                try:
+                    player.close()
+                except Exception:
+                    pass
+                if name == 'rhythm':
+                    target, self.rhythm_target = self.rhythm_target, None
+                    if target is not None:
+                        try:
+                            target.set_channel(9, muted=self.drum_was_muted)
+                        except (OSError, ValueError, RuntimeError):
+                            pass
+                from .transition_report import record
+                try:
+                    record(app, 'medley_auxiliary_failed', deck=name)
+                except Exception:
+                    pass
         if not active.playing:return
         self.elapsed+=dt
         if self.rhythm:
