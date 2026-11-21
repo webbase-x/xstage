@@ -340,3 +340,8 @@
 
 - [`604b48b8`](https://github.com/webbase-x/xstage/commit/604b48b8f089aa24633f0079690b5de8eb6a0f5b) adds an opt-in BASSASIO host for device init, channel enable/join, Float32 48 kHz format, start/stop and native callback user-data; [`74bf0822`](https://github.com/webbase-x/xstage/commit/74bf08227ca1ca8a7db36bbe33d868ffc28c8a9c) improves startup failure cleanup.
 - **PENDING-QA**: no compiled native DLL or ASIO driver tests, no BASSMIDI decode producer, no audio channel-format validation against real hardware, no GUI backend switch/fallback and no CI packaging. The host is not used by the main player yet; ASIO playback is not claimed.
+
+## 2026-11-21 — P1.3 experimental decode producer (PENDING-QA)
+
+- [`f8ec4446`](https://github.com/webbase-x/xstage/commit/f8ec4446664a106376ddebb2e853da482e271873) introduces opt-in BASSMIDI decode worker feeding the native PCM queue and ASIO host. [`910113ca`](https://github.com/webbase-x/xstage/commit/910113cae2dec4e1bea64c4216da65294782cef2) exposes native FIFO occupancy, bound in [`25c7698a`](https://github.com/webbase-x/xstage/commit/25c7698a34e7348b65a6260d037bd7227632227d).
+- **PENDING-QA**: no compiled DLL, tests or physical playback. Verify BASSASIO callback buffer semantics (mono channel buffers vs interleaved stereo) and output format before enabling. Main player integration, CI build/package and fallback remain incomplete.
