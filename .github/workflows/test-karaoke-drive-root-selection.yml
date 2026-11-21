@@ -1,0 +1,27 @@
+name: Karaoke Online duplicate Drive root isolation
+on:
+  push:
+    paths:
+      - "app.js"
+      - "cloud-import.js"
+      - "karaoke.html"
+      - "version.json"
+      - "scripts/karaoke-drive-root-selection-test.mjs"
+      - ".github/workflows/test-karaoke-drive-root-selection.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  duplicate-root:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate JavaScript syntax
+        run: |
+          node --check app.js
+          node --check cloud-import.js
+      - name: Verify root selection and source isolation
+        run: node scripts/karaoke-drive-root-selection-test.mjs
