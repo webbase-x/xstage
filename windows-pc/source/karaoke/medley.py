@@ -109,7 +109,12 @@ def tick(app,now=None):
 
     base=base_volume(app)
     gain=min(1.,state['elapsed']/fade) if fade else 1.
-    if waiting and fade and not (opts.get('crossfade') and decks and decks.ready()):gain=min(gain,max(0.,(state['trigger']-position)/max(.01,engine.speed)/fade))
+    # Do not fade the current song to silence while a requested crossfade
+    # is still waiting for the next deck to become ready. The normal queue
+    # advance remains available at the trigger as a fallback.
+    crossfade_waiting = opts.get('crossfade') and waiting
+    if waiting and fade and not crossfade_waiting:
+        gain=min(gain,max(0.,(state['trigger']-position)/max(.01,engine.speed)/fade))
     level=gain*base
     if state['gain'] is None or abs(level-state['gain'])>.015 or level in (0,base):
         if level!=state['gain']:engine.set_volume(level);state['gain']=level
