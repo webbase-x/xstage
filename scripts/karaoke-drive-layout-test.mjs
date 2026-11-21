@@ -20,8 +20,8 @@ assert.ok(importer.includes("for(const folder of ['SONGS','DB','SOUNDFONT','BACK
 assert.ok(!midi.includes("name==='AUDIO'"),'No SoundFont fallback to legacy AUDIO');
 assert.ok(midi.includes("x.name==='SOUNDFONT'"));
 assert.ok(midi.includes("['SF2','SF3']"));
-assert.ok(html.includes('cloud-import.js?v=1131'));
-assert.ok(html.includes('browser-midi.js?v=1131'));
+assert.ok(html.includes('cloud-import.js?v=1131-drive-layout'));
+assert.ok(html.includes('browser-midi.js?v=1131-fast-gm-start'));
 
 const first=importer.indexOf('function pathFor(');
 const end=importer.indexOf('async function db()',first);
