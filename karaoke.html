@@ -23,7 +23,7 @@
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
   <link rel="stylesheet" href="style.css?v=1152-midi-top-keyboard">
-  <link rel="stylesheet" href="xstage-ux.css?v=1152-midi-top-keyboard">
+  <link rel="stylesheet" href="xstage-ux.css?v=1156-song-key-single-menu">
   <link rel="stylesheet" href="cloud-import.css?v=1137-individual-select">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
@@ -93,7 +93,9 @@
                 aria-controls="midi-keyboard-panel" aria-expanded="false"
                 aria-label="เปิดหรือซ่อนคีย์บอร์ดดนตรี MIDI" title="คีย์บอร์ด MIDI แบบ X-Stage Karaoke PC">🎹 <span>คีย์บอร์ด MIDI</span></button>
             </div>
-            <button id="toggle-keyboard" class="stage-action toolbar-button toolbar-aux" type="button" aria-controls="virtual-keyboard" aria-expanded="false" title="เปิดหรือซ่อนแป้นพิมพ์">⌨ <span>แป้นพิมพ์</span></button>
+            <output id="toolbar-song-key" class="song-key-toolbar" aria-label="คีย์เพลงปัจจุบัน" aria-live="polite">คีย์ —</output>
+            <!-- Keep the original handler available to the menu and mobile remote. -->
+            <button id="toggle-keyboard" type="button" hidden aria-controls="virtual-keyboard" aria-expanded="false" aria-label="เปิดแป้นพิมพ์ค้นหา">แป้นพิมพ์</button>
             <button id="fullscreen" class="toolbar-button toolbar-fullscreen" type="button" aria-label="แสดงเต็มหน้าจอ" title="เต็มหน้าจอ">⛶</button>
             <time id="mobile-stage-clock" class="mobile-stage-clock stage-clock" aria-label="เวลาปัจจุบัน">--:--:--</time>
           </header>
@@ -455,13 +457,13 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="video-transcode.js?v=1119" defer></script>
   <script src="cloud-import.js?v=1137-individual-select" defer></script>
   <script src="tv-refresh.js?v=1119" defer></script>
-  <script src="app.js?v=1155-first-midi-ready" defer></script><script src="pc-extensions.js?v=1119" defer></script>
+  <script src="app.js?v=1156-song-key-single-menu" defer></script><script src="pc-extensions.js?v=1119" defer></script>
   <script src="midi-keyboard-ui.js?v=1152-midi-top-keyboard" defer></script>
   <script src="native-audio-meter.js?v=1119" defer></script>
   <script src="stage-controls.js?v=1119" defer></script>
   <script src="mobile-layout.js?v=1119" defer></script>
   <script src="android-apk-download.js?v=1119" defer></script>
 
-  <script src="stage-ui.js?v=1119" defer></script>
+  <script src="stage-ui.js?v=1156-song-key-single-menu" defer></script>
 </body>
 </html>
