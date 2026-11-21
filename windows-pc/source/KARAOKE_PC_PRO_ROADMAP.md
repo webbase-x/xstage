@@ -180,3 +180,8 @@
 - [`a622995a`](https://github.com/webbase-x/xstage/commit/a622995aea4c204058b5d1772c340ff8cfb35d09) makes `PcmPlayer.close()` best-effort across router, stream, device and DLL directory, preserving the first exception and the original constructor exception on initialization failure.
 - [`4bbf7cce`](https://github.com/webbase-x/xstage/commit/4bbf7cce5ab8823a5b204e18c5cce1ecc47cd9ef) adds router/stream teardown regression cases. These are source-only changes, **test execution not verified**.
 - P0.5 remains **IN PROGRESS**, not PASS: media format path coverage (MIDI/NCN/EMK-legacy/video), transition edge cases, and automated CI evidence still need work. Physical Windows playback and 30-minute soak are **DEFERRED-HARDWARE at user request**. Do not claim fully implemented or certified.
+
+## 2026-11-21 — P0.5 failed tail close isolation
+
+- [`6f9927b7`](https://github.com/webbase-x/xstage/commit/6f9927b7eaf16b605a67621da14d7dfad73feb3a) detaches the finished tail before native close and prevents teardown exceptions from interrupting the active next song; logs `tail_cleanup_failed` best effort. [`ec86e7e7`](https://github.com/webbase-x/xstage/commit/ec86e7e733e2d61f4b37727ccef9f29e3e564e02) adds a regression for no repeated close on later ticks.
+- Test not executed; hardware QA deferred at user request. P0.5 still IN PROGRESS; do not claim all file formats certified.
