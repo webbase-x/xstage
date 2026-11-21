@@ -177,3 +177,19 @@ class RestoreTests(unittest.TestCase):
         self.assertFalse(list(self.data.glob('restore-safety-*')))
         self.assertTrue((self.data/'restore-pending').exists())
 
+
+    def test_applying_journal_write_failure_cleans_unused_safety_snapshot(self):
+        restore.stage_restore(self.source,self.data)
+        original=restore.write_json
+        def fail_applying(path,value):
+            if Path(path).name=='state.json' and value.get('status')=='applying':
+                raise OSError('journal disk full')
+            return original(path,value)
+        with patch.object(restore,'write_json',side_effect=fail_applying):
+            with self.assertRaisesRegex(OSError,'journal disk full'):
+                restore.apply_pending(self.data)
+        self.assertEqual(self.title(),'ปัจจุบัน')
+        self.assertFalse(list(self.data.glob('restore-safety-*')))
+        state=json.loads((self.data/'restore-pending'/'state.json').read_text(encoding='utf-8'))
+        self.assertEqual(state['status'],'prepared')
+
