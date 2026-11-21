@@ -75,7 +75,7 @@ class RuntimeInstallerTests(unittest.TestCase):
         self.assertIn("'runas'", source)
         # ShellExecuteW returns NULL or an error code <= 32 on failure.
         # Include the NULL check: on 64-bit Windows restype is c_void_p.
-        self.assertRegex(source, r"if\\s+not\\s+result\\s+or\\s+result\\s*<=\\s*32\\s*:")
+        self.assertRegex(source, r"if\s+not\s+result\s+or\s+result\s*<=\s*32\s*:")
         self.assertIn("shell.restype=ctypes.c_void_p", source)
         self.assertLess(source.index("ShellExecuteW"), source.index("app.close_app()"))
         script = (ROOT / "tools" / "Repair-Dependencies.ps1").read_text(encoding="utf-8-sig")
