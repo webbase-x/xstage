@@ -355,3 +355,8 @@
 
 - [`98188281`](https://github.com/webbase-x/xstage/commit/98188281aff4e827b627292ae359585d44a324e5) requires native FIFO occupancy and preserves ASIO startup exceptions; [`effd4971`](https://github.com/webbase-x/xstage/commit/effd49711fccb4a1ea7d31f55c9e783081e35015) adds mock-only producer lifecycle tests (not executed).
 - **PENDING-QA**: ASIO callback format and hardware operation are not verified; ASIO is not wired into the default player. Native DLL CI outcome and BASS fallback must be verified before release.
+
+## 2026-11-21 — P1.3 explicit ASIO selection with BASS startup fallback (PENDING-QA)
+
+- [`67167199`](https://github.com/webbase-x/xstage/commit/6716719945257afff418c06d7e3495b26e06494c) adds an opt-in ASIO backend factory with BASS fallback when ASIO initialization fails. [`088cce1f`](https://github.com/webbase-x/xstage/commit/088cce1f17ffd33c2c8bce8635614a2fcc12f203) integrates it into the single-output MIDI playback path; [`580628c1`](https://github.com/webbase-x/xstage/commit/580628c146c9a001d47161d9b298e0dfd294a2eb) adds mocked selector tests (not run).
+- **PENDING-QA**: no user-facing ASIO settings dialog; ASIO opt-in requires configuration. Multi-bus takes precedence. Fallback handles startup only, not a driver failure during playback. Callback format/hardware tests and DLL CI validation remain pending. Do not label stable.
