@@ -19,13 +19,15 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebResourceResponse;
+import androidx.webkit.WebViewAssetLoader;
 import android.widget.Toast;
 import org.json.JSONObject;
 import java.io.OutputStream;
 
 public class MainActivity extends Activity {
-    private static final String BASE_URL="https://webbase-x.github.io/xstage/ag06/";
-    private static final String TRUSTED_ORIGIN="https://webbase-x.github.io";
+    private static final String BASE_URL="https://appassets.androidplatform.net/assets/ag06/index.html";
+    private static final String TRUSTED_ORIGIN="https://appassets.androidplatform.net";
     private static final int RECORD_PERMISSION_REQUEST=721;
     private static final int MAX_DATA_URL_CHARS=33_000_000;
     private WebView web;
@@ -43,7 +45,12 @@ public class MainActivity extends Activity {
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setMediaPlaybackRequiresUserGesture(true);
+        final WebViewAssetLoader assetLoader=new WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/",new WebViewAssetLoader.AssetsPathHandler(this)).build();
         web.setWebViewClient(new WebViewClient(){
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
+                return assetLoader.shouldInterceptRequest(request.getUrl());
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
                 final Uri uri=request.getUrl();
                 final String url=uri.toString();
@@ -57,7 +64,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onReceivedError(WebView view,WebResourceRequest request,WebResourceError error){
                 if(request.isForMainFrame()){
-                    Toast.makeText(MainActivity.this,"ไม่สามารถโหลดหน้า AG06 Studio - ตรวจสอบอินเทอร์เน็ต",Toast.LENGTH_LONG).show();
+                    Toast.makeText(MainActivity.this,"ไม่สามารถโหลดหน้า AG06 Studio - ตรวจสอบการติดตั้ง APK",Toast.LENGTH_LONG).show();
                 }
             }
         });
