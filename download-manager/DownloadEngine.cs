@@ -366,7 +366,14 @@ public sealed class DownloadEngine
             IsRedownload = video && separateCopy
         };
         Jobs.Insert(0, job);
-        Save();
+        // A new transfer must not start unless its record is durable. Otherwise
+        // a crash can leave downloaded bytes with no recoverable job history.
+        var storageError = Save();
+        if (storageError.Length > 0)
+        {
+            Jobs.Remove(job);
+            throw new IOException(storageError);
+        }
         Start(job);
         return job;
     }
