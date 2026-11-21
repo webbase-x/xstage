@@ -32,6 +32,7 @@ class NativePcmBridge:
             'xstage_pcm_pop': ([PTR, PTR, UINT], UINT),
             'xstage_pcm_underruns': ([PTR], U64),
             'xstage_pcm_overruns': ([PTR], U64),
+            'xstage_asio_callback': ([ctypes.c_int, UINT, PTR, UINT, PTR], UINT),
         }
         for name, (args, result) in signatures.items():
             fn = getattr(dll, name)
@@ -40,6 +41,11 @@ class NativePcmBridge:
         if not handle:
             raise OSError('สร้าง Native PCM bridge ไม่สำเร็จ')
         self.dll, self.handle = dll, handle
+
+    def callback_address(self):
+        if not self.handle:
+            raise OSError('PCM bridge ถูกปิดแล้ว')
+        return ctypes.cast(self.dll.xstage_asio_callback, PTR).value
 
     def push(self, pcm):
         if not self.handle:
