@@ -152,3 +152,8 @@
 - [`092168ec`](https://github.com/webbase-x/xstage/commit/092168ec4619a66710b63451a6da3dd8c686e59e) makes `medley_decks.build()` release both rhythm and main decks on failure even when one close raises, preserving original setup exception.
 - [`628f697a`](https://github.com/webbase-x/xstage/commit/628f697a63d15eb33e3d07c0be90ec00ede054c9) adds injected failure regression to `tests/test_full_song_medley.py`.
 - Source and tests committed; **test execution, Windows CI and real-time gapless audio remain unverified**. P0.5 IN PROGRESS; 24/27 remaining. Next validate tests on Windows, then measure preload/transition gap and 30-minute audio soak.
+
+## 2026-11-21 — P0.5 discard completed preloaded decks safely
+
+- [`bacf1c03`](https://github.com/webbase-x/xstage/commit/bacf1c036a5941550858eaa9e9cdec85fdd39dfc) changes `Decks.discard()` callback to attempt closure of both completed preload players even if one close raises. [`f51fd58f`](https://github.com/webbase-x/xstage/commit/f51fd58f1f71e59bf28c0e4a3fd886117d33718d) adds deterministic `Future`-based regression.
+- Source and tests committed, **not yet executed**. Windows CI and measured no-gap audio transitions remain pending. P0.5 IN PROGRESS; 24/27 outstanding.
