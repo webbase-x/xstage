@@ -168,3 +168,9 @@
 
 - [`b5396f8c`](https://github.com/webbase-x/xstage/commit/b5396f8c1eb7a57a8d28529a3c3cd987b41d0710) prevents an optional drum-fill close error from aborting a successfully prepared main song; [`ed2f9087`](https://github.com/webbase-x/xstage/commit/ed2f9087f9f7b371eca47957a4a004e7e2256e7f) adds a mocked seek-and-close failure regression.
 - Tests committed but not executed in Windows CI. No verified gapless playback or hardware evidence yet. P0.5 IN PROGRESS, 24/27 outstanding.
+
+## 2026-11-21 — P0.5 crossfade fallback and user-authorized hardware deferral
+
+- User explicitly requests implementing all P0.5 source work now and deferring **all real-device, real-EXE, real-audio, and physical soak tests**. Record those checks as DEFERRED-HARDWARE; do not represent them as PASS or hold up source development. Automated source/CI checks remain desirable but do not certify hardware behavior.
+- [`3c8aae08`](https://github.com/webbase-x/xstage/commit/3c8aae08aed34b4b14c0154fc4e5f9d2b0c5592c) prevents requested crossfade from fading the outgoing song to silence when the next deck is still loading; ordinary queue advance remains the fallback at the trigger.
+- P0.5 source work remains IN PROGRESS: MIDI/NCN/EMK legacy and video path review, transition instrumentation and remaining fault handling not yet closed. No physical gapless/30-minute soak evidence; 24/27 checklist gates remain pending.
