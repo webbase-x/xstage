@@ -32,6 +32,18 @@ if (args.Length >= 3 && args[0] == "--media-smoke")
     return;
 }
 
+// Windows device names remain reserved even when an extension is present.
+foreach (var device in new[] { "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$",
+             "COM1", "COM4", "COM9", "LPT1", "LPT4", "LPT9" })
+{
+    var cleaned = DownloadFileNaming.CleanName(device.ToLowerInvariant() + ".txt");
+    if (cleaned != "_" + device.ToLowerInvariant() + ".txt")
+        throw new Exception("Reserved Windows filename was not sanitized: " + device);
+}
+if (DownloadFileNaming.CleanName("company.txt") != "company.txt" ||
+    DownloadFileNaming.CleanName("LPT10.txt") != "LPT10.txt")
+    throw new Exception("Filename sanitization must not rename ordinary files.");
+
 var bytes = new byte[9 * 1024 * 1024];
 for (int i = 0; i < bytes.Length; i++) bytes[i] = (byte)(i % 251);
 using var server = new FileServer(bytes);
