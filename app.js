@@ -2313,7 +2313,9 @@ function setMidiEngineStatus(engine){
   if(!label)return;
   label.hidden=!engine;
   label.textContent=engine?.engine==='SpessaSynth'
-    ?'เครื่องเสียง: SpessaSynth · SoundFont'
+    ?engine?.scheduler==='audio-worklet'
+      ?'เครื่องเสียง: SpessaSynth · เล่นต่อเมื่อสลับแท็บ'
+      :'เครื่องเสียง: SpessaSynth · โหมดสำรอง'
     :engine?'เครื่องเสียง: Web Audio สำรอง':'';
 }
 window.addEventListener('xstage:soundfont-change',()=>{
@@ -3900,7 +3902,17 @@ window.addEventListener('xstage-native-audio-focus',event=>{
     tryRecoverInterruptedPlayback();
   }
 });
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)tryRecoverInterruptedPlayback();});
+document.addEventListener('visibilitychange',()=>{
+  // Background MIDI is scheduled by the AudioWorklet, not a tab timer.
+  // Resume lyric/transport rendering only when the page becomes visible.
+  // Do not pause, start, or seek music merely because visibility changed.
+  if(!document.hidden){
+    updateTransport();
+    scheduleLyricsDraw();
+    syncMediaSessionPosition();
+    tryRecoverInterruptedPlayback();
+  }
+});
 window.addEventListener('pageshow',tryRecoverInterruptedPlayback);
 window.addEventListener('focus',tryRecoverInterruptedPlayback);
 
