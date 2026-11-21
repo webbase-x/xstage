@@ -36,13 +36,17 @@ settings.window.XStageBrowserMidi.fontStatus=()=>({selectedId:''});
 const noBank=await getStartupSoundFont('token',new AbortController().signal);
 assert.deepEqual({bytes:noBank.bytes,pending:noBank.pending},
   {bytes:null,pending:null},'No selected bank should start MIDI immediately');
-assert.ok(source.includes('void upgradeWhenReady(lateEngine)'),
-  'Expensive synthesizer prep must upgrade after startup, never block indefinitely');
-assert.ok(source.includes('void lateFontPromise.then(bytes=>'),
-  'Late SoundFonts must upgrade the playing song');
-assert.ok(source.includes('state.liveMidiPlayback=updated'),
-  'Upgrade must replace the synth without replacing the current song');
+assert.ok(source.includes('liveFontBytes=await ensureMidiInstrumentBank('),
+  'The first song must wait for its SoundFont instead of playing oscillators');
+assert.ok(source.includes('const professional=await prepareFirstMidiSynth('),
+  'Initial playback must await the professional synth before emitting notes');
+assert.ok(source.includes('playRealtime(player,liveMidiBytes,midiOptions)'),
+  'The compatibility synthesizer must receive the real SoundFont');
+assert.ok(!source.includes('...midiOptions,fontBytes:null'),
+  'Selected SoundFonts must never be discarded by the fallback');
+assert.ok(!source.includes('void upgradeWhenReady(lateEngine)'),
+  'Do not play 8-bit audio while waiting to upgrade during the first track');
 const fontSource=fs.readFileSync(new URL('../browser-midi.js',import.meta.url),'utf8');
 assert.ok(fontSource.includes('validateFontContainer(bytes)'),
   'SoundFont loading must validate RIFF without parsing full sample data on UI thread');
-console.log('PASS: iPhone bounded MIDI start, deferred bank upgrade and no SoundFont main-thread parsing');
+console.log('PASS: font preload remains bounded while downloading MIDI; first audible note uses real bank and synth');
