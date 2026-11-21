@@ -365,3 +365,12 @@
 
 - [`477a894f`](https://github.com/webbase-x/xstage/commit/477a894f9f5db212c37beddeb9c45398fe65b8ae) adds an opt-in ASIO driver/channel dialog with read-only device enumeration and persistence; [`f8d039b0`](https://github.com/webbase-x/xstage/commit/f8d039b05c9abf33c73bb855844e9703f063092b) adds its Settings menu entry.
 - **PENDING-QA**: no UI regression executed; BASSASIO stereo callback ABI and physical playback unverified. Driver enumeration is not a device-ready test. Multi-Out still overrides ASIO; fallback handles initialization failures only.
+
+## 2026-11-21 — P1.3 ASIO callback / FIFO safety (PENDING-QA)
+
+- Official BASSASIO documentation confirms that joined channels deliver **interleaved** samples and ASIOPROC's `length` is **bytes**. Stereo float32 therefore uses 8 bytes/frame.
+- [`5306f16b`](https://github.com/webbase-x/xstage/commit/5306f16b9b0c26bd3d1934a289ad11742644c484): input ASIO buffers are no longer overwritten when rejecting unexpected callback invocations. [`f261752c`](https://github.com/webbase-x/xstage/commit/f261752ce7e86af74ab37f32567182399d02ec41) tests this with the compiled DLL and makes its presence optional outside CI.
+- [`baa9c3ac`](https://github.com/webbase-x/xstage/commit/baa9c3acbcc5f2a3fff0bb7f5dbf5bcfdea0f77a): Windows candidate build requires native DLL ABI tests; an absent or incompatible bridge is not skipped in CI.
+- [`f68a9685`](https://github.com/webbase-x/xstage/commit/f68a968558f9f56254ab4ba2c2f4011aba5248c8): BASSMIDI producer retries partial PCM pushes instead of dropping unaccepted frames; [`0b46274a`](https://github.com/webbase-x/xstage/commit/0b46274ae5377daf0a5f55487163733804f0e758) covers ordering with a fake partial consumer.
+- [`dc081f47`](https://github.com/webbase-x/xstage/commit/dc081f47b6a5b2a0153854871d9f345d387829d0): a failed ASIO driver release does not free its callback queue; [`72d4d516`](https://github.com/webbase-x/xstage/commit/72d4d5166dc60ac8ff7ef519849141041acba7ed) adds a mocked regression.
+- **PENDING-QA / DEFERRED-HARDWARE**: no verified Windows Actions run or physical playback; native callback ABI tests are added but not confirmed passing. Hardware verification and runtime driver-disconnect fallback still outstanding. Do not promote as a stable release.
