@@ -895,3 +895,143 @@ html,body{max-width:100%;overflow:hidden}
   #view-lyrics .replacement-choice input{min-height:38px;padding:7px 10px}
   #view-lyrics .replacement-hint{margin:3px 0 5px;line-height:1.35}
 }
+
+
+/* v0.1.35: calm import workspace — progressive disclosure and legible controls. */
+/* Navigation keeps the action names; explanatory sublabels are unnecessary. */
+.side-heading,.nav-link small,.side-version .zoom-hint{display:none!important}
+.nav-link>span:last-child{font-size:13px!important;line-height:1.45}
+.nav-link{min-height:44px}
+.top-actions .chip-soft,.top-actions .avatar{display:none}
+.breadcrumb strong{font-size:14px!important;letter-spacing:0;color:#eaf4ff}
+
+/* Import is the only scroll container. Expanding optional tools never clips them. */
+#view-import.is-visible{
+  overflow-y:auto!important;overflow-x:hidden!important;
+  overscroll-behavior:contain;scrollbar-width:thin;
+  scrollbar-color:#405675 transparent;
+  align-content:start;gap:14px;
+  padding:0 2px 18px 0;
+}
+#view-import>.hero,
+#view-import>.stat-grid,
+#view-import>.import-disclosure,
+#view-import>.import-main-panels{flex:0 0 auto!important;min-width:0}
+#view-import .hero{
+  display:flex!important;align-items:center;min-height:66px!important;
+  height:auto!important;padding:14px 23px;
+  background:linear-gradient(110deg,#162747,#203e5a);
+  box-shadow:none;border-radius:15px;
+}
+#view-import .hero:after{display:none}
+#view-import .hero-copy{padding:0!important;min-width:0}
+#view-import .hero h1{
+  font-size:clamp(22px,1.7vw,30px)!important;
+  line-height:1.25;margin:0!important
+}
+#view-import .stat-grid{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:13px!important;margin:0!important;
+}
+#view-import .stat{
+  min-width:0;min-height:96px;padding:16px 18px!important;
+  border-radius:14px;justify-content:center;gap:7px;
+}
+#view-import .stat>span{color:#b7cae5;font-size:13px!important;line-height:1.35}
+#view-import .stat strong{
+  font-size:clamp(27px,2.15vw,36px)!important;
+  line-height:1.1;padding:0;letter-spacing:-.02em;
+}
+#view-import .stat-grid-secondary{grid-template-columns:repeat(3,minmax(0,1fr))!important;margin:12px 0 0!important}
+#view-import .stat-grid-secondary .stat{min-height:82px;background:#152139}
+#view-import .stat-grid-secondary .stat strong{font-size:26px!important}
+
+/* Accessible native disclosure: summary remains visible, details load on demand. */
+#view-import .import-disclosure{display:block;min-height:0;min-width:0}
+#view-import .import-disclosure>summary{
+  width:max-content;max-width:100%;display:list-item;list-style-position:inside;
+  cursor:pointer;user-select:none;color:#b6d3e9;
+  font-size:13px;font-weight:600;line-height:1.5;
+  padding:8px 12px;border:1px solid #344961;border-radius:10px;
+  background:#15243b;
+}
+#view-import .import-disclosure>summary:hover{color:#e5f9ff;border-color:#5b8295}
+#view-import .import-disclosure>summary:focus-visible{outline:2px solid #70dacc;outline-offset:2px}
+#view-import>.import-main-panels{
+  display:grid!important;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr)!important;
+  gap:14px!important;height:auto!important;align-items:stretch;
+}
+#view-import .feature-panel,#view-import .progress-panel{
+  height:auto!important;min-height:280px!important;padding:23px 24px!important;
+  border-radius:17px;display:flex;flex-direction:column;
+}
+#view-import .panel-head{margin:0 0 16px;align-items:center}
+#view-import .panel-head h2{font-size:18px;line-height:1.35}
+#view-import .field-label{
+  font-size:13px;margin:0 0 9px;font-weight:600
+}
+#view-import .input-wrap{min-height:50px}
+#view-import .input-wrap input{font-size:14px;padding:10px 0}
+#view-import .browse-btn,#view-import .quiet-btn{font-size:12px;padding:10px 13px;min-height:37px}
+#view-import .primary-btn{font-size:14px;padding:13px 16px;min-height:45px}
+#view-import .feature-panel .folder-actions{
+  margin:10px 0 17px;display:flex;flex-wrap:wrap;gap:9px;align-items:center;
+}
+#view-import .field-hint{font-size:12px;line-height:1.5;color:#9db6cf}
+#view-import .field-hint:empty,#view-import .progress-panel p:empty,
+#view-import #db-audit-detail:empty{display:none}
+#view-import .recover-action{
+  margin-top:13px;padding:0;border:0;background:none;box-shadow:none;
+  display:flex!important;grid-template-columns:none!important;
+}
+#view-import .recover-btn{justify-self:auto;white-space:normal}
+#view-import .progress-panel h3{
+  font-size:17px!important;font-weight:650;text-align:left;
+  margin:3px 0 8px;line-height:1.45;
+}
+#view-import .progress-panel>p{font-size:13px!important;line-height:1.55;text-align:left;margin:0 0 12px}
+#view-import .progress-panel .progress-track{margin:16px 0 10px!important;flex:none}
+#view-import .progress-numbers{font-size:12px!important;line-height:1.45;gap:10px}
+#view-import .progress-panel .toolbar{margin:16px 0 0!important;flex-wrap:wrap}
+#view-import .progress-panel #summary-refreshed{margin-top:9px;font-size:11px!important}
+#view-import .import-advanced-content{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;margin-top:12px;
+}
+#view-import .import-advanced-content>.panel{
+  min-width:0;min-height:0;margin:0;padding:19px 20px;
+  display:block!important;
+}
+#view-import .import-advanced-content>.issues-panel:last-child{grid-column:1/-1}
+#view-import .import-advanced-content .toolbar{
+  display:flex;flex-wrap:wrap;gap:8px;margin:11px 0 0
+}
+#view-import .import-advanced-content .panel-head{
+  display:flex!important;align-items:center;flex-wrap:wrap;gap:9px;margin-bottom:10px;
+}
+#view-import .import-advanced-content h2{font-size:15px}
+#view-import .import-advanced-content .field-hint{
+  margin:5px 0;overflow-wrap:anywhere
+}
+@media(max-width:1200px){
+  #view-import>.import-main-panels{grid-template-columns:minmax(0,1fr)!important}
+  #view-import .feature-panel,#view-import .progress-panel{min-height:0!important}
+  #view-import .import-advanced-content{grid-template-columns:minmax(0,1fr)}
+  #view-import .import-advanced-content>.issues-panel:last-child{grid-column:auto}
+}
+@media(max-width:900px){
+  #view-import .hero{min-height:56px!important;padding:13px 17px}
+  #view-import .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}
+  #view-import .stat{padding:13px 14px!important;min-height:82px}
+  #view-import .stat>span{font-size:12px!important}
+  #view-import .stat strong{font-size:26px!important}
+  #view-import .stat-grid-secondary{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  #view-import .feature-panel,#view-import .progress-panel{padding:18px!important}
+}
+@media(max-width:430px){
+  #view-import .stat-grid-secondary{grid-template-columns:minmax(0,1fr)!important}
+  #view-import .stat>span{font-size:11px!important}
+  #view-import .stat strong{font-size:23px!important}
+  #view-import .input-wrap{padding:0 9px;gap:7px}
+  #view-import .browse-btn{font-size:11px;padding:8px}
+}
