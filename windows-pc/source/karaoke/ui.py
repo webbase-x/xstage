@@ -991,6 +991,7 @@ class KaraokeApp(tk.Tk):
         new_engine = None
         phase = 'system'
         try:
+            self._stop_chroma_video()
             if self.engine:
                 self.engine.close()
                 self.engine = None
@@ -1417,7 +1418,8 @@ class KaraokeApp(tk.Tk):
         self.update_stage_mode()
 
     def _paint_chroma_video(self):
-        if self._chroma_bridge is None or self.stage_chroma is None:
+        if (self._chroma_bridge is None or self.stage_chroma is None
+                or self.stage is None or not self.stage.winfo_exists()):
             return
         try:
             self._chroma_bridge.paint_tk(self.stage_chroma)
@@ -1607,5 +1609,6 @@ class KaraokeApp(tk.Tk):
         warmup=self.__dict__.get('queue_warmup')
         if warmup:
             step(self,'คืนแคชเพลงรอ',warmup.close)
+        step(self,'ปิดตัวถอดรหัส Chromakey',self._stop_chroma_video)
         if self.engine:step(self,'ปิดระบบเล่นเสียง',self.engine.close)
         finish(self)
