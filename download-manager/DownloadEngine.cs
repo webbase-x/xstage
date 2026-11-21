@@ -829,6 +829,9 @@ public sealed class DownloadEngine
         {
             foreach (var file in Directory.GetFiles(work, "*.part")) File.Delete(file);
             existingTotal = 0;
+            // Every segment was discarded: reset the corresponding UI/SQLite
+            // progress counters as well, not only the aggregate byte count.
+            Array.Clear(job.SegmentDownloadedBytes);
         }
         Interlocked.Exchange(ref job.DownloadedBytes, existingTotal);
         var tasks = Enumerable.Range(0, count).Select(i =>
