@@ -1089,6 +1089,8 @@ public sealed partial class MainForm : Form
     private void PaintProgress(object? sender, DataGridViewCellPaintingEventArgs e)
     {
         if (e.RowIndex < 0 || e.ColumnIndex != _grid.Columns["Progress"].Index) return;
+        var graphics = e.Graphics;
+        if (graphics is null) return;
         e.PaintBackground(e.CellBounds, true);
         var job = VisibleJobAt(e.RowIndex);
         if (job is not null && (job.TotalBytes > 0 || job.Kind == "Video" ||
@@ -1101,12 +1103,12 @@ public sealed partial class MainForm : Form
             using var bg = new SolidBrush(Color.FromArgb(229, 236, 245));
             using var fg = new SolidBrush(Color.FromArgb(32, 133, 222));
             using var complete = new SolidBrush(Color.FromArgb(17, 157, 104));
-            e.Graphics.FillRectangle(bg, rectangle);
+            graphics.FillRectangle(bg, rectangle);
             // Completed always has one continuous green bar, even when
             // temporary HTTP segment counters still contain gaps/old values.
             if (completeJob)
             {
-                e.Graphics.FillRectangle(complete, rectangle);
+                graphics.FillRectangle(complete, rectangle);
             }
             else
             {
@@ -1124,22 +1126,22 @@ public sealed partial class MainForm : Form
                         var startX = rectangle.X + i * rectangle.Width / segmentCount;
                         var endX = rectangle.X + (i + 1) * rectangle.Width / segmentCount;
                         var width = Math.Max(1, endX - startX - (segmentCount > 1 ? 1 : 0));
-                        e.Graphics.FillRectangle(partProgress >= 1 ? complete : fg,
+                        graphics.FillRectangle(partProgress >= 1 ? complete : fg,
                             startX, rectangle.Y, (int)Math.Round(width * partProgress), rectangle.Height);
                     }
                 }
                 else
-                    e.Graphics.FillRectangle(fg, rectangle.X, rectangle.Y,
+                    graphics.FillRectangle(fg, rectangle.X, rectangle.Y,
                         (int)Math.Round(rectangle.Width * progress), rectangle.Height);
             }
             using var progressFont = new Font("Segoe UI", 8, FontStyle.Bold);
-            TextRenderer.DrawText(e.Graphics, ProgressPresentation.PercentLabel(job),
+            TextRenderer.DrawText(graphics, ProgressPresentation.PercentLabel(job),
                 progressFont, rectangle,
                 completeJob || progress > .52 ? Color.White : Color.FromArgb(25, 70, 117),
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
         else
-            TextRenderer.DrawText(e.Graphics, e.FormattedValue?.ToString() ?? "—",
+            TextRenderer.DrawText(graphics, e.FormattedValue?.ToString() ?? "—",
                 _grid.Font, e.CellBounds, Color.FromArgb(188, 198, 214),
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         e.Handled = true;
