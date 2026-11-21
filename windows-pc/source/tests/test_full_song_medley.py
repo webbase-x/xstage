@@ -13,6 +13,17 @@ from karaoke.smf import MidiEvent, MidiSong
 
 
 class FullSongMedleyTests(unittest.TestCase):
+    def test_midi_wrapper_constructor_failure_releases_soundfont_device(self):
+        from pathlib import Path
+        from karaoke.medley_decks import build
+
+        synth = Mock()
+        with patch('karaoke.bass.BassSynth', return_value=synth), \
+             patch('karaoke.playback.MidiPlayer', side_effect=RuntimeError('MIDI wrapper failed')):
+            with self.assertRaisesRegex(RuntimeError, 'MIDI wrapper failed'):
+                build(Path('native'), {}, Path('queued.mid'), 0, 100, False, None)
+        synth.close.assert_called_once()
+
     def test_outgoing_pump_failure_restores_incoming_volume(self):
         decks = Decks()
         tail = Mock()
