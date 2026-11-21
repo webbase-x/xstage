@@ -66,6 +66,39 @@ class AsioMidiOutputTests(unittest.TestCase):
         self.assertTrue(synth.closed)
         self.assertTrue(sink.closed)
 
+    def test_partial_pcm_push_resends_remaining_frames_in_order(self):
+        class SequentialSynth(FakeSynth):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.next_frame = 0
+            def render(self, frames):
+                first = self.next_frame
+                self.next_frame += frames
+                return b''.join(n.to_bytes(8, 'little') for n in
+                                range(first, first + frames))
+
+        class PartialOutput(FakeOutput):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.accepted_frames = []
+            def push(self, pcm):
+                self.accepted_frames.append(int.from_bytes(pcm[:8], 'little'))
+                return 1
+
+        output = AsioMidiOutput('unused', device=0, synth_factory=SequentialSynth,
+                                output_factory=PartialOutput, chunk_frames=4,
+                                target_frames=4)
+        sink = output.output
+        try:
+            for _ in range(200):
+                if len(sink.accepted_frames) >= 4:
+                    break
+                time.sleep(.002)
+            self.assertGreaterEqual(len(sink.accepted_frames), 4)
+            self.assertEqual(sink.accepted_frames[:4], [0, 1, 2, 3])
+        finally:
+            output.close()
+
     def test_rejects_invalid_target(self):
         with self.assertRaises(ValueError):
             AsioMidiOutput('unused', device=0, chunk_frames=24, target_frames=12)
