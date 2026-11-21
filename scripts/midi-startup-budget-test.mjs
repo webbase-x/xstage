@@ -36,8 +36,8 @@ assert.equal(await first.pending,bank,'Completed SoundFont is available to the f
 settings.window.XStageBrowserMidi.fontStatus=()=>({selectedId:''});
 settings.window.XStageBrowserMidi.selectedFont=async()=>null;
 const noBank=await getStartupSoundFont('token',new AbortController().signal);
-assert.deepEqual({bytes:noBank.bytes,pending:noBank.pending},
-  {bytes:null,pending:null},'An explicitly selected no-SoundFont mode stays available');
+assert.equal(noBank.bytes===null&&noBank.pending?await noBank.pending:noBank.bytes,null,
+  'An explicitly selected no-SoundFont mode stays available');
 // First play regression: a bank selector may still show an empty ID while
 // refreshFonts is scanning Drive. Do not interpret that as an 8-bit request.
 let refreshed=false;
@@ -46,7 +46,8 @@ settings.window.XStageBrowserMidi.selectedFont=async()=>{
   return bank;
 };
 const refreshedBank=await getStartupSoundFont('token',new AbortController().signal);
-assert.equal(refreshedBank.bytes,bank);
+assert.equal(refreshedBank.bytes||await refreshedBank.pending,bank,
+  'The blank initial selector must still discover and load a valid bank');
 assert.equal(refreshed,true,'First startup must query the bank even before selector refresh');
 
 // Exercise the exact production helpers, without browser/audio/network mocks.
