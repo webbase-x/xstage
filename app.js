@@ -11,11 +11,16 @@ const ui = {
   librarySelect:$('library-select'),librarySwitcher:$('library-switcher'),
   search: $('search'), voiceSearch:$('voice-search'), songs: $('songs'), queue: $('queue'), queueCount: $('queue-count'), clearQueue: $('clear-queue'),
   player: $('player'), stage: $('stage'), stageIdle: $('stage-idle'), stageCode: $('stage-code'),
-  nowPlaying: $('now-playing'), nowArtist: $('now-artist'), songKey:$('tv-song-key'), playStatus: $('play-status'),
+  nowPlaying: $('now-playing'), nowArtist: $('now-artist'), songKey:$('tv-song-key'), toolbarSongKey:$('toolbar-song-key'), playStatus: $('play-status'),
   playPause: $('play-pause'), cancelCurrent:$('cancel-current'), restartCurrent:$('restart-current'), previous: $('previous'), next: $('next'),
   seek: $('seek'), elapsed: $('elapsed'), duration: $('duration'), speed: $('speed'), volume: $('volume'),
   repeat: $('repeat'), fullscreen: $('fullscreen'), lyrics: $('lyrics')
 };
+function setSongKeyDisplay(key=''){
+  const label='คีย์ '+(String(key||'').trim()||'—');
+  if(ui.songKey)ui.songKey.textContent=label;
+  if(ui.toolbarSongKey)ui.toolbarSongKey.textContent=label;
+}
 const state = {
   token: '', tokenExpiresAt:0, accountSub: '', manifest: null, songs: [], shown: [], selectedIndex: 0,
   queue: [], history: [], current: null, lyrics: null, objectUrl: '', liveMidiPlayback:null, liveMidiSource:null,
@@ -1686,7 +1691,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   ui.songTotal.textContent = '0 เพลง';ui.resultCount.textContent = 'กรุณาเข้าสู่ระบบ';
   ui.libraryState.textContent = 'คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ';
   ui.nowPlaying.textContent = 'ยังไม่ได้เลือกเพลง';ui.nowArtist.textContent='X-Stage Karaoke Online';ui.stageCode.textContent='—';
-  if(ui.songKey)ui.songKey.textContent='คีย์ —';
+  setSongKeyDisplay();
   ui.stage.classList.remove('playing');ui.stageIdle.hidden = false;
   setPlayStatus(''); updateTransport();renderSongs();renderQueue();
   if (revoke && oldToken && typeof google !== 'undefined') {
@@ -2703,7 +2708,7 @@ function clearIdleStage(message){
   ui.nowPlaying.textContent='ยังไม่มีเพลงกำลังเล่น';
   ui.nowArtist.textContent='';
   ui.stageCode.textContent='—';
-  if(ui.songKey)ui.songKey.textContent='คีย์ —';
+  setSongKeyDisplay();
   ui.stage.classList.remove('playing');
   ui.stageIdle.hidden=false;
   if(typeof pen!=='undefined')pen.clearRect(0,0,ui.lyrics.width,ui.lyrics.height);
@@ -2922,7 +2927,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     ui.nowPlaying.textContent=song.title||'ไม่ระบุชื่อเพลง';ui.nowArtist.textContent=song.artist||'ไม่ระบุศิลปิน';
     const musicalKey=String(song.key||song.musicKey||song.originalKey||song.keySignature||'').trim();
     ui.stageCode.textContent=song.code||'—';
-    if(ui.songKey)ui.songKey.textContent='คีย์ '+(musicalKey||'—');
+    setSongKeyDisplay(musicalKey);
     ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
     if(midiKeyControl)midiKeyControl.hidden=!liveMidiBytes;
     if($('midi-keyboard-control'))$('midi-keyboard-control').hidden=!liveMidiBytes;
