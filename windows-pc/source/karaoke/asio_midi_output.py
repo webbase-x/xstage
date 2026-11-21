@@ -38,21 +38,30 @@ class AsioMidiOutput:
             raise
 
     def _produce(self):
+        pending = b''
         try:
             while not self._stop.is_set():
                 bridge = self.output.bridge
-                # Producer never calls the native callback. Maintain a bounded
-                # lead rather than rendering unlimited MIDI ahead of the clock.
+                # Only the ASIO native callback consumes data. Maintain a
+                # bounded lead and never discard a partially accepted render.
                 buffered = bridge.buffered_frames()
                 if buffered >= self._target:
                     self._stop.wait(.002)
                     continue
-                pcm = self.synth.render(self._chunk)
-                if pcm:
-                    accepted = self.output.push(pcm)
-                    if accepted < len(pcm) // 8:
-                        self._stop.wait(.002)
-                else:
+                if not pending:
+                    pcm = self.synth.render(min(self._chunk, self._target - buffered))
+                    if len(pcm) % 8:
+                        raise OSError('BASSMIDI ส่ง PCM ที่ไม่ตรงขนาดเฟรม Stereo Float32')
+                    pending = pcm
+                if not pending:
+                    self._stop.wait(.002)
+                    continue
+                accepted = self.output.push(pending)
+                frames = len(pending) // 8
+                if type(accepted) is not int or not 0 <= accepted <= frames:
+                    raise OSError('ASIO PCM bridge คืนจำนวนเฟรมที่ไม่ถูกต้อง')
+                pending = pending[accepted * 8:]
+                if pending or accepted == 0:
                     self._stop.wait(.002)
         except Exception as exc:
             self._error = exc
@@ -82,9 +91,10 @@ class AsioMidiOutput:
     def close(self):
         self._stop.set()
         if self._worker is not None:
-            self._worker.join(timeout=3)
-            if self._worker.is_alive():
-                raise OSError('ASIO PCM producer ยังไม่หยุด: ไม่ปล่อยบัฟเฟอร์ที่กำลังใช้งาน')
+            if self._worker.ident is not None:
+                self._worker.join(timeout=3)
+                if self._worker.is_alive():
+                    raise OSError('ASIO PCM producer ยังไม่หยุด: ไม่ปล่อยบัฟเฟอร์ที่กำลังใช้งาน')
             self._worker = None
         if self.output is not None:
             self.output.close()
