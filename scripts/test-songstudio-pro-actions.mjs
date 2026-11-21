@@ -188,4 +188,12 @@ assert.ok(!html.includes('id="lyrics-search-context"')&&
   html.includes('id="group-list"')&&
   js.includes('async function loadMoreGroups('),
   'Lyrics editor must not render or fetch song/artist/untimed LYR context; grouped lyric search remains active');
+assert.ok(html.includes('id="sidebar-current-version"')&&
+          !html.includes('v0.1.35 · Preview')&&
+          html.includes('id="pro-update-version">กำลังตรวจสอบเวอร์ชัน')&&
+          js.includes('function showRunningVersion(session)')&&
+          js.includes('text("sidebar-current-version",version?')&&
+          (js.match(/showRunningVersion\(session\);/g)||[]).length===2&&
+          server.includes('"version":updater.VERSION'),
+  'Sidebar, update page and settings must show running EXE version from /api/session on connect/reconnect');
 console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs, Windows picker, Desktop Standalone and diagnostic log');
