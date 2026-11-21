@@ -26,6 +26,7 @@ class FullSongMedleyTests(unittest.TestCase):
                 self.set_volume = Mock()
                 self.close = Mock()
                 self.speed = 1.0
+                self.song = MidiSong([], 1, Lyrics())
 
         with patch('karaoke.bass.BassSynth'), \
              patch('karaoke.playback.MidiPlayer', FakeMidiPlayer), \
@@ -153,6 +154,7 @@ class FullSongMedleyTests(unittest.TestCase):
                 self.seek = Mock()
                 self.close = Mock()
                 self.speed = 1.0
+                self.song = MidiSong([], 1, Lyrics())
                 self.__class__.instances.append(self)
                 if len(self.instances) == 2:
                     self.seek.side_effect = ValueError('fill seek failed')
