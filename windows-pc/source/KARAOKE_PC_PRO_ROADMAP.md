@@ -350,3 +350,8 @@
 
 - [`b5ef4b44`](https://github.com/webbase-x/xstage/commit/b5ef4b443e7ba5429c1b9b551e227731c41745e3) adds an MSVC x64 compile step before the Windows app build. [`79875851`](https://github.com/webbase-x/xstage/commit/79875851c530ec0ce654165c474cc0340be44a05) requires the compiled DLL inside the candidate package. The build helper's compiler/linker invocation was adjusted in [`24d58639`](https://github.com/webbase-x/xstage/commit/24d586390be801269b987131777c7c9dc8e08e8e).
 - **PENDING-QA**: CI build results are not verified. ASIO output channel format, native callback ABI, BASSMIDI producer lifecycle and fallback remain unverified; main-player ASIO remains disabled. No stable release claim.
+
+## 2026-11-21 — P1.3 producer hardening (PENDING-QA)
+
+- [`98188281`](https://github.com/webbase-x/xstage/commit/98188281aff4e827b627292ae359585d44a324e5) requires native FIFO occupancy and preserves ASIO startup exceptions; [`effd4971`](https://github.com/webbase-x/xstage/commit/effd49711fccb4a1ea7d31f55c9e783081e35015) adds mock-only producer lifecycle tests (not executed).
+- **PENDING-QA**: ASIO callback format and hardware operation are not verified; ASIO is not wired into the default player. Native DLL CI outcome and BASS fallback must be verified before release.
