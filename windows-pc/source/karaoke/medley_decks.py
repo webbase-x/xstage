@@ -69,23 +69,23 @@ def build(native,settings,path,key,speed,melody,pattern,full_song=False,fill=Fal
             from .medley_full import can_play_fill, drum_fill, source_bounds
             engine.medley_bounds = source_bounds(engine, path)
             if fill and isinstance(engine, MidiPlayer):
-                song = drum_fill(engine.song, engine.medley_bounds, engine.speed)
-                if song and can_play_fill(engine, settings, engine.medley_bounds.first_note):
-                    try:
+                try:
+                    song = drum_fill(engine.song, engine.medley_bounds, engine.speed)
+                    if song and can_play_fill(engine, settings, engine.medley_bounds.first_note):
                         rhythm = _new_midi_player(native, settings, MidiPlayer, BassSynth)
                         rhythm.song = song
                         rhythm.duration = song.duration
                         rhythm.times = [event.at for event in song.events]
                         rhythm.seek(0)
-                    except (OSError, ValueError):
-                        # Optional drum fill must never prevent the main queued
-                        # song from being prepared, even if fill cleanup fails.
-                        failed_rhythm, rhythm = rhythm, None
-                        if failed_rhythm is not None:
-                            try:
-                                failed_rhythm.close()
-                            except Exception:
-                                pass
+                except (OSError, ValueError, RuntimeError, ZeroDivisionError, IndexError, KeyError):
+                    # A malformed optional fill or SoundFont inspection must
+                    # not abort the already prepared next-song engine.
+                    failed_rhythm, rhythm = rhythm, None
+                    if failed_rhythm is not None:
+                        try:
+                            failed_rhythm.close()
+                        except Exception:
+                            pass
         if pattern and isinstance(engine,MidiPlayer):
             # A queued full-song fill may already own a rhythm deck.
             # Release it before replacing it with the crossfade pattern.
