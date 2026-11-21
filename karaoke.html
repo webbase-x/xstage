@@ -23,7 +23,7 @@
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
   <link rel="stylesheet" href="style.css?v=1152-midi-top-keyboard">
-  <link rel="stylesheet" href="xstage-ux.css?v=1160-key-layout-handoff">
+  <link rel="stylesheet" href="xstage-ux.css?v=1161-song-key-in-status">
   <link rel="stylesheet" href="cloud-import.css?v=1137-individual-select">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
@@ -88,15 +88,7 @@
         <div id="songs" class="song-results" role="listbox" aria-label="รายการเพลง" aria-live="off"><div class="empty-state"><span class="empty-graphic" aria-hidden="true">♫</span>เพลงจาก Google Drive ของคุณจะแสดงที่นี่</div></div>
         <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span></div>
       </aside></div>
-            <div class="song-key-stack" role="group" aria-label="คีย์เพลงและปรับระดับคีย์">
-              <output id="toolbar-song-key" class="song-key-toolbar" aria-label="คีย์เพลงปัจจุบัน" aria-live="polite">คีย์ —</output>
-              <div id="midi-transpose-control" class="song-key-transpose" hidden aria-label="เพิ่มหรือลดระดับคีย์เพลง MIDI">
-                <button type="button" id="midi-key-down" aria-label="ลดคีย์ 1 ครึ่งเสียง" title="ลดคีย์ 1 ครึ่งเสียง">−</button>
-                <output id="midi-transpose-label" aria-live="polite" aria-label="จำนวนครึ่งเสียงที่ปรับ">0</output>
-                <button type="button" id="midi-key-up" aria-label="เพิ่มคีย์ 1 ครึ่งเสียง" title="เพิ่มคีย์ 1 ครึ่งเสียง">+</button>
-                <input id="midi-transpose" type="hidden" value="0">
-              </div>
-            </div>
+
             <!-- Keep the original handler available to the menu and mobile remote. -->
             <button id="toggle-keyboard" type="button" hidden aria-controls="virtual-keyboard" aria-expanded="false" aria-label="เปิดแป้นพิมพ์ค้นหา">แป้นพิมพ์</button>
             <button id="fullscreen" class="toolbar-button toolbar-fullscreen" type="button" aria-label="แสดงเต็มหน้าจอ" title="เต็มหน้าจอ">⛶</button>
@@ -230,9 +222,22 @@
             <div class="transport-now">
               <img class="transport-cover" src="assets/xstage-app-icon-192.png" width="58" height="58" alt="">
               <div class="transport-song-info">
-                <span class="transport-now-caption">สถานะเพลง</span>
-                <strong id="now-playing">ยังไม่ได้เลือกเพลง</strong>
-                <small id="now-artist">X-Stage Karaoke Online</small>
+                <div class="transport-song-detail">
+                  <div class="transport-song-copy">
+                    <span class="transport-now-caption">สถานะเพลง</span>
+                    <strong id="now-playing">ยังไม่ได้เลือกเพลง</strong>
+                    <small id="now-artist">X-Stage Karaoke Online</small>
+                  </div>
+                  <div class="song-key-stack" role="group" aria-label="คีย์เพลงและปรับระดับคีย์">
+                                <output id="toolbar-song-key" class="song-key-toolbar" aria-label="คีย์เพลงปัจจุบัน" aria-live="polite">คีย์ —</output>
+                                <div id="midi-transpose-control" class="song-key-transpose" hidden aria-label="เพิ่มหรือลดระดับคีย์เพลง MIDI">
+                                  <button type="button" id="midi-key-down" aria-label="ลดคีย์ 1 ครึ่งเสียง" title="ลดคีย์ 1 ครึ่งเสียง">−</button>
+                                  <output id="midi-transpose-label" aria-live="polite" aria-label="จำนวนครึ่งเสียงที่ปรับ">0</output>
+                                  <button type="button" id="midi-key-up" aria-label="เพิ่มคีย์ 1 ครึ่งเสียง" title="เพิ่มคีย์ 1 ครึ่งเสียง">+</button>
+                                  <input id="midi-transpose" type="hidden" value="0">
+                                </div>
+                              </div>
+                </div>
                 <div class="tv-song-meta"><span id="tv-song-key">คีย์ —</span></div>
                 <div class="timeline">
                   <input id="seek" type="range" min="0" max="1000" value="0" aria-label="ตำแหน่งการเล่น" disabled>
@@ -467,6 +472,6 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="mobile-layout.js?v=1122" defer></script>
   <script src="android-apk-download.js?v=1122" defer></script>
 
-  <script src="stage-ui.js?v=1160-key-layout-handoff" defer></script>
+  <script src="stage-ui.js?v=1161-song-key-in-status" defer></script>
 </body>
 </html>
