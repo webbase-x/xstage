@@ -38,6 +38,18 @@ def drum_pattern(song, end):
         return MidiSong(rows,b-a+.001,Lyrics(),initial_bpm=bpm), b-a
     return None
 
+def _new_midi_player(native, settings, MidiPlayer, BassSynth):
+    """Construct a MIDI deck without leaking its native synth on failure."""
+    output = BassSynth(native, settings=settings)
+    try:
+        return MidiPlayer(output=output)
+    except BaseException:
+        try:
+            output.close()
+        except Exception:
+            pass
+        raise
+
 def build(native,settings,path,key,speed,melody,pattern,full_song=False,fill=False):
     from .bass import BassSynth
     from .playback import MidiPlayer
@@ -48,15 +60,7 @@ def build(native,settings,path,key,speed,melody,pattern,full_song=False,fill=Fal
         if path.suffix.lower() in MIDI_EXT:
             # Own the synth before constructing the MIDI wrapper: a failing
             # wrapper constructor must not leak its already-open BASS device.
-            output = BassSynth(native, settings=settings)
-            try:
-                engine = MidiPlayer(output=output)
-            except BaseException:
-                try:
-                    output.close()
-                except Exception:
-                    pass
-                raise
+            engine = _new_midi_player(native, settings, MidiPlayer, BassSynth)
             engine.load(path)
             engine.set_channel(3,muted=melody)
         else:engine=PcmPlayer(native);engine.load(path)
@@ -68,7 +72,7 @@ def build(native,settings,path,key,speed,melody,pattern,full_song=False,fill=Fal
                 song = drum_fill(engine.song, engine.medley_bounds, engine.speed)
                 if song and can_play_fill(engine, settings, engine.medley_bounds.first_note):
                     try:
-                        rhythm = MidiPlayer(output=BassSynth(native, settings=settings))
+                        rhythm = _new_midi_player(native, settings, MidiPlayer, BassSynth)
                         rhythm.song = song
                         rhythm.duration = song.duration
                         rhythm.times = [event.at for event in song.events]
@@ -93,7 +97,7 @@ def build(native,settings,path,key,speed,melody,pattern,full_song=False,fill=Fal
                     # An optional fill must not block preparation of the
                     # required next-song crossfade rhythm deck.
                     pass
-            rhythm=MidiPlayer(output=BassSynth(native,settings=settings))
+            rhythm=_new_midi_player(native, settings, MidiPlayer, BassSynth)
             rhythm.song,rhythm.duration=pattern[0],pattern[0].duration
             rhythm.times=[e.at for e in rhythm.song.events];rhythm.seek(0)
             rhythm.set_loop(0,pattern[1]);rhythm.set_volume(0)
