@@ -9,7 +9,7 @@ from karaoke.asio_devices import discover_asio
 class AsioDeviceTests(unittest.TestCase):
     def test_discover_driver_names_without_initializing_audio(self):
         dll = Mock()
-        dll.BASS_ASIO_GetVersion.return_value = 0x2040000
+        dll.BASS_ASIO_GetVersion.return_value = 0x1040000
         names = [(b'ASIO Driver A', b'a.dll'), (b'ASIO Driver B', b'b.dll')]
         def info(index, pointer):
             if index >= len(names):
