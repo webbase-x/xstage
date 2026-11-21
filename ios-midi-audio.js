@@ -32,7 +32,7 @@ function createRelay(ctx){
   audio.srcObject=destination.stream;
   scope.document.body.appendChild(audio);
   relay={ctx,destination,audio,sources:new Set(),closed:false,failed:false,
-    failureNotice:new Set()};
+    failureNotice:new Set(),keepAliveForQueue:false};
   return relay;
 }
 function fallBack(record,error){
@@ -65,6 +65,15 @@ function prime(ctx){
   if(!available(ctx))return Promise.resolve(false);
   return start(createRelay(ctx));
 }
+// Preserve the already-playing iPhone media stream during an automatic
+// MIDI-to-MIDI queue handoff. Pausing it between songs can cause Safari to
+// require a fresh user gesture, which is unavailable on natural song end.
+function keepPlayingBetweenSongs(enabled){
+  if(!relay||relay.closed||relay.failed)return false;
+  relay.keepAliveForQueue=!!enabled;
+  if(!enabled&&!relay.sources.size)relay.audio.pause();
+  return true;
+}
 function attach(ctx,source,{onStatus=()=>{}}={}){
   const record=createRelay(ctx);
   if(!record){
@@ -76,13 +85,15 @@ function attach(ctx,source,{onStatus=()=>{}}={}){
   if(record.failed)source.connect(ctx.destination);
   else source.connect(record.destination);
   record.sources.add(source);
+  record.keepAliveForQueue=false;
   return {
     mode:record.failed?'direct':'ios-media',
     start:()=>start(record),
     pause(){
       // SoundFont changes can briefly attach two synths; do not mute the new
       // song when the previous synth releases its output connection.
-      if(!record.failed&&record.sources.size<=1)record.audio.pause();
+      if(!record.failed&&!record.keepAliveForQueue&&record.sources.size<=1)
+        record.audio.pause();
     },
     resume(){
       if(!record.failed&&!record.closed&&scope.document?.hidden!==true&&
@@ -92,7 +103,8 @@ function attach(ctx,source,{onStatus=()=>{}}={}){
       if(!record.sources.delete(source))return;
       try{source.disconnect(record.failed?ctx.destination:record.destination);}catch{}
       record.failureNotice.delete(onStatus);
-      if(!record.sources.size&&!record.failed)record.audio.pause();
+      if(!record.sources.size&&!record.failed&&!record.keepAliveForQueue)
+        record.audio.pause();
     }
   };
 }
@@ -108,5 +120,5 @@ function release(){
   try{record.destination.disconnect();}catch{}
   relay=null;
 }
-scope.XStageIOSMidiAudio={isIOS:ios,activate,prime,attach,release};
+scope.XStageIOSMidiAudio={isIOS:ios,activate,prime,attach,release,keepPlayingBetweenSongs};
 })(typeof window!=='undefined'?window:globalThis);
