@@ -319,6 +319,19 @@ class NativeSoundFontTests(unittest.TestCase):
             self.assertNotEqual(tail, wet_tail)
             self.assertNotEqual(pcm, wet)
 
+    def test_midi_synth_explicit_output_device_is_forwarded(self):
+        with tempfile.TemporaryDirectory() as folder:
+            font = make_font(Path(folder)/'device.sf2')
+            dll, midi = self.fake_api()
+            midi.BASS_MIDI_FontInit.side_effect = [101]
+            synth = BassSynth(Path(folder), settings={'soundfont': str(font)},
+                              bindings=(dll, midi), device_id=3)
+            try:
+                self.assertEqual(dll.BASS_Init.call_args.args[0], 3)
+            finally:
+                synth.close()
+
+
 
 if __name__ == '__main__':
     unittest.main()
