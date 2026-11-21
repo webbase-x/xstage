@@ -30,6 +30,23 @@ def composite_rgb24(foreground, background, width, height, *, key=ChromaKey()):
         raise ValueError("RGB24 frame sizes must match")
     if not isinstance(key, ChromaKey):
         raise ValueError("Invalid chroma-key settings")
+    # OpenCV is already available when the opt-in real decoder is enabled.
+    # Vectorized native compositing keeps high-resolution video responsive.
+    # The standard-library-only fallback remains for core and CI tests.
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        pass
+    else:
+        pixels = np.frombuffer(foreground, dtype=np.uint8).reshape(height, width, 3)
+        backing = np.frombuffer(background, dtype=np.uint8).reshape(height, width, 3)
+        lower = tuple(max(0, component - key.tolerance) for component in key.rgb)
+        upper = tuple(min(255, component + key.tolerance) for component in key.rgb)
+        mask = cv2.inRange(pixels, lower, upper)
+        result = pixels.copy()
+        cv2.copyTo(backing, mask, result)
+        return result.tobytes()
     result = bytearray(foreground)
     kr, kg, kb = key.rgb
     for i in range(0, size, 3):
