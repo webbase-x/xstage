@@ -134,7 +134,8 @@ public sealed class DownloadEngine
 
     public static bool TryParseUrl(string text, out Uri? url)
     {
-        if (Uri.TryCreate(text.Trim(), UriKind.Absolute, out url) &&
+        if (!string.IsNullOrWhiteSpace(text) &&
+            Uri.TryCreate(text.Trim(), UriKind.Absolute, out url) &&
             (url.Scheme == Uri.UriSchemeHttps || url.Scheme == Uri.UriSchemeHttp) &&
             string.IsNullOrEmpty(url.UserInfo)) return true;
         url = null;
