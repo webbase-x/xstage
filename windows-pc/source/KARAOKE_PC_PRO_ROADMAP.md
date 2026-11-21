@@ -345,3 +345,8 @@
 
 - [`f8ec4446`](https://github.com/webbase-x/xstage/commit/f8ec4446664a106376ddebb2e853da482e271873) introduces opt-in BASSMIDI decode worker feeding the native PCM queue and ASIO host. [`910113ca`](https://github.com/webbase-x/xstage/commit/910113cae2dec4e1bea64c4216da65294782cef2) exposes native FIFO occupancy, bound in [`25c7698a`](https://github.com/webbase-x/xstage/commit/25c7698a34e7348b65a6260d037bd7227632227d).
 - **PENDING-QA**: no compiled DLL, tests or physical playback. Verify BASSASIO callback buffer semantics (mono channel buffers vs interleaved stereo) and output format before enabling. Main player integration, CI build/package and fallback remain incomplete.
+
+## 2026-11-21 — P1.3 native ASIO DLL CI integration (PENDING-QA)
+
+- [`b5ef4b44`](https://github.com/webbase-x/xstage/commit/b5ef4b443e7ba5429c1b9b551e227731c41745e3) adds an MSVC x64 compile step before the Windows app build. [`79875851`](https://github.com/webbase-x/xstage/commit/79875851c530ec0ce654165c474cc0340be44a05) requires the compiled DLL inside the candidate package. The build helper's compiler/linker invocation was adjusted in [`24d58639`](https://github.com/webbase-x/xstage/commit/24d586390be801269b987131777c7c9dc8e08e8e).
+- **PENDING-QA**: CI build results are not verified. ASIO output channel format, native callback ABI, BASSMIDI producer lifecycle and fallback remain unverified; main-player ASIO remains disabled. No stable release claim.
