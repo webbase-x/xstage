@@ -214,3 +214,8 @@
 
 - [`06beb6fd`](https://github.com/webbase-x/xstage/commit/06beb6fd8ec55446621404f46ca73d7563617f17) restores incoming song volume to base when outgoing tail gain adjustment fails, detaching and closing the tail best-effort. [`f56b79f3`](https://github.com/webbase-x/xstage/commit/f56b79f36cafe9d9ecab8e612fa1f46e92e9e2de) adds a regression test.
 - Automated test execution is still unverified. P0.5 IN PROGRESS; actual Windows device playback/30-minute soak DEFERRED-HARDWARE.
+
+## 2026-11-21 — P0.5 outgoing deck pump failure recovery
+
+- [`2020cc42`](https://github.com/webbase-x/xstage/commit/2020cc424dc54c10f880c1960a182146696b2036) restores incoming deck volume to base after outgoing tail play/pause/pump failure, avoiding silent incoming audio at the beginning of crossfade. [`bc2fd625`](https://github.com/webbase-x/xstage/commit/bc2fd625cf7c91f008abdcbe28b4377d40d27aa7) adds a regression test.
+- Changes committed but automated tests not executed in this session; P0.5 IN PROGRESS. Hardware playback and soak checks remain DEFERRED-HARDWARE.
