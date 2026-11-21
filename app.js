@@ -35,6 +35,7 @@ const state = {
   libraryRootId:'',libraryRootCanShare:false,libraryRootOwnedByMe:false,libraryRootOwnerEmail:'',availableLibraries:[],
   queuePreload:null,queuePrepared:null,queuePreloadTimer:null,queuePreloadVersion:0,
   queuePreparedCache:new Map(),queuePreloadSkipped:new Set(),
+  transitionFill:null,
   activeBlobBytes:0,activeVideoBytes:0,
   playbackRestoreAttempted:false,
   awaitingSharedLibrary:false,
@@ -2614,6 +2615,11 @@ function renderQueue() {
   });
 }
 function moveQueue(index,step){const target=index+step;if(target<0||target>=state.queue.length)return;[state.queue[index],state.queue[target]]=[state.queue[target],state.queue[index]];renderQueue();}
+function stopSoundFontFill(){
+  const fill=state.transitionFill;
+  state.transitionFill=null;
+  try{fill?.stop?.();}catch(error){console.warn('SoundFont bridge cleanup:',error);}
+}
 function releaseFinishedMedia(){
   // Drop the completed/aborted track's media objects, but preserve its
   // identity in history until playSong starts the next one.
@@ -2645,6 +2651,19 @@ function playNext(){
   const song=queued||(state.medley?nextMedleyCandidate():null);
   const nextIsMidi=!!song&&!!(getFileId(song.midi)||getFileId(song.xmid)||getFileId(song.xsk));
   window.XStageIOSMidiAudio?.keepPlayingBetweenSongs?.(nextIsMidi);
+  stopSoundFontFill();
+  if(song&&!state.userPaused&&!state.userStopped){
+    // The outgoing GM/GS Worklet continues a subtle rhythm during the
+    // next song's preparation. It is detached from the old transport and
+    // stops when the new audio begins (or after its own safety timeout).
+    try{
+      const fill=state.liveMidiPlayback?.beginTransitionFill?.();
+      if(fill?.stop){
+        state.transitionFill=fill;
+        state.liveMidiPlayback=null;
+      }
+    }catch(error){console.warn('SoundFont transition fill:',error);}
+  }
   releaseFinishedMedia();
   scheduleQueuePreload();
   if(!queued)state.medleyUpcoming=null;
@@ -2691,6 +2710,7 @@ function syncMediaSessionPosition(){
   try{navigator.mediaSession.setPositionState({duration,playbackRate:player.playbackRate||1,position});}catch{}
 }
 function clearIdleStage(message){
+  stopSoundFontFill();
   resetSongVideo();
   state.userStopped=true;
   state.requestId++;
@@ -3032,6 +3052,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     }
     state.loading=false;renderQueue();updateTransport();
     state.userPaused=!autoplay;state.resumeAfterInterruption=false;
+    if(!autoplay)stopSoundFontFill();
     if(autoplay){
       if(!requestNativePlaybackAudioFocus())throw Error('Android Audio Focus ไม่พร้อม · ยังไม่เริ่มเสียงเพลง');
       try{await window.XStageResumeAudioGraph?.();}catch{}
@@ -3067,6 +3088,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       if(midiTransport.active)midiTransport.clear();
     }
     const message=e.message||'ไม่สามารถเล่นเพลงได้';
+    stopSoundFontFill();
     setPlayStatus(message);publishPlaybackStatus('error',song,message);
     state.loading=false;updateTransport();
   }
@@ -4154,6 +4176,9 @@ player.addEventListener('timeupdate',()=>{
   const now=Date.now();
   if(now-playbackSnapshotTick>2000){playbackSnapshotTick=now;savePlaybackResumeState();}
 });
+// Release any between-song SF2 rhythm only once the NEXT transport is
+// actually audible; keep it alive while Drive/Worklet prepares a queued song.
+player.addEventListener('playing',stopSoundFontFill);
 player.addEventListener('loadedmetadata',updateTransport);
 player.addEventListener('durationchange',updateTransport);
 player.addEventListener('play',()=>{state.userPaused=false;state.resumeAfterInterruption=false;syncSongVideo();updateTransport();});
@@ -4190,7 +4215,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&document.fullscreenElement){document.exitFullscreen();}
 });
 window.addEventListener('pagehide',savePlaybackResumeState);
-window.addEventListener('beforeunload',()=>{savePlaybackResumeState();state.liveMidiPlayback?.dispose();state.controller?.abort();resetSongVideo();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
+window.addEventListener('beforeunload',()=>{savePlaybackResumeState();stopSoundFontFill();state.liveMidiPlayback?.dispose();state.controller?.abort();resetSongVideo();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
 renderSongs();renderQueue();updateTransport();scheduleLyricsDraw();setupNativeAndroidTvUi();setupAppUpdateWatcher();
 const xstageCloudImporter=window.XStageCloudImport?.init({
   // The browser importer obtains only an in-memory short-lived token and the
