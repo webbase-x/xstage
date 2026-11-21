@@ -37,6 +37,7 @@ const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
 const html=fs.readFileSync(new URL('../karaoke.html',import.meta.url),'utf8');
 assert.ok(pro.includes("setSystemParameter?.('isMuted'"),'SpessaSynth channel mute must survive MIDI CC7');
 assert.ok(pro.includes("setSystemParameter?.('gain'"),'SpessaSynth channel gain must be independent');
+assert.ok(pro.includes("'gain',muted?0:mixer.getGain(ch)"),'Mute or Solo silences sustained notes immediately');
 assert.ok(pro.includes('detachMixer();'),'SpessaSynth mixer listeners must be detached');
 assert.ok(fallback.includes('gain.connect(mixerGains[n.channel]||master)'),'Web Audio notes route by channel');
 assert.ok(fallback.includes("removeEventListener?.('xstage-midi-mixerchange'"),'Web Audio listener cleaned up');

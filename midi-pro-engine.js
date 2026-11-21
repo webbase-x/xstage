@@ -180,8 +180,10 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           if(ch===previewChannel)continue;
           try{
             const channel=synth.midiChannels?.[ch];
-            channel?.setSystemParameter?.('isMuted',!!mixer.isMuted(ch));
-            channel?.setSystemParameter?.('gain',mixer.getGain(ch));
+            const muted=!!mixer.isMuted(ch);
+            channel?.setSystemParameter?.('isMuted',muted);
+            // isMuted rejects incoming notes; zero gain silences active voices.
+            channel?.setSystemParameter?.('gain',muted?0:mixer.getGain(ch));
           }catch(error){console.warn('MIDI channel mixer:',error);}
         }
       };
