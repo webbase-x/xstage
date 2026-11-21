@@ -813,22 +813,24 @@ async function warmRealtimeSamples(source,fontBytes,{signal=null,onStatus=()=>{}
     :parseFont(fontBytes);
   const song=parseMidi(source);
   const first=song.notes.reduce((min,n)=>Math.min(min,n.start),Infinity);
-  const horizon=(Number.isFinite(first)?first:0)+12;
+  const horizon=(Number.isFinite(first)?first:0)+6;
+  // Prime early samples only: long full-bank decoding delayed first sound.
+  const WARM_SAMPLE_LIMIT=20;
   const samples=new Set();
   for(const n of song.notes){
     if(n.start>horizon)continue;
     for(const g of font.find(n.bank,n.program,n.key,n.velocity)){
       samples.add(g.get(53));
-      if(samples.size>=72)break;
+      if(samples.size>=WARM_SAMPLE_LIMIT)break;
     }
-    if(samples.size>=72)break;
+    if(samples.size>=WARM_SAMPLE_LIMIT)break;
   }
   if(!samples.size)fail('SoundFont ไม่มีเครื่องดนตรีสำหรับเพลงนี้ · โปรดเลือก GM/GS SoundFont ที่ครบถ้วน');
   let ready=0;
   for(const index of samples){
     if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
     await sampleBuffer(font,index,ctx);
-    if(++ready%12===0){
+    if(++ready%8===0){
       onStatus('เตรียมเสียงเครื่องดนตรี '+ready+'/'+samples.size+'…');
       await new Promise(resolve=>setTimeout(resolve,0));
     }
@@ -1014,7 +1016,8 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   signal?.addEventListener('abort',dispose,{once:true});
   if(!player.paused)play();
   onStatus?.(font?'SoundFont พร้อมสังเคราะห์ MIDI แบบเรียลไทม์':'MIDI พร้อมเล่นโดยไม่แปลงเป็น WAV');
-  return {dispose,duration:song.duration};
+  return {dispose,duration:song.duration,
+    audioState:()=>ctx.state,resumeAudio:()=>ctx.resume()};
 }
 scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,playRealtime,warmRealtimeSamples,unlockAudio,
   liveAudioContext:()=>sharedLiveContext?.state!=='closed'?sharedLiveContext:null,
