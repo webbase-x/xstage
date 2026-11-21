@@ -181,6 +181,31 @@ try
     await cancelGate.WaitForBytesAsync(8 * 1024, CancellationToken.None);
     if (gateClock.ElapsedMilliseconds > 1200)
         throw new Exception("Canceled bandwidth reservation stalled a subsequent transfer.");
+    // Reconfiguration must invalidate an old reservation's cancellation refund.
+    var reconfiguredGate = new TransferRateGate(64);
+    using (var oldRequest = new CancellationTokenSource())
+    {
+        var obsolete = reconfiguredGate.WaitForBytesAsync(256 * 1024, oldRequest.Token);
+        reconfiguredGate.Configure(64);
+        var current = reconfiguredGate.WaitForBytesAsync(64 * 1024, CancellationToken.None);
+        oldRequest.Cancel();
+        try { await obsolete; throw new Exception("Old reservation must cancel."); }
+        catch (OperationCanceledException) { }
+        gateClock.Restart();
+        await current.WaitAsync(TimeSpan.FromSeconds(3));
+        if (gateClock.ElapsedMilliseconds < 650)
+            throw new Exception("Old canceled reservation must not refund a new configuration.");
+    }
+    using (var alreadyCanceled = new CancellationTokenSource())
+    {
+        alreadyCanceled.Cancel();
+        try
+        {
+            await reconfiguredGate.WaitForBytesAsync(8 * 1024, alreadyCanceled.Token);
+            throw new Exception("Pre-canceled request must not reserve bandwidth.");
+        }
+        catch (OperationCanceledException) { }
+    }
     limit.Configure(0);
     gateClock.Restart();
     await limit.WaitForBytesAsync(64 * 1024, CancellationToken.None);
