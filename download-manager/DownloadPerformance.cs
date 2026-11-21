@@ -236,7 +236,9 @@ public static class TransferRateMath
     {
         if (!activelyDownloading) return 0;
         if (!double.IsFinite(measured) || measured < 0) measured = 0;
-        if (previous <= 0) return measured;
-        return Math.Max(0, previous * 0.72 + measured * 0.28);
+        if (!double.IsFinite(previous) || previous <= 0) return measured;
+        var smoothed = previous * 0.72 + measured * 0.28;
+        // Corrupted or extreme telemetry must never poison ETA/UI state.
+        return double.IsFinite(smoothed) ? Math.Max(0, smoothed) : measured;
     }
 }
