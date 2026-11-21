@@ -1009,6 +1009,12 @@ try
         throw new Exception("Repartition must persist new geometry before download resumes.");
     if (job.Parts != 16 || job.SegmentsUsed != 0 || Interlocked.Read(ref job.DownloadedBytes) != 0)
         throw new Exception("Repartition must reset temporary pieces and progress.");
+    // Simulate a locked-file cleanup failure from the prior process: the
+    // new geometry is durable, but a stale old-format chunk survives on disk.
+    // The worker must discard it rather than append corrupt bytes.
+    Directory.CreateDirectory(oldWorkDir);
+    await File.WriteAllBytesAsync(Path.Combine(oldWorkDir, "00.part"),
+        Enumerable.Repeat((byte)0xEE, 4096).ToArray());
     manager.Start(job);
     await WaitFor(() => job.Status is "Completed" or "Failed");
     if (job.Status != "Completed") throw new Exception("Range resume failed: " + job.Error);
