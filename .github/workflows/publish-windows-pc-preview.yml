@@ -29,7 +29,7 @@ jobs:
       TAG: "xstage-karaoke-pc-preview-v1.0.79-build1079"
       INSTALLER: "X-StageKaraoke.exe"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
       - name: Check exact successful Windows source/build provenance
