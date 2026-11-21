@@ -13,7 +13,6 @@ const close=$('midi-keyboard-close'),range=$('midi-keyboard-range');
 const channel=$('midi-keyboard-channel'),instrument=$('midi-instrument');
 const keys=$('midi-piano-keys'),scroll=$('midi-piano-scroll');
 const notes=$('midi-keyboard-notes'),info=$('midi-piano-info');
-const label=$('midi-instrument-label');
 const black=new Set([1,3,6,8,10]),names=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
 const pianoLetters='awsedftgyhujkolp'; // Same C4–D#5 hotkeys as X-Stage PC.
 const noteName=n=>names[n%12]+Math.floor(n/12-1);
@@ -175,10 +174,6 @@ $('midi-keyboard-oct-down').addEventListener('click',()=>{
 $('midi-keyboard-oct-up').addEventListener('click',()=>{
   start=Math.min(60,start+12);redraw();
 });
-instrument.addEventListener('change',()=>{
-  label.textContent=instrument.selectedOptions[0]?.textContent||'ตามเพลง MIDI';
-  // The existing app listener applies the selected program to live MIDI.
-});
 keys.addEventListener('pointerdown',event=>{
   const target=event.target.closest?.('[data-note]');
   if(!target||event.button>0)return;
@@ -221,11 +216,9 @@ function setSong({bytes=null,getCurrentTime=null,isPlaying=null,previewNote=null
   if(!bytes){
     toggle(false);
     trigger.hidden=true;
-    label.textContent='ตามเพลง MIDI';
     return;
   }
   trigger.hidden=false;
-  label.textContent=instrument.selectedOptions[0]?.textContent||'ตามเพลง MIDI';
   // A newly loaded MIDI opens the top PC-style piano automatically unless
   // the listener explicitly closed it; changing songs preserves that choice.
   if(!userDismissed)toggle(true);
