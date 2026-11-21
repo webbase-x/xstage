@@ -168,7 +168,79 @@ jobs:
             $arguments = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $probe + '" /LOG="' + $log + '"'
             $install = Start-Process -FilePath $installer -ArgumentList $arguments -Wait -PassThru
             if ($install.ExitCode -ne 0) { throw "Inno Setup silent install failed: $($install.ExitCode)" }
-            $exe = Join-Path $probe 'XStageKaraoke.exe'
+            # Read the actual installed filename from the Inno Setup source of truth.
+            # The PyInstaller input is XStageKaraoke.exe; Inno Setup renames
+            # the installed launcher to X-StageKaraoke.exe using DestName.
+            $iss = Get-Content -LiteralPath 'windows-pc/installer/XStageKaraoke.iss' -Raw -Encoding UTF8
+            $appExeMatch = [regex]::Match($iss, '(?m)^#define\s+AppExe\s+"([^"]+\.exe)"\s*
+            if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+              Write-Host "Expected install directory: $probe"
+              if (Test-Path -LiteralPath $probe) {
+                Get-ChildItem -LiteralPath $probe -Force | Select-Object FullName, Length | Format-Table | Out-String | Write-Host
+              }
+              if (Test-Path -LiteralPath $log) {
+                Get-Content -LiteralPath $log -Tail 100 | ForEach-Object { Write-Host $_ }
+              }
+              throw 'Installed XStageKaraoke.exe is missing from requested directory'
+            }
+            foreach ($name in @('bass.dll', 'bassmidi.dll', 'bass_fx.dll')) {
+              $dll = Join-Path (Join-Path $probe 'native/x64') $name
+              if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) {
+                throw "Installed audio DLL missing: $name"
+              }
+            }
+            foreach ($name in @('Setup-Dependencies.ps1', 'Setup-Audio.ps1')) {
+              if (-not (Test-Path -LiteralPath (Join-Path $probe $name) -PathType Leaf)) {
+                throw "Installed support file missing: $name"
+              }
+            }
+            foreach ($name in @(
+              'Dependency-Common.ps1', 'Probe-Native.ps1', 'Repair-Dependencies.ps1',
+              'Repair-XStage-WiFi.ps1', 'Setup-System-EQ.ps1', 'Open-APO-Device.ps1',
+              'Install-EqualizerAPO.ps1', 'Installer-Safety.ps1')) {
+              if (-not (Test-Path -LiteralPath (Join-Path (Join-Path $probe 'tools') $name) -PathType Leaf)) {
+                throw "Installed menu helper missing: $name"
+              }
+            }
+            $check = Start-Process -FilePath $exe -WorkingDirectory $probe -ArgumentList @('--check-dependencies', '--dependency-report', ('"' + $report + '"')) -PassThru
+            if (-not $check.WaitForExit(45000)) {
+              Stop-Process -Id $check.Id -Force -ErrorAction SilentlyContinue
+              throw 'Installed EXE dependency preflight timed out'
+            }
+            if ($check.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $report -PathType Leaf)) {
+              throw "Installed EXE dependency preflight failed: $($check.ExitCode)"
+            }
+            $result = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($result.ok -ne $true) {
+              $failed = @($result.checks | Where-Object { $_.ok -ne $true })
+              throw "Installed runtime dependency check failed: $($failed | ConvertTo-Json -Compress)"
+            }
+            Write-Host 'Installed EXE verified: x64 BASS DLLs, menu helpers, Python imports and native API'
+          } finally {
+            $uninstall = Join-Path $probe 'unins000.exe'
+            if (Test-Path -LiteralPath $uninstall -PathType Leaf) {
+              $remove = Start-Process -FilePath $uninstall -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+              if ($remove.ExitCode -ne 0) { Write-Warning "Temporary test installation uninstall returned $($remove.ExitCode)" }
+            }
+          }
+
+      - name: Upload Windows installer candidate and test logs
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-Karaoke-PC-Windows-v1.0.79-build1079-CANDIDATE
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            windows-pc/installer/output/*.exe
+            windows-pc/installer/output/*.sha256
+            windows-pc/source/build-tests-summary.json
+            windows-pc/source/build-tests.log
+      # Manual install test and signing remain mandatory before publishing a
+      # public update. Do not set downloads/windows-pc-latest.json.available=true.
+)
+            if (-not $appExeMatch.Success) { throw 'Installer AppExe is missing or invalid' }
+            $exe = Join-Path $probe $appExeMatch.Groups[1].Value
             if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
               Write-Host "Expected install directory: $probe"
               if (Test-Path -LiteralPath $probe) {
