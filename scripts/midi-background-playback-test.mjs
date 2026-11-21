@@ -91,7 +91,8 @@ assert.equal(Sequencer.instance.files[0].fileName,'X-Stage.mid');
 assert.ok(messages.some(item=>item[0]==='channel'&&
   item[1]==='keyShift'&&item[2]===2));
 assert.equal(messages.filter(item=>item[0]==='channel'&&
-  item[1]==='keyShift').length,15,'Never transpose percussion channel');
+  item[1]==='keyShift').length,14,
+  'Never transpose GM percussion or the isolated keyboard preview channel');
 
 // Background page must not pause or stop note scheduling.
 page.hidden=true;
