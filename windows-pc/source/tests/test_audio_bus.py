@@ -84,6 +84,21 @@ class MidiBusDispatcherTests(unittest.TestCase):
         self.assertEqual(dispatcher.dispatch(bytes([0xC3, 5])), 3)
         self.assertEqual(dispatcher.dispatch(bytes([0xB2, 7, 100])), 2)
 
+    def test_drum_state_broadcasts_to_every_override_bus_without_duplicate(self):
+        sent = {bus: [] for bus in range(4)}
+        plan = performance_plan(4, {ch: 0 for ch in range(16)},
+                                {36: 2, 38: 3, 42: 2})
+        dispatcher = MidiBusDispatcher(plan, {bus: sent[bus].append for bus in sent})
+        for data in (bytes([0xC9, 8]), bytes([0xB9, 7, 95]),
+                     bytes([0xB9, 123, 0]), bytes([0xE9, 0, 64])):
+            self.assertEqual(dispatcher.dispatch(data), 0)
+            for bus in (0, 2, 3):
+                self.assertEqual(sent[bus][-1], data)
+        self.assertEqual([len(sent[bus]) for bus in range(4)], [4, 0, 4, 4])
+        self.assertEqual(dispatcher.dispatch(bytes([0x99, 36, 100])), 2)
+        self.assertEqual([len(sent[bus]) for bus in range(4)], [4, 0, 5, 4])
+        self.assertEqual(dispatcher.dispatch(bytes([0x89, 36, 0])), 2)
+
     def test_rejects_malformed_messages_and_incomplete_sinks(self):
         plan = performance_plan(4)
         with self.assertRaises(ValueError):
