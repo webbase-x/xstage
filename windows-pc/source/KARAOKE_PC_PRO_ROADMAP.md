@@ -423,3 +423,11 @@ The user requested batched coding without physical QA. **This is a coding update
 - Reviewed failed Windows candidate [run 44928598764](https://github.com/webbase-x/xstage/actions/runs/44928598764): 1,137 tests, **3 failures**, 0 errors, 80 skipped. Two `test_context_menu` assertions expected six top-level child menus and the old first-four labels, but the six-category navigation intentionally adds one cascade. Updated expectations in [`1c086f8a`](https://github.com/webbase-x/xstage/commit/1c086f8a9443712119d4c31a19ce952b8b48f147).
 - The third failure, `test_restore.RestoreTests.test_failed_restore_copy_removes_incomplete_staging_file`, patched obsolete `shutil.copyfile` while `replace_file` now streams with `shutil.copyfileobj` into an exclusive randomized temp. Updated fault injection to raise after a partial write and verify no `*.restore-*.tmp` leak in [`60d6f704`](https://github.com/webbase-x/xstage/commit/60d6f7049bb433cdbe753276347d25bfb5dcd884).
 - **PENDING-QA:** full Windows regression + installer smoke on both corrections; no PASS claim until exact CI evidence. **DEFERRED-HARDWARE:** physical output, display and soak. P0–P6 remain incomplete and Stable is blocked.
+
+## 2026-11-22 02:11 Asia/Bangkok — P0.4 GUI menu regression follow-up
+
+- Latest reviewed main at start: `ed1a52723bce8b45ffe377338fa8cf2b602b52c4`.
+- Windows CI [run 44934174987](https://github.com/webbase-x/xstage/actions/runs/44934174987) FAILED: 1,137 tests, 1 failure, 0 errors, 80 skipped. Only failure: `test_context_menu.ContextMenuTests.test_category_order_and_action_routing`: 21 top-level entries exceed 20-entry UI limit. EXE was not built.
+- Removed redundant root separator after the six-category menu: `058d5e02d00df1e7ca451b815f3892bd6ff60d7e`. Added explicit separator regression check: `f4dd3962ad900eb5cc03527b6d0ad69643c0ef05`.
+- **PENDING-QA:** run Windows full regression, context menu category test, executable/installer smoke and capture exact CI outcome on the new commit. No claim of PASS until observed.
+- **DEFERRED-HARDWARE:** physical GUI flicker, MIDI/ASIO routing, long playback soak; release remains blocked.
