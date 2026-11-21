@@ -168,4 +168,15 @@ assert.ok(js.includes('["diagnostic-open-log","activity-open-log"]')&&
           server.includes('version=updater.VERSION')&&
           server.includes('"version":updater.VERSION'),
   'Import log and active app version must be reliable and directly accessible');
+assert.ok(html.includes('id="toast-dismiss"')&&
+  html.includes('id="toast-message"')&&
+  js.includes('function dismissToast()')&&
+  js.includes('if(!error)state.toastTimer=setTimeout(dismissToast,8000)')&&
+  js.includes('if(confirmationPending||modal.open)return false;')&&
+  js.includes('modal.returnValue="cancel"')&&
+  js.includes('function showStableModal(id)'),
+ 'Popup warnings persist until dismissal and confirmations cannot overlap');
+assert.ok(js.includes('const known=Boolean(state.updateTarget?.newer)')&&
+  stylesheet.includes('#toast.show{opacity:1;visibility:visible;pointer-events:auto}'),
+ 'Transient update errors must not flash away existing notices');
 console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs, Windows picker, Desktop Standalone and diagnostic log');
