@@ -83,19 +83,22 @@ def _destroy_taskbar_icons(handles):
 def fit_zoom(view_width,view_height,max_zoom=1.20):
     """Automatic Windows UI fit in Qt logical pixels (independent of DPI).
 
-    The former unconditional 120% Qt zoom made a maximized 1366x768 window
-    behave like an ~1138x640 CSS viewport. Tall editing tools then had their
-    bottom controls clipped by fixed-height panels. Fit the available
-    *client area* instead of assuming a 2K/4K monitor, and keep all page
-    chrome within the desktop window. Nested views may scroll when needed.
+    Use the client width to fit workspace columns while preserving readable
+    font sizes on 1366x768 and smaller displays. Tall editing tools scroll
+    inside their views instead of forcing the entire UI to shrink to 70-80%.
+    Manual Ctrl+Plus/Minus and Ctrl+0 continue to work.
     """
     width=max(1,int(view_width))
     height=max(1,int(view_height))
     # Target enough logical CSS room for left navigation, two work panels,
     # activity status and controls. Native Qt layout values are DIP, not
     # physical pixels, so this also behaves on Windows HiDPI screens.
-    scale=min(float(max_zoom),width/1360.0,height/960.0)
-    return max(0.70,round(scale,2))
+    # Prioritize readable text: tall views already scroll internally.
+    # Scaling the whole Qt WebView to 80% on a 1366x768 laptop made
+    # standard 12px Thai labels render at under 10 physical pixels.
+    # Width drives auto-fit; clamp the minimum to keep text legible.
+    scale=min(float(max_zoom),width/1360.0)
+    return max(0.90,round(scale,2))
 
 
 def run_desktop(server,url,workspace,icon_path,state=None):
