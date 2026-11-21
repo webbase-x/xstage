@@ -20,7 +20,7 @@
 
 | ID | Phase | Acceptance condition | Status | Evidence / next action |
 |---|---|---|---|---|
-| P0.1 | Build and tests | Re-run full Windows regression on the latest P0 source/workflow; **0 fail, 0 errors** and review skips | OPEN | 1,014/0/0/78 is prior source only; trigger a new main candidate |
+| P0.1 | Build and tests | Re-run full Windows regression on the latest P0 source/workflow; **0 fail, 0 errors** and review skips | OPEN | [run 44872566462](https://github.com/webbase-x/xstage/actions/runs/44872566462): regression step PASS, installer smoke FAIL; full summary needs recheck on fixed CI |
 | P0.2 | EXE and integrity | Native 64-bit BASS DLLs, icon, executable, SHA-256 and signed package manifest verified | OPEN | Previous candidate passes; re-verify new build |
 | P0.3 | Real installer smoke | Silent install to Thai/space path; installed EXE dependency preflight; clean uninstall | OPEN | New CI step not yet evidenced |
 | P0.4 | GUI & queue safety | Windows UI open/close, search, hotkeys, queue, mixer lifecycle and no stalling/flicker | OPEN | Add GUI smoke evidence and review failures |
@@ -59,7 +59,7 @@
 5. Record dated commit SHA, CI run URL, tests run/passed/failed/errors/skipped, any artifacts, and exact remaining count. Do not mutate Release/installer availability flags without verified evidence.
 6. Continue to the next task **only after the current task passes**; advance to P1 only when **all 6 P0 items pass**.
 
-## Hourly report format
+## 2026-11-21 13:14 Asia/Bangkok — P0.1 investigation\n\n- Windows [run 44872566462](https://github.com/webbase-x/xstage/actions/runs/44872566462) passed source inspection, Windows regression, native x64 BASS validation, icon verification and installer compilation; **failed** in silent installation smoke because the expected installed `XStageKaraoke.exe` was not found in the requested Thai/space path. Installer SHA-256: `e6bf9eabb012e59ce0cfee13a90b243035a20e5d33d69080b9d4563176a011be`. This SHA belongs to a failed candidate and must not be advertised as a release.\n- Workflow change `deb9e859b05c8d6a1ffcefaa0e503f69ca5aa2c7` makes `/DIR` and `/LOG` explicit single-string arguments and prints install directory contents plus Inno log on failure. This is a **diagnostic/fix candidate**, not proof of success.\n- **P0.1 remains OPEN** until rerun of complete Windows CI and installer smoke succeeds; **27/27 remain**. No physical hardware or production EXE verification.\n\n## Hourly report format
 
 - **Working on:** `P?.?` + one-line objective
 - **Changed:** exact file paths, Git commit SHA and/or CI run
