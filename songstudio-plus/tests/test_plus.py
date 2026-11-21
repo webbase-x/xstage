@@ -103,6 +103,26 @@ class PlusTests(unittest.TestCase):
             manual.build_catalog(self.workspace,"invalid")
 
 
+    def test_exported_song_does_not_enter_build_queue_again(self):
+        import manual_editor as manual
+        path=self.put("single.mp3",b"PAYLOAD-MP3"*900)
+        self.lrc(path)
+        plus.import_folder(self.workspace,self.src)
+        song=plus.songs(self.workspace)[0]
+        manual.approve(self.workspace,song["id"],song["version_id"])
+        self.assertEqual(len(manual.build_catalog(self.workspace,"ready")["rows"]),1)
+        self.assertEqual(len(manual.build_catalog(self.workspace,"converted")["rows"]),0)
+        first=plus.build_song(self.workspace,song["id"])
+        self.assertFalse(first["skipped"])
+        self.assertEqual(manual.build_catalog(self.workspace,"ready")["rows"],[])
+        self.assertEqual(len(manual.build_catalog(self.workspace,"converted")["rows"]),1)
+        self.assertEqual(manual.approved_build_ids(self.workspace),[])
+        self.assertEqual(manual.ready_count(self.workspace),0)
+        self.assertEqual(manual.approved_selected_ids(self.workspace,[song["id"]]),set())
+        second=plus.build_song(self.workspace,song["id"])
+        self.assertTrue(second["skipped"])
+        self.assertEqual(second["sha256"],first["sha256"])
+
     def test_schema_all_tables_prefixed_and_separate_from_legacy(self):
         with plus.connect(self.workspace) as db:
             names=[row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")]
