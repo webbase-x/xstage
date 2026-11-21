@@ -991,7 +991,7 @@ class KaraokeApp(tk.Tk):
                         from .asio_backend import create_midi_output
                         output = create_midi_output(
                             self.home / 'native' / 'x64', self.settings,
-                            notify=lambda detail: self.status_var.set(detail))
+                            notify=lambda detail: self.messages.put(('job_note', detail)))
                 new_engine = prepared[0] if prepared else MidiPlayer(output=output, device=int(self.settings.get("midi_device", -1)))
                 phase = 'file'
                 if not prepared:new_engine.load(path)
