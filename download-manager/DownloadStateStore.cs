@@ -233,8 +233,10 @@ public sealed class DownloadStateStore
             var count = job.SegmentsUsed;
             for (var index = 0; index < count; index++)
             {
-                var startByte = job.TotalBytes * index / count;
-                var endByte = job.TotalBytes * (index + 1) / count - 1;
+                // Multiplication before division overflows for multi-GB files.
+                // Use the same overflow-safe boundaries as the HTTP Range engine.
+                var startByte = TransferSegmentGeometry.Boundary(job.TotalBytes, index, count);
+                var endByte = TransferSegmentGeometry.Boundary(job.TotalBytes, index + 1, count) - 1;
                 var max = endByte - startByte + 1;
                 var part = Path.Combine(baseDir, index.ToString("D2") + ".part");
                 var actual = File.Exists(part) ? new FileInfo(part).Length :
