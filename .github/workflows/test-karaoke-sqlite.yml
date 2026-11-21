@@ -1,0 +1,33 @@
+name: Karaoke Online real SQLite3 database
+
+on:
+  push:
+    paths:
+      - "drive-sqlite.js"
+      - "app.js"
+      - "cloud-import.js"
+      - "karaoke.html"
+      - "scripts/karaoke-drive-sqlite-test.mjs"
+      - ".github/workflows/test-karaoke-sqlite.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned SQLite WebAssembly for test only
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund sql.js@1.13.0
+      - name: Validate browser code
+        run: |
+          node --check drive-sqlite.js
+          node --check app.js
+          node --check cloud-import.js
+      - name: Exercise genuine SQLite3 binary
+        run: node scripts/karaoke-drive-sqlite-test.mjs
