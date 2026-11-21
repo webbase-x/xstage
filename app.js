@@ -19,7 +19,10 @@ const ui = {
 function setSongKeyDisplay(key=''){
   const label='คีย์ '+(String(key||'').trim()||'—');
   if(ui.songKey)ui.songKey.textContent=label;
-  if(ui.toolbarSongKey)ui.toolbarSongKey.textContent=label;
+  if(ui.toolbarSongKey){
+    ui.toolbarSongKey.textContent=label;
+    ui.toolbarSongKey.title=String(key||'').trim()?'คีย์เพลง: '+key:'ยังไม่มีข้อมูลคีย์เพลง';
+  }
 }
 const state = {
   token: '', tokenExpiresAt:0, accountSub: '', manifest: null, songs: [], shown: [], selectedIndex: 0,
@@ -2703,7 +2706,6 @@ function clearIdleStage(message){
   state.medleyUpcoming=null;
   releaseQueuePreload();
   if(midiKeyControl)midiKeyControl.hidden=true;
-  if($('midi-keyboard-control'))$('midi-keyboard-control').hidden=true;
   window.XStageMIDIPiano?.setSong({bytes:null});
   ui.nowPlaying.textContent='ยังไม่มีเพลงกำลังเล่น';
   ui.nowArtist.textContent='';
@@ -2925,12 +2927,16 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     if(getFileId(song.video))void loadSongVideo(song,request,token,controller.signal);
     syncMediaSessionMetadata(song);
     ui.nowPlaying.textContent=song.title||'ไม่ระบุชื่อเพลง';ui.nowArtist.textContent=song.artist||'ไม่ระบุศิลปิน';
-    const musicalKey=String(song.key||song.musicKey||song.originalKey||song.keySignature||'').trim();
+    const metadataKey=song.key||song.musicKey||song.originalKey||song.keySignature||'';
+    // A MIDI file may specify its musical key even when the song catalog
+    // does not. Use its actual FF 59 signature, never guess from audio notes.
+    const midiSignature=!metadataKey&&liveMidiBytes
+      ?window.XStageBrowserMidi?.parseMidi(liveMidiBytes)?.keySignature||'':'';
+    const musicalKey=String(metadataKey||midiSignature).trim();
     ui.stageCode.textContent=song.code||'—';
     setSongKeyDisplay(musicalKey);
     ui.stage.classList.add('playing');ui.stageIdle.hidden=true;
     if(midiKeyControl)midiKeyControl.hidden=!liveMidiBytes;
-    if($('midi-keyboard-control'))$('midi-keyboard-control').hidden=!liveMidiBytes;
     if($('midi-instrument'))$('midi-instrument').value='';
     if(midiKeyValue){midiKeyValue.value='0';$('midi-transpose-label').textContent='0';}
     if(liveMidiBytes){
@@ -3042,7 +3048,6 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     if(!state.liveMidiPlayback){
       window.XStageIOSMidiAudio?.release?.();
       if(midiTransport.active)midiTransport.clear();
-      if($('midi-keyboard-control'))$('midi-keyboard-control').hidden=true;
     }
     const message=e.message||'ไม่สามารถเล่นเพลงได้';
     setPlayStatus(message);publishPlaybackStatus('error',song,message);
