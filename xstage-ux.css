@@ -4603,3 +4603,32 @@ body.xstage-ui-v2 .stage #midi-keyboard-panel .midi-piano-scroll{
     min-height:0
   }
 }
+
+/* 1.15.6: The current catalog key replaces the onstage search keyboard.
+   The virtual keyboard remains accessible from the menu and remote. */
+body.xstage-ui-v2 .stage .stage-toolbar #toggle-keyboard{display:none!important}
+body.xstage-ui-v2 .stage .stage-toolbar .song-key-toolbar{
+  display:inline-flex;align-items:center;justify-content:center;flex:none;
+  min-width:70px;max-width:128px;min-height:40px;
+  padding:7px 11px;border-radius:11px;
+  border:1px solid rgba(96,217,199,.55);background:rgba(8,61,72,.86);
+  color:#bcfff1;font-size:clamp(.72rem,1vw,.94rem);font-weight:850;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+@media(max-width:760px){
+  /* Compact toolbar dedicates the full row to the song search. */
+  body.xstage-ui-v2 .stage .stage-toolbar .song-key-toolbar{display:none!important}
+  body.xstage-ui-v2:not(.xstage-native-tv) .stage .transport-panel .tv-song-meta{
+    display:flex!important;align-items:center;justify-content:flex-start;
+    min-width:0;margin-top:3px
+  }
+  body.xstage-ui-v2:not(.xstage-native-tv) .stage #tv-song-key{
+    display:inline-flex;max-width:100%;padding:3px 7px;border-radius:7px;
+    border:1px solid rgba(96,217,199,.4);background:rgba(8,61,72,.64);
+    color:#bcfff1;font-size:.7rem;font-weight:850;white-space:nowrap
+  }
+}
+/* Later transport display:grid !important must not expose a hidden menu. */
+body.xstage-ui-v2 .stage .transport-right-actions #stage-tools-toggle[hidden]{
+  display:none!important
+}
