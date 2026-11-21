@@ -325,3 +325,8 @@
 
 - [`58b05875`](https://github.com/webbase-x/xstage/commit/58b05875680ba4f7043816a56e2dbf7d34cb6c81) adds bounded stereo float32 PCM staging with overflow and underrun accounting, deterministic silence and a native-buffer copy helper. [`b97b5cb4`](https://github.com/webbase-x/xstage/commit/b97b5cb4fa249afe86255815092f393419722d75) adds offline contract tests (not executed in this turn).
 - **PENDING-QA**: no ASIO callback or native ASIO initialization exists yet; a real-time callback must be implemented in native code rather than calling Python from the ASIO audio thread. Hardware validation remains deferred. No ASIO playback or stable release claim.
+
+## 2026-11-21 — P1.3 native PCM bridge foundation (PENDING-QA)
+
+- [`6282e59e`](https://github.com/webbase-x/xstage/commit/6282e59ee90145c5face3285a8de5f7418190f90) adds C++ SPSC lock-free PCM FIFO (float32 stereo, silence on underrun) intended for native ASIO callback consumption; [`1b57bfe6`](https://github.com/webbase-x/xstage/commit/1b57bfe6fd7931740c41a2f55ff45fbb2c79b4ec) adds Python producer-side ctypes wrapper.
+- **PENDING-QA**: DLL build/package, native BASSASIO callback, BASSMIDI decode producer, device/channel mapping, fallback and real-device verification remain. No real ASIO output is enabled or claimed.
