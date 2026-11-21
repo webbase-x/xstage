@@ -987,7 +987,10 @@ class KaraokeApp(tk.Tk):
                             self.home / 'native' / 'x64', plan=plan,
                             devices=device_map, settings=self.settings)
                     else:
-                        output = BassSynth(self.home / 'native' / 'x64', settings=self.settings)
+                        from .asio_backend import create_midi_output
+                        output = create_midi_output(
+                            self.home / 'native' / 'x64', self.settings,
+                            notify=lambda detail: self.status_var.set(detail))
                 new_engine = prepared[0] if prepared else MidiPlayer(output=output, device=int(self.settings.get("midi_device", -1)))
                 phase = 'file'
                 if not prepared:new_engine.load(path)
