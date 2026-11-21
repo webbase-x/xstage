@@ -3,6 +3,8 @@
 Experimental ASIO is never selected by default. Failures are surfaced through
 an optional diagnostic callback; no silent claim of ASIO playback.
 """
+import logging
+
 from .bass import BassSynth
 
 
@@ -28,5 +30,8 @@ def create_midi_output(native, settings, *, notify=None,
             primary, lambda: bass_factory(native, settings=settings), notify=notify)
     except Exception as exc:
         if notify is not None:
-            notify('ASIO เริ่มทำงานไม่สำเร็จ ใช้ BASS แทน: ' + str(exc))
+            try:
+                notify('ASIO เริ่มทำงานไม่สำเร็จ ใช้ BASS แทน: ' + str(exc))
+            except Exception:
+                logging.exception('Unable to surface ASIO startup fallback notice')
         return bass_factory(native, settings=settings)
