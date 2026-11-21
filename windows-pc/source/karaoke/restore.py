@@ -18,6 +18,10 @@ def readonly(path):
 
 def validate_backup(folder):
     folder=Path(folder)
+    if folder.is_symlink() or getattr(folder, 'is_junction', lambda: False)():
+        raise ValueError('โฟลเดอร์ชุดสำรองเป็นลิงก์ที่ไม่ปลอดภัย')
+    if not folder.is_dir():
+        raise ValueError('ไม่พบโฟลเดอร์ชุดสำรอง')
     for name in FILES + OPTIONAL_FILES:
         source = folder/name
         # A backup must be self-contained. Do not follow symlinks/junctions
@@ -67,7 +71,10 @@ def stage_restore(folder,data):
     info=validate_backup(folder)
     from .first_run import settings_for_restore
     info['settings']=settings_for_restore(folder,info['settings'])
-    data=Path(data);pending=data/'restore-pending'
+    data=Path(data)
+    if data.is_symlink() or getattr(data, 'is_junction', lambda: False)():
+        raise ValueError('โฟลเดอร์ข้อมูลปลายทางเป็นลิงก์ที่ไม่ปลอดภัย')
+    pending=data/'restore-pending'
     if pending.is_symlink() or getattr(pending,'is_junction',lambda:False)():
         raise ValueError('โฟลเดอร์กู้คืนค้างเป็นลิงก์ที่ไม่ปลอดภัย')
     if pending.exists():raise ValueError('มีงานกู้คืนรอเปิดโปรแกรมอยู่แล้ว')
