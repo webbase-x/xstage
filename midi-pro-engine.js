@@ -64,12 +64,13 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
   const unlocked=scope.XStageBrowserMidi?.liveAudioContext?.();
   const ownsContext=!unlocked;
   const ctx=unlocked||new Ctor({latencyHint:'playback'});
-  let synth=null,sequencer=null,master=null,tone=null,limiter=null,disposed=false;
+  let synth=null,sequencer=null,master=null,tone=null,limiter=null,mediaOutput=null,disposed=false;
   const dispose=()=>{
     if(disposed)return;disposed=true;
     try{sequencer?.pause();}catch{}
     try{synth?.stopAll(true);}catch{}
     try{synth?.destroy();}catch{}
+    try{mediaOutput?.dispose();}catch{}
     try{master?.disconnect();tone?.disconnect();limiter?.disconnect();}catch{}
     if(ownsContext)void ctx.close().catch(()=>{});
   };
@@ -99,7 +100,8 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
     synth.connect(master);
     if(tone){master.connect(tone);tone.connect(limiter);}
     else master.connect(limiter);
-    limiter.connect(ctx.destination);
+    mediaOutput=scope.XStageIOSMidiAudio?.attach(ctx,limiter,{onStatus})||null;
+    if(!mediaOutput)limiter.connect(ctx.destination);
     const bank=fontBytes.buffer.slice(fontBytes.byteOffset,
       fontBytes.byteOffset+fontBytes.byteLength);
     await synth.soundBankManager.addSoundBank(bank,'X-Stage GM');
@@ -170,10 +172,12 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           updateVolume();applyKey();applyProgram();
           sequencer.playbackRate=clamp(Number(player.playbackRate)||1,.25,2);
           sequencer.currentTime=clamp(Number(player.currentTime)||0,0,parsed.duration);
+          scope.XStageIOSMidiAudio?.activate();
           void ctx.resume().catch(()=>onStatus('ต้องอนุญาตเล่นเสียงเบื้องหลัง'));
+          void mediaOutput?.start().catch(()=>{});
           sequencer.play();
         };
-        const pause=()=>{started=false;sequencer.pause();};
+        const pause=()=>{started=false;sequencer.pause();mediaOutput?.pause();};
         const seek=()=>{
           if(stopped)return;
           sequencer.currentTime=clamp(Number(player.currentTime)||0,0,parsed.duration);
@@ -182,12 +186,13 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
         const change=()=>{applyKey();applyProgram();};
         const visibility=()=>{
           if(stopped||scope.document?.hidden||player.paused)return;
-          if(ctx.state==='suspended'){
-            // Some mobile browsers suspend WebAudio while backgrounded.
-            // Recover only for a song that the user did not pause.
+          scope.XStageIOSMidiAudio?.activate();
+          if(ctx.state==='suspended'||ctx.state==='interrupted'){
+            // Resume only after the tab is visible and the user did not pause.
             void ctx.resume().catch(()=>onStatus(
-              'เบราว์เซอร์พักเสียงขณะสลับแอป · กด ▶ เพื่อเล่นต่อ'));
+              'iPhone พักเสียงขณะสลับแท็บ · แตะ ▶ เพื่อเล่นต่อ'));
           }
+          mediaOutput?.resume();
           // Reconcile the lyric/player clock with the actual audio thread
           // when a backgrounded tab is shown again.
           const actual=Number(sequencer.currentTime);
@@ -284,12 +289,15 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
       };
       const play=()=>{
         if(playing||disposed)return;
-        playing=true;void ctx.resume().catch(()=>onStatus('กด ▶ อีกครั้งเพื่ออนุญาตเสียง'));
+        playing=true;
+        scope.XStageIOSMidiAudio?.activate();
+        void mediaOutput?.start().catch(()=>{});
+        void ctx.resume().catch(()=>onStatus('กด ▶ อีกครั้งเพื่ออนุญาตเสียง'));
         reset();step();timer=setInterval(step,15);
       };
       const pause=()=>{
         if(timer!==null){clearInterval(timer);timer=null;}
-        playing=false;reset();
+        playing=false;reset();mediaOutput?.pause();
       };
       const seek=()=>{pause();if(!player.paused)play();};
       const listeners=[['play',play],['pause',pause],['ended',pause],
