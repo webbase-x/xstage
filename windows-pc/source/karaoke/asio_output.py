@@ -41,6 +41,7 @@ class AsioOutput:
             'BASS_ASIO_ChannelSetFormat': ([BOOL, UINT, UINT], BOOL),
             'BASS_ASIO_ChannelSetRate': ([BOOL, UINT, ctypes.c_double], BOOL),
             'BASS_ASIO_Start': ([UINT, UINT], BOOL),
+            'BASS_ASIO_IsStarted': ([], BOOL),
             'BASS_ASIO_Stop': ([], BOOL),
             'BASS_ASIO_ErrorGetCode': ([], ctypes.c_int),
         }
@@ -74,6 +75,12 @@ class AsioOutput:
     def _check(self, value, action):
         if not value:
             raise OSError(f'{action} ไม่สำเร็จ (ASIO {self.dll.BASS_ASIO_ErrorGetCode()})')
+
+    def check_health(self):
+        """Detect ASIO engines which stopped unexpectedly between MIDI events."""
+        if not self.started or not self.dll.BASS_ASIO_IsStarted():
+            raise OSError('ASIO driver หยุดทำงานระหว่างเล่น')
+        return True
 
     def push(self, pcm):
         if not self.started:
