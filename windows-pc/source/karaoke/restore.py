@@ -129,7 +129,21 @@ def replace_file(source,target):
             temp.unlink(missing_ok=True)
 
 
+def validate_sqlite_sidecars(data, names):
+    """Refuse linked or non-file SQLite journals before modifying live data."""
+    for name in names:
+        if not name.endswith('.sqlite3'):
+            continue
+        for suffix in ('-wal', '-shm'):
+            sidecar = Path(data) / (name + suffix)
+            if (sidecar.is_symlink()
+                    or getattr(sidecar, 'is_junction', lambda: False)()
+                    or (sidecar.exists() and not sidecar.is_file())):
+                raise ValueError('ไฟล์ SQLite journal ไม่ปลอดภัย: ' + sidecar.name)
+
+
 def rollback(data,safety,existed,replaced=FILES):
+    validate_sqlite_sidecars(data, replaced)
     for name in replaced:
         target=data/name
         if name.endswith('.sqlite3'):
@@ -182,6 +196,7 @@ def apply_pending(data):
             if (target.is_symlink() or getattr(target,'is_junction',lambda:False)()
                     or (target.exists() and not target.is_file())):
                 raise ValueError('ไฟล์ปลายทางย้อนคืนไม่ปลอดภัย: '+name)
+        validate_sqlite_sidecars(data, replaced)
         rollback(data,safety,existed,replaced)
         pending.rename(data/('restore-interrupted-'+uuid.uuid4().hex))
         raise ValueError('กู้คืนครั้งก่อนถูกขัดจังหวะ คืนข้อมูลเดิมแล้ว กรุณาเลือกชุดสำรองใหม่')
@@ -198,6 +213,7 @@ def apply_pending(data):
             raise ValueError('ไฟล์ข้อมูลปัจจุบันเป็นลิงก์ที่ไม่ปลอดภัย: '+name)
         if source.exists() and not source.is_file():
             raise ValueError('ไฟล์ข้อมูลปัจจุบันไม่ถูกต้อง: '+name)
+    validate_sqlite_sidecars(data, replaced)
     safety=data/('restore-safety-'+uuid.uuid4().hex);safety.mkdir()
     existed=[]
     try:
