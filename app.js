@@ -3132,9 +3132,6 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       state.liveMidiSource=liveMidiBytes;
       const parsedLiveMidi=window.XStageBrowserMidi.parseMidi(liveMidiBytes);
       midiTransport.begin(parsedLiveMidi.duration,midiTailHandoffCue(parsedLiveMidi,lyrics));
-      // Each MIDI arrangement gets clean per-channel mixing; the next song
-      // must not inherit a muted piano/drum track from the previous one.
-      window.XStageWebMidiMixer?.resetForSong?.();
       try{
         state.liveMidiPlayback=professional
           ?attachProfessionalMidiEngine(professional,midiOptions)
@@ -3821,7 +3818,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1127';
+    script.src='./assets/vendor/qrcode.min.js?v=1128';
     script.async=true;
     let done=false;
     const finish=error=>{

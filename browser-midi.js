@@ -808,24 +808,6 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   const MASTER_GAIN=.18;
   const MAX_VOICES=96;
   master.gain.value=MASTER_GAIN;
-  // A small Web Audio gain node per MIDI channel makes PC-style Mute,
-  // Solo and level changes immediate without rescheduling the song.
-  const mixerGains=Array.from({length:16},()=>ctx.createGain());
-  for(const channel of mixerGains)channel.connect(master);
-  const applyMixer=()=>{
-    const mixer=scope.XStageWebMidiMixer;
-    for(let ch=0;ch<16;ch++){
-      const muted=!!mixer?.isMuted?.(ch);
-      const level=muted?0:(Number(mixer?.getGain?.(ch))||0);
-      const gain=mixer?Math.max(0,Math.min(1.5,level)):1;
-      const param=mixerGains[ch].gain;
-      if(typeof param.setTargetAtTime==='function')
-        param.setTargetAtTime(gain,ctx.currentTime,.012);
-      else param.value=gain;
-    }
-  };
-  scope.addEventListener?.('xstage-midi-mixerchange',applyMixer);
-  applyMixer();
   const notes=song.notes.slice().sort((a,b)=>a.start-b.start);
   let cursor=0,disposed=false,timer=null,voices=[],revision=0;
   const regionCache=new Map();
@@ -899,7 +881,7 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
       gain.gain.linearRampToValueAtTime(amp,onset+attack);
       gain.gain.setValueAtTime(amp,held);
       gain.gain.exponentialRampToValueAtTime(.00001,onset+duration);
-      gain.connect(mixerGains[n.channel]||master);
+      gain.connect(master);
       let src;
       if(buffer){
         const sample=font.samples[region.get(53)];
@@ -949,8 +931,7 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   const dispose=()=>{
     if(disposed)return;disposed=true;pause();
     for(const [event,fn] of listeners)player.removeEventListener(event,fn);
-    scope.removeEventListener?.('xstage-midi-mixerchange',applyMixer);
-    try{iosOutput?.dispose();for(const channel of mixerGains)channel.disconnect();master.disconnect();limiter?.disconnect();}catch{}
+    try{iosOutput?.dispose();master.disconnect();limiter?.disconnect();}catch{}
   };
   signal?.addEventListener('abort',dispose,{once:true});
   if(!player.paused)play();
