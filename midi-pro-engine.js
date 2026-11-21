@@ -198,6 +198,7 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
         if(!player.paused)play();
         return {
           engine:'SpessaSynth',scheduler:'audio-worklet',duration:parsed.duration,
+          currentTime:()=>Number(sequencer.currentTime),
           dispose(){
             if(stopped)return;stopped=true;pause();
             for(const [name,fn] of listeners)player.removeEventListener(name,fn);
