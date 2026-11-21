@@ -122,13 +122,13 @@ class RestoreTests(unittest.TestCase):
         target=self.data/'settings.json'
         original=target.read_bytes()
         def partial_copy(src,dst):
-            Path(dst).write_bytes(b'incomplete')
+            dst.write(b'incomplete')
             raise OSError('disk full')
-        with patch.object(restore.shutil,'copyfile',side_effect=partial_copy):
+        with patch.object(restore.shutil,'copyfileobj',side_effect=partial_copy):
             with self.assertRaisesRegex(OSError,'disk full'):
                 restore.replace_file(source,target)
         self.assertEqual(target.read_bytes(),original)
-        self.assertFalse((self.data/'settings.json.restore-tmp').exists())
+        self.assertFalse(list(self.data.glob('settings.json.restore-*.tmp')))
 
 
     def test_pending_restore_symlink_is_rejected(self):
