@@ -17,7 +17,7 @@ class InstallerDataPreservationTests(unittest.TestCase):
 
     def test_song_drop_folders_are_persistent(self):
         for name in ('Songs', 'Songs\\MIDI', 'Songs\\MIDI\\NCN',
-                     'Songs\\MIDI\\EMK', 'Songs\\MP3', 'Songs\\VIDEO'):
+                     'Songs\\MIDI\\EMK', 'Songs\\MIDI\\XMID', 'Songs\\MP3', 'Songs\\VIDEO'):
             with self.subTest(name=name):
                 self.assertIn('Name: "{app}\\' + name + '"', self.script)
         self.assertIn('Name: "{app}\\Songs"; Permissions: users-modify; Flags: uninsneveruninstall', self.script)
