@@ -127,9 +127,16 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Native Tk GUI unavailable on this Windows runner' }
             $env:DISPLAY = 'xstage-native-win32-test-opt-in'
             $env:PYTHONDONTWRITEBYTECODE = '1'
+            # Both the parent logger and child tests must use UTF-8 on Windows.
+            $env:PYTHONIOENCODING = 'utf-8:backslashreplace'
+            $env:PYTHONUTF8 = '1'
+            [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+            $OutputEncoding = [Console]::OutputEncoding
             $env:PYTHONPATH = (Join-Path (Get-Location).Path 'tests') + ';' + (Get-Location).Path
             @'
           import os, pathlib, subprocess, sys, unittest
+          sys.stdout.reconfigure(encoding='utf-8', errors='backslashreplace')
+          sys.stderr.reconfigure(encoding='utf-8', errors='backslashreplace')
           # Run each GUI test in a fresh process to isolate Tk thread destruction,
           # and to fail rather than hang indefinitely on unresolved modal dialogs.
           classes = [
@@ -172,8 +179,13 @@ jobs:
                       failures.append(test)
                   else:
                       completed += 1
-              except subprocess.TimeoutExpired:
+              except subprocess.TimeoutExpired as exc:
                   print("GUI test timed out:", test, flush=True)
+                  partial = exc.stdout or b""
+                  if isinstance(partial, bytes):
+                      partial = partial.decode("utf-8", errors="replace")
+                  if partial:
+                      print(partial, flush=True)
                   failures.append(test)
           print(f"GUI SUMMARY: {completed} passed; {len(failures)} failed; {len(retired)} retired", flush=True)
           if failures:
