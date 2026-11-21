@@ -30,8 +30,9 @@ assert.ok(midi.includes("fontStatusChanged()")&&
 assert.ok(midi.includes('BUILTIN_GM_ID')&&
   midi.includes('TimGM6mb.sf2')&&
   midi.includes('selected===BUILTIN_GM_ID')&&
-  midi.includes('parseFont(bytes)'),
-  'Without a private SoundFont, the player must use a real GM sample bank');
+  midi.includes('validateFontContainer(bytes)')&&
+  midi.includes('fontCache.parsed=parseFont(fontBytes)'),
+  'GM SoundFont must validate header quickly and parse samples on demand');
 assert.ok(midi.includes('Number(option.dataset.size)')&&
   midi.includes('gmCandidates'),
   'Only compatible GM banks should be selected automatically from private Drive');
