@@ -54,9 +54,9 @@ function plan({fontBytes=0,queuedBytes=0,activeBytes=0,extraBytes=0}={}){
     (native.lowMemory||native.available<=Math.max(native.threshold,384*MiB));
   const level=heapPressure||nativePressure||ratio>=.83?'high':
     ratio>=.58||!!native&&native.available/native.total<.25?'medium':'low';
-  // Hard cap across PC browsers, Android WebView and phones: at most two
-  // NEXT queued songs. Low-RAM devices may prepare fewer or none.
-  const queueLimit=2;
+  // Preload exactly ONE upcoming song, never a speculative backlog.
+  // Low-memory devices may still skip preparation to protect playback.
+  const queueLimit=1;
   return {budget,occupied,remaining:Math.max(0,budget-occupied),
     ratio,level,queueLimit,heapPressure, nativePressure,
     hint,heap:h,native,fontBytes,activeBytes};
