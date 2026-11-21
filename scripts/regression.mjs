@@ -887,7 +887,8 @@ assert.ok(singerStage.includes('class="stage-official-banner"'),'separate singer
 const stageParityStart=css.lastIndexOf('/* v1.0.91: Android TV stage shares the WEB stage design exactly.');
 assert.ok(stageParityStart>0,'shared WEB / Android TV stage parity rules must be last');
 const stageParity=css.slice(stageParityStart);
-assert.ok(!stageParity.includes(':not(.xstage-native-tv)'),'final stage appearance must not diverge between Web and Android TV');
+assert.ok(!/\.stage-(?:hero|brand-lockup|brand-scene|brand-side-viz|brand-spectrum):not\(\.xstage-native-tv\)/.test(stageParity),
+  'stage hero and visualizers must stay aligned between Web and Android TV; responsive toolbar controls may differ');
 assert.ok(stageParity.includes('top:37%!important')&&stageParity.includes('width:min(72cqw,760px)!important'),'all devices must share the exact stationary Web hero geometry');
 assert.ok(stageParity.includes('grid-template-columns:minmax(0,1fr) minmax(0,4fr) minmax(0,1fr)!important'),'both stages must share the same EQ/banner/EQ layout');
 assert.ok(stageParity.includes('height:clamp(36px,9cqh,110px)!important'),'live EQ side meters must match Web');
