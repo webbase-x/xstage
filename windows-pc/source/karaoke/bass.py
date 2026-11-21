@@ -126,7 +126,12 @@ class BassSynth:
             if not decode:
                 self.check(self.dll.BASS_ChannelPlay(self.stream, False), 'เริ่มระบบเสียง')
         except Exception:
-            self.close()
+            # Keep the original initialization error even if native teardown
+            # also fails; close() still attempts every remaining resource.
+            try:
+                self.close()
+            except Exception:
+                pass
             raise
 
     @staticmethod
