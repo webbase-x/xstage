@@ -7,7 +7,7 @@ from karaoke.virtual_lyric_display import VirtualDisplay
 
 class ChromaVideoRendererTests(unittest.TestCase):
     def test_composites_green_and_preserves_opaque_pixels(self):
-        renderer = ChromaVideoRenderer(ChromaKey((0, 255, 0), 0))
+        renderer = ChromaVideoRenderer(ChromaKey(rgb=(0, 255, 0), tolerance=0))
         front = VideoFrame(2, 1, bytes([0, 255, 0, 255, 0, 0]))
         back = VideoFrame(2, 1, bytes([5, 10, 15, 20, 25, 30]))
         result = renderer.composite(front, back)
