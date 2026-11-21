@@ -431,3 +431,10 @@ The user requested batched coding without physical QA. **This is a coding update
 - Removed redundant root separator after the six-category menu: `058d5e02d00df1e7ca451b815f3892bd6ff60d7e`. Added explicit separator regression check: `f4dd3962ad900eb5cc03527b6d0ad69643c0ef05`.
 - **PENDING-QA:** run Windows full regression, context menu category test, executable/installer smoke and capture exact CI outcome on the new commit. No claim of PASS until observed.
 - **DEFERRED-HARDWARE:** physical GUI flicker, MIDI/ASIO routing, long playback soak; release remains blocked.
+
+## 2026-11-22 03:12 Asia/Bangkok — P0.6 SQLite journal safety
+
+- Verified previous candidate Windows CI [run 44939612374](https://github.com/webbase-x/xstage/actions/runs/44939612374) concluded SUCCESS for commit f604f405; this is evidence only for that commit, not the newer changes.
+- Commit 9e7e22b3: reject symlink/junction/non-regular SQLite -wal/-shm sidecars before restore allocation and interrupted rollback, rather than unlinking unsafe paths. This preserves user data on suspicious files.
+- Commit 115de64d: regression cases for regular sidecars, directory sidecars and symlink sidecars (Windows symlink privilege conditional).
+- **PENDING-QA:** Run focused test_restore_sqlite_sidecar_safety.py, complete restore regression, Windows integration/installer CI on the new commit. Physical playback and audio-device soak remain **DEFERRED-HARDWARE**. No Stable publication authorized.
