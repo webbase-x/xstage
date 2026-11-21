@@ -1635,6 +1635,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   const oldToken = state.token;
   state.requestId++;
   state.controller?.abort(); state.controller = null; state.loading = false;
+  window.XStageMIDIPiano?.setSong({bytes:null});
   state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;state.liveMidiSource=null;
   window.XStageIOSMidiAudio?.release?.();
   player.pause(); player.removeAttribute('src'); player.load();
@@ -2617,6 +2618,7 @@ function clearIdleStage(message){
   releaseQueuePreload();
   if(midiKeyControl)midiKeyControl.hidden=true;
   if($('midi-instrument-control'))$('midi-instrument-control').hidden=true;
+  window.XStageMIDIPiano?.setSong({bytes:null});
   ui.nowPlaying.textContent='ยังไม่มีเพลงกำลังเล่น';
   ui.nowArtist.textContent='';
   ui.stageCode.textContent='—';
@@ -2696,6 +2698,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     }catch{}
   }
   const request=++state.requestId;
+  window.XStageMIDIPiano?.setSong({bytes:null});
   state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;state.liveMidiSource=null;
   state.controller?.abort();const controller=new AbortController();state.controller=controller;
   const token=state.token;
@@ -2909,6 +2912,13 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
           player,liveMidiBytes,{...midiOptions,fontBytes:null});
         setMidiEngineStatus(state.liveMidiPlayback);
       }
+      window.XStageMIDIPiano?.setSong({
+        bytes:liveMidiBytes,
+        getCurrentTime:()=>Number(player.currentTime)||0,
+        isPlaying:()=>!player.paused&&!player.ended,
+        previewNote:(note,on)=>!!state.liveMidiPlayback?.previewNote?.(
+          note,on,$('midi-instrument')?.value||'')
+      });
       if(lateEngine)void upgradeWhenReady(lateEngine);
       // When the bank is still downloading, keep the song playing; upgrade
       // only the current song and keep its MIDI position and lyrics clock.
@@ -2922,6 +2932,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
         });
       }
     }else{
+      window.XStageMIDIPiano?.setSong({bytes:null});
       setMidiEngineStatus(null);
       if(midiTransport.active)midiTransport.clear();
       player.src=url;
