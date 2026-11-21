@@ -268,8 +268,9 @@ jobs:
           $log = Join-Path $env:RUNNER_TEMP 'xstage-installer-smoke.log'
           # Only write a unique marker inside the runner's test account data.
           # Installer must preserve it when removed.
-          $userdata = Join-Path $env:LOCALAPPDATA 'X-Stage/Karaoke PC/Data'
+          $userdata = Join-Path $probe 'data'
           $sentinel = $null
+          $songSentinel = $null
           $sentinelText = 'xstage-ci-preserve-' + $env:GITHUB_RUN_ID
           try {
             # Keep quotes intact for the custom path containing spaces and Thai text.
@@ -323,9 +324,16 @@ jobs:
             if (-not (Test-Path -LiteralPath $userdata -PathType Container)) {
               throw "Installer did not create user Data directory: $userdata"
             }
+            foreach ($folder in @('Songs', 'Songs/MIDI', 'Songs/MIDI/NCN', 'Songs/MIDI/XMID', 'Songs/MP3', 'Songs/M4A', 'Songs/VIDEO')) {
+              if (-not (Test-Path -LiteralPath (Join-Path $probe $folder) -PathType Container)) {
+                throw "Installer did not create song directory: $folder"
+              }
+            }
             $sentinel = Join-Path $userdata ('ci-uninstall-preserve-' + $env:GITHUB_RUN_ID + '.txt')
             if (Test-Path -LiteralPath $sentinel) { throw 'Test data sentinel already exists; refusing to overwrite' }
             Set-Content -LiteralPath $sentinel -Value $sentinelText -NoNewline -Encoding UTF8
+            $songSentinel = Join-Path $probe 'Songs/MIDI/XMID/ci-preserve-song.mid'
+            Set-Content -LiteralPath $songSentinel -Value $sentinelText -NoNewline -Encoding UTF8
           } finally {
             try {
               $uninstall = Join-Path $probe 'unins000.exe'
@@ -340,7 +348,9 @@ jobs:
                 Start-Sleep -Milliseconds 250
               }
               if (Test-Path -LiteralPath $probe) {
-                $leftovers = @(Get-ChildItem -LiteralPath $probe -Recurse -File -Force)
+                $leftovers = @(Get-ChildItem -LiteralPath $probe -Recurse -File -Force | Where-Object {
+                  $_.FullName -ne $sentinel -and $_.FullName -ne $songSentinel
+                })
                 if ($leftovers.Count -gt 0) {
                   throw "Files left after uninstall: $($leftovers.FullName -join ', ')"
                 }
@@ -351,11 +361,18 @@ jobs:
                   throw 'Uninstall removed or changed user Data sentinel'
                 }
               }
-              Write-Host 'Silent uninstall verified: no installed files remain; user Data preserved'
+              if (-not (Test-Path -LiteralPath $songSentinel -PathType Leaf) -or
+                  (Get-Content -LiteralPath $songSentinel -Raw -Encoding UTF8) -ne $sentinelText) {
+                throw 'Uninstall removed or changed user song sentinel'
+              }
+              Write-Host 'Silent uninstall verified: runtime removed; user Data and Songs preserved'
             } finally {
               # Remove only our unique CI test marker. Never modify any other Data.
               if ($sentinel -and (Test-Path -LiteralPath $sentinel -PathType Leaf)) {
                 Remove-Item -LiteralPath $sentinel -Force
+              }
+              if ($songSentinel -and (Test-Path -LiteralPath $songSentinel -PathType Leaf)) {
+                Remove-Item -LiteralPath $songSentinel -Force
               }
             }
           }
