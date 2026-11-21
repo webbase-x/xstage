@@ -331,8 +331,20 @@ public sealed class DownloadEngine
             job.Status = previousStatus;
             throw new IOException(saveError);
         }
-        // Delete old geometry only after SQLite has accepted the new state.
-        if (Directory.Exists(work)) Directory.Delete(work, true);
+        // The new geometry is already durable. If Windows locks an old
+        // chunk, report the cleanup failure without reverting SQLite to an
+        // incompatible geometry; the next transfer will discard stale parts.
+        if (Directory.Exists(work))
+        {
+            try { Directory.Delete(work, true); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                job.Error = "เปลี่ยนจำนวนส่วนแล้ว แต่ยังลบไฟล์ชั่วคราวเดิมไม่ได้: " +
+                    ex.Message + " กรุณาปิดโปรแกรมที่ใช้งานไฟล์ แล้วลองเริ่มดาวน์โหลดอีกครั้ง";
+                Save();
+                throw new IOException(job.Error, ex);
+            }
+        }
         return true;
     }
 
