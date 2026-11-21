@@ -1159,3 +1159,22 @@ body{font-size:var(--studio-ui-text);line-height:1.45}
     min-height:180px;max-height:clamp(200px,38dvh,440px)!important
   }
 }
+
+/* Popup stability: no fade/transform flicker under Windows Qt WebEngine.
+   Errors remain visible until the user closes them; success toasts time out. */
+#toast{display:flex;align-items:flex-start;gap:12px;
+  transform:none!important;transition:none!important;
+  visibility:hidden;opacity:0;pointer-events:none}
+#toast.show{opacity:1;visibility:visible;pointer-events:auto}
+#toast-message{flex:1;min-width:0;overflow-wrap:anywhere;line-height:1.5}
+.toast-dismiss{border:0;background:transparent;color:inherit;flex:none;
+  border-radius:6px;min-width:28px;min-height:28px;padding:2px 5px;
+  font-size:17px;line-height:1.25}
+.toast-dismiss:hover,.toast-dismiss:focus-visible{background:#ffffff24}
+#confirm-dialog,#settings-dialog,#issues-dialog,#risk-dialog,#lyrics-dialog{
+  animation:none!important;transition:none!important;transform:none!important
+}
+#confirm-dialog::backdrop,#settings-dialog::backdrop,
+#issues-dialog::backdrop,#risk-dialog::backdrop,#lyrics-dialog::backdrop{
+  animation:none!important;transition:none!important
+}
