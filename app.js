@@ -550,11 +550,11 @@ function rememberLogin(enabled){try{if(enabled)localStorage.setItem(REMEMBERED_L
 // surface for lyrics, queue, media controls and existing non-MIDI tracks.
 const nativePlayer=ui.player;
 const midiTransport={
-  active:false,position:0,duration:0,paused:true,ended:false,
+  active:false,position:0,duration:0,paused:true,ended:false,seeking:false,
   volume:1,rate:1,loop:false,startedAt:0,interval:null,
   emit(name){nativePlayer.dispatchEvent(new Event(name));},
   time(){
-    if(this.paused)return this.position;
+    if(this.paused||this.seeking)return this.position;
     // Follow the audible sequencer clock, not a wall clock that keeps
     // advancing when a mobile OS temporarily suspends WebAudio.
     const audioTime=state.liveMidiPlayback?.scheduler==='audio-worklet'
@@ -589,11 +589,14 @@ const midiTransport={
   seek(value){
     this.position=Math.max(0,Math.min(this.duration,Number(value)||0));
     this.startedAt=performance.now();this.ended=false;
-    this.emit('seeking');this.emit('seeked');this.emit('timeupdate');
+    this.seeking=true;
+    try{this.emit('seeking');this.emit('seeked');}
+    finally{this.seeking=false;}
+    this.emit('timeupdate');
   },
   clear(){
     this.pause();this.active=false;this.position=0;this.duration=0;
-    this.ended=false;clearInterval(this.interval);this.interval=null;
+    this.ended=false;this.seeking=false;clearInterval(this.interval);this.interval=null;
   },
   begin(duration){
     nativePlayer.pause();nativePlayer.removeAttribute('src');
