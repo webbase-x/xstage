@@ -352,8 +352,8 @@
     const release=(state.version&&Number.isSafeInteger(state.build))
       ?' · v'+state.version+' · Build '+state.build : '';
     el.textContent=!DOWNLOADS_ENABLED&&appInfo[id].type!=="web"?"ปิดการดาวน์โหลดชั่วคราว":state.status+release;
-    el.classList.toggle("ready",DOWNLOADS_ENABLED&&states[id].available);
-    el.classList.toggle("pending",!DOWNLOADS_ENABLED||!states[id].available);
+    el.classList.toggle("ready",(DOWNLOADS_ENABLED||appInfo[id].type==="web")&&states[id].available);
+    el.classList.toggle("pending",(!DOWNLOADS_ENABLED&&appInfo[id].type!=="web")||!states[id].available);
     const quick=document.querySelector('[data-download-app="'+id+'"]');
     if(quick){
       const available=DOWNLOADS_ENABLED&&states[id].available&&isInstallableDownload(states[id].url);
