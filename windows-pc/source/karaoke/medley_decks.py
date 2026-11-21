@@ -63,9 +63,14 @@ def build(native,settings,path,key,speed,melody,pattern,full_song=False,fill=Fal
                         rhythm.times = [event.at for event in song.events]
                         rhythm.seek(0)
                     except (OSError, ValueError):
-                        if rhythm:
-                            rhythm.close()
-                        rhythm = None
+                        # Optional drum fill must never prevent the main queued
+                        # song from being prepared, even if fill cleanup fails.
+                        failed_rhythm, rhythm = rhythm, None
+                        if failed_rhythm is not None:
+                            try:
+                                failed_rhythm.close()
+                            except Exception:
+                                pass
         if pattern and isinstance(engine,MidiPlayer):
             rhythm=MidiPlayer(output=BassSynth(native,settings=settings))
             rhythm.song,rhythm.duration=pattern[0],pattern[0].duration
