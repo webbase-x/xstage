@@ -335,3 +335,8 @@
 
 - [`9c82b921`](https://github.com/webbase-x/xstage/commit/9c82b9217f5305fde6e685dc8d8481b6b8897405) exports a native BASSASIO-style PCM callback from C++; [`48464b83`](https://github.com/webbase-x/xstage/commit/48464b83b9a7942cee81ee055d7ee7b8e79c1e04) adds MSVC DLL build script; [`376f7def`](https://github.com/webbase-x/xstage/commit/376f7def068866f9556bf6ce1a2768dc30cd8a8b) exposes callback pointer from Python bridge.
 - **PENDING-QA**: no compiled DLL verified; no BASSASIO_ChannelEnable/Join/Start host wired; no ASIO format negotiation or MIDI decode producer. DLL packaging and CI remain pending. Do not enable ASIO as a user-facing audio backend yet.
+
+## 2026-11-21 — P1.3 opt-in ASIO output host (PENDING-QA)
+
+- [`604b48b8`](https://github.com/webbase-x/xstage/commit/604b48b8f089aa24633f0079690b5de8eb6a0f5b) adds an opt-in BASSASIO host for device init, channel enable/join, Float32 48 kHz format, start/stop and native callback user-data; [`74bf0822`](https://github.com/webbase-x/xstage/commit/74bf08227ca1ca8a7db36bbe33d868ffc28c8a9c) improves startup failure cleanup.
+- **PENDING-QA**: no compiled native DLL or ASIO driver tests, no BASSMIDI decode producer, no audio channel-format validation against real hardware, no GUI backend switch/fallback and no CI packaging. The host is not used by the main player yet; ASIO playback is not claimed.
