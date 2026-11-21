@@ -36,5 +36,5 @@ def create_midi_output(native, settings, *, notify=None,
                 # The audio fallback succeeded; a failed UI callback is not a
                 # playback error. Keep a concise diagnostic without a traceback
                 # that CI would misinterpret as an unhandled exception.
-                logging.warning('Unable to surface ASIO startup fallback notice', exc_info=False)
+                logging.warning('Unable to surface ASIO startup fallback notice')
         return bass_factory(native, settings=settings)
