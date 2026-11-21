@@ -16,6 +16,8 @@ on:
       - "index.html"
       - "karaoke.html"
       - "app.js"
+      - "scripts/cloud-import-test.mjs"
+      - "scripts/cloud-import-contract-test.mjs"
       - "scripts/cloud-import-browser-e2e.mjs"
       - "scripts/video-browser-transcode-e2e.mjs"
       - "video-transcode*.js"
@@ -26,6 +28,8 @@ on:
       - "index.html"
       - "karaoke.html"
       - "app.js"
+      - "scripts/cloud-import-test.mjs"
+      - "scripts/cloud-import-contract-test.mjs"
       - "scripts/cloud-import-browser-e2e.mjs"
       - ".github/workflows/test-cloud-import-browser.yml"
   workflow_dispatch:
@@ -36,8 +40,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
       - name: Check standalone importer regressions
