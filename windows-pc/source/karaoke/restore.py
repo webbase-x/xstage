@@ -90,7 +90,17 @@ def stage_restore(folder,data):
 
 def replace_file(source,target):
     temp=target.with_name(target.name+'.restore-tmp')
-    shutil.copyfile(source,temp);temp.replace(target)
+    # A prior interrupted copy must not be reused. Always replace from the
+    # validated source and remove an incomplete staging file on copy failure.
+    try:
+        shutil.copyfile(source,temp)
+        temp.replace(target)
+    except BaseException:
+        try:
+            temp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
 
 
 def rollback(data,safety,existed,replaced=FILES):
