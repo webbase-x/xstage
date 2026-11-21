@@ -2106,6 +2106,28 @@ function setStageVisualScale(value){
   saveUiPrefs({visualScale:state.visualScale});
   return state.visualScale;
 }
+// Play-on-demand must never wait indefinitely for a large GM SoundFont.
+// A late bank can upgrade the running synth without restarting its clock.
+const FAST_FONT_BUDGET_MS=/iPad|iPhone|iPod/.test(navigator.userAgent||'')?1100:2200;
+async function getStartupSoundFont(token,signal){
+  if(!window.XStageBrowserMidi?.fontStatus?.().selectedId)
+    return {bytes:null,pending:null};
+  const task=Promise.resolve().then(()=>
+    window.XStageBrowserMidi.selectedFont(token,signal));
+  // Handle a rejected fetch even when its result arrives after the deadline.
+  const safe=task.catch(error=>{
+    if(error?.name!=='AbortError')console.warn('SoundFont unavailable:',error);
+    return null;
+  });
+  let timeout;
+  try{
+    const result=await Promise.race([
+      safe.then(bytes=>({ready:true,bytes})),
+      new Promise(resolve=>{timeout=setTimeout(()=>resolve({ready:false}),FAST_FONT_BUDGET_MS);})
+    ]);
+    return result.ready?{bytes:result.bytes,pending:null}:{bytes:null,pending:safe};
+  }finally{clearTimeout(timeout);}
+}
 async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=false){
   const soundFontGeneration=state.xskSoundFontGeneration||0;
   const isXmid=!!getFileId(song?.xmid);
@@ -2115,11 +2137,9 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
     throw Error('ตัวเล่น XMID/XSK2 หรือ MIDI ยังไม่พร้อม กรุณาอัปเดตเว็บ');
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   onStatus('กำลังโหลด XMID/XSK2 และ SoundFont จาก Google Drive…');
-  const [response,fontBytes]=await Promise.all([
-    privateFile(fileId,token,{signal}),
-    window.XStageBrowserMidi.fontStatus?.().selectedId
-      ?window.XStageBrowserMidi.selectedFont(token,signal):Promise.resolve(null)
-  ]);
+  const fontTask=getStartupSoundFont(token,signal);
+  const response=await privateFile(fileId,token,{signal});
+  const {bytes:fontBytes,pending:lateFont}=await fontTask;
   const packed=await response.blob();
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   onStatus('กำลังตรวจและแยก XMID/XSK2 ในหน่วยความจำ…');
@@ -2146,7 +2166,7 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
     window.XStageBrowserMidi.parseMidi(midiBytes);
     onStatus('MIDI/SoundFont พร้อมเล่นแบบเรียลไทม์');
     return {song,token,blob:null,lyrics:unpacked.document,
-      liveMidi:midiBytes,liveFont:fontBytes};
+      liveMidi:midiBytes,liveFont:fontBytes,lateFont};
   }
   onStatus('กำลังสังเคราะห์ MIDI ของ XSK2 ให้พร้อมเล่น…');
   const rendered=await window.XStageBrowserMidi.render(midiBytes,{
@@ -2740,17 +2760,16 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       }
     }
     const readyPrepared=prepared||pendingPrepared;
-    let embeddedKaraokeLyrics=null,liveMidiBytes=null,liveFontBytes=null;
+    let embeddedKaraokeLyrics=null,liveMidiBytes=null,liveFontBytes=null,lateFontPromise=null;
     const loadMedia=async()=>{
       if(!getFileId(song.midi))return privateFile(song.audio.fileId,token,
         {signal:controller.signal}).then(r=>r.blob());
       if(!window.XStageBrowserMidi)throw Error('ไม่พบเครื่องเล่น MIDI ของเว็บ กรุณาอัปเดตหน้าเว็บ');
       setPlayStatus('กำลังโหลด MIDI และ SoundFont จาก Google Drive…');
-      const [midiResponse,fontBytes]=await Promise.all([
-        privateFile(song.midi.fileId,token,{signal:controller.signal}),
-        window.XStageBrowserMidi.fontStatus?.().selectedId
-          ?window.XStageBrowserMidi.selectedFont(token,controller.signal):Promise.resolve(null)
-      ]);
+      const fontTask=getStartupSoundFont(token,controller.signal);
+      const midiResponse=await privateFile(song.midi.fileId,token,{signal:controller.signal});
+      const {bytes:fontBytes,pending:lateFont}=await fontTask;
+      lateFontPromise=lateFont;
       if(controller.signal.aborted)throw new DOMException('ยกเลิก','AbortError');
       const midiBytes=new Uint8Array(await midiResponse.arrayBuffer());
       if(song.sourceFormat==='KAR'&&!getFileId(song.lyrics)){
@@ -2775,6 +2794,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       ({blob:audio,lyrics}=readyPrepared);
       liveMidiBytes=readyPrepared.liveMidi||null;
       liveFontBytes=readyPrepared.liveFont||null;
+      lateFontPromise=readyPrepared.lateFont||null;
     }else if(getFileId(song.xsk)||getFileId(song.xmid)){
       const ready=await boundedPlaybackTask(
         prepareXskPlayback(song,token,controller.signal,message=>{
@@ -2782,6 +2802,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
         }),120,'โหลดหรือแยก XSK2 จาก Google Drive นานเกินไป',controller);
       audio=ready.blob;lyrics=ready.lyrics;liveMidiBytes=ready.liveMidi||null;
       liveFontBytes=ready.liveFont||null;
+      lateFontPromise=ready.lateFont||null;
     }else{
       [audio,lyrics]=await boundedPlaybackTask(Promise.all([
         loadMedia(),
