@@ -22,6 +22,12 @@ BASS_ATTRIB_BUFFER = 13
 BASS_ATTRIB_MIDI_VOICES = 0x12003
 BASS_ATTRIB_MIDI_SRC = 0x12006
 BASS_MIDI_EVENTS_RAW = 0x10000
+# BASSMIDI 2.4 native events, scoped to one MIDI channel or one drum key.
+MIDI_EVENT_CUTOFF = 25
+MIDI_EVENT_RESONANCE = 26
+MIDI_EVENT_DRUM_CUTOFF = 55
+MIDI_EVENT_DRUM_RESONANCE = 56
+MIDI_EVENT_DRUM_LEVEL = 57
 UINT = ctypes.c_uint32
 BOOL = ctypes.c_int
 PTR = ctypes.c_void_p
@@ -153,6 +159,7 @@ class BassSynth:
             'BASS_MIDI_FontSetVolume': ([UINT, ctypes.c_float], BOOL),
             'BASS_MIDI_StreamSetFonts': ([UINT, PTR, UINT], BOOL),
             'BASS_MIDI_StreamEvents': ([UINT, UINT, PTR, UINT], UINT),
+            'BASS_MIDI_StreamEvent': ([UINT, UINT, UINT, UINT], BOOL),
         }
         for dll, table in ((self.dll, signatures), (self.midi, midi_signatures)):
             for name, (args, result) in table.items():
@@ -189,6 +196,38 @@ class BassSynth:
                     self._apply_effects([data[0] & 15])
             else:
                 self._raw(data)
+
+    def set_channel_tone(self, channel, cutoff=64, resonance=64):
+        """Apply a SoundFont low-pass tone to ONE MIDI channel (0..15)."""
+        from .instrument_tone import value
+        if type(channel) is not int or not 0 <= channel < 16:
+            raise ValueError('ช่อง MIDI ต้องอยู่ระหว่าง 1–16')
+        cutoff = value(cutoff, 'Cutoff')
+        resonance = value(resonance, 'Resonance')
+        with self.lock:
+            if not self.stream:
+                raise OSError('ตัวสังเคราะห์เสียงไม่ได้เปิด')
+            for event, number in ((MIDI_EVENT_CUTOFF, cutoff),
+                                  (MIDI_EVENT_RESONANCE, resonance)):
+                self.check(self.midi.BASS_MIDI_StreamEvent(
+                    self.stream, channel, event, number), 'ปรับโทนเสียงเครื่องดนตรี')
+
+    def set_drum_tone(self, note, cutoff=64, resonance=64, level=127):
+        """Apply per-key drum filter/level on GM percussion channel 10."""
+        from .instrument_tone import value
+        note = value(note, 'หมายเลขกลอง')
+        cutoff = value(cutoff, 'Cutoff')
+        resonance = value(resonance, 'Resonance')
+        level = value(level, 'Level')
+        with self.lock:
+            if not self.stream:
+                raise OSError('ตัวสังเคราะห์เสียงไม่ได้เปิด')
+            for event, number in ((MIDI_EVENT_DRUM_CUTOFF, cutoff),
+                                  (MIDI_EVENT_DRUM_RESONANCE, resonance),
+                                  (MIDI_EVENT_DRUM_LEVEL, level)):
+                parameter = note | (number << 8)
+                self.check(self.midi.BASS_MIDI_StreamEvent(
+                    self.stream, 9, event, parameter), 'ปรับโทนเสียงกลอง')
 
     def reset(self):
         with self.lock:
