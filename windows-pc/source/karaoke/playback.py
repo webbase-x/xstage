@@ -224,6 +224,9 @@ class MidiPlayer:
     def play(self):
         if not self.song:
             return
+        poll = getattr(self.output, 'poll', None)
+        if poll is not None:
+            poll()
         if self.position >= self.duration:
             self.seek(0)
         if not self.playing:
@@ -346,6 +349,10 @@ class MidiPlayer:
         self.loop_start, self.loop_end = float(start), float(end)
 
     def pump(self):
+        if self.playing and self.song:
+            poll = getattr(self.output, 'poll', None)
+            if poll is not None:
+                poll()
         if not self.playing or not self.song:
             return
         position = self.position
