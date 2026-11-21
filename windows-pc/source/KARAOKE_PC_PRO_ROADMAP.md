@@ -360,3 +360,8 @@
 
 - [`67167199`](https://github.com/webbase-x/xstage/commit/6716719945257afff418c06d7e3495b26e06494c) adds an opt-in ASIO backend factory with BASS fallback when ASIO initialization fails. [`088cce1f`](https://github.com/webbase-x/xstage/commit/088cce1f17ffd33c2c8bce8635614a2fcc12f203) integrates it into the single-output MIDI playback path; [`580628c1`](https://github.com/webbase-x/xstage/commit/580628c146c9a001d47161d9b298e0dfd294a2eb) adds mocked selector tests (not run).
 - **PENDING-QA**: no user-facing ASIO settings dialog; ASIO opt-in requires configuration. Multi-bus takes precedence. Fallback handles startup only, not a driver failure during playback. Callback format/hardware tests and DLL CI validation remain pending. Do not label stable.
+
+## 2026-11-21 — P1.3 ASIO settings UI (PENDING-QA)
+
+- [`477a894f`](https://github.com/webbase-x/xstage/commit/477a894f9f5db212c37beddeb9c45398fe65b8ae) adds an opt-in ASIO driver/channel dialog with read-only device enumeration and persistence; [`f8d039b0`](https://github.com/webbase-x/xstage/commit/f8d039b05c9abf33c73bb855844e9703f063092b) adds its Settings menu entry.
+- **PENDING-QA**: no UI regression executed; BASSASIO stereo callback ABI and physical playback unverified. Driver enumeration is not a device-ready test. Multi-Out still overrides ASIO; fallback handles initialization failures only.
