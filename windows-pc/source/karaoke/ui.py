@@ -57,11 +57,30 @@ class LyricsCanvas(tk.Canvas):
         super().__init__(parent, bg="#080e1a", highlightthickness=0, **kwargs)
         self.state = ("พร้อมร้องเพลง", "เพิ่มเพลงเข้าคิว แล้วกดเล่น", "", "X-Stage Karaoke PC")
         self.bind("<Configure>", lambda _: self.redraw())
+        self.extra_lines = ()
 
     def show(self, current, upcoming, prefix="", title=""):
         state = (current, upcoming, prefix, title)
         if self.state != state:
             self.state = state
+            self.redraw()
+
+    def show_timeline(self, lyrics, position, offset_ms=0, line_count=2, title=""):
+        """Render real timed lines on the existing Tk canvas, without new windows."""
+        from .lyric_viewport import viewport
+        frame = viewport(lyrics, position, line_count=line_count, offset_ms=offset_ms)
+        if not frame.lines:
+            self.extra_lines = ()
+            self.show("♪", "", "", title)
+            return
+        lines = tuple(line.text for line in frame.lines)
+        current = lines[0] if frame.active_index == 0 else "♪"
+        following = lines[1] if len(lines) > 1 else ""
+        extra = lines[2:]
+        changed = self.extra_lines != extra
+        self.extra_lines = extra
+        self.show(current, following, frame.highlighted_prefix, title)
+        if changed:
             self.redraw()
 
     def redraw(self):
@@ -82,8 +101,16 @@ class LyricsCanvas(tk.Canvas):
         self.create_text(left, middle, text=current, fill=TEXT, font=font, anchor="w")
         if prefix and current.startswith(prefix):
             self.create_text(left, middle, text=prefix, fill=TEAL, font=font, anchor="w")
-        self.create_text(width / 2, middle + 65, text=upcoming, fill=MUTED,
-                         font=("Leelawadee UI", 17), width=max(30, width - 60), justify="center")
+        extras = getattr(self, "extra_lines", ())
+        line_step = max(24, min(50, height // 9))
+        next_y = min(height - 25 - len(extras) * line_step, middle + 65)
+        self.create_text(width / 2, next_y, text=upcoming, fill=MUTED,
+                         font=("Leelawadee UI", max(12, min(17, width // 42))),
+                         width=max(30, width - 60), justify="center")
+        for index, line in enumerate(extras):
+            self.create_text(width / 2, next_y + (index + 1) * line_step,
+                             text=line, fill=MUTED, font=("Leelawadee UI", max(12, min(17, width // 42))),
+                             width=max(30, width - 60), justify="center")
         self.create_text(width - 20, height - 20, text="X-STAGE KARAOKE PC", anchor="se", fill="#30415d",
                          font=("Segoe UI", 10, "bold"))
 
