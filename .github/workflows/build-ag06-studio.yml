@@ -1,0 +1,94 @@
+name: X-Stage AG06 Studio - Web Windows Android preview
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ag06/**"
+      - ".github/workflows/build-ag06-studio.yml"
+  pull_request:
+    paths:
+      - "ag06/**"
+      - ".github/workflows/build-ag06-studio.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  web-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Parse and test the shared frontend
+        run: |
+          node --check ag06/app.js
+          node --check ag06/audio-engine.js
+          node --check ag06/presets.js
+          node --test ag06/tests/*.test.mjs
+      - name: Verify no unintentional production downloads
+        run: |
+          test -f ag06/index.html
+          test -f ag06/desktop/package.json
+          test -f ag06/android/app/src/main/AndroidManifest.xml
+
+  windows-preview:
+    needs: web-contract
+    runs-on: windows-latest
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Electron build dependencies
+        working-directory: ag06/desktop
+        run: npm install --no-audit --no-fund
+      - name: Build Windows portable EXE (unsigned preview)
+        working-directory: ag06/desktop
+        run: npm run dist
+      - name: Inspect and hash EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(Get-ChildItem 'ag06/desktop/dist' -Filter '*.exe' -File)
+          if ($files.Count -lt 1) { throw 'No AG06 Windows executable produced' }
+          foreach ($file in $files) {
+            if ($file.Length -lt 1000000) { throw 'EXE unexpectedly small' }
+            Get-FileHash -Algorithm SHA256 $file.FullName | Format-List
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-AG06-Studio-Windows-EXE-Preview
+          path: ag06/desktop/dist/*.exe
+          if-no-files-found: error
+
+  android-preview:
+    needs: web-contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Build debug signed APK preview
+        run: gradle -p ag06/android :app:assembleDebug --no-daemon --stacktrace
+      - name: Verify APK exists
+        run: |
+          test -s ag06/android/app/build/outputs/apk/debug/app-debug.apk
+          sha256sum ag06/android/app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: X-Stage-AG06-Studio-Android-APK-Preview
+          path: ag06/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
