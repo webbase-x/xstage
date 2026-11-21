@@ -299,3 +299,8 @@
 
 - [`2f74b80e`](https://github.com/webbase-x/xstage/commit/2f74b80e0bd5e13e990abb251a08894b96b6c2c5) adds `karaoke/multi_bus_synth.py`: separate BASSMIDI synth per logical bus, MIDI message routing and optional per-bus BASS device IDs, with cleanup on partial initialization. [`54fd6e90`](https://github.com/webbase-x/xstage/commit/54fd6e9082dfcdaf95e65c4d0b103dd8e466ebb8) preserves the original initialization exception during cleanup.
 - **P1.1/P1.2 IN PROGRESS, PENDING-QA**: opt-in backend is not yet wired into normal playback, device/channel matrix and ASIO not yet implemented. Physical tests deferred at user's request; no claim of measured audio output or stable release.
+
+## 2026-11-21 — P1 opt-in integration into main MIDI player (PENDING-QA)
+
+- [`03c39585`](https://github.com/webbase-x/xstage/commit/03c395851fada4ad89014a7d398e5a34c9ae461e) routes channel EQ/tone and per-note drum tone to selected synthesizer bus. [`b9d746ff`](https://github.com/webbase-x/xstage/commit/b9d746ff2bc29ad06c88b0d9fb50dd67b9c36cd6) enables opt-in `multi_bus.enabled` selection in the main MIDI playback path; legacy stereo remains the default.
+- **PENDING-QA**: Settings schema/persistence and GUI controls for this opt-in are not yet established; device routing, channel reset semantics, drum-key note-offs and ASIO require consolidated regression and physical verification. No PASS/stable release claim.
