@@ -233,6 +233,26 @@ public sealed class TransferRateGate
     }
 }
 
+/// <summary>
+/// Apply independent global and per-file bandwidth budgets to the same bytes.
+/// Reserve both budgets together: serial waits incorrectly halve throughput
+/// when the two configured caps are equal. Cancellation propagates to both
+/// reservations and never bypasses either budget.
+/// </summary>
+public static class TransferRateLimiter
+{
+    public static Task WaitAsync(TransferRateGate global, TransferRateGate? file,
+        int bytes, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        if (bytes <= 0) return Task.CompletedTask;
+        var globalWait = global.WaitForBytesAsync(bytes, cancellation);
+        if (file is null || file.LimitKibPerSecond == 0) return globalWait;
+        var fileWait = file.WaitForBytesAsync(bytes, cancellation);
+        return Task.WhenAll(globalWait, fileWait);
+    }
+}
+
 public static class TransferRateMath
 {
     public static double Smooth(double previous, double measured, bool activelyDownloading)
