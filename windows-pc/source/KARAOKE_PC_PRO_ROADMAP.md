@@ -411,3 +411,9 @@ The user requested batched coding without physical QA. **This is a coding update
 - Re-read main and roadmap before editing. P0.6 incremental safety patch [`24c27ecc`](https://github.com/webbase-x/xstage/commit/24c27eccd5ebb00b3a84d8a41c1097c26e2ec8e6) rejects symbolic-link/junction backup roots and restore destination roots before creating staging files. No existing user data is modified.
 - Regression tests [`cd01d043`](https://github.com/webbase-x/xstage/commit/cd01d04327228d940ebbb86f499822ecfe243edb), strengthened [`7970eb3f`](https://github.com/webbase-x/xstage/commit/7970eb3f578c981b8efdafd3aa714061396d2149): linked backup root, linked destination, missing backup root. Symlink tests may skip on systems without permission; require Windows CI evidence.
 - **PENDING-QA:** Run `python -m unittest discover -s tests -p 'test_restore_root_safety.py'` from `windows-pc/source` and full Windows build regression/installer smoke. No new PASS claim until CI logs confirm; P0.4/P0.5 hardware evidence remains deferred. Continue other independent P0.6 work next iteration. Stable release remains blocked.
+
+## 2026-11-22 — P0.6 restore temporary-file isolation
+
+- `25b1223891423ed3d315e3877073da089625d607`: replace predictable `*.restore-tmp` copy target with exclusive random temporary file, flush/fsync and atomic rename; reject source/target links and unexpected directories.
+- `1219ba50be45237d531d49d68cf16714b4adec98`: regression tests for stale temporary symlink, unsafe target symlink and successful cleanup.
+- **PENDING-QA**: run Windows regression and installer smoke on these commits; physical storage/Windows reparse-point behavior **DEFERRED-HARDWARE**. No stable release authorized.
