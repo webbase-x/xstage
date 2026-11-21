@@ -23,7 +23,7 @@
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
   <link rel="stylesheet" href="style.css?v=1152-midi-top-keyboard">
-  <link rel="stylesheet" href="xstage-ux.css?v=1159-transpose-below-key">
+  <link rel="stylesheet" href="xstage-ux.css?v=1160-key-layout-handoff">
   <link rel="stylesheet" href="cloud-import.css?v=1137-individual-select">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
@@ -35,8 +35,8 @@
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
-        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1121" alt="" width="48" height="48">
-        <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small><small id="karaoke-release-label">Karaoke Web v1.0.121 · Build 1121</small></span>
+        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1122" alt="" width="48" height="48">
+        <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small><small id="karaoke-release-label">Karaoke Web v1.0.122 · Build 1122</small></span>
       </a>
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
       <div class="account-tools">
@@ -73,7 +73,7 @@
             <div class="stage-brand-scene">
               <canvas id="stage-viz-left" class="stage-brand-side-viz" width="320" height="190"></canvas>
               <div class="stage-brand-lockup">
-                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1121" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
+                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1122" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
               </div>
               <canvas id="stage-viz-right" class="stage-brand-side-viz" width="320" height="190"></canvas>
             </div>
@@ -433,7 +433,7 @@
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
 <script>
-window.XSTAGE_RELEASE={version:'1.0.121',build:1121};
+window.XSTAGE_RELEASE={version:'1.0.122',build:1122};
 document.addEventListener('DOMContentLoaded',function(){
   const label=document.getElementById('karaoke-release-label');
   if(!label)return;
@@ -447,26 +447,26 @@ document.addEventListener('DOMContentLoaded',function(){
   }catch(error){/* Native bridge may be unavailable in normal web browsers. */}
 });
 </script>
-<script src="config.js?v=1121"></script>
+<script src="config.js?v=1122"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
   <script src="cloud-import-core.js?v=1123" defer></script>
-  <script src="xsk-browser.js?v=1121" defer></script>
+  <script src="xsk-browser.js?v=1122" defer></script>
   <script src="xmid-browser.js?v=1122" defer></script>
-  <script src="memory-budget.js?v=1121" defer></script>
+  <script src="memory-budget.js?v=1122" defer></script>
   <script src="ios-midi-audio.js?v=1151-queue-handoff" defer></script>
   <script src="browser-midi.js?v=1157-top-song-key-single-menu" defer></script>
-  <script src="midi-pro-engine.js?v=1155-first-midi-ready" defer></script>
-  <script src="video-metadata-editor.js?v=1121" defer></script>
-  <script src="video-transcode.js?v=1121" defer></script>
+  <script src="midi-pro-engine.js?v=1160-key-layout-handoff" defer></script>
+  <script src="video-metadata-editor.js?v=1122" defer></script>
+  <script src="video-transcode.js?v=1122" defer></script>
   <script src="cloud-import.js?v=1137-individual-select" defer></script>
-  <script src="tv-refresh.js?v=1121" defer></script>
-  <script src="app.js?v=1159-transpose-below-key" defer></script><script src="pc-extensions.js?v=1121" defer></script>
+  <script src="tv-refresh.js?v=1122" defer></script>
+  <script src="app.js?v=1160-key-layout-handoff" defer></script><script src="pc-extensions.js?v=1122" defer></script>
   <script src="midi-keyboard-ui.js?v=1157-top-song-key-single-menu" defer></script>
-  <script src="native-audio-meter.js?v=1121" defer></script>
-  <script src="stage-controls.js?v=1121" defer></script>
-  <script src="mobile-layout.js?v=1121" defer></script>
-  <script src="android-apk-download.js?v=1121" defer></script>
+  <script src="native-audio-meter.js?v=1122" defer></script>
+  <script src="stage-controls.js?v=1122" defer></script>
+  <script src="mobile-layout.js?v=1122" defer></script>
+  <script src="android-apk-download.js?v=1122" defer></script>
 
-  <script src="stage-ui.js?v=1158-key-toolbar-release" defer></script>
+  <script src="stage-ui.js?v=1160-key-layout-handoff" defer></script>
 </body>
 </html>
