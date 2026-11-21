@@ -198,3 +198,8 @@
 - [`0d181a7a`](https://github.com/webbase-x/xstage/commit/0d181a7a63eb6edfd7580605c3faa0a4b4d637b1) isolates cleanup failure when replacing an optional preloaded fill with a crossfade rhythm deck.
 - [`839b9123`](https://github.com/webbase-x/xstage/commit/839b912373bd32cf46aea5dce5f452502d5acc3d) prevents a second exception from `pause()` from breaking the optional fill failure fallback.
 - These commits are **not validated by test execution**. P0.5 remains IN PROGRESS; real hardware and soak testing DEFERRED at user request. Do not assert completion or release readiness.
+
+## 2026-11-21 — P0.5 auxiliary deck runtime fault isolation
+
+- [`a8a388d3`](https://github.com/webbase-x/xstage/commit/a8a388d3586df08d68adb92157e020b85b30ba35) isolates play/pause/pump failures on auxiliary tail/rhythm decks, closes the affected deck best-effort, and restores drum channel 9 when rhythm fails. [`26c0d7ab`](https://github.com/webbase-x/xstage/commit/26c0d7ab3f2d20dbd0f3ec45c014887f92cf7225) adds a mocked rhythm failure regression.
+- Source and test committed; test execution not verified. P0.5 remains IN PROGRESS; real hardware checks DEFERRED at user request.
