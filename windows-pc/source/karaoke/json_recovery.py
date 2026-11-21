@@ -118,7 +118,11 @@ def prompt_restore(target, description, parent=None):
                 messagebox.showinfo('กู้คืนสำเร็จ', f'กู้คืนแล้ว\nสำเนาเดิม: {backup or "ไม่มีไฟล์เดิม"}', parent=root)
                 return True
             except (OSError, ValueError, UnicodeError) as failure:
-                logging.exception('JSON_RECOVERY_FAILED document=%s', target.name)
+                # Invalid/changed backup files are an expected, recoverable
+                # operator path, not an unhandled application exception.
+                # Show the full reason in the dialog without emitting a
+                # traceback that appears as a CI failure annotation.
+                logging.warning('JSON_RECOVERY_REJECTED document=%s reason=%s', target.name, failure)
                 messagebox.showerror('ยังไม่กู้คืน', str(failure), parent=root)
     finally:
         if owned_root:root.destroy()
