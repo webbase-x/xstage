@@ -169,6 +169,11 @@ jobs:
           $probe = Join-Path $env:RUNNER_TEMP 'XStage Karaoke ไทย folder'
           $report = Join-Path $env:RUNNER_TEMP 'xstage-installed-dependencies.json'
           $log = Join-Path $env:RUNNER_TEMP 'xstage-installer-smoke.log'
+          # Only write a unique marker inside the runner's test account data.
+          # Installer must preserve it when removed.
+          $userdata = Join-Path $env:LOCALAPPDATA 'X-Stage/Karaoke PC/Data'
+          $sentinel = $null
+          $sentinelText = 'xstage-ci-preserve-' + $env:GITHUB_RUN_ID
           try {
             # Keep quotes intact for the custom path containing spaces and Thai text.
             $arguments = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $probe + '" /LOG="' + $log + '"'
@@ -218,11 +223,43 @@ jobs:
               throw "Installed runtime dependency check failed: $($failed | ConvertTo-Json -Compress)"
             }
             Write-Host 'Installed EXE verified: x64 BASS DLLs, menu helpers, Python imports and native API'
+            if (-not (Test-Path -LiteralPath $userdata -PathType Container)) {
+              throw "Installer did not create user Data directory: $userdata"
+            }
+            $sentinel = Join-Path $userdata ('ci-uninstall-preserve-' + $env:GITHUB_RUN_ID + '.txt')
+            if (Test-Path -LiteralPath $sentinel) { throw 'Test data sentinel already exists; refusing to overwrite' }
+            Set-Content -LiteralPath $sentinel -Value $sentinelText -NoNewline -Encoding UTF8
           } finally {
-            $uninstall = Join-Path $probe 'unins000.exe'
-            if (Test-Path -LiteralPath $uninstall -PathType Leaf) {
+            try {
+              $uninstall = Join-Path $probe 'unins000.exe'
+              if (-not (Test-Path -LiteralPath $uninstall -PathType Leaf)) {
+                throw 'Installed uninstaller is missing; cannot verify cleanup'
+              }
               $remove = Start-Process -FilePath $uninstall -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
-              if ($remove.ExitCode -ne 0) { Write-Warning "Temporary test installation uninstall returned $($remove.ExitCode)" }
+              if ($remove.ExitCode -ne 0) { throw "Silent uninstall failed: $($remove.ExitCode)" }
+              # The uninstaller removes its own EXE asynchronously on some Windows versions.
+              for ($attempt = 0; $attempt -lt 20; $attempt++) {
+                if (-not (Test-Path -LiteralPath (Join-Path $probe 'unins000.exe'))) { break }
+                Start-Sleep -Milliseconds 250
+              }
+              if (Test-Path -LiteralPath $probe) {
+                $leftovers = @(Get-ChildItem -LiteralPath $probe -Recurse -File -Force)
+                if ($leftovers.Count -gt 0) {
+                  throw "Files left after uninstall: $($leftovers.FullName -join ', ')"
+                }
+              }
+              if ($sentinel) {
+                if (-not (Test-Path -LiteralPath $sentinel -PathType Leaf) -or
+                    (Get-Content -LiteralPath $sentinel -Raw -Encoding UTF8) -ne $sentinelText) {
+                  throw 'Uninstall removed or changed user Data sentinel'
+                }
+              }
+              Write-Host 'Silent uninstall verified: no installed files remain; user Data preserved'
+            } finally {
+              # Remove only our unique CI test marker. Never modify any other Data.
+              if ($sentinel -and (Test-Path -LiteralPath $sentinel -PathType Leaf)) {
+                Remove-Item -LiteralPath $sentinel -Force
+              }
             }
           }
 
