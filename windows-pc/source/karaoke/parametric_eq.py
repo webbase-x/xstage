@@ -11,7 +11,7 @@ class Volume(C.Structure):
     _fields_=[('channel',C.c_int),('volume',C.c_float)]
 
 class Processor:
-    def __init__(self,output,graphic=False):
+    def __init__(self,output,graphic=False,*,rate_override=None):
         self.dll=output.dll;self.stream=output.stream;self.handles=[];self.state=flat()
         if graphic:
             from .graphic_eq import flat as graphic_flat
@@ -27,9 +27,17 @@ class Processor:
         else:self.fx=output.fx
         for name,args,result in [('BASS_ChannelSetFX',[C.c_uint32,C.c_uint32,C.c_int],C.c_uint32),('BASS_FXSetParameters',[C.c_uint32,C.c_void_p],C.c_int),('BASS_ChannelRemoveFX',[C.c_uint32,C.c_uint32],C.c_int),('BASS_ChannelGetAttribute',[C.c_uint32,C.c_uint32,C.POINTER(C.c_float)],C.c_int)]:
             fn=getattr(self.dll,name);fn.argtypes=args;fn.restype=result
-        rate=C.c_float()
-        if not self.dll.BASS_ChannelGetAttribute(self.stream,1,C.byref(rate)) or rate.value<100:raise OSError('อ่าน Sample Rate ไม่สำเร็จ')
-        self.rate=rate.value
+        # BASSMIDI per-channel streams allow FX/DSP but not GetAttribute.
+        # Their sample rate is inherited from the parent MIDI stream.
+        if rate_override is None:
+            rate=C.c_float()
+            if not self.dll.BASS_ChannelGetAttribute(self.stream,1,C.byref(rate)) or rate.value<100:
+                raise OSError('อ่าน Sample Rate ไม่สำเร็จ')
+            self.rate=rate.value
+        else:
+            self.rate=float(rate_override)
+            if not 8000 <= self.rate <= 192000:
+                raise ValueError('Sample Rate ของช่อง MIDI ไม่ถูกต้อง')
         try:
             for kind,priority in [(0x10003,100)]+[(0x10013,90-i) for i in range(self.count)]+[(0x10003,10)]:
                 h=self.dll.BASS_ChannelSetFX(self.stream,kind,priority)
