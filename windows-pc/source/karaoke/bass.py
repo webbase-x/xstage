@@ -53,6 +53,9 @@ class BassSynth:
         # Reject stale mappings before acquiring any native audio resources.
         mapping_rows = extended_entries(self.options, list(range(len(self.options['fonts']))), mapping) if mapping else None
         self.stream = 0
+        self.native = Path(native).resolve()
+        self._fx_library = None
+        self._channel_processors = {}
         self._font_config = None
         self._font_count = 0
         self.fonts = []
@@ -160,6 +163,7 @@ class BassSynth:
             'BASS_MIDI_StreamSetFonts': ([UINT, PTR, UINT], BOOL),
             'BASS_MIDI_StreamEvents': ([UINT, UINT, PTR, UINT], UINT),
             'BASS_MIDI_StreamEvent': ([UINT, UINT, UINT, UINT], BOOL),
+            'BASS_MIDI_StreamGetChannel': ([UINT, UINT], UINT),
         }
         for dll, table in ((self.dll, signatures), (self.midi, midi_signatures)):
             for name, (args, result) in table.items():
@@ -229,6 +233,83 @@ class BassSynth:
                 self.check(self.midi.BASS_MIDI_StreamEvent(
                     self.stream, 9, event, parameter), 'ปรับโทนเสียงกลอง')
 
+    def _load_fx_library(self):
+        if self._fx_library is not None:
+            return self._fx_library
+        path = (self.native / 'bass_fx.dll' if os.name == 'nt'
+                else self.native / 'libbass_fx.so')
+        if os.name == 'nt':
+            self.validate_dll(path)
+            self._fx_library = ctypes.WinDLL(str(path))
+        elif self.decode:
+            self._fx_library = ctypes.CDLL(str(path))
+        else:
+            raise OSError('EQ รายช่อง MIDI ใช้ได้บน Windows ผ่าน SoundFont')
+        # Loading the add-on before BASS_ChannelSetFX registers its FX types.
+        getter = self._fx_library.BASS_FX_GetVersion
+        getter.argtypes = []
+        getter.restype = UINT
+        version = getter()
+        if version >> 16 != 0x204:
+            self._fx_library = None
+            raise OSError('bass_fx.dll ต้องเป็น BASS FX 2.4')
+        return self._fx_library
+
+    def _remove_channel_eq(self, channel):
+        item = self._channel_processors.pop(channel, None)
+        if item is not None:
+            handle, processor = item
+            try:
+                processor.close()
+            finally:
+                # A MIDI channel stream is owned by its parent. Explicitly free
+                # idle channels to release CPU when the user returns to Flat.
+                self.dll.BASS_StreamFree(handle)
+
+    def set_channel_eq(self, channel, state):
+        """Live 31-band FX on the dry mix of exactly one BASSMIDI channel.
+
+        BASSMIDI_StreamGetChannel does not create a new MIDI clock. Do not
+        allocate channel streams for Flat/Bypass; up to 16 can be enabled.
+        """
+        from .graphic_eq import flat, validate
+        from .parametric_eq import Processor
+        from types import SimpleNamespace
+        if type(channel) is not int or not 0 <= channel < 16:
+            raise ValueError('ช่อง MIDI ต้องอยู่ระหว่าง 1–16')
+        state = validate(state)
+        with self.lock:
+            if not self.stream:
+                raise OSError('ตัวสังเคราะห์เสียงไม่ได้เปิด')
+            if state['bypass'] or state == flat():
+                self._remove_channel_eq(channel)
+                return
+            current = self._channel_processors.get(channel)
+            if current is not None:
+                current[1].set(state)
+                return
+            # Do not alter master stream effects, audio device or other voices.
+            self._load_fx_library()
+            handle = self.midi.BASS_MIDI_StreamGetChannel(self.stream, channel)
+            self.check(handle, 'สร้างช่องเสียง MIDI สำหรับ EQ')
+            wrapper = SimpleNamespace(dll=self.dll, stream=handle, fx=self._fx_library)
+            try:
+                processor = Processor(wrapper, graphic=True, rate_override=48000)
+                try:
+                    processor.set(state)
+                except BaseException:
+                    processor.close()
+                    raise
+            except BaseException:
+                self.dll.BASS_StreamFree(handle)
+                raise
+            self._channel_processors[channel] = (handle, processor)
+
+    def _release_channel_eq(self):
+        # Avoid orphan FX handles during an offline song change or shutdown.
+        for channel in tuple(self._channel_processors):
+            self._remove_channel_eq(channel)
+
     def reset(self):
         with self.lock:
             if self.stream:
@@ -244,6 +325,7 @@ class BassSynth:
         if not self.decode:
             raise ValueError('ใช้ได้เฉพาะตัวเรนเดอร์แบบ Offline')
         with self.lock:
+            self._release_channel_eq()
             if self.stream:
                 self.check(self.dll.BASS_StreamFree(self.stream), 'ปิด MIDI Stream เพลงก่อน')
                 self.stream = 0
@@ -275,6 +357,7 @@ class BassSynth:
 
     def close(self):
         with self.lock:
+            self._release_channel_eq()
             if self.stream:
                 self.dll.BASS_StreamFree(self.stream)
                 self.stream = 0
