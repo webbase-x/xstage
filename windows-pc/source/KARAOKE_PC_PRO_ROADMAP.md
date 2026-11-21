@@ -274,3 +274,8 @@
 - User requested continuous P0–P6 engineering without waiting for interim tests; retain all release and real-device gates for final consolidated verification.
 - [`35026576`](https://github.com/webbase-x/xstage/commit/35026576572a1ea69a5b1b6d00f95053b3030393) introduces immutable, validated 2/4/8/16 logical output-bus routing for MIDI channels 0–15, with backwards-compatible stereo default. [`6de61f68`](https://github.com/webbase-x/xstage/commit/6de61f68a823af3b5da606d9d35e179a8c85a57e) adds model contract tests.
 - **P1.1 IN PROGRESS, PENDING-QA**: model only; physical multichannel output graph, device selection and ASIO backend are not implemented by these commits. P0.4/P0.5/P0.6 verification remains outstanding; stable release blocked.
+
+## 2026-11-21 — P1.2 percussion note routing (PENDING-QA)
+
+- [`853f7ecd`](https://github.com/webbase-x/xstage/commit/853f7ecda3805ba269bcab0a0e18dab83046a3c4) adds validated per-note drum bus overrides on MIDI channel 9 (zero-based), with per-channel fallback and stereo-compatible defaults; [`72ef31e1`](https://github.com/webbase-x/xstage/commit/72ef31e18e6793ec6cb5fc07c1abfb768a42b2d6) adds unit coverage for overrides and malformed mappings.
+- **P1.2 IN PROGRESS, PENDING-QA:** route resolution is implemented but no multichannel native audio backend is connected; ASIO and real-device acceptance remain pending. Continue source implementation without waiting for intermediate tests as requested.
