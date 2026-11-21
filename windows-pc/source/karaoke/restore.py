@@ -18,6 +18,12 @@ def readonly(path):
 
 def validate_backup(folder):
     folder=Path(folder)
+    for name in FILES + OPTIONAL_FILES:
+        source = folder/name
+        # A backup must be self-contained. Do not follow symlinks/junctions
+        # that could silently read or restore files outside the selected set.
+        if source.is_symlink() or getattr(source, 'is_junction', lambda: False)():
+            raise ValueError('ชุดสำรองมีไฟล์ลิงก์ที่ไม่ปลอดภัย: '+name)
     for name in FILES:
         if not (folder/name).is_file():raise ValueError('ชุดสำรองไม่ครบ: '+name)
     with closing(readonly(folder/FILES[0])) as db:
