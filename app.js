@@ -1636,6 +1636,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   state.requestId++;
   state.controller?.abort(); state.controller = null; state.loading = false;
   state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;state.liveMidiSource=null;
+  window.XStageIOSMidiAudio?.release?.();
   player.pause(); player.removeAttribute('src'); player.load();
   resetSongVideo();
   if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
@@ -2577,6 +2578,7 @@ function clearIdleStage(message){
   state.controller=null;
   state.loading=false;
   state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;state.liveMidiSource=null;
+  window.XStageIOSMidiAudio?.release?.();
   player.pause();
   releaseNativePlaybackAudioFocus();
   player.removeAttribute('src');
@@ -2663,6 +2665,15 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
   if (!playable(song)) {
     setPlayStatus('เพลงนี้ยังไม่มี XSK2 หรือไฟล์เสียง/MIDI พร้อม Lyrics JSON ที่พร้อมเล่น');
     return;
+  }
+  // Safari allows media playback most reliably when the output element is
+  // started during the original tap, before asynchronous Google Drive reads.
+  if(autoplay&&(getFileId(song.midi)||getFileId(song.xmid)||getFileId(song.xsk))){
+    try{
+      void window.XStageIOSMidiAudio?.prime?.(
+        window.XStageBrowserMidi?.liveAudioContext?.()
+      ).catch(error=>console.warn('iPhone MIDI media prime:',error?.message||error));
+    }catch{}
   }
   const request=++state.requestId;
   state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;state.liveMidiSource=null;
