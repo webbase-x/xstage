@@ -11,7 +11,7 @@
   "documentation_url": "https://github.com/webbase-x/xstage/tree/main/songstudio-plus",
   "status": "Verified Song Studio Pro v0.1.35 Windows Setup: installs in Program Files with UAC, Start Menu shortcut and uninstall support, preserving existing SQLite and original media. Unsigned Preview.",
   "file": "X-Stage-Song-Studio-Pro-v0.1.35-win-x64-Setup.exe",
-  "sha256": "7cf0caee42d8f55328e25644514feb58f26330e2524ce299f6cdc59eacfcd364",
+  "sha256": "ed23a67ead73fe6373a5a6abceaa63d66dd11becf865014b7268ab70336e351f",
   "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.35-preview/X-Stage-Song-Studio-Pro-v0.1.35-win-x64-Setup.exe",
   "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.35-preview"
 }
