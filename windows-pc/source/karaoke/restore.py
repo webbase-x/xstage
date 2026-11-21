@@ -68,6 +68,8 @@ def stage_restore(folder,data):
     from .first_run import settings_for_restore
     info['settings']=settings_for_restore(folder,info['settings'])
     data=Path(data);pending=data/'restore-pending'
+    if pending.is_symlink() or getattr(pending,'is_junction',lambda:False)():
+        raise ValueError('โฟลเดอร์กู้คืนค้างเป็นลิงก์ที่ไม่ปลอดภัย')
     if pending.exists():raise ValueError('มีงานกู้คืนรอเปิดโปรแกรมอยู่แล้ว')
     temp=data/('restore-stage-'+uuid.uuid4().hex);temp.mkdir(parents=True)
     try:
@@ -114,7 +116,10 @@ def rollback(data,safety,existed,replaced=FILES):
 
 def apply_pending(data):
     data=Path(data);pending=data/'restore-pending'
+    if pending.is_symlink() or getattr(pending,'is_junction',lambda:False)():
+        raise ValueError('โฟลเดอร์กู้คืนค้างเป็นลิงก์ที่ไม่ปลอดภัย')
     if not pending.exists():return None
+    if not pending.is_dir():raise ValueError('โฟลเดอร์กู้คืนค้างไม่ถูกต้อง')
     state=parse_json((pending/'state.json').read_text(encoding='utf-8'))
     if state['status']=='applying':
         safety_name=state.get('safety')
@@ -150,7 +155,11 @@ def apply_pending(data):
     replaced=FILES+tuple(name for name in OPTIONAL_FILES if (pending/name).is_file())
     for name in replaced:
         source=data/name
+        if source.is_symlink() or getattr(source,'is_junction',lambda:False)():
+            raise ValueError('ไฟล์ข้อมูลปัจจุบันเป็นลิงก์ที่ไม่ปลอดภัย: '+name)
         if source.exists():
+            if not source.is_file():
+                raise ValueError('ไฟล์ข้อมูลปัจจุบันไม่ถูกต้อง: '+name)
             if name.endswith('.sqlite3'):copy_database(source,safety/name)
             else:shutil.copyfile(source,safety/name)
             existed.append(name)
