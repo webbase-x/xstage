@@ -22,7 +22,7 @@
 |---|---|---|---|---|
 | P0.1 | Build and tests | Re-run full Windows regression on the latest P0 source/workflow; **0 fail, 0 errors** and review skips | **PASS** | [run 44876022780](https://github.com/webbase-x/xstage/actions/runs/44876022780), commit `eb6bd7f92750483073bd592f0d38e923a4b3ad2d`: **1,040 tests, 0 failures, 0 errors, 78 skipped**; Windows build, installer, installed dependency smoke, and artifact upload all PASS; reviewed 78 skips |
 | P0.2 | EXE and integrity | Native 64-bit BASS DLLs, icon, executable, SHA-256 and signed package manifest verified | **PASS** | [run 44877165196](https://github.com/webbase-x/xstage/actions/runs/44877165196), commit `6b33cedc2939e3f579b431f982df804e079ef30b`: 1,042 tests, 0 failures/errors, 78 skipped; package completeness + native x64 BASS + icon + SHA-256 PASS; signed Sigstore provenance [attestation 70463681](https://github.com/webbase-x/xstage/attestations/70463681) for setup EXE and release-manifest.json independently verified. **Not an Authenticode-signed production EXE.** |
-| P0.3 | Real installer smoke | Silent install to Thai/space path; installed EXE dependency preflight; clean uninstall | OPEN | New CI step not yet evidenced |
+| P0.3 | Real installer smoke | Silent install to Thai/space path; installed EXE dependency preflight; clean uninstall | **PASS** | [run 44877690650](https://github.com/webbase-x/xstage/actions/runs/44877690650), commit `3c8ee7a6781ab38ba91ff6fbf17a106c3117c1be`: silent install + installed dependency preflight + silent uninstall return code + no remaining installed files + CI user-Data sentinel preserved PASS, 1,042 tests / 0 fail / 0 error / 78 skipped. Signed attestation [70464622](https://github.com/webbase-x/xstage/attestations/70464622). |
 | P0.4 | GUI & queue safety | Windows UI open/close, search, hotkeys, queue, mixer lifecycle and no stalling/flicker | OPEN | Add GUI smoke evidence and review failures |
 | P0.5 | Playback & live audio | Real Windows MIDI/NCN/EMK-legacy, SoundFont, MP3/video, transitions and ≥30-minute audio device soak | BLOCKED-HARDWARE | Requires actual Windows speakers/audio interface and playback observation |
 | P0.6 | Data & release safety | Backup/restore, corrupted files, fail-closed deletes, recovery; no unintended stable publish | OPEN | Verify safe migrations and explicit stable gate |
@@ -48,7 +48,7 @@
 | P6.3 | Release | Verified release/signing/update with rollback and stable acceptance | NOT STARTED | |
 | P6.4 | Handoff | Operator docs, installer repair, published checksums and final acceptance report | NOT STARTED | |
 
-**Current outstanding:** **25 of 27** checklist items, including **4 P0** gates. **P0.1 and P0.2 PASS; P0.3 is the next item.** Prior candidate test success provides evidence but **does not automatically close an item** on newer code/workflow.
+**Current outstanding:** **24 of 27** checklist items, including **3 P0** gates. **P0.1, P0.2, P0.3 PASS; P0.4 is the next item.** Prior candidate test success provides evidence but **does not automatically close an item** on newer code/workflow.
 
 ## Rules for every hourly development iteration
 
@@ -75,6 +75,14 @@
 - **Cryptographic evidence:** [Sigstore attestation 70463681](https://github.com/webbase-x/xstage/attestations/70463681) signs build provenance for two separate subjects (installer EXE and internal `release-manifest.json`), recorded on Rekor and validated using `gh attestation verify` bound to this repository/workflow. Candidate installer SHA-256 `2e941761692eeaef6acca54058531c0f38e78114be785b76dcc3b99c290a30a2`. Actions artifact ID `14697051076`.
 - **Scope:** Sigstore supply-chain signature is NOT a Windows Authenticode code-signing certificate; real hardware/long playback and full installer uninstall-cleanup acceptance remain unverified. Do not mark Stable or publish a production update based on P0.2 alone.
 - **Decision:** **P0.2 PASS**. Remaining **25/27 total, 4/6 P0**. Next item **P0.3** must check clean uninstall, residue handling and installed app preflight without impacting existing Data.
+
+## 2026-11-21 13:59 Asia/Bangkok — P0.3 accepted; next P0.4
+
+- **Changed:** Windows candidate workflow now requires silent uninstall success with exit code 0, verifies no installed files remain in the Thai/space test path, and asserts a run-unique sentinel under the test account's user Data directory is intact after uninstall. Only its own CI marker is removed; other user Data and song files are never touched. Commit [3c8ee7a6](https://github.com/webbase-x/xstage/commit/3c8ee7a6781ab38ba91ff6fbf17a106c3117c1be).
+- **Windows run evidence:** [run 44877690650](https://github.com/webbase-x/xstage/actions/runs/44877690650) SUCCESS; **1,042 tests / 0 fail / 0 error / 78 skipped**; installer build + native x64 audio checks + installation with Thai/space path + deployed runtime preflight + clean uninstall all PASS. Explicit log: `Silent uninstall verified: no installed files remain; user Data preserved`.
+- **Signed candidate integrity:** [Sigstore attestation 70464622](https://github.com/webbase-x/xstage/attestations/70464622), signed for 2 subjects and verified with GitHub CLI. Installer SHA-256: `e63c5557a009145d8f6953b940feccc2acc1dcaddb74710a67d233e02f1fc5d7`. GitHub artifact ID: `14696319033`.
+- **Scope:** This is GitHub-hosted Windows CI acceptance for an unsigned candidate, NOT native external hardware or production Authenticode certificate validation. P0.4 GUI/hotkeys/queue, P0.5 real-audio soak and P0.6 data/release gates remain open.
+- **Decision:** **P0.3 PASS**. Remaining **24/27 total, 3/6 P0**. Next **P0.4**.
 
 ## Hourly report format
 
