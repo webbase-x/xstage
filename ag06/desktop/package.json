@@ -10,8 +10,8 @@
     "dist": "electron-builder --win portable --x64"
   },
   "devDependencies": {
-    "electron": "35.1.5",
-    "electron-builder": "26.0.12"
+    "electron": "45.4.1",
+    "electron-builder": "26.18.0"
   },
   "build": {
     "appId": "com.webbasex.ag06studio",
