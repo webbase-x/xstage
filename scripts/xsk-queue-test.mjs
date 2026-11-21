@@ -26,6 +26,9 @@ const sandbox={
   console:{warn:()=>{failed=true}},setTimeout(fn){timers.push(fn);return timers.length;},
   clearTimeout(){},
   getStartupSoundFont:async()=>({bytes:null,pending:null}),
+  // The production preloader resolves a real GM bank before offline MIDI
+  // rendering; this fixture supplies a verified synthetic bank instead.
+  ensureMidiInstrumentBank:async()=>Uint8Array.of(1,2,3),
   getFileId:record=>record?.fileId||'',
   privateFile:async(id,token,{signal})=>{
     assert.equal(id,'file-001');assert.equal(token,'token-001');
