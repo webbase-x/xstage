@@ -31,6 +31,7 @@
     "karaoke-web":{target:"เว็บเบราว์เซอร์สมัยใหม่บน iPhone, iPad, Android, Windows หรือ Mac",fallback:[]},
     "karaoke-pc":{target:"คอมพิวเตอร์ Windows 10/11 แบบ x64",fallback:["karaoke-web"]},
     "download-manager":{target:"Windows 10/11 x64 สำหรับดาวน์โหลดไฟล์ HTTP/HTTPS",fallback:["karaoke-web"]},
+    "ag06-studio":{target:"เว็บสมัยใหม่ที่รองรับไมโครโฟน หรือ Windows 10/11 x64 และ Android 10+ ที่รองรับ USB Audio",fallback:[]},
     "studio-pro":{target:"คอมพิวเตอร์ Windows 10/11 x64 (EXE Pro Preview)",fallback:["karaoke-web"]},
     "karaoke-android":{target:"Android TV, Google TV หรือแท็บเล็ต Android (APK สำหรับติดตั้งเอง)",fallback:["karaoke-web"]},
     "file-share":{target:"โทรศัพท์ แท็บเล็ต Android 6+ หรือ Android TV ที่รองรับสำหรับติดตั้ง APK; เครื่องอื่นใช้เว็บเบราว์เซอร์",fallback:["karaoke-web"]},
@@ -44,6 +45,7 @@
     const info=catalog[id];
     if(!info)return {level:"unknown",text:"ยังไม่ทราบแพลตฟอร์มที่รองรับ",target:"",fallback:[]};
     const kind=p.kind,web=id==="karaoke-web";
+    if(id==="ag06-studio")return {level:"unknown",text:"เว็บใช้งานได้เมื่ออนุญาตไมโครโฟน ส่วน AG06 ผ่าน USB ต้องให้ระบบรู้จักอุปกรณ์ก่อน และ EXE/APK ยังเป็น Preview",target:info.target,fallback:[]};
     if(web){
       return {level:"supported",text:"เปิดเว็บไซต์บนอุปกรณ์นี้ได้",target:info.target,fallback:info.fallback};
     }

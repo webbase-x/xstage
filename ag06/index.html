@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111624">
+<meta name="description" content="X-Stage AG06 Studio - USB audio capture, software DSP and recording for first-generation Yamaha AG06">
+<title>X-Stage AG06 Studio | Yamaha AG06 รุ่นแรก</title>
+<link rel="icon" type="image/svg+xml" href="./icon.svg">
+<link rel="stylesheet" href="./style.css">
+<script type="module" src="./app.js"></script>
+</head>
+<body>
+<a class="skip" href="#mixer">ข้ามไปที่มิกเซอร์</a>
+<div class="app-shell">
+<header class="topbar">
+ <a class="brand" href="../"><span class="brand-mark">X<span>★</span></span><span>X-STAGE <b>AG06 STUDIO</b><small>FIRST GENERATION · USB AUDIO</small></span></a>
+ <span class="connection" id="connection" role="status"><i></i>ยังไม่เชื่อมต่อเสียง</span>
+</header>
+<main>
+ <section class="hero">
+  <div><div class="eyebrow">YAMAHA AG06 · ORIGINAL MODEL ONLY</div>
+  <h1>เสียงดีขึ้น<br><em>ควบคุมง่ายขึ้น</em></h1>
+  <p>มิกเซอร์เสียงซอฟต์แวร์สำหรับบันทึกเสียงและสตรีมผ่าน AG06 รุ่นแรก ใช้งานได้บน PC, Android และเว็บ โดยไม่อ้างว่าเปลี่ยน DSP ภายในเครื่อง</p>
+  <div class="hero-tags"><span>USB 2 IN / 2 OUT</span><span>LIVE AUDIO METER</span><span>RECORDING</span></div>
+  </div>
+  <div class="device-art" aria-hidden="true"><div class="art-head">X-STAGE | AG06</div><div class="faders"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="art-bottom">D-PRE · DSP · USB AUDIO</div></div>
+ </section>
+ <section class="panel device-panel" aria-labelledby="device-title">
+  <div class="section-header"><div><div class="eyebrow">01 / DEVICE</div><h2 id="device-title">เชื่อมต่ออุปกรณ์เสียง</h2></div><span class="chip" id="actual-rate">ยังไม่เริ่มรับเสียง</span></div>
+  <div class="device-controls">
+   <label class="device-label" for="source-select">แหล่งเสียงจาก USB / ไมโครโฟน<select id="source-select"><option value="">อุปกรณ์เสียงเริ่มต้น</option></select></label>
+   <button type="button" class="button subtle" id="refresh-devices">ค้นหาอุปกรณ์</button>
+   <button type="button" class="button primary" id="toggle-audio">เริ่มรับเสียง</button>
+  </div>
+  <p class="subtle-text" id="input-hint">เชื่อมต่อ AG06 เข้ากับอุปกรณ์ แล้วเลือก AG06/03 หากระบบตรวจพบ ชื่ออุปกรณ์อาจแสดงหลังอนุญาตไมโครโฟน</p>
+ </section>
+ <div class="workspace" id="mixer">
+ <div class="left-column">
+  <section class="panel meters" aria-labelledby="level-title">
+   <div class="section-header"><div><div class="eyebrow">02 / INPUT</div><h2 id="level-title">ระดับสัญญาณ USB</h2></div><span class="chip muted">REAL TIME</span></div>
+   <div class="meter-row"><strong>L</strong><div class="meter-track"><div id="meter-left" class="meter-fill"></div></div><output id="db-left">−∞ dBFS</output></div>
+   <div class="meter-row"><strong>R</strong><div class="meter-track"><div id="meter-right" class="meter-fill"></div></div><output id="db-right">−∞ dBFS</output></div>
+   <div class="meter-scale"><span>−60</span><span>−48</span><span>−36</span><span>−24</span><span>−12</span><span>0 dBFS</span></div>
+   <p class="subtle-text">มิเตอร์วัดสัญญาณดิจิทัลที่เข้ามา ไม่ใช่ตำแหน่งปุ่ม GAIN หรือมิเตอร์ฮาร์ดแวร์บน AG06</p>
+  </section>
+  <section class="panel" aria-labelledby="preset-title">
+    <div class="section-header"><div><div class="eyebrow">03 / PRESET</div><h2 id="preset-title">โทนเสียง</h2></div><span class="chip">SOFTWARE FX</span></div>
+    <div class="preset-tabs" id="presets"><button type="button" data-preset="voice">เสียงพูด</button><button type="button" data-preset="vocal">ร้องเพลง</button><button type="button" data-preset="guitar">กีตาร์</button><button type="button" data-preset="flat">เสียงต้นฉบับ</button></div>
+    <p class="subtle-text">เอฟเฟกต์ทำงานบนสัญญาณที่รับจาก AG06 ผ่าน USB เท่านั้น ไม่ได้แก้ COMP/EQ, AMP SIM หรือ SPX Reverb ที่ฝังอยู่ในเครื่อง</p>
+  </section>
+  <section class="panel monitor" aria-labelledby="monitor-title">
+   <div class="section-header"><div><div class="eyebrow">04 / OUTPUT</div><h2 id="monitor-title">มอนิเตอร์และบันทึก</h2></div></div>
+   <label class="toggle"><input type="checkbox" id="monitor-toggle"><span><strong>ฟังเสียงผ่านอุปกรณ์เล่นเสียง</strong><small>ปิดไว้โดยค่าเริ่มต้น · ใช้หูฟังเพื่อป้องกันเสียงหอน</small></span></label>
+   <p class="warning">หากใช้ลำโพงใกล้ไมโครโฟน อาจเกิดเสียงหอน โปรดใช้หูฟัง และหลีกเลี่ยง LOOPBACK ซ้อนกับการมอนิเตอร์</p>
+   <div class="record-actions"><button type="button" id="record-button" class="button record" disabled>● เริ่มบันทึกเสียง</button><span id="record-timer" class="timer">00:00</span></div>
+   <p class="subtle-text" id="record-info">บันทึกเสียงที่ผ่านเอฟเฟกต์ซอฟต์แวร์บนอุปกรณ์นี้ ไฟล์ถูกสร้างในเครื่อง ไม่อัปโหลดไปเซิร์ฟเวอร์</p>
+   <a id="download-recording" class="button download" hidden>ดาวน์โหลดเสียงที่บันทึก</a>
+  </section>
+ </div>
+ <section class="panel effects" aria-labelledby="fx-title">
+  <div class="section-header"><div><div class="eyebrow">05 / AUDIO PROCESSING</div><h2 id="fx-title">Software DSP</h2></div><span class="chip">STEREO USB MIX</span></div>
+  <div class="fx-grid">
+   <div class="fx-group"><div class="fx-heading"><span>01</span><h3>Filter & Equalizer</h3></div>
+    <label class="range-control">High-pass <output data-output="hpf"></output><input data-param="hpf" type="range" min="20" max="250" step="5"></label>
+    <label class="range-control">Low EQ <output data-output="low"></output><input data-param="low" type="range" min="-12" max="12" step="1"></label>
+    <label class="range-control">Mid EQ <output data-output="mid"></output><input data-param="mid" type="range" min="-12" max="12" step="1"></label>
+    <label class="range-control">High EQ <output data-output="high"></output><input data-param="high" type="range" min="-12" max="12" step="1"></label>
+   </div>
+   <div class="fx-group"><div class="fx-heading"><span>02</span><h3>Dynamics & Space</h3></div>
+    <label class="range-control">Compressor <output data-output="comp"></output><input data-param="comp" type="range" min="-36" max="-6" step="1"></label>
+    <label class="range-control">Reverb <output data-output="reverb"></output><input data-param="reverb" type="range" min="0" max="60" step="1"></label>
+    <label class="range-control">Guitar Drive <output data-output="drive"></output><input data-param="drive" type="range" min="0" max="40" step="1"></label>
+    <label class="range-control">Output Gain <output data-output="gain"></output><input data-param="gain" type="range" min="-18" max="6" step="1"></label>
+   </div>
+  </div>
+  <div class="fx-note"><strong>การทำงานจริง</strong> DSP นี้ใช้ Web Audio บนคอมพิวเตอร์/โทรศัพท์ที่เปิดแอป ไม่ใช่ Yamaha hardware DSP และไม่สามารถสั่งปุ่ม PAD, +48V, TO PC, GAIN หรือ MONITOR MUTE บนตัวเครื่องได้</div>
+ </section>
+ </div>
+ <section class="help-panel">
+  <div><div class="eyebrow">SETUP / AG06 FIRST GENERATION</div><h2>ก่อนเริ่มใช้งาน</h2><p>Windows ให้ติดตั้ง Yamaha Steinberg USB Driver จาก Yamaha และเลือก AG06/03 เป็นอุปกรณ์รับเสียง มือถือ Android ต้องรองรับ USB audio/OTG และอาจต้องจ่ายไฟแยกตามอุปกรณ์ เว็บต้องได้รับอนุญาตใช้ไมโครโฟน</p></div>
+  <div class="links"><a href="https://usa.yamaha.com/audio/streaming-gaming/products/mixers/ag-series/support.html" target="_blank" rel="noopener noreferrer">ไดรเวอร์และคู่มือ Yamaha ↗</a><a href="https://usa.yamaha.com/audio/streaming-gaming/explore/guides/ag-controller.html" target="_blank" rel="noopener noreferrer">Yamaha AG Controller ↗</a></div>
+ </section>
+</main>
+<footer><span>X-STAGE AG06 STUDIO · Independent software, not affiliated with Yamaha</span><span id="status-message" role="status" aria-live="polite">พร้อมเริ่มใช้งาน</span></footer>
+</div>
+</body>
+</html>

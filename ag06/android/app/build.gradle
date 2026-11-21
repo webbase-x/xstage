@@ -1,0 +1,61 @@
+plugins { id 'com.android.application' }
+
+def signingPath=System.getenv('XSTAGE_KEYSTORE_PATH')
+def signingReady=signingPath && System.getenv('XSTAGE_KEYSTORE_PASSWORD') && System.getenv('XSTAGE_KEY_ALIAS') && System.getenv('XSTAGE_KEY_PASSWORD') && file(signingPath).exists()
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+}
+
+tasks.register('copyAg06Frontend', Copy) {
+    from(rootProject.file('../')) {
+        include 'index.html', 'app.js', 'audio-engine.js', 'presets.js', 'style.css', 'icon.svg'
+    }
+    into(file('src/main/assets/ag06'))
+}
+tasks.named('preBuild').configure { dependsOn tasks.named('copyAg06Frontend') }
+
+android {
+    namespace 'com.webbasex.ag06studio'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.webbasex.ag06studio'
+        minSdk 29
+        targetSdk 34
+        versionCode 1
+        versionName '0.1.0'
+    }
+    signingConfigs {
+        testPreview {
+            // Public test key already used by X-Stage Android TV previews.
+            // Stable across CI builds, but NOT a production identity.
+            storeFile rootProject.file('../../android-tv/test-signing/xstage-test-update.jks')
+            storePassword 'xstage-test-update'
+            keyAlias 'xstage-test'
+            keyPassword 'xstage-test-update'
+        }
+        if (signingReady) {
+            release {
+                storeFile file(signingPath)
+                storePassword System.getenv('XSTAGE_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('XSTAGE_KEY_ALIAS')
+                keyPassword System.getenv('XSTAGE_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (signingReady) signingConfig signingConfigs.release
+        }
+        debug {
+            applicationIdSuffix '.debug'
+            signingConfig signingConfigs.testPreview
+            versionNameSuffix '-preview'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

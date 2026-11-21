@@ -191,6 +191,7 @@ const expectedPlatformCards={
   'karaoke-web':'website',
   'karaoke-pc':'windows',
   'download-manager':'windows',
+  'ag06-studio':'website windows android',
   'studio-pro':'windows',
   'karaoke-android':'android',
   'mirror-ios-pc':'windows',
