@@ -935,3 +935,60 @@ html.xstage-native-auth-pending .android-tv-auth-panel{visibility:visible!import
   margin:2px 0;color:#9dc7dc;opacity:.86;line-height:1.3
 }
 .xstage-midi-engine-status[hidden]{display:none!important}
+
+/* PC-style live MIDI keyboard. Based on the Windows Karaoke overlay;
+   independent of the existing text-search onscreen keyboard. */
+#midi-instrument-control.midi-instrument-control{display:inline-flex;align-items:center;gap:5px;max-width:100%;font-size:.7rem;color:#aac9da;white-space:nowrap}
+#midi-instrument-control[hidden],.midi-piano-panel[hidden]{display:none!important}
+.midi-instrument-trigger{display:inline-flex;align-items:center;gap:5px;max-width:145px;min-height:31px;padding:4px 7px;
+  border:1px solid #4386a0;border-radius:8px;color:#e3faff;background:linear-gradient(145deg,#193c56,#0d263d);
+  font-size:.73rem;cursor:pointer;white-space:nowrap}
+.midi-instrument-trigger span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis}
+.midi-instrument-trigger[aria-expanded="true"]{border-color:#54efd2;background:#185166}
+.midi-piano-panel{position:absolute;z-index:27;top:clamp(48px,8vh,78px);left:50%;transform:translateX(-50%);
+  width:min(1010px,calc(100% - 20px));max-height:min(56vh,292px);
+  display:flex;flex-direction:column;box-sizing:border-box;padding:9px 10px 7px;gap:6px;
+  color:#e6f3ff;background:linear-gradient(160deg,#14243aec,#0a1525f7);
+  border:1px solid #4a6c89;border-radius:13px;box-shadow:0 14px 56px #000c,0 0 0 1px #102d47 inset;backdrop-filter:blur(12px)}
+.midi-piano-toolbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-height:31px}
+.midi-piano-title{font-size:.82rem;white-space:nowrap;color:#f3f7ff;margin-right:5px}
+.midi-piano-title small{display:block;font-weight:500;font-size:.6rem;color:#91b6d0}
+.midi-piano-toolbar label{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;color:#b2d3e4;font-size:.69rem}
+.midi-piano-toolbar select{max-width:164px;border:1px solid #496886;border-radius:7px;background:#172e46;color:#f4fbff;
+  font:inherit;min-height:29px;padding:3px 6px;cursor:pointer}
+.midi-piano-toolbar button{background:#1b324b;color:#e7f8ff;border:1px solid #52708e;border-radius:7px;
+  min-height:29px;padding:4px 9px;font-size:.72rem;cursor:pointer}
+.midi-piano-toolbar button:disabled{opacity:.42;cursor:default}
+.midi-piano-toolbar .midi-piano-close{margin-left:auto;min-width:29px;padding:3px;font-size:1rem}
+.midi-piano-notes{flex:1;min-width:30px;max-width:160px;color:#ff7587;font-size:.7rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.midi-piano-scroll{position:relative;width:100%;overflow-x:auto;overflow-y:hidden;min-height:133px;
+  border:1px solid #3b5a72;border-radius:7px;background:#0c1828;overscroll-behavior-x:contain;
+  touch-action:pan-x;scrollbar-width:thin;scrollbar-color:#5282a0 #101e2e}
+.midi-piano-keys{position:relative;height:128px;min-width:100%;isolation:isolate}
+.midi-piano-key{position:absolute;top:0;margin:0;padding:0;border-radius:0 0 4px 4px;
+  font-family:system-ui,sans-serif;touch-action:pan-x;cursor:pointer;user-select:none;-webkit-user-select:none}
+.midi-piano-key.is-white{z-index:1;height:127px;border:1px solid #4b5c77;
+  background:linear-gradient(170deg,#fbfcff,#e3ebf4);color:#29415f}
+.midi-piano-key.is-white span{position:absolute;bottom:6px;left:0;right:0;text-align:center;font-size:.59rem;pointer-events:none}
+.midi-piano-key.is-black{z-index:2;height:80px;border:1px solid #4b6c8d;background:linear-gradient(130deg,#243b59,#0b1726);
+  box-shadow:1px 3px 3px #0007}
+.midi-piano-key.sounding{background:#ff354b!important;border-color:#f9a8b3!important;color:#fff!important}
+.midi-piano-key.preview{background:#42d9c3!important;border-color:#c2ffef!important;color:#06343e!important}
+.midi-piano-key:focus-visible,.midi-piano-toolbar button:focus-visible,
+.midi-instrument-trigger:focus-visible{outline:2px solid #6df2da;outline-offset:2px}
+.midi-piano-info{min-height:13px;margin:0;color:#9cbacd;font-size:.65rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:750px){
+  .midi-piano-panel{top:52px;max-height:min(67vh,310px);padding:7px 6px;gap:5px;width:calc(100% - 10px)}
+  .midi-piano-toolbar{gap:5px}
+  .midi-piano-title{width:100%;font-size:.72rem}
+  .midi-piano-title small{display:inline;margin-left:7px}
+  .midi-piano-toolbar label{font-size:.65rem}
+  .midi-piano-toolbar select{max-width:135px;min-height:31px}
+  .midi-piano-toolbar button{min-height:32px}
+  .midi-piano-notes{max-width:88px}
+  .midi-piano-scroll{min-height:127px}
+  .midi-piano-keys{height:122px!important}
+  .midi-piano-key.is-white{height:121px}
+  .midi-piano-key.is-black{height:75px}
+}
+@media(max-height:450px){.midi-piano-panel{top:36px;max-height:calc(100% - 42px);overflow-y:auto}}
