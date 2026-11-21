@@ -707,9 +707,22 @@ try
         file = filename, sha256 = new string('a', 64), size_bytes = 250_000_000L,
         download_url = "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.20-build23-preview/" + filename
     });
+    // Compare against the compiled application version, not a former release.
+    // A version bump must not break otherwise valid update security tests.
+    var installedVersion = Version.Parse(UpdateChecker.CurrentVersion);
+    var nextPatch = new Version(installedVersion.Major, installedVersion.Minor,
+        checked(installedVersion.Build + 1)).ToString();
+    var previousPatch = installedVersion.Build > 0
+        ? new Version(installedVersion.Major, installedVersion.Minor,
+            installedVersion.Build - 1).ToString()
+        : null;
     if (UpdateChecker.Parse(json) is not { Version: "0.2.20", Build: 23 } ||
-        UpdateChecker.IsNewer("0.2.20", 23) || !UpdateChecker.IsNewer("0.2.20", 24) ||
-        !UpdateChecker.IsNewer("0.2.21", 1) || UpdateChecker.IsNewer("0.1.1", 2) ||
+        UpdateChecker.IsNewer(UpdateChecker.CurrentVersion, UpdateChecker.CurrentBuild) ||
+        UpdateChecker.IsNewer(UpdateChecker.CurrentVersion, UpdateChecker.CurrentBuild - 1) ||
+        !UpdateChecker.IsNewer(UpdateChecker.CurrentVersion, checked(UpdateChecker.CurrentBuild + 1)) ||
+        !UpdateChecker.IsNewer(nextPatch, 1) ||
+        (previousPatch is not null && UpdateChecker.IsNewer(previousPatch, int.MaxValue)) ||
+        UpdateChecker.IsNewer("0.1.1", 2) ||
         UpdateChecker.IsNewer("0.2.1", 4))
         throw new Exception("EXE-only manifest and version comparison failed.");
     if (UpdateChecker.Parse(json.Replace("github.com", "untrusted.test")) is not null ||
