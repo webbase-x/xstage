@@ -92,10 +92,19 @@ assert.ok(js.includes('__XSTAGE_CORE_BOUND__'),
 assert.ok(html.includes('list="lyrics-replacement-options"')&&
           html.includes('<option value="X-Stage Karaoke">'),
  'Grouped lyric replacement must offer X-Stage Karaoke while retaining custom typing');
-assert.ok(js.includes('function groupPageSize()')&&
-          js.includes('state.groupLimit=groupPageSize()')&&
-          js.includes('state.groupOffset+=state.groupLimit'),
- 'Grouped lyric pages must size from available panel space and paginate with the same limit');
+assert.ok(!html.includes('id="groups-prev"')&&
+          !html.includes('id="groups-next"')&&
+          js.includes('async function loadMoreGroups(')&&
+          js.includes('function renderGroupWindow(')&&
+          html.includes('id="groups-scroll-status"')&&
+          js.includes('groupNearBottom()'),
+ 'Grouped lyric results must scroll continuously with bounded SQLite batches and virtual DOM');
+assert.ok(html.includes('id="build-tab-ready"')&&
+          html.includes('id="build-tab-attention"')&&
+          html.includes('id="build-scroll-status"')&&
+          js.includes('async function loadMoreBuildSongs(')&&
+          js.includes('function renderBuildRows('),
+ 'XMID/X-Media build must offer ready/review tabs and bounded scroll fetching');
 assert.ok(js.includes('const review=song.manual_status==="review"')&&
           js.includes('check.disabled=!selectable')&&
           js.includes('await api("/api/manual/approve"'),
