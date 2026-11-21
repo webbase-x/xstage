@@ -429,9 +429,19 @@ function savePreferredLibraryRoot(sub,rootId){
   }catch{}
 }
 function libraryLabel(root){
-  if(root?.ownedByMe)return 'คลังของฉัน';
   const owner=String(root?.owners?.[0]?.emailAddress||'').trim();
-  return owner?'แชร์โดย '+owner:'คลังที่แชร์ให้ฉัน';
+  const base=root?.ownedByMe?'คลังของฉัน':owner?'แชร์โดย '+owner:'คลังที่แชร์ให้ฉัน';
+  const duplicate=state.availableLibraries.filter(x=>
+    String(x.name||driveLayout.root)===String(root?.name||driveLayout.root)).length>1;
+  if(!duplicate)return base;
+  let created='';
+  try{
+    if(root.createdTime&&!Number.isNaN(Date.parse(root.createdTime)))
+      created=new Date(root.createdTime).toLocaleString('th-TH',{
+        day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:false});
+  }catch{}
+  return (root.name||driveLayout.root)+' · '+base+
+    (created?' · '+created:'')+' · …'+String(root.id||'').slice(-5);
 }
 function renderLibrarySelector(roots,activeId){
   state.availableLibraries=Array.isArray(roots)?roots.slice():[];
@@ -451,7 +461,8 @@ async function loadLatestCachedCatalog(sub,rootId=''){
   try{
     const saved=await catalogStorage('get',libraryCacheOwner(sub,rootId));
     const catalog=saved?.catalog;
-    if(catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
+    if(saved?.layoutVersion!==5||saved?.format!=='xstage-sqlite3-v1'||
+       catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
     return {
       catalog,
       generation:String(saved.generation||''),
@@ -479,7 +490,8 @@ async function loadCachedCatalog(ownerKey,pointer){
     if(saved?.generation!==String(pointer.generation)||saved.catalogFileId!==pointer.catalogFileId||
        JSON.stringify(saved.deltaFileIds||[])!==JSON.stringify(pointer.deltaFileIds||[]))return null;
     const catalog=saved.catalog;
-    if(catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
+    if(saved?.layoutVersion!==5||saved?.format!=='xstage-sqlite3-v1'||
+       catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
     if(Number.isSafeInteger(pointer.songCount)&&catalog.songs.length!==pointer.songCount)return null;
     return catalog;
   }catch{return null;}
@@ -488,6 +500,7 @@ async function saveCachedCatalog(ownerKey,pointer,catalog){
   if(!ownerKey||!pointer?.generation||!Array.isArray(catalog?.songs))return;
   try{await catalogStorage('put',ownerKey,{
     generation:String(pointer.generation),catalogFileId:pointer.catalogFileId,
+    layoutVersion:pointer.layoutVersion,format:pointer.format,
     deltaFileIds:pointer.deltaFileIds||[],catalog
   });}catch(error){console.warn('X-Stage local catalog cache:',error?.message||error);}
 }
@@ -1044,7 +1057,7 @@ async function driveList(q, token) {
   const seenPageTokens = new Set();
   let pageToken = '';
   do {
-    const params = new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,parents,ownedByMe,sharedWithMeTime,capabilities(canShare),owners(displayName,emailAddress))',pageSize:'1000'});
+    const params = new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,parents,ownedByMe,createdTime,sharedWithMeTime,capabilities(canShare),owners(displayName,emailAddress))',pageSize:'1000'});
     if (pageToken) params.set('pageToken',pageToken);
     const result = await googleFetch(`https://www.googleapis.com/drive/v3/files?${params}`,
       {headers: requestHeaders(token),cache:'no-store'},'Google Drive');
@@ -1421,8 +1434,10 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       return;
     }
     setSharedLibraryGate(false);
-    const ownedRoots=roots.filter(item=>item.ownedByMe);
-    const sharedRoots=roots.filter(item=>!item.ownedByMe).sort((a,b)=>String(b.sharedWithMeTime||'').localeCompare(String(a.sharedWithMeTime||'')));
+    const ownedRoots=roots.filter(item=>item.ownedByMe).sort((a,b)=>
+      String(a.createdTime||'').localeCompare(String(b.createdTime||'')));
+    const sharedRoots=roots.filter(item=>!item.ownedByMe).sort((a,b)=>
+      String(b.sharedWithMeTime||'').localeCompare(String(a.sharedWithMeTime||'')));
     const preferred=preferredRootId&&roots.find(item=>String(item.id)===preferredRootId);
     const root=preferred||ownedRoots[0]||sharedRoots[0]||roots[0];
     if(preferredRootId&&String(root.id)!==preferredRootId&&instant){
@@ -1530,7 +1545,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     if(!instant)showCatalogLoading('พร้อมใช้งาน','ฐานเพลงครั้งแรกพร้อมแล้ว',100);
     hideCatalogLoading();
     void saveCachedCatalog(cacheOwner,pointer,catalog);
-    setStatus(`เชื่อมต่อแล้ว · ${num(state.songs.length)} เพลง · ${libraryLabel(root)}${downloaded?' (อัปเดตฐานล่าสุดแล้ว)':sameAsInstant?' (ฐานในเครื่องเป็นรุ่นล่าสุด)':''}`,'success');
+    const duplicateRoots=roots.filter(x=>x.name===driveLayout.root).length;
+    setStatus(`เชื่อมต่อแล้ว · ${num(state.songs.length)} เพลง · ${libraryLabel(root)}${duplicateRoots>1?' · พบ XStageKaraoke ชื่อซ้ำ '+duplicateRoots+' โฟลเดอร์ · เปลี่ยนได้ที่เมนูเลือกคลัง':''}${downloaded?' (อัปเดตฐานล่าสุดแล้ว)':sameAsInstant?' (ฐานในเครื่องเป็นรุ่นล่าสุด)':''}`,'success');
     setAndroidTvStageAccess(true,account.sub);
     void restorePlaybackAfterReload();
     if(!readPlaybackResumeState())ui.search.focus();
@@ -1865,6 +1881,7 @@ function savePlaybackResumeState(){
     }
     sessionStorage.setItem(PLAYBACK_RESUME_KEY,JSON.stringify({
       savedAt:Date.now(),
+      rootId:String(state.libraryRootId||''),
       songKey:songIdentity(state.current),
       songCode:String(state.current.code||''),
       songTitle:String(state.current.title||''),
@@ -1878,6 +1895,9 @@ function readPlaybackResumeState(){
   try{
     const saved=JSON.parse(sessionStorage.getItem(PLAYBACK_RESUME_KEY)||'null');
     if(!saved||Date.now()-Number(saved.savedAt||0)>2*60*60*1000)return null;
+    // Song titles/codes can be identical in different folders. Never resume
+    // another root's song merely because the metadata happens to match.
+    if(!state.libraryRootId||String(saved.rootId||'')!==String(state.libraryRootId))return null;
     return saved;
   }catch{return null;}
 }
@@ -3876,7 +3896,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1132';
+    script.src='./assets/vendor/qrcode.min.js?v=1133';
     script.async=true;
     let done=false;
     const finish=error=>{

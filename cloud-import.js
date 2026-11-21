@@ -336,6 +336,19 @@ class Drive {
       fail('อัปเดต current.json แล้ว Google Drive ยืนยัน MD5 ไม่ตรง');
   }
 }
+function chooseImportRoot(roots,activeRootId){
+  if(!Array.isArray(roots))fail('รายการคลังเพลงไม่ถูกต้อง');
+  const selected=activeRootId
+    ?roots.find(item=>String(item.id)===String(activeRootId))
+    :roots.length===1?roots[0]:null;
+  if(roots.length>1&&!selected)
+    fail('พบ XStageKaraoke ชื่อซ้ำหลายโฟลเดอร์ · กรุณาเลือกคลังที่ต้องการจากเมนูคลังเพลงก่อนนำเข้า');
+  if(roots.length&&!selected)
+    fail('คลัง XStageKaraoke ที่เลือกไม่ตรงกับบัญชีปัจจุบัน · กรุณาเปิดคลังใหม่');
+  if(selected?.ownedByMe===false)
+    fail('ไม่สามารถนำเข้าไปยังโฟลเดอร์ที่ไม่ได้เป็นเจ้าของโดยไม่ได้อนุญาต');
+  return selected?.id||'';
+}
 async function loadCatalog(drive,root){
   const children=await drive.listChildren(root);
   const dbDirs=children.filter(x=>x.name===driveLayout.db&&x.mimeType===MIME_FOLDER);
@@ -853,12 +866,13 @@ class Importer {
       this.status('กำลังตรวจ XStageKaraoke/DB/current.json บน Google Drive…');
       const rootQuery="'root' in parents and name='"+driveLayout.root+"' and mimeType='"+MIME_FOLDER+"' and trashed=false";
       const roots=await drive.list(rootQuery);
-      if(roots.length>1)fail('พบ XStageKaraoke มากกว่าหนึ่งโฟลเดอร์ · หยุดป้องกันฐานแยก');
-      let rootId;
-      if(roots.length){
-        if(roots[0].ownedByMe===false)fail('ไม่สามารถนำเข้าไปยังโฟลเดอร์ที่ไม่ได้เป็นเจ้าของโดยไม่ได้อนุญาต');
-        rootId=roots[0].id;
-      }else{
+      // Pin new uploads to the folder actually selected in Karaoke Online.
+      // Do not silently use the first same-name root or create a third copy.
+      const activeRootId=String(auth.rootId||'');
+      if(activeRootId&&!roots.some(item=>String(item.id)===activeRootId))
+        fail('โฟลเดอร์ XStageKaraoke ที่เลือกไม่พบแล้ว · กรุณาเปิดคลังเพลงใหม่');
+      let rootId=chooseImportRoot(roots,activeRootId);
+      if(!rootId){
         if(!this.dom['allow-create'].checked)
           fail('ไม่พบ XStageKaraoke · กรุณาอนุญาตสร้างคลังใหม่ก่อนนำเข้า');
         rootId=await drive.folder('root',driveLayout.root);
