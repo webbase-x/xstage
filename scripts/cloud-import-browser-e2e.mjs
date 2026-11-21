@@ -350,7 +350,17 @@ try{
   await page.click('#cloud-import-resume');
   const chooser=await chooserPromise;
   await chooser.setFiles(dir);
-  await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น'),null,{timeout:90000});
+  try {
+    await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น'),null,{timeout:90000});
+  } catch (error) {
+    const diagnostic=await page.evaluate(()=>({
+      status:document.getElementById('cloud-import-status')?.textContent,
+      ready:document.getElementById('cloud-import-ready')?.textContent,
+      resumeDisabled:document.getElementById('cloud-import-resume')?.disabled,
+      pauseDisabled:document.getElementById('cloud-import-pause')?.disabled
+    }));
+    throw new Error('Cloud import resume stalled: '+JSON.stringify(diagnostic),{cause:error});
+  }
   const finalPointer=[...records.values()].find(x=>x.name==='current.json');
   assert.equal(JSON.parse(finalPointer.data.toString('utf8')).songCount,5,
     'Reopening and resuming must publish the missing track without losing previous entries');
