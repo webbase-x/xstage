@@ -92,7 +92,9 @@ jobs:
       - name: Compile native ASIO PCM bridge (Windows x64)
         shell: cmd
         run: |
-          call "%ProgramFiles%\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
+          for /f "usebackq delims=" %%I in (`"%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSROOT=%%I"
+          if not defined VSROOT (echo MSVC x64 toolchain unavailable & exit /b 1)
+          call "%VSROOT%\\VC\\Auxiliary\\Build\\vcvars64.bat"
           if errorlevel 1 exit /b 1
           pwsh -NoProfile -File windows-pc/source/tools/Build-AsioBridge.ps1 -OutputDirectory windows-pc/source/native/x64
           if errorlevel 1 exit /b 1
