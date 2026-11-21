@@ -263,7 +263,12 @@ try
         throw new Exception("Unlimited rate setting must not delay transfers.");
     if (TransferRateMath.Smooth(1000, 0, true) is <= 0 or >= 1000 ||
         TransferRateMath.Smooth(1000, 2000, true) is <= 1000 or >= 2000 ||
-        TransferRateMath.Smooth(1000, 0, false) != 0)
+        TransferRateMath.Smooth(1000, 0, false) != 0 ||
+        TransferRateMath.Smooth(double.NaN, 200, true) != 200 ||
+        TransferRateMath.Smooth(double.PositiveInfinity, 200, true) != 200 ||
+        TransferRateMath.Smooth(double.NegativeInfinity, 200, true) != 200 ||
+        TransferRateMath.Smooth(200, double.NaN, true) is <= 0 or >= 200 ||
+        !double.IsFinite(TransferRateMath.Smooth(double.MaxValue, double.MaxValue, true)))
         throw new Exception("Download speed smoothing must decay and reset correctly.");
 
     // Retry policy is selective. Auth and missing resources must not be
