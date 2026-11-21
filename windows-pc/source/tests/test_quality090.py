@@ -384,6 +384,39 @@ class QualityGuiTests(unittest.TestCase):
         self.assertFalse(self.app.start_song(QueueItem(999)))
         self.app._cleanup_busy=False
 
+    def test_search_queue_mixer_and_window_lifecycle(self):
+        from karaoke.dialog_layout import DialogWindow
+        path=self.song('p04-gui.mid')
+        song_id=self.app.library.add_files([path])[0]
+        self.pump(lambda:self.app.database_ready)
+        app=self.app
+        app.search_popup(initial='Song')
+        self.pump(lambda:not app.search_pending and str(song_id) in app.songs.get_children())
+        self.assertTrue(app.search_visible)
+        app.songs.selection_set(str(song_id))
+        with patch.object(app,'can_play_search_immediately',return_value=False):
+            app.input_enter()
+        self.assertEqual([item.song_id for item in app.song_queue.items],[song_id])
+        self.assertFalse(app.search_visible)
+        self.assertTrue(app.bind('<F9>'))
+        self.assertTrue(app.bind('<F10>'))
+        app.show_queue();app.update()
+        self.assertTrue(app.queue_window.winfo_ismapped())
+        self.assertEqual(len(app.queues.get_children()),1)
+        app.queue_window.withdraw();app.update()
+        self.assertFalse(app.queue_window.winfo_ismapped())
+        def mixer_windows():
+            return [w for w in app.winfo_children() if isinstance(w,DialogWindow)
+                    and w.winfo_exists() and 'MIDI Control' in w.title()]
+        for _ in range(2):
+            app.open_mixer();self.pump(lambda:bool(mixer_windows()))
+            self.assertEqual(len(mixer_windows()),1)
+            mixer_windows()[0].destroy();app.update()
+            self.assertFalse(mixer_windows())
+        pulse=[];app.after(0,lambda:pulse.append(True))
+        self.pump(lambda:bool(pulse))
+        self.assertFalse(self.errors,self.errors)
+
     def test_close_cancels_all_owned_after_callbacks(self):
         self.app.after(20000,lambda:None)
         app=self.app;app.close_app()
