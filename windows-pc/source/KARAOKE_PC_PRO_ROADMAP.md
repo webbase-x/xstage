@@ -157,3 +157,9 @@
 
 - [`bacf1c03`](https://github.com/webbase-x/xstage/commit/bacf1c036a5941550858eaa9e9cdec85fdd39dfc) changes `Decks.discard()` callback to attempt closure of both completed preload players even if one close raises. [`f51fd58f`](https://github.com/webbase-x/xstage/commit/f51fd58f1f71e59bf28c0e4a3fd886117d33718d) adds deterministic `Future`-based regression.
 - Source and tests committed, **not yet executed**. Windows CI and measured no-gap audio transitions remain pending. P0.5 IN PROGRESS; 24/27 outstanding.
+
+## 2026-11-21 — P0.5 medley tail teardown and executor shutdown
+
+- [`41a30a74`](https://github.com/webbase-x/xstage/commit/41a30a7418f01ce23426bbd7c47bc2a8f75d43e4) updates `Decks.stop_tail()` to attempt drum channel restoration and close both tail/rhythm players, preserving first cleanup error. `Decks.close()` always shuts down preload executor via `finally`.
+- [`0cd3e64e`](https://github.com/webbase-x/xstage/commit/0cd3e64e708fd4b08975b96161089c5195b96204) adds tests for both-player teardown and executor shutdown after injected failures.
+- **Committed but not executed in Windows CI**. P0.5 IN PROGRESS, 24/27 outstanding; actual seamless playback and hardware tests not yet verified.
