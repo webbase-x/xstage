@@ -487,7 +487,7 @@ async function render(source,{fontBytes=null,signal=null,onStatus=null,
 const BUILTIN_GM_ID='builtin:TimGM6mb';
 const BUILTIN_GM_URL='https://raw.githubusercontent.com/craffel/pretty-midi/main/pretty_midi/TimGM6mb.sf2';
 const BUILTIN_GM_MAX_BYTES=8*1048576;
-let context=null,selected='',fontCache=null,fontRefreshSequence=0,fontRefreshPromise=null;
+let context=null,selected=BUILTIN_GM_ID,fontCache=null,fontRefreshSequence=0,fontRefreshPromise=null;
 let fontLoadPromise=null, fontWarning='',builtinRetryAfter=0;
 function fontStatus(){
   return {loaded:!!fontCache,selectedId:selected,
@@ -516,13 +516,12 @@ async function refreshFonts(auth){
   const select=$('xstage-soundfont-select');if(!select)return;
   const sameLibrary=context?.sub===auth?.sub&&context?.rootId===auth?.rootId;
   context=auth;
-  if(!sameLibrary){selected='';fontCache=null;fontLoadPromise=null;fontStatusChanged();}
+  if(!sameLibrary){selected=BUILTIN_GM_ID;fontCache=null;fontLoadPromise=null;fontStatusChanged();}
   select.replaceChildren(new Option('กำลังตรวจสอบ SoundFont…',''));
   const pending=(async()=>{
     const sub=auth?.sub||'',rootId=auth?.rootId||'';
     const choices=[
-      new Option('เสียงเครื่องดนตรี GM · TimGM6mb (6 MB)',BUILTIN_GM_ID),
-      new Option('เสียงสังเคราะห์พื้นฐาน (คุณภาพต่ำ)','')
+      new Option('เสียงเครื่องดนตรี GM · TimGM6mb (6 MB)',BUILTIN_GM_ID)
     ];
     if(!auth?.token||!rootId){
       if(sequence===fontRefreshSequence){selected=BUILTIN_GM_ID;fontCache=null;select.replaceChildren(...choices);select.value=selected;}
@@ -555,7 +554,7 @@ async function refreshFonts(auth){
       select.replaceChildren(...choices);
       const hinted=Number(scope.navigator?.deviceMemory||4);
       const maxMB=(hinted<=2?64:hinted<=4?128:256)*1048576;
-      const eligible=choices.slice(2).filter(option=>
+      const eligible=choices.slice(1).filter(option=>
         Number(option.dataset.size)>0&&Number(option.dataset.size)<=Math.min(MAX_FONT,maxMB));
       // A selected GM bank sounds like actual instruments; the old
       // no-SoundFont fallback used raw oscillators (8-bit game sound).
@@ -614,7 +613,7 @@ async function refreshFonts(auth){
 async function selectedFont(token,signal){
   if(fontRefreshPromise)await fontRefreshPromise;
   if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
-  if(!selected)return null;
+  if(!selected)selected=BUILTIN_GM_ID;
   if(!context||token!==context.token)fail('บัญชี Google เปลี่ยน · โปรดเลือก SoundFont อีกครั้ง');
   if(selected===BUILTIN_GM_ID){
     const id=BUILTIN_GM_ID,sub=context.sub;
@@ -721,6 +720,44 @@ function unlockAudio(){
   void sharedLiveContext.resume().catch(()=>{});
   return true;
 }
+// Decode the earliest song samples BEFORE starting the MIDI transport.
+// A cold Web Audio sampler used to miss notes while SF2 samples were
+// first converted, but replaying the song reused warm sample buffers.
+async function warmRealtimeSamples(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
+  if(!fontBytes?.byteLength)fail('ยังไม่พบ SoundFont เครื่องดนตรี');
+  const Ctor=scope.AudioContext||scope.webkitAudioContext;
+  if(!Ctor)fail('เบราว์เซอร์ไม่รองรับ Web Audio');
+  const ctx=sharedLiveContext&&sharedLiveContext.state!=='closed'?
+    sharedLiveContext:new Ctor();
+  sharedLiveContext=ctx;
+  const font=fontCache?.bytes===fontBytes
+    ?(fontCache.parsed||(fontCache.parsed=parseFont(fontBytes)))
+    :parseFont(fontBytes);
+  const song=parseMidi(source);
+  const first=song.notes.reduce((min,n)=>Math.min(min,n.start),Infinity);
+  const horizon=(Number.isFinite(first)?first:0)+12;
+  const samples=new Set();
+  for(const n of song.notes){
+    if(n.start>horizon)continue;
+    for(const g of font.find(n.bank,n.program,n.key,n.velocity)){
+      samples.add(g.get(53));
+      if(samples.size>=72)break;
+    }
+    if(samples.size>=72)break;
+  }
+  if(!samples.size)fail('SoundFont ไม่มีเครื่องดนตรีสำหรับเพลงนี้ · โปรดเลือก GM/GS SoundFont ที่ครบถ้วน');
+  let ready=0;
+  for(const index of samples){
+    if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
+    await sampleBuffer(font,index,ctx);
+    if(++ready%12===0){
+      onStatus('เตรียมเสียงเครื่องดนตรี '+ready+'/'+samples.size+'…');
+      await new Promise(resolve=>setTimeout(resolve,0));
+    }
+  }
+  if(fontCache?.parsed===font)fontStatusChanged();
+  return {samples:ready};
+}
 function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose=()=>0,getProgram=()=>null}={}){
   const Ctor=scope.AudioContext||scope.webkitAudioContext;
   if(!Ctor)fail('เบราว์เซอร์ไม่รองรับ Web Audio MIDI Synthesizer');
@@ -797,9 +834,10 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
       regions=regionCache.get(regionKey);
     }
     if(!regions.length){
-      regions=[null]; // A partial SoundFont should not make the song silent.
+      // A missing SF2 instrument must not morph into an oscillator.
       if(!missingPresetWarning){missingPresetWarning=true;
-        onStatus?.('SoundFont ไม่มีเครื่องดนตรีบางช่อง · ใช้เสียง MIDI พื้นฐานแทนเฉพาะช่องนั้น');}
+        onStatus?.('SoundFont ไม่มีเสียงเครื่องดนตรีบางช่อง · กรุณาใช้ชุดเสียง GM/GS ที่ครบถ้วน');}
+      return;
     }
     for(const region of regions){
       let buffer=null;
@@ -881,9 +919,9 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   onStatus?.(font?'SoundFont พร้อมสังเคราะห์ MIDI แบบเรียลไทม์':'MIDI พร้อมเล่นโดยไม่แปลงเป็น WAV');
   return {dispose,duration:song.duration};
 }
-scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,playRealtime,unlockAudio,
+scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,playRealtime,warmRealtimeSamples,unlockAudio,
   liveAudioContext:()=>sharedLiveContext?.state!=='closed'?sharedLiveContext:null,
   supportsRealtime:()=>!!(scope.AudioContext||scope.webkitAudioContext),
-  reset(){fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;fontWarning='';context=null;selected='';fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียงสังเคราะห์พื้นฐาน (ไม่มี SoundFont)',''));}};
+  reset(){fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;fontWarning='';context=null;selected=BUILTIN_GM_ID;fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียงเครื่องดนตรี GM · TimGM6mb (6 MB)',BUILTIN_GM_ID));}};
 scope.addEventListener?.('xstage:auth-cleared',()=>scope.XStageBrowserMidi.reset());
 })(typeof window!=='undefined'?window:globalThis);
