@@ -6,7 +6,7 @@ const ver=JSON.parse(read('version.json'));
 assert.equal(ver.build,1132);
 assert.ok(html.includes('xstage-ux.css?v=1132-intro-search-safe-area'));
 assert.ok(html.includes('stage-ui.js?v=1132-title-key-intro'));
-assert.ok(html.includes('app.js?v=1132-title-key-intro'));
+assert.ok(html.includes('app.js?v=1132-sqlite3'));
 const titleRow=html.indexOf('class="transport-song-title"');
 const name=html.indexOf('id="now-playing"',titleRow);
 const key=html.indexOf('id="toolbar-song-key"',titleRow);
