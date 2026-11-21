@@ -703,6 +703,7 @@ let sharedLiveContext=null;
 function unlockAudio(){
   const Ctor=scope.AudioContext||scope.webkitAudioContext;
   if(!Ctor)return false;
+  scope.XStageIOSMidiAudio?.activate();
   if(!sharedLiveContext||sharedLiveContext.state==='closed')sharedLiveContext=new Ctor();
   void sharedLiveContext.resume().catch(()=>{});
   return true;
@@ -727,8 +728,13 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
     limiter.ratio.value=12;
     limiter.attack.value=.003;
     limiter.release.value=.16;
-    master.connect(limiter);limiter.connect(ctx.destination);
-  }else master.connect(ctx.destination);
+    master.connect(limiter);
+  }
+  const output=limiter||master;
+  const iosOutput=scope.XStageIOSMidiAudio?.attach(ctx,output,{
+    onStatus:message=>onStatus?.(message)
+  })||null;
+  if(!iosOutput)output.connect(ctx.destination);
   const MASTER_GAIN=.18;
   const MAX_VOICES=96;
   master.gain.value=MASTER_GAIN;
@@ -841,10 +847,12 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   };
   const play=()=>{
     if(disposed)return;
+    scope.XStageIOSMidiAudio?.activate();
+    void iosOutput?.start().catch(()=>{});
     ctx.resume().catch(()=>onStatus?.('กด ▶ อีกครั้งเพื่ออนุญาตเสียง MIDI'));
     reset();schedule();if(timer===null)timer=setInterval(schedule,80);
   };
-  const pause=()=>{if(timer!==null){clearInterval(timer);timer=null;}reset();};
+  const pause=()=>{if(timer!==null){clearInterval(timer);timer=null;}reset();iosOutput?.pause();};
   const seek=()=>{pause();if(!player.paused)play();};
   const listeners=[['play',play],['pause',pause],['ended',pause],
     ['seeking',seek],['ratechange',seek],['xstage-midi-transpose',seek]];
@@ -852,7 +860,7 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   const dispose=()=>{
     if(disposed)return;disposed=true;pause();
     for(const [event,fn] of listeners)player.removeEventListener(event,fn);
-    try{master.disconnect();limiter?.disconnect();}catch{}
+    try{iosOutput?.dispose();master.disconnect();limiter?.disconnect();}catch{}
   };
   signal?.addEventListener('abort',dispose,{once:true});
   if(!player.paused)play();
