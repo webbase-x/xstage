@@ -99,6 +99,11 @@ class FakeApp:
 
     def defer_menu_command(self, callback):
         self.deferred += 1
+        # These commands create real Tk windows and can install/repair software.
+        # The menu event is exercised; its side effect is stubbed in prebuild QA.
+        if getattr(callback, "__name__", "") in ("repair_components", "support_report", "view_logs"):
+            self.calls.append("mocked-window:" + callback.__name__)
+            return
         callback()
 
     def __getattr__(self, name):
@@ -166,6 +171,8 @@ class PrebuildMenuAudit(unittest.TestCase):
         build = (ROOT / "build.ps1").read_text(encoding="utf-8-sig")
         self.assertIn("PyInstaller", build)
         self.assertIn("--collect-all imageio_ffmpeg", build)
+        self.assertIn("--collect-all cv2", build)
+
 
     def test_prebuild_does_not_modify_library_or_song_files(self):
         source = (ROOT / "karaoke" / "context_menu.py").read_text(encoding="utf-8")
