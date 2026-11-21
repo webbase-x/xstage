@@ -236,3 +236,9 @@
 
 - [`a78e1653`](https://github.com/webbase-x/xstage/commit/a78e16534c7cb822a8ca2abbabdd9d661873e7fd) rejects symlink/junction inputs among required and optional restore backup files before reading or staging; [`b357de45`](https://github.com/webbase-x/xstage/commit/b357de4576ba127aee2aeb3e95a82d6d5a185770) adds regression that external symlink content cannot be restored and current data stays intact.
 - Automated test result **PENDING-QA** (not PASS). Continue P0.6 data/release-safety work while waiting; revisit exact commits when CI evidence is available. Physical tests remain DEFERRED-HARDWARE. Do not advertise a stable EXE.
+
+## 2026-11-21 — P0.6 interrupted restore journal hardening (PENDING-QA)
+
+- [`475ddb7f`](https://github.com/webbase-x/xstage/commit/475ddb7f38779d88e019c54e57fb3e9218856c3f) validates interrupted restore safety-folder name, symlink/junction state, rollback target allowlist and backup file existence before rollback mutates user data.
+- [`2e51ebe7`](https://github.com/webbase-x/xstage/commit/2e51ebe78ea823db0d8c7a59515dce536c7cf1a5) additionally rejects non-string and duplicate journal entries before set operations. Regression tests [`e7477058`](https://github.com/webbase-x/xstage/commit/e74770581c9e973edd26295e2655417d52e6367f), [`88dfc640`](https://github.com/webbase-x/xstage/commit/88dfc640308626721112e8811e15effe7e865f17).
+- Source commits recorded; automated CI execution/results still PENDING-QA, not PASS. Continue independent engineering tasks under user-authorized nonblocking QA; do not release Stable before required gates pass.
