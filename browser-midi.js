@@ -270,6 +270,19 @@ function ncnLyrics(lyrBytes,curBytes,code,midi){
     lines,metadata};
 }
 
+// A large SoundFont is parsed by the dedicated AudioWorklet after playback
+// starts. Avoid parsing its entire preset/sample tree on the iPhone UI thread
+// while the user is waiting at the Play button.
+function validateFontContainer(bytes){
+  const b=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes);
+  if(b.byteLength<256||b.byteLength>MAX_FONT||
+     str(b,0,4)!=='RIFF'||str(b,8,4)!=='sfbk')
+    fail('ไฟล์ SoundFont ไม่ใช่ SF2/SF3 ที่สมบูรณ์');
+  const reported=u32(new DataView(b.buffer,b.byteOffset,b.byteLength),4)+8;
+  if(reported!==b.byteLength&&reported+1!==b.byteLength)
+    fail('SoundFont RIFF ขนาดไม่ตรง');
+  return true;
+}
 function parseFont(data){
   const b=data instanceof Uint8Array?data:new Uint8Array(data);
   if(b.byteLength<256||b.byteLength>MAX_FONT||str(b,0,4)!=='RIFF'||str(b,8,4)!=='sfbk')
@@ -618,10 +631,10 @@ async function selectedFont(token,signal){
         const bytes=new Uint8Array(await response.arrayBuffer());
         if(bytes.length<100000||bytes.length>BUILTIN_GM_MAX_BYTES)
           fail('ขนาดไฟล์เสียง GM ไม่ถูกต้อง');
-        const parsed=parseFont(bytes);
+        validateFontContainer(bytes);
         if(selected!==id||context?.token!==token||context?.sub!==sub)
           throw new DOMException('เปลี่ยนบัญชีหรือชุดเสียง','AbortError');
-        fontCache={id,sub,bytes,parsed,label:'TimGM6mb · General MIDI'};
+        fontCache={id,sub,bytes,parsed:null,label:'TimGM6mb · General MIDI'};
         builtinRetryAfter=0;
         fontWarning='';fontStatusChanged();
         return bytes;
@@ -686,9 +699,9 @@ async function selectedFont(token,signal){
     if(selected!==id||context?.token!==token||context?.sub!==sub)
       fail('รายการ SoundFont เปลี่ยนระหว่างโหลด · กรุณาเลือกใหม่');
     // Parse once, then reuse decoded structure and bounded sample buffers.
-    const parsed=parseFont(bytes);
+    validateFontContainer(bytes);
     const label=$('xstage-soundfont-select')?.selectedOptions?.[0]?.text||'SoundFont';
-    fontCache={id,sub,bytes,parsed,label};
+    fontCache={id,sub,bytes,parsed:null,label};
     fontWarning='';
     fontStatusChanged();
     return bytes;
@@ -714,8 +727,9 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   const song=parseMidi(source),ctx=sharedLiveContext&&sharedLiveContext.state!=='closed'?
     sharedLiveContext:new Ctor();
   sharedLiveContext=ctx;
-  const font=fontBytes?(fontCache?.bytes===fontBytes&&fontCache.parsed?
-    fontCache.parsed:parseFont(fontBytes)):null;
+  const font=fontBytes?(fontCache?.bytes===fontBytes
+    ?(fontCache.parsed||(fontCache.parsed=parseFont(fontBytes)))
+    :parseFont(fontBytes)):null;
   // The PC BASSMIDI backend starts fonts at -6 dB and limits polyphony.
   // Web Audio summing has no built-in clipping guard; keep headroom and use
   // a single final dynamics limiter, never boost every note independently.
