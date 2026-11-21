@@ -7,7 +7,7 @@
   "description": "First-generation Yamaha AG06 recording and software DSP studio",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win portable --x64"
+    "dist": "node tools/make_icon.cjs && electron-builder --win portable --x64"
   },
   "devDependencies": {
     "electron": "45.4.1",
@@ -16,15 +16,33 @@
   "build": {
     "appId": "com.webbasex.ag06studio",
     "productName": "X-Stage AG06 Studio",
-    "files": ["main.cjs", "package.json"],
+    "files": [
+      "main.cjs",
+      "package.json",
+      "icon.ico",
+      "tools/make_icon.cjs"
+    ],
     "extraResources": [
       {
         "from": "../",
         "to": "ag06-web",
-        "filter": ["index.html", "app.js", "audio-engine.js", "presets.js", "style.css", "icon.svg"]
+        "filter": [
+          "index.html",
+          "app.js",
+          "audio-engine.js",
+          "presets.js",
+          "style.css",
+          "icon.svg"
+        ]
       }
     ],
-    "win": {"target": "portable", "artifactName": "X-Stage-AG06-Studio-v${version}-Windows.exe"},
-    "directories": {"output": "dist"}
+    "win": {
+      "target": "portable",
+      "artifactName": "X-Stage-AG06-Studio-v${version}-Windows.exe",
+      "icon": "icon.ico"
+    },
+    "directories": {
+      "output": "dist"
+    }
   }
 }
