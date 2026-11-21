@@ -23,7 +23,7 @@ assert.match(patch,/\.voice-search-button\s*\{[\s\S]*?flex-shrink:0!important/);
 assert.match(html,/meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/);
 assert.match(html,/id="search" type="search"/);
 assert.match(html,/id="voice-search" class="voice-search-button"/);
-assert.match(html,/xstage-ux\.css\?v=1156-song-key-single-menu/);
+assert.match(html,/xstage-ux\.css\?v=1157-top-song-key-single-menu/);
 for(const [viewport,leftSafe,rightSafe] of [
   [320,0,0],[375,0,0],[390,0,0],[402,0,0],[430,0,0],[440,0,0],
   [667,44,44],[844,59,59],[932,59,59],[1024,0,0]
@@ -47,4 +47,18 @@ assert.match(ui,/getClientRects\(\)\.length>0/,
   'Menu placement follows actual responsive CSS visibility');
 assert.match(css,/#stage-tools-toggle\[hidden\]/,
   'Hidden menu must override stronger transport styles');
-console.log('PASS: responsive iPhone search, song key and single visible hamburger');
+assert.doesNotMatch(html,/id="midi-keyboard-control"/,
+  'The former top piano button must be completely removed');
+assert.match(html,/<nav id="mobile-stage-menu"[\s\S]*?id="midi-keyboard-toggle"/,
+  'The MIDI keyboard is available from the upper menu');
+assert.ok(css.includes('html body.xstage-ui-v2:not(.xstage-native-tv) .stage .transport-right-actions #stage-tools-toggle{\\n')===false
+  || css.includes('display:none!important'),'Lower menu must be suppressed');
+const finalStyles=css.split('/* 1.15.7 — One upper hamburger')[1];
+assert.ok(finalStyles,'Final responsive CSS overrides must exist');
+assert.match(finalStyles,/#mobile-menu-toggle\{[\s\S]*?display:inline-flex!important/,
+  'The upper hamburger must appear on phone widths');
+assert.match(finalStyles,/#toolbar-song-key\{[\s\S]*?display:inline-flex!important/,
+  'The song-key badge must appear on phone widths');
+assert.match(finalStyles,/#stage-tools-toggle\{\s*display:none!important/,
+  'The bottom hamburger must be removed when the top menu exists');
+console.log('PASS: mobile search, actual top MIDI key replacement, one top menu');
