@@ -115,7 +115,7 @@ assert.ok(read('xstage-mirror-tv/prepare_upstream.py').includes('Distinct X-Stag
 assert.ok(read('mirror-tv/index.html').includes('../assets/app-icons/mirror-tv.svg'),'Mirror pairing guide must show its own icon');
 const tvReload=read('tv-refresh.js');
 assert.doesNotThrow(()=>new Function(tvReload),'TV refresh JS must parse');
-assert.ok(index.includes('id="tv-refresh-window"')&&index.includes('tv-refresh.js?v=1122'),'TV player must expose refresh button and logic');
+assert.ok(index.includes('id="tv-refresh-window"')&&index.includes('tv-refresh.js?v=1123'),'TV player must expose refresh button and logic');
 assert.ok(app.includes('xstage-tv-quick-refresh')&&app.includes('window.XStageTvRefreshPage?.()'),'Android TV remote quick menu must contain a working refresh action');
 assert.ok(css.includes('body.xstage-ui-v2 .stage #tv-refresh-window:not([hidden])'),'TV refresh must override stage overlay hiding');
 assert.ok(singerStage.includes('id="refresh-window"')&&singerStage.includes('window.location.reload()'),'separate TV stage must have clickable reload');
