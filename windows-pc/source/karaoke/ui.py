@@ -991,7 +991,9 @@ class KaraokeApp(tk.Tk):
         new_engine = None
         phase = 'system'
         try:
-            self._stop_chroma_video()
+            # Call the class helper directly: shutdown/playback contract tests
+            # use lightweight app doubles without instance-bound UI methods.
+            KaraokeApp._stop_chroma_video(self)
             if self.engine:
                 self.engine.close()
                 self.engine = None
@@ -1609,6 +1611,6 @@ class KaraokeApp(tk.Tk):
         warmup=self.__dict__.get('queue_warmup')
         if warmup:
             step(self,'คืนแคชเพลงรอ',warmup.close)
-        step(self,'ปิดตัวถอดรหัส Chromakey',self._stop_chroma_video)
+        step(self,'ปิดตัวถอดรหัส Chromakey',lambda: KaraokeApp._stop_chroma_video(self))
         if self.engine:step(self,'ปิดระบบเล่นเสียง',self.engine.close)
         finish(self)
