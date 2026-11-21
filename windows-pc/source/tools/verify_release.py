@@ -53,7 +53,7 @@ def make_manifest(package, version):
     files={}
     for path in sorted(package.rglob('*')):
         if path.is_symlink():raise ValueError('Symlink in release package')
-        if not path.is_file() or '__pycache__' in path.parts or path.name=='release-manifest.json':continue
+        if not path.is_file() or '__pycache__' in path.parts or path==package/'release-manifest.json':continue
         files[path.relative_to(package).as_posix()]=file_hash(path)
     return {'version':version,'algorithm':'sha256','files':files}
 
@@ -95,6 +95,19 @@ def verify_manifest(package):
         resolved=path.resolve()
         if not resolved.is_relative_to(package) or not path.is_file() or file_hash(path)!=expected:
             raise ValueError('Release file missing or modified: '+name)
+    # Hashes protect only files *listed* in the manifest. Reject unexpected
+    # payloads too, including nested files and injected executables. A build
+    # output with an unlisted file must not pass the integrity gate.
+    actual=set()
+    for entry in package.rglob('*'):
+        if entry.is_symlink() or getattr(entry,'is_junction',lambda: False)():
+            raise ValueError('Unexpected link in release package: '+str(entry))
+        if not entry.is_file():continue
+        name=entry.relative_to(package).as_posix()
+        if name=='release-manifest.json':continue
+        actual.add(name)
+    extras=actual-set(files)
+    if extras:raise ValueError('Unlisted release file: '+sorted(extras)[0])
     return manifest
 
 
