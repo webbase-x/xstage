@@ -22,7 +22,10 @@ def create_midi_output(native, settings, *, notify=None,
             raise ValueError('ต้องเลือก ASIO device ID')
         if type(channel) is not int or channel < 0 or channel % 2:
             raise ValueError('ASIO channel ต้องเป็นเลขคู่')
-        return asio_factory(native, device=device, channel=channel, settings=settings)
+        from .asio_failover import FailoverMidiOutput
+        primary = asio_factory(native, device=device, channel=channel, settings=settings)
+        return FailoverMidiOutput(
+            primary, lambda: bass_factory(native, settings=settings), notify=notify)
     except Exception as exc:
         if notify is not None:
             notify('ASIO เริ่มทำงานไม่สำเร็จ ใช้ BASS แทน: ' + str(exc))
