@@ -185,3 +185,10 @@
 
 - [`6f9927b7`](https://github.com/webbase-x/xstage/commit/6f9927b7eaf16b605a67621da14d7dfad73feb3a) detaches the finished tail before native close and prevents teardown exceptions from interrupting the active next song; logs `tail_cleanup_failed` best effort. [`ec86e7e7`](https://github.com/webbase-x/xstage/commit/ec86e7e733e2d61f4b37727ccef9f29e3e564e02) adds a regression for no repeated close on later ticks.
 - Test not executed; hardware QA deferred at user request. P0.5 still IN PROGRESS; do not claim all file formats certified.
+
+## 2026-11-21 16:09 Asia/Bangkok — P0.5 regression validity and rhythm ownership
+
+- Main baseline `b641e4d2d55c3fb0d070376eeee91f2dd676d7db` reviewed before editing.
+- [`8fcb9bd2`](https://github.com/webbase-x/xstage/commit/8fcb9bd2180464539891ed6830cc1102b9cc8115) corrects two preload regression tests: `MidiPlayer` patch must remain a type for `isinstance`, and rhythm song must expose real iterable MIDI events. Previously committed tests could fail with TypeError before reaching their intended failure branch.
+- [`2f0124cc`](https://github.com/webbase-x/xstage/commit/2f0124ccbdc6ffb311be9aaf838ca3c64bb91601) fixes rhythm-deck ownership when full-song fill and crossfade pattern are both requested; release superseded fill before replacing it, avoiding leaked native stream.
+- No test execution or Windows CI result available for these commits; physical playback and >=30-minute soak explicitly **DEFERRED-HARDWARE**, not PASS. P0.5 **IN PROGRESS**; 24/27 checklist items outstanding. Next: check MIDI/NCN/EMK/video loaders, transitions and CI, then P0.6 only after P0.5 acceptance.
