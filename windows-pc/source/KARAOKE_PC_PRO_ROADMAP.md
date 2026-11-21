@@ -294,3 +294,8 @@
 
 - [`9452d785`](https://github.com/webbase-x/xstage/commit/9452d7859dea2f5b05a75204c4edf8d8900dbe56) adds injectable, validated MIDI channel-voice dispatch to configured bus sinks; note-on/note-off/percussion polyphonic aftertouch share the same per-note bus. [`1313b64c`](https://github.com/webbase-x/xstage/commit/1313b64ca60fbb49ad3ed8e877a57b1867533b59) adds routing and malformed-message regressions.
 - User requests skipping physical tests now. **PENDING-QA / DEFERRED-HARDWARE**, not PASS. This is a MIDI message dispatcher, not PCM splitting, native multi-output rendering or ASIO; these remain to implement. No stable release claim.
+
+## 2026-11-21 — P1 opt-in multi-bus BASSMIDI synthesis (PENDING-QA)
+
+- [`2f74b80e`](https://github.com/webbase-x/xstage/commit/2f74b80e0bd5e13e990abb251a08894b96b6c2c5) adds `karaoke/multi_bus_synth.py`: separate BASSMIDI synth per logical bus, MIDI message routing and optional per-bus BASS device IDs, with cleanup on partial initialization. [`54fd6e90`](https://github.com/webbase-x/xstage/commit/54fd6e9082dfcdaf95e65c4d0b103dd8e466ebb8) preserves the original initialization exception during cleanup.
+- **P1.1/P1.2 IN PROGRESS, PENDING-QA**: opt-in backend is not yet wired into normal playback, device/channel matrix and ASIO not yet implemented. Physical tests deferred at user's request; no claim of measured audio output or stable release.
