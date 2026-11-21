@@ -83,6 +83,16 @@
       note:"Preview v0.2.1 Build 4 · ส่วนขยาย Chrome/Edge ต้องเปิดใช้งานและจับคู่จากในแอปก่อน · ดาวน์โหลดเฉพาะไฟล์ที่เข้าถึงได้โดยชอบและไม่ข้าม DRM · Windows ยังไม่ได้ลงลายเซ็น Code Signing และยังไม่ได้ทดสอบเบราว์เซอร์จริงครบทุกเครื่อง",
       fallback:"กำลังสร้างตัวติดตั้ง Windows Preview"
     },
+    "ag06-studio":{
+      title:"X-Stage AG06 Studio",category:"WEB · WINDOWS · ANDROID · AUDIO",
+      subtitle:"มิกเซอร์ซอฟต์แวร์สำหรับ Yamaha AG06 รุ่นแรก",
+      description:"เลือกอุปกรณ์รับเสียง AG06/03 ผ่านระบบปฏิบัติการ วัดระดับเสียงสเตอริโอ ปรับ HPF/EQ/Compressor/Reverb/Guitar Drive แบบซอฟต์แวร์ และบันทึกเสียงลงเครื่อง โดยไม่สั่งแก้ DSP ในตัว AG06 และไม่อ้างว่าควบคุมปุ่มบนฮาร์ดแวร์",
+      features:["แสดงระดับเสียง L/R แบบเรียลไทม์จากอุปกรณ์เสียงที่เลือก","ปรับเสียงด้วย Web Audio (HPF, EQ 3 ย่าน, Compressor, Reverb และ Drive)","พรีเซ็ตเสียงพูด ร้องเพลง กีตาร์ และเสียงต้นฉบับ","บันทึกเสียงจริงในเครื่องโดยไม่อัปโหลดไฟล์","เวอร์ชันเว็บพร้อมใช้เมื่ออนุญาตไมโครโฟน; Windows EXE/Android APK อยู่ระหว่างตรวจสอบ Build และฮาร์ดแวร์จริง"],
+      hero:"สตูดิโอเสียงสำหรับ AG06 รุ่นแรก",blurb:"USB Audio · Software DSP · Recording",preview:"AG06 STUDIO · FIRST GENERATION",
+      type:"web",url:"./ag06/",
+      secondary:{label:"ซอฟต์แวร์ AG Controller ของ Yamaha",url:"https://usa.yamaha.com/audio/streaming-gaming/explore/guides/ag-controller.html"},
+      note:"แอปเว็บต้องอนุญาตไมโครโฟน และต้องใช้ USB Audio ที่ระบบปฏิบัติการรองรับ · เอฟเฟกต์ของแอปเป็นซอฟต์แวร์ ไม่ควบคุม AG06 hardware DSP · Windows/Android ยังไม่เปิดลิงก์ EXE/APK จนกว่าจะยืนยันไฟล์"
+    },
     "studio-pro":{
       title:"X-Stage Song Studio Pro",category:"WINDOWS · MUSIC PRODUCTION",
       subtitle:"สตูดิโอคาราโอเกะหนึ่งเดียวสำหรับ Windows",
@@ -507,7 +517,7 @@
       preview.appendChild(cardArt.firstElementChild.cloneNode(true));
     }else{
       const img=document.createElement("img");
-      img.src=({ "karaoke-web":"./assets/xstage-app-icon.svg","karaoke-pc":"./assets/app-icons/karaoke-pc.svg","download-manager":"./assets/app-icons/download-manager.svg","studio-pro":"./songstudio-plus/web/icon.svg","karaoke-android":"./assets/app-icons/karaoke-android.svg","mirror-tv":"./assets/app-icons/mirror-tv.svg","mirror-pc":"./assets/app-icons/mirror-pc.svg","mirror-ios-pc":"./assets/app-icons/mirror-ios-pc.svg","mirror-android-pc":"./assets/app-icons/mirror-android-pc.svg","file-share":"./assets/app-icons/file-share.svg" })[id]||"./assets/xstage-stage-logo.png";
+      img.src=({ "karaoke-web":"./assets/xstage-app-icon.svg","karaoke-pc":"./assets/app-icons/karaoke-pc.svg","download-manager":"./assets/app-icons/download-manager.svg","studio-pro":"./songstudio-plus/web/icon.svg","ag06-studio":"./ag06/icon.svg","karaoke-android":"./assets/app-icons/karaoke-android.svg","mirror-tv":"./assets/app-icons/mirror-tv.svg","mirror-pc":"./assets/app-icons/mirror-pc.svg","mirror-ios-pc":"./assets/app-icons/mirror-ios-pc.svg","mirror-android-pc":"./assets/app-icons/mirror-android-pc.svg","file-share":"./assets/app-icons/file-share.svg" })[id]||"./assets/xstage-stage-logo.png";
       img.alt="";
       preview.appendChild(img);
     }
@@ -554,7 +564,7 @@
     let visible=0;
     cards.forEach(card=>{
       const categoryMatches=selectedFilter==="all"||card.dataset.category===selectedFilter;
-      const platformMatches=selectedPlatform==="all"||card.dataset.platform===selectedPlatform;
+      const platformMatches=selectedPlatform==="all"||card.dataset.platform.split(/\s+/).includes(selectedPlatform);
       const textMatches=!query||card.dataset.name.toLocaleLowerCase("th-TH").includes(query);
       const matches=categoryMatches&&platformMatches&&textMatches;
       card.hidden=!matches;
