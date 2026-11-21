@@ -9,6 +9,8 @@ class SixCategoryMenuTests(unittest.TestCase):
         path = Path(__file__).resolve().parents[1] / "karaoke" / "context_menu.py"
         source = path.read_text(encoding="utf-8")
         ast.parse(source)
+        self.assertNotIn("menu.add_separator()\n\n    options = submenu", source,
+                         "Do not add an extra root separator after categories")
         for label in (
             "เมนูหลัก · 6 หมวด", "เพลงและคิว", "เสียงและ SoundFont",
             "เนื้อร้องและภาพ", "การควบคุม", "เครื่องมือแสดงสด",
