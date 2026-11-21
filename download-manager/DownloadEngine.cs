@@ -786,7 +786,10 @@ public sealed class DownloadEngine
         var count = SegmentCount(job.TotalBytes, job.Parts);
         // Save the actual geometry with the job so resumption never reuses a segment
         // written for different byte boundaries. Older jobs default to zero (unknown).
-        if (job.SegmentsUsed > 0 && job.SegmentsUsed != count)
+        // A zero/unknown geometry cannot validate pre-existing chunks. This
+        // also recovers safely when a previous repartition persisted its new
+        // geometry but Windows refused to delete a locked old chunk.
+        if (job.SegmentsUsed != count)
         {
             foreach (var path in Directory.GetFiles(work, "*.part")) File.Delete(path);
         }
