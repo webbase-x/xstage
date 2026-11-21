@@ -117,6 +117,43 @@ try
     if (pausedFromNetwork.Status != "Paused" || pausedFromNetwork.ResumeWhenNetworkReturns)
         throw new Exception("Explicit Pause must cancel network auto-resume.");
 
+    // Persist a 32-range near-long.MaxValue checkpoint: SQLite boundaries
+    // must not overflow even when no physical .part files exist yet.
+    var hugeStateFolder = Path.Combine(folder, "huge-range-checkpoint");
+    var hugeState = new DownloadStateStore(hugeStateFolder);
+    hugeState.SaveSnapshot(new[]
+    {
+        new DownloadJob { Id = "huge", Url = server.Url + "range/huge.bin",
+            Folder = folder, Kind = "File", Status = "Paused",
+            TotalBytes = long.MaxValue, SupportsRanges = true, SegmentsUsed = 32,
+            SegmentDownloadedBytes = new long[32] }
+    });
+    if (hugeState.Inspect().Chunks != 32)
+        throw new Exception("Large-file SQLite checkpoint lost segment rows.");
+    using (var db = new Microsoft.Data.Sqlite.SqliteConnection(
+        "Data Source=" + hugeState.DatabasePath))
+    {
+        db.Open();
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = "SELECT chunk_index,from_byte,to_byte FROM xstage_download_chunks ORDER BY chunk_index";
+        using var reader = cmd.ExecuteReader();
+        long previousEnd = -1;
+        var rows = 0;
+        while (reader.Read())
+        {
+            var index = reader.GetInt32(0);
+            var start = reader.GetInt64(1);
+            var end = reader.GetInt64(2);
+            if (index != rows || start != previousEnd + 1 || end < start ||
+                end != TransferSegmentGeometry.Boundary(long.MaxValue, index + 1, 32) - 1)
+                throw new Exception("SQLite checkpoint has overflowed or discontinuous Range offsets.");
+            previousEnd = end;
+            rows++;
+        }
+        if (rows != 32 || previousEnd != long.MaxValue - 1)
+            throw new Exception("SQLite Range checkpoint did not cover the entire large file.");
+    }
+
     // Simulated SQLite write failure: no orphaned transfer may start and no
     // unpersisted job may remain visible in the in-memory queue.
     var rejectedFolder = Path.Combine(folder, "rejected-new-job");
