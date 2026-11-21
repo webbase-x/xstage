@@ -174,3 +174,9 @@
 - User explicitly requests implementing all P0.5 source work now and deferring **all real-device, real-EXE, real-audio, and physical soak tests**. Record those checks as DEFERRED-HARDWARE; do not represent them as PASS or hold up source development. Automated source/CI checks remain desirable but do not certify hardware behavior.
 - [`3c8aae08`](https://github.com/webbase-x/xstage/commit/3c8aae08aed34b4b14c0154fc4e5f9d2b0c5592c) prevents requested crossfade from fading the outgoing song to silence when the next deck is still loading; ordinary queue advance remains the fallback at the trigger.
 - P0.5 source work remains IN PROGRESS: MIDI/NCN/EMK legacy and video path review, transition instrumentation and remaining fault handling not yet closed. No physical gapless/30-minute soak evidence; 24/27 checklist gates remain pending.
+
+## 2026-11-21 — P0.5 MP3/WAV BASS FX failure cleanup
+
+- [`a622995a`](https://github.com/webbase-x/xstage/commit/a622995aea4c204058b5d1772c340ff8cfb35d09) makes `PcmPlayer.close()` best-effort across router, stream, device and DLL directory, preserving the first exception and the original constructor exception on initialization failure.
+- [`4bbf7cce`](https://github.com/webbase-x/xstage/commit/4bbf7cce5ab8823a5b204e18c5cce1ecc47cd9ef) adds router/stream teardown regression cases. These are source-only changes, **test execution not verified**.
+- P0.5 remains **IN PROGRESS**, not PASS: media format path coverage (MIDI/NCN/EMK-legacy/video), transition edge cases, and automated CI evidence still need work. Physical Windows playback and 30-minute soak are **DEFERRED-HARDWARE at user request**. Do not claim fully implemented or certified.
