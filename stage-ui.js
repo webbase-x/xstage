@@ -230,5 +230,21 @@
       queueDock.classList.remove('mobile-expanded');
     }
   });
+  // Never display both hamburger menus at once. On compact screens the
+  // upper trigger is CSS-hidden, so the bottom menu stays available.
+  const upperMenuTrigger=$('mobile-menu-toggle');
+  const lowerMenuTrigger=$('stage-tools-toggle');
+  function syncMenuTriggerPlacement(){
+    if(!upperMenuTrigger||!lowerMenuTrigger)return;
+    const upperVisible=!upperMenuTrigger.hidden&&
+      upperMenuTrigger.getClientRects().length>0&&
+      getComputedStyle(upperMenuTrigger).visibility!=='hidden';
+    lowerMenuTrigger.hidden=upperVisible;
+    if(upperVisible)lowerMenuTrigger.tabIndex=-1;
+    else lowerMenuTrigger.removeAttribute('tabindex');
+  }
+  window.addEventListener('resize',syncMenuTriggerPlacement,{passive:true});
+  window.addEventListener('orientationchange',syncMenuTriggerPlacement);
+  syncMenuTriggerPlacement();
   syncQueue();syncRepeat();syncVolume();
 })();
