@@ -330,3 +330,8 @@
 
 - [`6282e59e`](https://github.com/webbase-x/xstage/commit/6282e59ee90145c5face3285a8de5f7418190f90) adds C++ SPSC lock-free PCM FIFO (float32 stereo, silence on underrun) intended for native ASIO callback consumption; [`1b57bfe6`](https://github.com/webbase-x/xstage/commit/1b57bfe6fd7931740c41a2f55ff45fbb2c79b4ec) adds Python producer-side ctypes wrapper.
 - **PENDING-QA**: DLL build/package, native BASSASIO callback, BASSMIDI decode producer, device/channel mapping, fallback and real-device verification remain. No real ASIO output is enabled or claimed.
+
+## 2026-11-21 — P1.3 native callback source and DLL build script (PENDING-QA)
+
+- [`9c82b921`](https://github.com/webbase-x/xstage/commit/9c82b9217f5305fde6e685dc8d8481b6b8897405) exports a native BASSASIO-style PCM callback from C++; [`48464b83`](https://github.com/webbase-x/xstage/commit/48464b83b9a7942cee81ee055d7ee7b8e79c1e04) adds MSVC DLL build script; [`376f7def`](https://github.com/webbase-x/xstage/commit/376f7def068866f9556bf6ce1a2768dc30cd8a8b) exposes callback pointer from Python bridge.
+- **PENDING-QA**: no compiled DLL verified; no BASSASIO_ChannelEnable/Join/Start host wired; no ASIO format negotiation or MIDI decode producer. DLL packaging and CI remain pending. Do not enable ASIO as a user-facing audio backend yet.
