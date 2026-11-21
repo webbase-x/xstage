@@ -199,7 +199,20 @@ class Decks:
         if self.tail:
             ratio=min(1,self.elapsed/self.fade)
             self.tail.set_volume(base*math.sqrt(1-ratio));active.set_volume(base*math.sqrt(ratio))
-            if ratio>=1:self.tail.close();self.tail=None
+            if ratio>=1:
+                # Clear ownership before native teardown; a failed close must
+                # not leave the stale tail pumping on subsequent UI ticks.
+                finished, self.tail = self.tail, None
+                try:
+                    finished.close()
+                except Exception:
+                    # Continue the active song; the old tail is no longer
+                    # allowed to interrupt playback or be closed repeatedly.
+                    from .transition_report import record
+                    try:
+                        record(app, 'tail_cleanup_failed')
+                    except Exception:
+                        pass
     def stop_tail(self):
         first_error = None
         target, self.rhythm_target = self.rhythm_target, None
