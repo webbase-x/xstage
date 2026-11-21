@@ -1,0 +1,34 @@
+name: Karaoke Online restored playback checks
+on:
+  push:
+    paths:
+      - "app.js"
+      - "browser-midi.js"
+      - "midi-pro-engine.js"
+      - "karaoke.html"
+      - "config.js"
+      - ".github/workflows/test-karaoke-playback-restore.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  playback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Validate MIDI scripts
+        run: |
+          node --check app.js
+          node --check browser-midi.js
+          node --check midi-pro-engine.js
+      - name: Test playback engines and first song
+        run: |
+          node scripts/browser-midi-test.mjs
+          node scripts/midi-pro-engine-test.mjs
+          node scripts/midi-startup-budget-test.mjs
+          node scripts/midi-background-playback-test.mjs
+          node scripts/midi-medley-handoff-test.mjs
+          node scripts/web-midi-transport-test.mjs
