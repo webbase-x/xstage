@@ -831,6 +831,12 @@ try
         throw new Exception("Native Chrome/Edge extension IDs and allowed origins failed.");
     var isolatedEngineData = Path.Combine(folder, "isolated-engine");
     var manager = new DownloadEngine(isolatedEngineData);
+    if (DownloadEngine.TryParseUrl(null!, out _) ||
+        DownloadEngine.TryParseUrl("", out _) ||
+        DownloadEngine.TryParseUrl("  ", out _) ||
+        !DownloadEngine.TryParseUrl("  https://example.com/file  ", out var trimmedUrl) ||
+        trimmedUrl?.AbsoluteUri != "https://example.com/file")
+        throw new Exception("Captured URL parser must reject empty input and trim valid URLs.");
     if (DownloadEngine.TryParseUrl("file:///C:/Windows/system.ini", out _) ||
         DownloadEngine.TryParseUrl("ftp://localhost/file", out _) ||
         DownloadEngine.TryParseUrl("https://user:pass@example.com/file", out _))
