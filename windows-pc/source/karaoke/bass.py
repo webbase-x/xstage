@@ -311,9 +311,17 @@ class BassSynth:
             self._channel_processors[channel] = (handle, processor)
 
     def _release_channel_eq(self):
-        # Avoid orphan FX handles during an offline song change or shutdown.
+        # Tear down every MIDI channel even if one FX processor fails.
+        # Otherwise an early exception strands later channel streams.
+        first_error = None
         for channel in tuple(self._channel_processors):
-            self._remove_channel_eq(channel)
+            try:
+                self._remove_channel_eq(channel)
+            except Exception as exc:
+                if first_error is None:
+                    first_error = exc
+        if first_error is not None:
+            raise first_error
 
     def reset(self):
         with self.lock:
