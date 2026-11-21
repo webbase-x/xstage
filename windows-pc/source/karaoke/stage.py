@@ -82,7 +82,8 @@ class StageCanvas(LyricsCanvas):
         idle = self.telemetry.get('idle', False)
         reserved_top = max(132 if height < 650 else 174, int(self.telemetry.get('reserved_top', 132 if height < 650 else 174)))
         reserved_bottom = max(16, int(self.telemetry.get('reserved_bottom', 96)))
-        key = width, height, current, upcoming, title, bg, normal, active, prefs.get('font_size', 84), str(background_path(prefs) or ''), prefs.get('background_dim', .25), idle, reserved_top, reserved_bottom
+        extras = tuple(getattr(self, 'extra_lines', ()))[:2]
+        key = width, height, current, upcoming, extras, title, bg, normal, active, prefs.get('font_size', 84), str(background_path(prefs) or ''), prefs.get('background_dim', .25), idle, reserved_top, reserved_bottom
         paint_key = key, prefix, self.progress_word, round(self.progress_fraction, 3), tuple(sorted(self.telemetry.items())), wall_clock()
         if self._paint_key == paint_key:
             return
@@ -96,7 +97,11 @@ class StageCanvas(LyricsCanvas):
                 hint = self.fit_text(upcoming, small, width-70)
                 next_run = small.shape(hint)
                 gap = max(12, round(size*.3))
-                band_height = run.height+gap+next_run.height
+                extra_font = ThaiFont(max(12, size // 3))
+                extra_hints = [self.fit_text(line, extra_font, width-70) for line in extras]
+                extra_gap = max(6, size // 8)
+                extra_height = sum(extra_font.shape(line).height + extra_gap for line in extra_hints)
+                band_height = run.height+gap+next_run.height+extra_height
                 if size <= 14 or (font.getlength(current) <= width-60 and band_height <= available_height):
                     break
                 size -= 1
@@ -109,7 +114,13 @@ class StageCanvas(LyricsCanvas):
                 stroke_width=stroke)
             next_bounds = draw_text(normal_image, (width//2, top+run.height+gap), hint, small,
                 '#c1d9f1', stroke_width=1, anchor='mt')
-            self._line_boxes = self._lyric_bounds, next_bounds
+            extra_boxes = []
+            cursor = top + run.height + gap + next_run.height + extra_gap
+            for extra_text in extra_hints:
+                extra_boxes.append(draw_text(normal_image, (width//2, cursor), extra_text,
+                                             extra_font, '#9aacc9', stroke_width=1, anchor='mt'))
+                cursor += extra_font.shape(extra_text).height + extra_gap
+            self._line_boxes = (self._lyric_bounds, next_bounds, *extra_boxes)
             overlay = normal_image.copy()
             draw_text(overlay, (left, top), current, font, active, stroke_width=stroke)
             self._cache = key, normal_image, overlay, left, top, font, size
