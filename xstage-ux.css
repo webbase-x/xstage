@@ -5087,10 +5087,10 @@ body.xstage-ui-v2 .windows-volume-connect:focus-visible{
 /* 1.16.2 — Phone search lives at the screen's safe lower edge.
    The same search/results DOM is moved out of the top toolbar by
    mobile-layout.js; desktop and display-only Android TV are unchanged. */
-@media (max-width:760px), (max-height:540px) and (pointer:coarse){
+@media (max-width:820px), (max-height:540px) and (pointer:coarse){
   html body.xstage-ui-v2.xstage-mobile-search-bottom:not(.xstage-native-tv) .stage .stage-search-slot{
     position:fixed!important;
-    top:auto!important;bottom:max(calc(6px + env(safe-area-inset-bottom,0px)),calc(6px + var(--xs-search-keyboard-inset,0px)))!important;
+    top:auto!important;bottom:max(env(safe-area-inset-bottom,0px),var(--xs-search-keyboard-inset,0px))!important;
     left:max(8px,env(safe-area-inset-left,0px))!important;
     right:max(8px,env(safe-area-inset-right,0px))!important;
     width:auto!important;min-width:0!important;max-width:none!important;
@@ -5116,7 +5116,7 @@ body.xstage-ui-v2 .windows-volume-connect:focus-visible{
     left:0!important;right:0!important;
     width:100%!important;min-width:0!important;max-width:100%!important;
     height:auto!important;min-height:49px!important;
-    max-height:max(112px,min(64dvh,calc(100dvh - var(--xs-search-keyboard-inset,0px) - 72px)))!important;
+    max-height:max(96px,min(64dvh,calc(var(--xs-search-visual-height,100dvh) - 72px)))!important;
     display:flex!important;flex-direction:column-reverse!important;
     overflow:hidden!important;box-sizing:border-box!important;
     border-radius:16px!important;z-index:261!important
