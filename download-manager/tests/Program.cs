@@ -613,14 +613,14 @@ try
 
     // Host buckets are case-insensitive and trim whitespace. A cancelled
     // waiter must not consume a slot or prevent another host from running.
-    var normalizedHosts = new TransferSlotQueue(2, 1);
-    using (var active = await normalizedHosts.EnterAsync(
+    var cancellableNormalizedHosts = new TransferSlotQueue(2, 1);
+    using (var active = await cancellableNormalizedHosts.EnterAsync(
         "normalized-active", " EXAMPLE.test ", 1, CancellationToken.None))
     {
         using var cancellation = new CancellationTokenSource();
-        var blocked = normalizedHosts.EnterAsync(
+        var blocked = cancellableNormalizedHosts.EnterAsync(
             "normalized-waiter", "example.TEST", 0, cancellation.Token);
-        if (blocked.IsCompleted || normalizedHosts.WaitingCount != 1)
+        if (blocked.IsCompleted || cancellableNormalizedHosts.WaitingCount != 1)
             throw new Exception("Equivalent host spellings bypassed the host limit.");
         cancellation.Cancel();
         try
@@ -629,15 +629,15 @@ try
             throw new Exception("Cancelled host waiter unexpectedly acquired a slot.");
         }
         catch (OperationCanceledException) { }
-        if (normalizedHosts.WaitingCount != 0 || normalizedHosts.ActiveCount != 1)
+        if (cancellableNormalizedHosts.WaitingCount != 0 || cancellableNormalizedHosts.ActiveCount != 1)
             throw new Exception("Cancelled host waiter leaked scheduler capacity.");
-        using var other = await normalizedHosts.EnterAsync(
+        using var other = await cancellableNormalizedHosts.EnterAsync(
             "normalized-other", "independent.test", 1, CancellationToken.None)
             .WaitAsync(TimeSpan.FromSeconds(3));
-        if (normalizedHosts.ActiveCount != 2)
+        if (cancellableNormalizedHosts.ActiveCount != 2)
             throw new Exception("Cancelled waiter blocked another host.");
     }
-    if (normalizedHosts.ActiveCount != 0 || normalizedHosts.WaitingCount != 0)
+    if (cancellableNormalizedHosts.ActiveCount != 0 || cancellableNormalizedHosts.WaitingCount != 0)
         throw new Exception("Normalized host test leaked scheduler slots.");
 
     // A cancelled waiter from a saturated host must not reserve global capacity
