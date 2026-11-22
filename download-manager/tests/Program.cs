@@ -32,6 +32,79 @@ if (args.Length >= 3 && args[0] == "--media-smoke")
     return;
 }
 
+// Live capture: route only supported public sources into the opt-in recorder.
+// A querystring does not change the HLS/DASH pathname classification.
+if (!LiveStreamCapture.IsSupportedSource("https://video.example/live/master.m3u8?token=abc") ||
+    !LiveStreamCapture.IsSupportedSource("https://cdn.example/dash/live.mpd") ||
+    !LiveStreamCapture.IsSupportedSource("https://www.youtube.com/live/test123") ||
+    LiveStreamCapture.IsSupportedSource("https://example.org/song.mp3") ||
+    LiveStreamCapture.IsSupportedSource("https://example.org/master.m3u8.evil") ||
+    LiveStreamCapture.IsSupportedSource("file:///C:/secret/master.m3u8") ||
+    LiveStreamCapture.IsSupportedSource("https://user:pass@example.org/live.m3u8"))
+    throw new Exception("Live capture URL classifier must accept only authorized-format HTTP(S) inputs.");
+
+var liveArgs = LiveStreamCapture.BuildCaptureArguments(
+    "https://video.example/stream.m3u8?token=abc", @"C:\Temp\safe recording.mkv");
+if (!liveArgs.SequenceEqual(new[]
+{
+    "-hide_banner", "-nostats", "-loglevel", "warning",
+    "-rw_timeout", "15000000", "-i",
+    "https://video.example/stream.m3u8?token=abc",
+    "-map", "0:v:0?", "-map", "0:a:0?",
+    "-c", "copy", "-f", "matroska", "-y", @"C:\Temp\safe recording.mkv"
+}))
+    throw new Exception("Live FFmpeg arguments must preserve URL/path as separate argument tokens.");
+
+var rejectedLiveInput = false;
+try { LiveStreamCapture.BuildCaptureArguments("https://example.org/installer.exe", "test.mkv"); }
+catch (ArgumentException) { rejectedLiveInput = true; }
+if (!rejectedLiveInput)
+    throw new Exception("Unknown file URLs must not be treated as live streams.");
+
+var pauses = LiveSpeechSegmentPlanner.ParseSilenceLog(
+    "[silencedetect] silence_start: 292.0\n" +
+    "[silencedetect] silence_end: 293.2 | silence_duration: 1.2\n" +
+    "[silencedetect] silence_start: 591.0\n" +
+    "[silencedetect] silence_end: 592.0 | silence_duration: 1.0\n" +
+    "[silencedetect] silence_start: 610\n" +
+    "[silencedetect] silence_end: 610.1 | silence_duration: 0.1\n");
+if (pauses.Count != 2 ||
+    Math.Abs(pauses[0].Start - 292) > .001 ||
+    Math.Abs(pauses[1].End - 592) > .001)
+    throw new Exception("Silence parser should read valid FFmpeg silence intervals.");
+
+var clips = LiveSpeechSegmentPlanner.Plan(630, 300, pauses);
+if (clips.Count != 3 ||
+    Math.Abs(clips[0].End - 292.6) > .05 ||
+    Math.Abs(clips[1].Start - clips[0].End) > .000001 ||
+    Math.Abs(clips[1].End - 591.5) > .05 ||
+    Math.Abs(clips[2].Start - clips[1].End) > .000001 ||
+    Math.Abs(clips[2].End - 630) > .000001)
+    throw new Exception("Live clip planner must split near requested time ONLY at detected pauses.");
+
+var uninterrupted = LiveSpeechSegmentPlanner.Plan(600, 60,
+    Array.Empty<LiveSilence>());
+if (uninterrupted.Count != 1 || uninterrupted[0] != (0d, 600d))
+    throw new Exception("Speech-safe planner must never force a clock-only cut.");
+
+var earlyPause = LiveSpeechSegmentPlanner.Plan(180, 60,
+    new[] { new LiveSilence(6, 8) });
+if (earlyPause.Count != 1)
+    throw new Exception("An unrelated early silence must not trigger arbitrary cuts.");
+
+var extendedSpeech = LiveSpeechSegmentPlanner.Plan(550, 60,
+    new[] { new LiveSilence(440, 442) });
+if (extendedSpeech.Count != 2 || extendedSpeech[0].End < 440)
+    throw new Exception("The safe clip boundary must extend beyond the target when speech continues.");
+
+var invalidLiveMinutes = false;
+try { LiveSpeechSegmentPlanner.Plan(100, 45, pauses); }
+catch (ArgumentOutOfRangeException) { invalidLiveMinutes = true; }
+if (!invalidLiveMinutes)
+    throw new Exception("Clip lengths below one minute are unsupported.");
+
+Console.WriteLine("PASS: live URL/FFmpeg argument contracts, pause detection and no mid-speech clock cuts.");
+
 // Windows device names remain reserved even when an extension is present.
 foreach (var device in new[] { "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$",
              "COM1", "COM4", "COM9", "LPT1", "LPT4", "LPT9" })
