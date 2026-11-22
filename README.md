@@ -206,7 +206,7 @@
 
 ## New Google Drive destination (November 2026)
 
-## MIDI dedup and multi-device imports (Web 1.0.139)
+## MIDI dedup and multi-device imports (Web 1.0.140)
 
 - Song database: exactly one active `XStageKaraoke/DB/songs.sqlite3`. Neither `current.json` nor `catalog-delta-*.sqlite3` is a playback source. Only the one-time browser migration action reads the old pointer; old snapshots and pointers are preserved in `BACKUP` until the new SQLite is verified.
 - Duplicate detection compares the **raw MIDI byte length and MD5** (NOT just the XSK/XMID package size), across MID/MIDI/KAR/NCN and MIDI extracted and verified from XSK2/XMID packages. A size match alone is NEVER proof of a duplicate: different songs can share the same length. The same 00001.XMID filename may recur in every independent Song Studio export batch; source filenames and embedded codes are not identity keys. Distinct XMIDs with the same filename are stored under different content-hash subfolders. Only byte-identical MIDI recordings are skipped. Other audio/video formats retain separate fingerprint handling.
