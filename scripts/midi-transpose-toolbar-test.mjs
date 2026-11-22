@@ -46,9 +46,46 @@ const elems={
 const dollar=id=>elems[id]||null;
 let sent=0,warnings=0;
 const media={dispatchEvent(){sent++;if(sent===13)throw Error('synth temporarily reinitializing');}};
-const simulator=new Function('$','nativePlayer','Event','console',
+let keyDisplayUpdates=0;
+const simulator=new Function('
+const click=id=>{
+  const button=elems[id];
+  if(button.disabled)return;
+  for(const fn of button.listeners)fn({preventDefault(){},stopPropagation(){}});
+};
+for(let i=0;i<12;i++)click('midi-key-down');
+assert.equal(elems['midi-transpose'].value,'-12');
+assert.equal(elems['midi-transpose-label'].textContent,'-12');
+assert.equal(elems['midi-key-down'].disabled,true);
+assert.equal(elems['midi-key-up'].disabled,false,'PLUS must still work at minus twelve');
+click('midi-key-up');
+assert.equal(elems['midi-transpose'].value,'-11','PLUS reverses after minimum key');
+assert.equal(warnings,1,'Synth exception must not lock the displayed key');
+for(let i=0;i<23;i++)click('midi-key-up');
+assert.equal(elems['midi-transpose'].value,'12');
+assert.equal(elems['midi-transpose-label'].textContent,'+12');
+assert.equal(elems['midi-key-up'].disabled,true);
+assert.equal(elems['midi-key-down'].disabled,false,'MINUS must still work at plus twelve');
+click('midi-key-down');
+assert.equal(elems['midi-transpose'].value,'11');
+elems['midi-transpose-control'].hidden=true;
+click('midi-key-down');
+assert.equal(elems['midi-transpose'].value,'11','Hidden control must not change key');
+assert.ok(sent>=36,'Every successful transpose notifies the live engine');
+assert.ok(keyDisplayUpdates>0,'Transposing a MIDI song must refresh the key displayed in Song Status');
+// Cached HTML may still contain the old status layout; the real DOM
+// migration must move (not clone) the original controls, preserving clicks.
+const stageUi=read('stage-ui.js');
+assert.match(stageUi,/function migrateSongKeyToToolbar\(\)/);
+assert.match(stageUi,/info\.insertBefore\(detail,info\.firstChild\)/);
+assert.match(stageUi,/if\(stack\.parentNode!==detail\)detail\.append\(stack\)/);
+assert.match(stageUi,/toolbar\.insertBefore\(transpose,clock\|\|null\)/);
+assert.match(stageUi,/transpose\.classList\.remove\('speed-control'\)/);
+console.log('PASS: plain Song Status key; search then live MIDI -/+ then clock; -12/+12 and cached DOM relocation');
+,'nativePlayer','Event','console','setSongKeyDisplay',
   snippet+'\nreturn {setMidiKey,syncMidiKeyButtons};')(
-  dollar,media,class Event{constructor(type){this.type=type;}},{warn(){warnings++;}});
+  dollar,media,class Event{constructor(type){this.type=type;}},{warn(){warnings++;}},
+  ()=>{keyDisplayUpdates++;});
 const click=id=>{
   const button=elems[id];
   if(button.disabled)return;
