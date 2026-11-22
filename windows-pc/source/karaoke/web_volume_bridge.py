@@ -14,7 +14,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .system_volume import WindowsVolume
+from karaoke.system_volume import WindowsVolume
 
 HOST = "127.0.0.1"
 PORT = 48731
