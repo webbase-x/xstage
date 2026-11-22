@@ -70,7 +70,7 @@ for(const intlImplementation of [Intl,{}]){
   }
 }
 assert.ok(css.includes('Thai search-result glyph shaping'),'Thai results must reserve space for combining marks');
-assert.ok(index.includes('app.js?v=1164-mobile-lyrics-thai-grapheme'),'Thai search fix must invalidate cached JS');
+assert.ok(index.includes('app.js?v=1172-direct-sqlite-no-json'),'Thai search fix must invalidate cached JS');
 assert.ok(index.includes('xstage-ux.css?v=1164-mobile-controls-lights-thai-accents'),'Thai font fix must invalidate cached CSS');
 
 assert.doesNotThrow(()=>new Function(storefrontScript),'storefront JavaScript must parse');
@@ -885,7 +885,7 @@ assert.ok(noRootBranch.includes('state.songs=[]') &&
 
 // Newly created XStageKaraoke may be empty or contain SOUNDFONT first. The
 // player should stay usable with 0 entries, not throw a missing DB error.
-const missingPointerBranch=app.split('if(!canonical.length&&!pointers.length){')[1]?.split("if(!canonical.length&&pointers.length!==1)")[0]||'';
+const missingPointerBranch=app.split('if(!canonical.length){')[1]?.split('    const pointer=directCatalogPointer')[0]||'';
 assert.ok(missingPointerBranch.includes('state.songs=[]') &&
           missingPointerBranch.includes('state.queue=[]') &&
           missingPointerBranch.includes('state.catalogCache.clear()') &&
@@ -893,7 +893,7 @@ assert.ok(missingPointerBranch.includes('state.songs=[]') &&
           missingPointerBranch.includes('setAndroidTvStageAccess(true,account.sub)') &&
           missingPointerBranch.includes('songs.sqlite3'),
           'Empty or SoundFont-first XStageKaraoke must show a clean 0-song stage');
-assert.ok(app.includes("พบ current.json หลายรายการ · ไม่เลือกฐานเพลงโดยคาดเดา"),
+assert.ok(app.includes("พบ songs.sqlite3 ซ้ำใน DB"),
           'Duplicate current pointers must remain an explicit integrity error');
 
 // WEB/APK use the same HTML5 stage. Video must be optional, muted and
