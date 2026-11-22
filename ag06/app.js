@@ -310,7 +310,7 @@ projectSave.addEventListener("click",async()=>{
  try{
   if(!studio.tracks.length&&!midiNotes.length)throw new Error("โปรเจกต์ยังว่าง");
   studioStatus("กำลังจัดเตรียมข้อมูลโปรเจกต์…");
-  const json=encodeProject(studio,midiNotes);
+  const json=encodeProject(studio,midiNotes,{bpm:$("midi-bpm").value,instrument:$("midi-instrument").value});
   if(json.length>100*1024*1024)throw new Error("โปรเจกต์ใหญ่เกิน 100 MB กรุณาลดจำนวนแทร็ก");
   const file=new Blob([json],{type:"application/json"});
   if(window.AG06Android){
@@ -347,6 +347,8 @@ $("studio-open-project").addEventListener("change",async event=>{
   studio.noiseGate=!!parsed.settings?.noiseGate;studio.spectralReduction=!!parsed.settings?.spectralReduction;
   $("studio-noise-gate").checked=studio.noiseGate;$("studio-spectral").checked=studio.spectralReduction;
   $("studio-ducking").checked=studio.ducking;$("studio-normalize").checked=studio.normalize;
+  $("midi-bpm").value=clamp(parsed.settings?.midiBpm||120,40,240);
+  $("midi-instrument").value=["triangle","sine","square","sawtooth"].includes(parsed.settings?.midiInstrument)?parsed.settings.midiInstrument:"triangle";
   midiNotes=Array.isArray(parsed.notes)?parsed.notes.slice(0,512).map(n=>({pitch:clamp(n.pitch,36,96),beat:clamp(n.beat,0,128),length:clamp(n.length,.125,16),velocity:clamp(n.velocity,0,1)})):[];
   studioRender();renderNotes();studioStatus("เปิดโปรเจกต์แล้ว · "+tracks.length+" แทร็ก");
  }catch(e){studioStatus("เปิดโปรเจกต์ไม่สำเร็จ: "+e.message,true);}
