@@ -6,7 +6,7 @@ const midiText=fs.readFileSync(new URL('../browser-midi.js',import.meta.url),'ut
 const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
 const html=fs.readFileSync(new URL('../karaoke.html',import.meta.url),'utf8');
 const version=JSON.parse(fs.readFileSync(new URL('../version.json',import.meta.url),'utf8'));
-assert.equal(version.build,1140);
+assert.equal(version.build,1141);
 assert.ok(html.includes('browser-midi.js?v=1139-soundfont-extension'));
 assert.ok(html.includes('app.js?v=1174-auto-migrate-mid'));
 assert.ok(app.includes('window.XStageBrowserMidi.prefersCompactGm?.()'));
