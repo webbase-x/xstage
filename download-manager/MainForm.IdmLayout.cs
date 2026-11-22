@@ -850,18 +850,26 @@ public sealed partial class MainForm
         split.Panel2.Controls.Add(CreateLivePreview());
         split.SizeChanged += (_, _) =>
         {
-            // On a short window / with the URL input expanded, keep the
-            // real transfer list available instead of overlapping controls.
-            if (split.Height < 335)
+            // The window can pass through tiny/zero client sizes when
+            // minimized, changing DPI, or opening the URL panel. Calculate
+            // from the CLIENT area and respect both panel minima before
+            // writing SplitterDistance; invalid transient dimensions must
+            // never reach native WinForms layout.
+            if (split.IsDisposed || split.Disposing) return;
+            var height = split.ClientSize.Height;
+            var minimum = split.Panel1MinSize + split.Panel2MinSize + split.SplitterWidth;
+            if (height < Math.Max(335, minimum + 10))
             {
                 if (!split.Panel2Collapsed) split.Panel2Collapsed = true;
                 return;
             }
             if (split.Panel2Collapsed) split.Panel2Collapsed = false;
-            var maximum = split.Height - split.Panel2MinSize - split.SplitterWidth;
-            if (maximum >= split.Panel1MinSize)
-                split.SplitterDistance = Math.Clamp((int)(split.Height * .58),
-                    split.Panel1MinSize, maximum);
+            var maximum = height - split.Panel2MinSize - split.SplitterWidth;
+            if (maximum <= split.Panel1MinSize) return;
+            var wanted = Math.Clamp((int)(height * .58),
+                split.Panel1MinSize, maximum);
+            if (wanted != split.SplitterDistance)
+                split.SplitterDistance = wanted;
         };
         desk.Controls.Add(split, 0, 1);
         return desk;
