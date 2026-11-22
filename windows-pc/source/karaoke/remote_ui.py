@@ -188,6 +188,7 @@ def remote_window(app):
     from .remote_capacity import recommended_clients
     capacity_auto=tk.BooleanVar(value=app.settings.get('remote_capacity_auto',True))
     capacity=tk.IntVar(value=app.settings.get('remote_max_clients',10))
+    auto_start_var=tk.BooleanVar(value=app.settings.get('remote_auto_start',True))
     def capacity_value():
         latency=app.remote.capacity_stats()[1] if app.remote else 0
         return recommended_clients(monitor.snapshot(),variables['audio'].get(),latency) if capacity_auto.get() else capacity.get()
@@ -213,7 +214,9 @@ def remote_window(app):
             app.settings.update(remote_show_stage=qr_mode.get()!='off',remote_idle_only=qr_mode.get()!='always')
             app.settings.update({('remote_'+k):variables[k].get() for k in ('accepting','approval','allow_edit')})
             app.settings['remote_limit']=count
-            app.settings.update(remote_capacity_auto=capacity_auto.get(),remote_max_clients=maximum)
+            app.settings.update(remote_capacity_auto=capacity_auto.get(),remote_max_clients=maximum,
+                                remote_auto_start=auto_start_var.get())
+            if app.remote:app.settings['remote_port']=app.remote.port
             app.save_settings();update_invite();update_visibility();settings_pages.schedule()
             return True
         except (ValueError,tk.TclError) as e:
@@ -251,6 +254,9 @@ def remote_window(app):
     capacity_input.bind('<FocusOut>',lambda e:apply_options())
     edit_control=ttk.Checkbutton(advanced,style='Remote.TCheckbutton',text='ผู้ร้องแก้คีย์ / ยกเลิกคำขอได้',variable=variables['allow_edit'],command=apply_options)
     operator_control=ttk.Checkbutton(advanced,style='Remote.TCheckbutton',text='รีโมทผู้ดูแล',variable=variables['operator'],command=apply_options)
+    auto_start_control=ttk.Checkbutton(advanced,style='Remote.TCheckbutton',
+        text='เปิดเซิร์ฟเวอร์ LAN อัตโนมัติเมื่อเปิด X-Stage PC',
+        variable=auto_start_var,command=apply_options)
     review_panel=ttk.Frame(pages[2],style='Remote.TFrame')
     tree=ttk.Treeview(review_panel,style='Remote.Treeview',columns=('song','singer','key'),show='headings',height=4)
     for name,label in [('song','รออนุมัติ'),('singer','ผู้ร้อง'),('key','คีย์')]:
@@ -284,7 +290,8 @@ def remote_window(app):
         if variables['operator'].get() and app.remote:operator_code.pack(anchor='w',pady=(12,0))
         else:operator_code.pack_forget()
     def update_buttons():
-        blocked = repair.running or (flow.step < 2 and not monitor.snapshot().ready)
+        from .remote_boot import lan_address
+        blocked = repair.running or (flow.step < 2 and not lan_address(monitor.snapshot()))
         next_button.configure(state='disabled' if blocked else 'normal')
         if flow.step==1:
             step_label.configure(text=f'2 / 3  •  ตั้งค่า  {settings_pages.index+1} / {len(settings_pages.pages)}')
@@ -302,8 +309,9 @@ def remote_window(app):
         update_visibility()
     def start():
         state=monitor.snapshot()
+        from .remote_boot import lan_address
         try:
-            selected_port,count=validate_setup(state.ready,repair.running,port.get(),limit.get())
+            selected_port,count=validate_setup(bool(lan_address(state)),repair.running,port.get(),limit.get())
         except (ValueError,tk.TclError) as e:
             if not state.ready:flow.stopped();show_step()
             app.show_error(e)
@@ -322,6 +330,8 @@ def remote_window(app):
                 app.remote=None
                 app.show_error(e)
                 return
+        app.settings['remote_port']=app.remote.port
+        app.save_settings()
         flow.started();update_invite();show_step()
     def advance():
         if flow.step==0:
@@ -334,6 +344,10 @@ def remote_window(app):
         flow.back();show_step()
     def stop():
         if app.remote:app.remote.close();app.remote=None
+        # Explicit Stop also prevents auto-restarting on the next launch.
+        auto_start_var.set(False)
+        app.settings['remote_auto_start']=False
+        app.save_settings()
         repair_note.set('')
         flow.stopped();update_invite();show_step()
     def rotate():
@@ -351,7 +365,7 @@ def remote_window(app):
     bar.bind('<Configure>',lambda event:update_buttons(),add='+')
     from .remote_paging import SettingsPages
     section_widgets=[accepting_control,approval_row,limits,qr_row,audio_control,advanced_button,
-                     port_row,capacity_control,capacity_row,edit_control,operator_control]
+                     port_row,capacity_control,capacity_row,edit_control,operator_control,auto_start_control]
     sections=[(widget,dict(fill='x',pady=8)) for widget in section_widgets]
     def visible_sections():
         active=list(range(6))
@@ -359,7 +373,7 @@ def remote_window(app):
             if not app.remote:active.append(6)
             active.append(7)
             if not capacity_auto.get():active.append(8)
-            active.extend([9,10])
+            active.extend([9,10,11])
         return active
     settings_pages=SettingsPages(window,options,sections,visible_sections,update_buttons)
     for widget in section_widgets[6:]:widget.pack_forget()
@@ -372,7 +386,10 @@ def remote_window(app):
             repair_note.set('กำลังตรวจสอบ…' if result==0 else 'เปิดสิทธิ์ไม่สำเร็จ กรุณาลองอีกครั้ง')
         state=monitor.snapshot()
         from .remote_setup import network_actions
-        actions=network_actions(state.status,state.ready,repair.running)
+        from .remote_boot import lan_address
+        address_ip=lan_address(state)
+        network_ready=bool(address_ip)
+        actions=network_actions(state.status,network_ready,repair.running)
         permission_bar.grid_remove();connect_wifi.grid_remove();refresh_wifi.grid_remove();repair_label.grid_remove()
         if actions['permission']:permission_bar.grid(row=5,column=0,columnspan=2,sticky='w',pady=8)
         if actions['connect']:connect_wifi.grid(row=4,column=0,sticky='w',pady=8)
@@ -384,16 +401,17 @@ def remote_window(app):
         recommended=recommended_clients(state,variables['audio'].get(),latency)
         if server and capacity_auto.get():server.configure(max_clients=recommended)
         previous_step=flow.step
-        flow.network_changed(state.ready,bool(server))
+        flow.network_changed(network_ready,bool(server))
         if previous_step!=flow.step:show_step()
         update_buttons()
-        if state!=last_network[0]:
-            wifi.set(wifi_heading(state))
-            address.set(state.address)
-            update_invite();last_network[0]=state
+        if (state,address_ip)!=last_network[0]:
+            wifi.set(wifi_heading(state) if state.ready else
+                     ('LAN / Ethernet · '+address_ip if network_ready else wifi_heading(state)))
+            address.set(address_ip)
+            update_invite();last_network[0]=(state,address_ip)
         if flow.step==2:
-            step_label.configure(text='3 / 3  •  รีโมทพร้อมใช้งาน' if state.ready else '3 / 3  •  รอเชื่อมต่อ Wi-Fi อีกครั้ง')
-        status.configure(text=(f'เชื่อมต่อ {server.connected_count()} / {server.policy.get("max_clients",10)} เครื่อง' if server else ('พร้อมเชื่อมต่อ' if state.ready else 'กำลังตรวจสอบ' if state.status=='checking' else 'ยังไม่พร้อมเชื่อมต่อ')))
+            step_label.configure(text='3 / 3  •  รีโมทพร้อมใช้งาน' if network_ready else '3 / 3  •  รอการเชื่อมต่อ LAN อีกครั้ง')
+        status.configure(text=(f'เชื่อมต่อ {server.connected_count()} / {server.policy.get("max_clients",10)} เครื่อง' if server else ('พร้อมเชื่อมต่อ' if network_ready else 'กำลังตรวจสอบ' if state.status=='checking' else 'ยังไม่พร้อมเชื่อมต่อ')))
         book=getattr(app,'remote_requests',None)
         rows=[r for r in book.records.values() if r['status']=='pending'] if book else []
         if rows:review_panel.pack(fill='both',expand=True)
