@@ -71,8 +71,23 @@ public sealed partial class MainForm : Form
         };
         Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
         _timer.Start();
-        FormClosing += (_, _) =>
+        FormClosing += (_, e) =>
         {
+            // Keep the UI process alive until separately recorded livestreams
+            // have closed MKV headers or safely cancelled clip generation.
+            // Never pause normal downloads for a close attempt we reject.
+            var openLive = Application.OpenForms.OfType<LiveStreamCaptureForm>()
+                .Where(window => window.IsBusy).ToArray();
+            if (openLive.Length > 0)
+            {
+                e.Cancel = true;
+                foreach (var window in openLive) window.StopOrCancel();
+                MessageBox.Show(this,
+                    "กำลังปิดไฟล์ไลฟ์ให้ปลอดภัย กรุณาปิดหน้าต่างหลักหลังบันทึกเสร็จ",
+                    "X-Stage Live Capture", MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
             Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             _browserStop.Cancel();
             _timer.Stop();
