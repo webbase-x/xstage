@@ -313,7 +313,7 @@ def remote_window(app):
         try:
             selected_port,count=validate_setup(bool(lan_address(state)),repair.running,port.get(),limit.get())
         except (ValueError,tk.TclError) as e:
-            if not state.ready:flow.stopped();show_step()
+            if not lan_address(state):flow.stopped();show_step()
             app.show_error(e)
             return
         if not apply_options():return
@@ -335,7 +335,8 @@ def remote_window(app):
         flow.started();update_invite();show_step()
     def advance():
         if flow.step==0:
-            if flow.next(monitor.snapshot().ready,repair.running):show_step()
+            from .remote_boot import lan_address
+            if flow.next(bool(lan_address(monitor.snapshot())),repair.running):show_step()
         elif flow.step==1:
             if not settings_pages.next():start()
         else:window.destroy()
@@ -395,7 +396,7 @@ def remote_window(app):
         if actions['connect']:connect_wifi.grid(row=4,column=0,sticky='w',pady=8)
         if actions['refresh']:refresh_wifi.grid(row=4,column=1,pady=8)
         if repair.running:repair_note.set('กำลังจัดการสิทธิ์…')
-        if state.ready:repair_note.set('')
+        if network_ready:repair_note.set('')
         if repair_note.get():repair_label.grid(row=7,column=0,columnspan=2,sticky='w',pady=4)
         occupancy,latency=server.capacity_stats() if server else (0,0)
         recommended=recommended_clients(state,variables['audio'].get(),latency)
