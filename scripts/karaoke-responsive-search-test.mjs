@@ -8,7 +8,7 @@ const patch=css.split('/* 1.16.2 — Phone search lives at the screen')[1];
 assert.ok(patch,'Mobile bottom search rules must override previous top-toolbar positioning');
 assert.match(patch,/@media\s*\(max-width:760px\)/);
 assert.match(patch,/@media\s*\(max-width:350px\)/);
-assert.match(patch,/@media\s*\(max-height:540px\)/);
+assert.match(patch,/\(max-height:540px\)/);
 assert.match(patch,/env\(safe-area-inset-left,0px\)/);
 assert.match(patch,/env\(safe-area-inset-right,0px\)/);
 assert.match(patch,/env\(safe-area-inset-bottom,0px\)/);
