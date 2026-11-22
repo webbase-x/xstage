@@ -2,6 +2,7 @@
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from karaoke import restore
 
@@ -34,9 +35,10 @@ class RollbackCorruptSnapshotTests(unittest.TestCase):
             data.mkdir()
             safety.mkdir()
             for folder, value in ((data, 'live'), (safety, 'old')):
-                with sqlite3.connect(folder / 'songs.sqlite3') as db:
+                with closing(sqlite3.connect(folder / 'songs.sqlite3')) as db:
                     db.execute('CREATE TABLE marker (value TEXT)')
                     db.execute('INSERT INTO marker VALUES (?)', (value,))
+                    db.commit()
             (data / 'play_stats.sqlite3').write_bytes(b'live stats sentinel')
             (safety / 'play_stats.sqlite3').write_bytes(b'corrupt stats sqlite')
             with self.assertRaises(sqlite3.DatabaseError):
@@ -45,7 +47,7 @@ class RollbackCorruptSnapshotTests(unittest.TestCase):
                     ['songs.sqlite3', 'play_stats.sqlite3'],
                     ('songs.sqlite3', 'play_stats.sqlite3'),
                 )
-            with sqlite3.connect(data / 'songs.sqlite3') as db:
+            with closing(sqlite3.connect(data / 'songs.sqlite3')) as db:
                 self.assertEqual(db.execute('SELECT value FROM marker').fetchone()[0], 'live')
             self.assertEqual(
                 (data / 'play_stats.sqlite3').read_bytes(), b'live stats sentinel'
@@ -59,9 +61,10 @@ class RollbackCorruptSnapshotTests(unittest.TestCase):
             data.mkdir()
             safety.mkdir()
             for folder, value in ((data, 'live'), (safety, 'old')):
-                with sqlite3.connect(folder / 'songs.sqlite3') as db:
+                with closing(sqlite3.connect(folder / 'songs.sqlite3')) as db:
                     db.execute('CREATE TABLE marker (value TEXT)')
                     db.execute('INSERT INTO marker VALUES (?)', (value,))
+                    db.commit()
             (data / 'queue.json').write_text('[]', encoding='utf-8')
             (safety / 'queue.json').write_bytes(bytes((0xff, 0xfe)) + b'invalid')
             with self.assertRaises(ValueError):
@@ -70,7 +73,7 @@ class RollbackCorruptSnapshotTests(unittest.TestCase):
                     ['songs.sqlite3', 'queue.json'],
                     ('songs.sqlite3', 'queue.json'),
                 )
-            with sqlite3.connect(data / 'songs.sqlite3') as db:
+            with closing(sqlite3.connect(data / 'songs.sqlite3')) as db:
                 self.assertEqual(db.execute('SELECT value FROM marker').fetchone()[0], 'live')
             self.assertEqual((data / 'queue.json').read_text(encoding='utf-8'), '[]')
 
