@@ -18,6 +18,7 @@ new DataView(bank.buffer).setUint32(4,bank.byteLength-8,true);
 bank.set([115,102,98,107],8);
 const auth={sub:'account',rootId:'root',token:'private-token'};
 let publicFetches=0,largeDownloads=0;
+const driveParents=[];
 class Option{
   constructor(text,value){this.text=text;this.value=value;this.dataset={};}
 }
@@ -43,6 +44,7 @@ const fakeFetch=async(url,options={})=>{
     assert.equal(options.headers.Authorization,'Bearer '+auth.token);
     const q=new URL(url).searchParams.get('q');
     const parent=q.match(/'([^']+)' in parents/)?.[1]||'';
+    driveParents.push({q,parent});
     const folders=parent==='root'
       ?[{id:'font-root',name:'SOUNDFONT',mimeType:'application/vnd.google-apps.folder'}]
       :parent==='font-root'
@@ -82,7 +84,7 @@ assert.equal(first.byteLength,bank.byteLength,'Public GM must have real validate
 assert.equal(publicFetches,1);
 assert.ok(select.options.some(option=>option.value===large),
   'The SOUNDFONT/SF2 browser picker must expose the 243 MB file: '+
-  JSON.stringify(select.options.map(option=>({value:option.value,size:option.dataset?.size}))));
+  JSON.stringify({parents:driveParents,options:select.options.map(option=>({value:option.value,size:option.dataset?.size}))}));
 select.value=large;
 select.onchange(); // Explicit large-bank choice may start a background fetch.
 assert.equal(midi.prefersCompactGm(),true,
