@@ -477,6 +477,25 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           beginTransitionFill,
           currentTime:()=>Number(sequencer.currentTime),
           finished:()=>!!sequencer.isFinished,previewNote,
+          // iOS may suspend the AudioContext/MediaStream relay without pausing
+          // the virtual MIDI transport. Restore the existing output graph
+          // without restarting or seeking the actual sequencer.
+          async resumeAudio(){
+            if(stopped||fullyReleased||disposed||player.paused)return false;
+            scope.XStageIOSMidiAudio?.activate?.();
+            let contextReady=ctx.state==='running';
+            if(!contextReady){
+              try{await ctx.resume();contextReady=ctx.state==='running';}
+              catch{contextReady=false;}
+            }
+            const mediaReady=await mediaOutput?.resume?.();
+            if(!contextReady||mediaReady===false){
+              onStatus('iPhone พักเสียง MIDI · แตะ ▶ เพื่อเปิดเสียงต่อ');
+              return false;
+            }
+            updateVolume();
+            return true;
+          },
           dispose(){releaseEngine();}
         };
       }
@@ -569,7 +588,15 @@ async function prepare(source,fontBytes,{signal=null,onStatus=()=>{}}={}){
           for(const [name,fn] of listeners)player.removeEventListener(name,fn);
           releasePreview();dispose();
         },
-        duration:parsed.duration,engine:'SpessaSynth',previewNote
+        duration:parsed.duration,engine:'SpessaSynth',previewNote,
+        async resumeAudio(){
+          if(disposed||player.paused)return false;
+          scope.XStageIOSMidiAudio?.activate?.();
+          let ready=ctx.state==='running';
+          if(!ready){try{await ctx.resume();ready=ctx.state==='running';}catch{ready=false;}}
+          const relayReady=await mediaOutput?.resume?.();
+          return ready&&relayReady!==false;
+        }
       };
     },
     dispose
