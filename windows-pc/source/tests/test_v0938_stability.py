@@ -27,15 +27,22 @@ class RemoteLifecycleTests(unittest.TestCase):
                 remote.sessions['token'] = dict(active=100., seen=100., role='guest')
                 with patch('karaoke.remote.time.monotonic', return_value=410.):
                     remote.expire_sessions()
-                self.assertNotIn('token', remote.sessions)
+                    self.assertEqual(remote.capacity_stats()[0],0)
+                self.assertIn('token', remote.sessions,
+                              'Sleeping guest may reconnect using saved LAN pairing')
                 remote.sessions['token'] = dict(active=100., seen=399., role='guest')
                 with patch('karaoke.remote.time.monotonic', return_value=410.):
                     remote.expire_sessions()
                 self.assertIn('token', remote.sessions)
-                # Polling stops; it must eventually expire even if initially read-only.
-                with patch('karaoke.remote.time.monotonic', return_value=800.):
+                # Six-hour dormant guest retention is bounded, never permanent.
+                with patch('karaoke.remote.time.monotonic', return_value=22001.):
                     remote.expire_sessions()
                 self.assertNotIn('token', remote.sessions)
+                remote.sessions['operator'] = dict(active=100., seen=100., role='operator')
+                with patch('karaoke.remote.time.monotonic', return_value=410.):
+                    remote.expire_sessions()
+                self.assertNotIn('operator', remote.sessions,
+                                 'Operator control must not remain active after sleep')
             finally:
                 remote.server.server_close()
                 remote.audio.close()
