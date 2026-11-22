@@ -31,6 +31,7 @@
           "app.js",
           "audio-engine.js",
           "studio-session.js",
+          "studio-advanced.js",
           "presets.js",
           "style.css",
           "icon.svg"
