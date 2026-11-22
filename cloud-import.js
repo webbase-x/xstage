@@ -1804,5 +1804,5 @@ class Importer {
     }
   }
 }
-scope.XStageCloudImport={init:(options)=>new Importer(options),Drive,loadCatalog,buildMidiIndex,distinctImportCode};
+scope.XStageCloudImport={init:(options)=>new Importer(options),Drive,loadCatalog,buildMidiIndex,distinctImportCode,acquireCatalogLease};
 })(window);
