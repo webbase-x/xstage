@@ -62,11 +62,14 @@ class WindowsPickerTests(unittest.TestCase):
     def test_single_media_picker_is_supported_without_changing_folder_dialog(self):
         self.assertIn("elseif ($kind -eq 'media')",windows_picker._SCRIPT)
         self.assertIn("*.mid;*.midi;*.kar;*.mp3",windows_picker._SCRIPT)
-        with patch.object(windows_picker.sys,"platform","win32"),\
-             patch.object(windows_picker.subprocess,"run",
-                          return_value=SimpleNamespace(
-                              returncode=0,stdout="C:\\\\เพลงไทย\\\\0001.mid",stderr="")):
-            self.assertIn("0001.mid",windows_picker.pick("media")["path"])
+        with tempfile.TemporaryDirectory() as folder:
+            candidate=Path(folder)/"เพลงไทย ๐๐๑.mid"
+            candidate.write_bytes(b"MThd")
+            with patch.object(windows_picker.sys,"platform","win32"),\
+                 patch.object(windows_picker.subprocess,"run",
+                              return_value=SimpleNamespace(
+                                  returncode=0,stdout=str(candidate),stderr="")):
+                self.assertEqual(windows_picker.pick("media")["path"],str(candidate))
 
     def test_non_windows_is_rejected(self):
         with patch.object(windows_picker.sys,"platform","linux"):

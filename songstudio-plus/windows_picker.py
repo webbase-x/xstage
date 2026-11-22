@@ -153,7 +153,7 @@ def pick(kind,current="",log=None):
         if kind=="folder" and not p.is_dir():
             if log: log("picker.invalid_result",kind=kind,path=chosen)
             raise RuntimeError("Windows ส่งพาธโฟลเดอร์ที่ไม่พบกลับมา")
-        if kind=="lrc" and not p.is_file():
+        if kind in ("lrc","media") and not p.is_file():
             if log: log("picker.invalid_result",kind=kind,path=chosen)
             raise RuntimeError("Windows ส่งพาธไฟล์ที่ไม่พบกลับมา")
     if log: log("picker.result",kind=kind,cancelled=not bool(chosen),path=chosen,
