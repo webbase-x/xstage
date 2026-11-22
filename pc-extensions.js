@@ -371,12 +371,13 @@ function ensureEqAudio(){
  if(eqContext){startStageBrandVisualizer();return true;}
  const C=window.AudioContext||window.webkitAudioContext;
  if(!C)return false; // Unsupported metering must never prevent song playback.
+ let speakerConnected=false;
  try{
    eqContext=new C();
    eqSource=eqContext.createMediaElementSource(audio);
    // AUDIBLE PATH: source -> destination only. Do not insert BiquadFilter,
    // analyser, preset, or any additional gain/EQ node into speaker output.
-   eqSource.connect(eqContext.destination);
+   eqSource.connect(eqContext.destination);speakerConnected=true;
    eqContext.addEventListener?.('statechange',()=>{
      const interrupted=eqContext&&(eqContext.state==='interrupted'||eqContext.state==='suspended');
      if(interrupted&&state.current&&!state.userPaused&&!state.userStopped){
@@ -400,8 +401,8 @@ function ensureEqAudio(){
  }catch(error){
    // Preserve the unfiltered speaker connection if a visual-only node fails.
    console.warn('Visual-only stage spectrum unavailable:',error);
-   if(eqSource&&eqContext){try{eqSource.connect(eqContext.destination);}catch{}}
-   return !!eqSource;
+   if(!speakerConnected&&eqSource&&eqContext){try{eqSource.connect(eqContext.destination);speakerConnected=true;}catch{}}
+   return speakerConnected;
  }
 }
 
