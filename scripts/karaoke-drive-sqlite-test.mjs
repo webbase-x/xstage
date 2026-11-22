@@ -8,14 +8,17 @@ const source=read('drive-sqlite.js');
 const app=read('app.js'),importer=read('cloud-import.js'),page=read('karaoke.html');
 const version=JSON.parse(read('version.json'));
 assert.equal(version.build,1137);
-assert.ok(page.indexOf('drive-sqlite.js?v=1137')<page.indexOf('cloud-import.js?v=1140-google-session-renew'));
+assert.ok(page.indexOf('drive-sqlite.js?v=1170-single-sqlite')<page.indexOf('cloud-import.js?v=1170-single-sqlite'));
 assert.ok(app.includes('codec.read(new Uint8Array(buffer))'));
 assert.ok(importer.includes("application/vnd.sqlite3"));
-assert.ok(importer.includes("catalog-delta-'+generation+'.sqlite3"));
-assert.ok(importer.includes("songs-'+generation+'.sqlite3"));
+assert.ok(!importer.includes("catalog-delta-'+generation+'.sqlite3"));
+assert.ok(importer.includes("'songs.sqlite3'"));
+assert.ok(importer.includes("publishSingleCatalog"));
+assert.ok(importer.includes("moveToFolder"));
 assert.ok(!importer.includes("catalog-base-'+generation+'.json"));
-assert.ok(app.includes("pointer?.layoutVersion!==5"));
-assert.ok(importer.includes("pointer.layoutVersion!==5"));
+assert.ok(app.includes("![5,6].includes(pointer?.layoutVersion)"));
+assert.ok(importer.includes("![5,6].includes(pointer.layoutVersion)"));
+assert.ok(app.includes("pointer.layoutVersion===6&&deltaIds.length"));
 
 const SQL=await initSqlJs();
 const scope={initSqlJs:()=>Promise.resolve(SQL),Uint8Array,ArrayBuffer,Blob,
@@ -48,4 +51,4 @@ assert.deepEqual(Array.from(delta.removes),['drive/X200']);
 assert.equal(delta.upserts[0].title,'เพลงแก้ไข');
 await assert.rejects(codec.create('snapshot',[songA,songA]),/รหัสเพลงว่างหรือซ้ำ/);
 await assert.rejects(codec.read(new Uint8Array(400)),/ไม่ใช่ฐานข้อมูล SQLite3/);
-console.log('PASS: real SQLite3 binary (SQLite format 3), schema, immutable snapshot/delta, Thai titles, integrity and corruption guard');
+console.log('PASS: real SQLite3 binary (SQLite format 3), schema, single canonical snapshot, legacy delta reader, Thai titles, integrity and corruption guard');
