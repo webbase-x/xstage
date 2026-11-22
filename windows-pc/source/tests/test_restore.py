@@ -178,6 +178,18 @@ class RestoreTests(unittest.TestCase):
         self.assertTrue((self.data/'restore-pending').exists())
 
 
+    def test_cancelled_staging_cleans_partial_directory_without_touching_live_data(self):
+        original = restore.copy_database
+        def interrupt(source, target):
+            Path(target).write_bytes(b'partial snapshot')
+            raise KeyboardInterrupt('cancelled staging')
+        with patch.object(restore, 'copy_database', side_effect=interrupt):
+            with self.assertRaisesRegex(KeyboardInterrupt, 'cancelled staging'):
+                restore.stage_restore(self.source, self.data)
+        self.assertEqual(self.title(), 'ปัจจุบัน')
+        self.assertFalse(list(self.data.glob('restore-stage-*')))
+        self.assertFalse((self.data/'restore-pending').exists())
+
     def test_applying_journal_write_failure_cleans_unused_safety_snapshot(self):
         restore.stage_restore(self.source,self.data)
         original=restore.write_json
