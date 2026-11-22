@@ -27,6 +27,7 @@ import preview_player as preview
 import manual_editor as manual
 import pro_updater as updater
 import song_download as songdl
+import drive_library as drivelib
 
 class State:
     def __init__(self,workspace):
@@ -483,12 +484,19 @@ class Handler(BaseHTTPRequestHandler):
         try:
             body=self.read_json()
             path=urllib.parse.urlsplit(self.path).path
-            if path=="/api/import":
+            if path=="/api/drive/check":
+                result=drivelib.describe(body.get("folder",""))
+            elif path=="/api/import":
                 source=body.get("folder","")
                 self.state.diagnostic("import.request",folder=source,
                                       exists=Path(source).is_dir() if isinstance(source,str) else False)
                 result=self.state.start_job("import",lambda progress,cancel:
                     core.import_folder(self.state.workspace,source,progress,cancel))
+            elif path=="/api/import/google-drive":
+                root=drivelib.resolve_root(body.get("folder",""))
+                self.state.diagnostic("import.google-drive.request",root=str(root))
+                result=self.state.start_job("drive-import",lambda progress,cancel:
+                    drivelib.download_and_import(self.state.workspace,root,progress,cancel))
             elif path=="/api/import/file":
                 raw=body.get("file","")
                 if not isinstance(raw,str) or not raw.strip():
