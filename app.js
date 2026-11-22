@@ -4259,6 +4259,20 @@ function mayRestoreScreenAudio(){
      screenSleepIntent?.song===state.current&&screenSleepIntent.requestId===state.requestId||
      midiTransport.active&&!player.paused);
 }
+async function boundedScreenAudioRecovery(action){
+  // Some iOS Safari/PWA versions never settle AudioContext.resume().
+  // Bound the attempt so a subsequent permitted user tap can retry in place.
+  let timeout=0;
+  try{
+    const pending=action(); // Invoke immediately inside the user's gesture.
+    return await Promise.race([
+      Promise.resolve(pending),
+      new Promise(resolve=>{timeout=setTimeout(()=>resolve(false),1800);})
+    ]);
+  }finally{
+    if(timeout)clearTimeout(timeout);
+  }
+}
 async function recoverScreenAudio(){
   if(wakeRecoveryInFlight||!mayRestoreScreenAudio())return false;
   wakeRecoveryInFlight=true;
@@ -4266,16 +4280,16 @@ async function recoverScreenAudio(){
   try{
     let restored=true;
     if(player.paused){
-      restored=await resumePlaybackFromSystem();
+      restored=await boundedScreenAudioRecovery(()=>resumePlaybackFromSystem());
     }else if(midiTransport.active){
       // Do not call the virtual player.play() again: it is already running.
       // Recover AudioContext + iOS HTMLMediaElement relay in place.
       if(state.liveMidiPlayback?.resumeAudio)
-        restored=await state.liveMidiPlayback.resumeAudio();
+        restored=await boundedScreenAudioRecovery(()=>state.liveMidiPlayback.resumeAudio());
       else if(window.XStageBrowserMidi?.unlockAudio)
-        restored=await window.XStageBrowserMidi.unlockAudio()!==false;
+        restored=await boundedScreenAudioRecovery(()=>window.XStageBrowserMidi.unlockAudio());
     }else if(window.XStageResumeAudioGraph){
-      restored=await window.XStageResumeAudioGraph();
+      restored=await boundedScreenAudioRecovery(()=>window.XStageResumeAudioGraph());
     }
     if(requestId!==state.requestId||!state.current||state.userPaused||state.userStopped)
       return false;
