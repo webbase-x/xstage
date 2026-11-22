@@ -365,9 +365,11 @@
       <p class="cloud-import-note" id="cloud-import-ios-help">iPhone/iPad: Safari 18.4 ขึ้นไปสามารถเลือกโฟลเดอร์ในแอป Files ได้โดยแตะ “เลือกโฟลเดอร์เพลง” หากเบราว์เซอร์รุ่นเก่าแสดงเฉพาะไฟล์รายตัว อาจไม่ส่งโครงสร้างโฟลเดอร์ครบ ระบบจะตรวจรายการก่อนนำเข้า และจะไม่อัปโหลดชุดเพลงที่องค์ประกอบไม่ครบ</p>
       <div class="cloud-import-actions">
         <button id="cloud-import-pick" type="button">📁 เลือกโฟลเดอร์เพลง</button>
+        <button id="cloud-import-pick-fallback" type="button" title="เลือกผ่านตัวเลือกโฟลเดอร์แบบอัปโหลด เมื่อ Chrome ไม่อนุญาตให้ใช้ตัวเลือกหลัก">เลือกโฟลเดอร์ (วิธีสำรอง)</button>
         <button id="cloud-import-scan" type="button" disabled hidden>ตรวจสอบอีกครั้ง</button>
         <input id="cloud-import-input" type="file" webkitdirectory directory multiple hidden>
       </div>
+      <p class="cloud-import-note" id="cloud-import-folder-help">ถ้า Chrome แจ้งว่าโฟลเดอร์มีไฟล์ระบบ ให้เลือกเฉพาะโฟลเดอร์ย่อยที่เก็บเพลง เช่น XStageSongPlus/MIDI/MID/XMID หรือกด “เลือกโฟลเดอร์ (วิธีสำรอง)” โดยไม่ต้องปิดการป้องกันของเบราว์เซอร์</p>
       <div id="cloud-import-source" class="cloud-import-source">ยังไม่ได้เลือกโฟลเดอร์</div>
       <div class="cloud-import-stats">
         <div><b id="cloud-import-total">0</b><span>ไฟล์ที่พบ</span></div>
@@ -468,7 +470,7 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="midi-pro-engine.js?v=1134-playback-restore" defer></script>
   <script src="video-metadata-editor.js?v=1134" defer></script>
   <script src="video-transcode.js?v=1134" defer></script>
-  <script src="cloud-import.js?v=1135-retired-root" defer></script>
+  <script src="cloud-import.js?v=1135-retired-root-folder-picker-fallback" defer></script>
   <script src="tv-refresh.js?v=1134" defer></script>
   <script src="app.js?v=1136-stage-lighting" defer></script><script src="pc-extensions.js?v=1134" defer></script>
   <script src="midi-keyboard-ui.js?v=1134-clean-title-1157-top-song-key-single-menu" defer></script>
