@@ -85,12 +85,16 @@ class Drive {
     this.assertLive();
     // Google tokens last about an hour. Refresh once before a request and
     // retry a rejected 401 with the new token; do not repeat any other error.
-    if(this.ensureAuth)await this.ensureAuth(false);
+    if(this.ensureAuth){
+      try{await this.ensureAuth(false);}
+      catch(error){error.code='XSTAGE_AUTH_REQUIRED';throw error;}
+    }
     this.assertLive();
     let response=await fetch(url,{...options,headers:this.headers(options.headers),cache:'no-store'});
     this.assertLive();
     if(response.status===401&&this.ensureAuth){
-      await this.ensureAuth(true);
+      try{await this.ensureAuth(true);}
+      catch(error){error.code='XSTAGE_AUTH_REQUIRED';throw error;}
       this.assertLive();
       response=await fetch(url,{...options,headers:this.headers(options.headers),cache:'no-store'});
       this.assertLive();
@@ -279,10 +283,11 @@ class Drive {
             return {position:match?Number(match[1])+1:0};
           }
           if(response.ok)return {complete:await response.json(),position:file.size};
+          if(response.status===401)fail('Google ยังปฏิเสธโทเค็นที่ต่ออายุ · เชื่อม Google แล้วทำต่อ');
           if(response.status!==429&&response.status<500)
             fail('สอบถามตำแหน่งอัปโหลด Drive ไม่สำเร็จ (HTTP '+response.status+')');
         }catch(error){
-          if(aborted(error)||this.signal?.()?.aborted)throw error;
+          if(aborted(error)||error?.code==='XSTAGE_AUTH_REQUIRED'||this.signal?.()?.aborted)throw error;
           if(attempt===3)throw error;
         }
         if(attempt===3)fail('สอบถามตำแหน่งอัปโหลด Drive ไม่สำเร็จหลังลองซ้ำ');
@@ -300,7 +305,8 @@ class Drive {
             'Content-Range':'bytes '+start+'-'+(end-1)+'/'+file.size},
           body:file.slice(start,end),signal:this.signal?.()});
       }catch(error){
-        if(error?.name==='AbortError'||this.signal?.()?.aborted)throw error;
+        if(error?.name==='AbortError'||error?.code==='XSTAGE_AUTH_REQUIRED'||
+           this.signal?.()?.aborted)throw error;
         if(++retries>4)fail('การเชื่อมต่อ Google Drive ขาดหลายครั้ง · หยุดและทำต่อภายหลัง');
         await sleep(Math.min(4000,350*2**retries));
         const status=await uploadStatus();
