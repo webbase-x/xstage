@@ -242,7 +242,7 @@ assert.ok(style.includes('.cloud-import-body{')&&
   style.includes('.cloud-import-footer-buttons{')&&
   style.includes('flex:0 0 auto'),
   'Import Start and status must be anchored outside scrollable contents');
-assert.ok(page.includes('cloud-import.js?v=1139-auth-ready-import-cta')&&
+assert.ok(page.includes('cloud-import.js?v=1140-google-session-renew')&&
   page.includes('cloud-import.css?v=1138-visible-import-cta')&&
   page.includes('video-metadata-editor.js?v=1138-verified-video-selection'),
   'Updated scripts and styles must bypass stale browser caches');
