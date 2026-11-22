@@ -182,6 +182,12 @@
   }
   for(const event of ['play','playing'])media.addEventListener(event,onPlay);
   for(const event of ['pause','ended','emptied'])media.addEventListener(event,onStop);
+  // A native <audio> pause can arrive during a MIDI handoff even though the
+  // virtual sequencer is still playing. Its clock emits timeupdate regularly;
+  // recover the animation loop instead of leaving stage LEDs permanently off.
+  media.addEventListener('timeupdate',()=>{
+    if(!frame&&!document.hidden&&stage.classList.contains('playing')&&currentPlayback().playing)onPlay();
+  });
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden)onStop();
     else if(stage.classList.contains('playing')&&currentPlayback().playing)onPlay();
