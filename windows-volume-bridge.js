@@ -98,7 +98,10 @@
     }catch(error){
       if(connected&&epoch===currentRequestId)
         disconnect('ปรับเสียง Windows ไม่สำเร็จ · '+error.message);
-    }finally{writing=false;}
+    }finally{
+      writing=false;
+      if(connected&&pendingVolume!==null)void flush();
+    }
   }
   function setVolume(value){
     if(!connected||syncing)return false;
@@ -132,6 +135,8 @@
       if(!result.token||typeof result.token!=='string')throw Error('ไม่ได้รับโทเค็นที่ตรวจสอบได้');
       token=result.token;connected=true;muted=!!result.muted;
       currentRequestId++;
+      const media=$('player');
+      if(media?.muted)media.muted=false;
       // The browser media gain must become unity when the displayed slider
       // controls the Windows master, avoiding double attenuation.
       reflect(result,true);
