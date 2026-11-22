@@ -142,10 +142,11 @@
     frame=requestAnimationFrame(render);
     if(timestamp-lastFrame<45)return;
     lastFrame=timestamp;
-    const video=document.getElementById('karaoke-video');
     const playback=currentPlayback();
+    // A music video is only a background layer. It must never suppress the
+    // real-audio / real-MIDI stage lights and the EQ canvases by the logo.
     if(!playing||!playback.playing||playback.muted||playback.volume<=0||
-       !stage.classList.contains('playing')||video?.hidden===false){dark();return;}
+       !stage.classList.contains('playing')){dark();return;}
     const live=readLiveSpectrum();
     // MIDI can reach the browser output through a separate synthesizer.
     // Prefer its measurable spectrum; otherwise use the actual scheduled
