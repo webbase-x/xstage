@@ -5359,3 +5359,17 @@ html body.xstage-ui-v2 .stage .stage-search-slot .song-match{
     height:clamp(36px,8cqh,65px)!important;
   }
 }
+
+/* Remembered Google account: one-tap renewal, never an automatic OAuth popup. */
+html body.xstage-ui-v2 .account-tools .google-renew-button{
+  min-height:30px;padding:5px 9px;font-size:.7rem;white-space:nowrap;
+  border-color:#5f9cb8;color:#d5f3fc;
+}
+html body.xstage-ui-v2 .account-tools .google-renew-button[hidden]{
+  display:none!important;
+}
+@media(max-width:620px){
+  html body.xstage-ui-v2 .account-tools .google-renew-button{
+    padding:5px 6px;min-height:28px;font-size:.63rem;
+  }
+}
