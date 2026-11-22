@@ -4,6 +4,9 @@ Independent audio-capture, software-FX, metering and recording for Windows, Andr
 
 ## Studio Workspace (independent implementation)
 
+- Software DSP includes Simple and Detail views; these only operate on captured audio and never change the mixer hardware.
+- Optional automatic ducking uses RMS activity from a locally tagged voice track to lower designated music tracks during playback and offline WAV rendering. Peak normalization is optional for exported WAV; these are simple independent tools, not a WaveLab algorithm or loudness-standard mastering.
+
 - Import up to 12 locally held audio files/takes (80 MiB per file, up to 10 minutes each); mix with per-track volume, mute/solo, trim in/out, offset, playback and offline stereo 44.1 kHz/16-bit WAV export. On Android, native WAV export is limited to 24 MiB by the existing bounded MediaStore bridge.
 - Tracks are a local in-memory session: save/export finished mixes before closing the app. Importing individual recordings does not grant multichannel AG06 hardware access. Browsers and mobile devices may have insufficient memory for large sessions.
 - This is not Cubase AI, Cubasis LE, WaveLab Cast, or Yamaha AG Controller, and does not incorporate their proprietary code, licenses, DSP protocol, or assets.
