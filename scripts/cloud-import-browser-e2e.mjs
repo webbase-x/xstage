@@ -247,6 +247,40 @@ try{
   await page.click('#cloud-import-pick-fallback');
   await (await fallbackChooser).setFiles(dir);
   await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='2');
+  // A successful name scan must provide an immediately usable Start action;
+  // the tall metadata editor may scroll, but the action bar must not disappear.
+  const originalViewport=page.viewportSize();
+  for(const [width,height] of [[390,680],[600,800],[768,720],[1280,800]]){
+    await page.setViewportSize({width,height});
+    const layout=await page.evaluate(()=>{
+      const dialog=document.getElementById('cloud-import-dialog');
+      const body=document.getElementById('cloud-import-body');
+      const footer=dialog.querySelector('.cloud-import-footer');
+      const start=document.getElementById('cloud-import-start');
+      body.scrollTop=body.scrollHeight;
+      const bounds=node=>{const r=node.getBoundingClientRect();return {
+        top:r.top,bottom:r.bottom,left:r.left,right:r.right,height:r.height
+      };};
+      return {button:bounds(start),footer:bounds(footer),dialog:bounds(dialog),
+        scrollable:getComputedStyle(body).overflowY,
+        disabled:start.disabled,hidden:start.hidden,
+        hint:document.getElementById('cloud-import-action-hint').textContent,
+        selected:document.getElementById('cloud-import-selection-count').textContent};
+    });
+    assert.ok(!layout.disabled&&!layout.hidden,
+      'Start must be enabled after selecting valid files at '+width+'x'+height);
+    assert.ok(layout.button.height>=40&&layout.button.top>=0&&
+      layout.button.bottom<=height+3&&layout.button.left>=-2&&
+      layout.button.right<=width+3,
+      'Start must remain onscreen at '+width+'x'+height+': '+JSON.stringify(layout));
+    assert.ok(layout.footer.top>=layout.dialog.top-2&&
+      layout.footer.bottom<=layout.dialog.bottom+3&&layout.scrollable==='auto',
+      'Action bar must remain inside dialog while body scrolls: '+JSON.stringify(layout));
+    assert.ok(layout.hint.includes('พร้อมตรวจเนื้อหา/MD5')&&
+      layout.selected.includes('รายการ'),
+      'Selected song count and action guidance must agree');
+  }
+  await page.setViewportSize(originalViewport);
   assert.equal(await page.locator('#cloud-import-fonts').textContent(),'1');
   assert.equal(await page.locator('#cloud-import-blocked').textContent(),'3',
     'Two unreviewed videos must not silently become embedded karaoke');
