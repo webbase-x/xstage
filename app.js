@@ -1570,7 +1570,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     const roots=(await driveList("name='"+driveLayout.root+
       "' and mimeType='application/vnd.google-apps.folder' and trashed=false",token))
       .filter(root=>!isRetiredDriveRoot(root.id));
-    if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','พบคลังเพลง · กำลังตรวจ current.json…',24);
+    if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','พบคลังเพลง · กำลังตรวจ DB/songs.sqlite3…',24);
     if(authId!==state.authId)return;
     if(!roots.length){
       // A verified empty Drive is NOT a valid cached library. An account
@@ -1631,7 +1631,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       const rootCached=await loadLatestCachedCatalog(account.sub,root.id);
       if(rootCached){instant=rootCached;applyInstantCatalog(instant);}
     }
-    // Only the new XStageKaraoke/DB/current.json is authoritative.
+    // DB/songs.sqlite3 is the only playable catalog. The old pointer may be inspected solely for migration.
     const dbDirs=await driveList(`'${root.id}' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
     if(dbDirs.length>1)throw Error('พบ DB ซ้ำใน '+driveLayout.root);
     const dbId=dbDirs[0]?.id||'';
