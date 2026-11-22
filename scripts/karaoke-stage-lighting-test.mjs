@@ -203,7 +203,7 @@ const drawAudioMeter=vm.runInNewContext(webEq.slice(meterGuardStart,meterGuardEn
   '\ndrawStageBrandVisualizer;',meterScope);
 drawAudioMeter(100);
 assert.equal(conflictingFFTWrites,0,
-  'The silent HTML analyser must never paint over MIDI's side EQ meters');
+  "The silent HTML analyser must never paint over MIDI side EQ meters");
 assert.equal(meterScope.stageLiveSpectrum.active,false,
   'Synthetic MIDI must not report stale HTML audio energy as real spectrum');
 assert.ok(followupFrames>0,'Audio analyser resumes polling for the next ordinary audio track');
