@@ -58,25 +58,25 @@ class ContextMenuTests(unittest.TestCase):
         app, menu = self.app(), Menu()
         populate_context_menu(app, menu, Menu, [(0,0,1920,1080)])
         labels = [e['label'] for e in menu.entries if e['type']!='separator']
-        self.assertFalse(any(e.get('label','').startswith('ค้นหาเพลง') for e in menu.find('ตัวเลือก')['menu'].entries))
-        self.assertEqual(labels[:5], ['เมนูหลัก · 6 หมวด','ตัวเลือก','พื้นหลัง','เครื่องมือ','จัดการข้อมูลเพลง'])
-        self.assertEqual(labels[-2:], ['รายละเอียดโปรแกรม…','ออกจากโปรแกรม'])
-        self.assertEqual(len(menu.children),7)
+        self.assertFalse(any(e.get('label','').startswith('ค้นหาเพลง') for e in menu.find('7. ตัวเลือก')['menu'].entries))
+        self.assertEqual(labels[:4], ['เมนูหลัก · 6 หมวด (หมายเลข 1–6)','7. ตัวเลือกและตัวกรอง','8. พื้นหลัง','9. เครื่องมือขั้นสูง'])
+        self.assertEqual(labels[-1], '14. โปรแกรมและการออก')
+        self.assertEqual(len(menu.children),10)
         self.assertLessEqual(len(menu.entries),20)
-        menu.find('ซาวด์ฟอนท์')['command']()
+        menu.find('13. ทางลัด')['menu'].find('ซาวด์ฟอนท์')['command']()
         app.audio_settings.assert_called_once()
-        self.assertEqual(menu.find('มิกเซอร์')['accelerator'],'F9')
+        self.assertEqual(menu.find('13. ทางลัด')['menu'].find('มิกเซอร์')['accelerator'],'F9')
 
     def test_stale_search_and_idle_commands_are_disabled(self):
         app, menu = self.app(), Menu()
         for visible,pending,revision in [(False,False,2),(True,True,2),(True,False,1)]:
             app.search_visible,app.search_pending,app.search_result_revision=visible,pending,revision
             populate_context_menu(app, menu, Menu, [])
-            self.assertEqual(menu.find('จัดการข้อมูลเพลง')['state'],'normal')
-            self.assertEqual(menu.find('ตัวควบคุม')['menu'].find('ยกเลิกเพลง')['state'],'disabled')
+            self.assertEqual(menu.find('13. ทางลัด')['menu'].find('จัดการข้อมูลเพลง')['state'],'normal')
+            self.assertEqual(menu.find('10. ตัวควบคุม')['menu'].find('ยกเลิกเพลง')['state'],'disabled')
         app.search_visible,app.search_pending,app.search_result_revision=True,False,2
         populate_context_menu(app, menu, Menu, [])
-        menu.find('จัดการข้อมูลเพลง')['command']()
+        menu.find('13. ทางลัด')['menu'].find('จัดการข้อมูลเพลง')['command']()
         app.manage_songs.assert_called_once()
 
     def test_queue_and_transport_routes(self):
@@ -96,7 +96,7 @@ class ContextMenuTests(unittest.TestCase):
         screens=[(0,0,1920,1080),(-1280,0,1280,720)]
         for _ in range(4): populate_context_menu(app,menu,Menu,screens)
         self.assertEqual(len(menu.children),7)
-        display=menu.find('ระบบ 2')['menu']
+        display=menu.find('11. ระบบ 2')['menu']
         self.assertEqual(len([e for e in display.entries if e['type']=='radio']),2)
         self.assertEqual(display.find('จอร้องเต็ม')['state'],'disabled')
         app.stage=SimpleNamespace(winfo_exists=lambda:True)
