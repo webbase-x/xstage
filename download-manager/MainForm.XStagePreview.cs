@@ -39,8 +39,13 @@ public sealed partial class MainForm
         };
         tabs.DrawItem += (_, e) =>
         {
-            var selected = e.Index == tabs.SelectedIndex;
+            // Windows may request an owner-draw tab while its handle/size is
+            // changing (startup, minimize, DPI scaling). Never pass a zero or
+            // stale rectangle to native GDI+.
+            if (e.Index < 0 || e.Index >= tabs.TabPages.Count) return;
             var area = tabs.GetTabRect(e.Index);
+            if (area.Width <= 0 || area.Height <= 0) return;
+            var selected = e.Index == tabs.SelectedIndex;
             using var background = new SolidBrush(selected
                 ? Color.FromArgb(21, 89, 155) : DarkPanel);
             e.Graphics.FillRectangle(background, area);
@@ -303,12 +308,16 @@ public sealed partial class MainForm
 
     private void PaintSpeedGraph(Graphics graphics, Rectangle area)
     {
-        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        // A collapsed/minimized panel can momentarily have zero client
+        // dimensions. Do not manufacture an off-screen chart rectangle:
+        // GDI+ can report "Parameter is not valid" while layout is settling.
+        if (area.Width <= 0 || area.Height <= 0) return;
         graphics.Clear(Color.FromArgb(12, 33, 47));
-        var rect = Rectangle.FromLTRB(area.Left + 63, area.Top + 12,
-            Math.Max(area.Left + 85, area.Right - 15),
-            Math.Max(area.Top + 45, area.Bottom - 26));
+        if (area.Width < 130 || area.Height < 85) return;
+        var rect = new Rectangle(area.Left + 63, area.Top + 12,
+            area.Width - 78, area.Height - 38);
         if (rect.Width < 25 || rect.Height < 30) return;
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
         var max = Math.Max(1024, _speedSamples.Count == 0 ? 0 : _speedSamples.Max() * 1.12);
         using var gridPen = new Pen(Color.FromArgb(42, 69, 83), 1);
         using var textBrush = new SolidBrush(Color.FromArgb(176, 198, 218));
