@@ -40,6 +40,14 @@ def validate_remote_url(url):
     host=parts.hostname.rstrip(".")
     if not host or host.lower() in ("localhost","localhost.localdomain"):
         raise ValueError("ไม่อนุญาตลิงก์เครือข่ายภายในเครื่อง")
+    # Numeric IP literals must be checked directly, not via a resolver that
+    # may rebind or return an unrelated address.
+    try:
+        literal=ipaddress.ip_address(host)
+    except ValueError:
+        literal=None
+    if literal is not None and not literal.is_global:
+        raise ValueError("ไม่อนุญาตลิงก์เครือข่ายภายในเครื่อง")
     try:
         endpoints=socket.getaddrinfo(host,443,type=socket.SOCK_STREAM)
     except OSError as exc:

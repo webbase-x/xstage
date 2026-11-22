@@ -671,8 +671,11 @@ def import_folder(workspace,source,progress=None,cancel=None,selected_file=None)
     # Companion LYR/CUR/LRC files are still resolved by the existing reader.
     one=None
     if selected_file is not None:
-        one=Path(selected_file).expanduser().resolve(strict=True)
-        if (not one.is_file() or one.is_symlink() or
+        try:
+            one=Path(selected_file).expanduser().resolve(strict=True)
+        except (OSError,RuntimeError) as exc:
+            raise ValueError("ไฟล์เพลงไม่อยู่ในโฟลเดอร์หรือไม่ใช่ชนิดที่รองรับ") from exc
+        if (not one.is_file() or
                 not one.is_relative_to(root) or one.suffix.lower() not in MEDIA_EXT):
             raise ValueError("ไฟล์เพลงไม่อยู่ในโฟลเดอร์หรือไม่ใช่ชนิดที่รองรับ")
     totals={"files_seen":0,"files_new":0,"media_duplicates":0,
