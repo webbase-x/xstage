@@ -35,8 +35,12 @@ assert.ok(js.includes('manual-cue-token')&&js.includes('manual-advanced-times')&
  js.includes('manualCueUndo'),'New cue editor must be connected');
 const exportBackend=read('songstudio-plus/app.py');
 const exportStyle=read('songstudio-plus/web/style.css');
-for(const id of ['build-operation-progress','build-progress-percent','build-progress-count',
-                 'build-progress-results','build-progress-fill','build-progress-track']){
+// The outer section is a semantic container, not an element whose value changes.
+assert.ok(source.includes('id="build-operation-progress"'),
+  'missing visible export progress container');
+for(const id of ['build-progress-percent','build-progress-count',
+                 'build-progress-results','build-progress-fill','build-progress-track',
+                 'build-progress-state','build-progress-current']){
   assert.ok(source.includes('id="'+id+'"'),'missing visible export progress element: '+id);
   assert.ok(js.includes('"'+id+'"'),'missing live update for '+id);
 }
