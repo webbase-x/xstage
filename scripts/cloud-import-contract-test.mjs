@@ -164,6 +164,54 @@ try {
   assert.equal(paginationRequests,2);
 } finally { ctx.fetch=originalFetch; }
 
+// An upload may exceed Google's short-lived access token lifetime. The first
+// HTTP 401 must renew the same account, then retry exactly that request once.
+const beforeRenewFetch=ctx.fetch;
+let activeToken='expired-token',requests=[],forcedRenewals=0,attemptedRenewals=0;
+ctx.fetch=async(url,options={})=>{
+  requests.push({url:String(url),method:options.method||'GET',
+    authorization:options.headers?.Authorization,range:options.headers?.['Content-Range']});
+  if(options.headers?.Authorization==='Bearer expired-token')
+    return reply(401,{error:'invalid_token'});
+  if(String(url).includes('upload_id='))return reply(308,null,{Range:'bytes=0-7'});
+  return reply(200,{files:[]});
+};
+try{
+  const renewDrive=new Drive(()=>activeToken,()=>{});
+  renewDrive.ensureAuth=async force=>{
+    attemptedRenewals++;
+    if(force){forcedRenewals++;activeToken='renewed-token';}
+  };
+  const rows=await renewDrive.list("'root' in parents");
+  assert.equal(rows.length,0);
+  assert.equal(forcedRenewals,1,'A 401 should trigger one Google token renewal');
+  assert.deepEqual(requests.map(x=>x.authorization),
+    ['Bearer expired-token','Bearer renewed-token']);
+  requests=[];activeToken='expired-token';
+  const chunk=await renewDrive.signedFetch('https://www.googleapis.com/upload/drive/v3/files?upload_id=TEST',{
+    method:'PUT',headers:{'Content-Range':'bytes 0-7/64'},body:new Blob(['12345678'])
+  });
+  assert.equal(chunk.status,308,'Resumable Drive chunk should continue after OAuth renewal');
+  assert.equal(forcedRenewals,2);
+  assert.deepEqual(requests.map(x=>x.range),['bytes 0-7/64','bytes 0-7/64'],
+    'Retry must preserve the exact uploaded chunk range');
+  requests=[];activeToken='expired-token';
+  renewDrive.ensureAuth=async force=>{
+    if(force)throw Error('Google requires explicit user reconnection');
+  };
+  await assert.rejects(
+    renewDrive.signedFetch('https://www.googleapis.com/drive/v3/files'),
+    error=>error.code==='XSTAGE_AUTH_REQUIRED'&&/explicit user/.test(error.message),
+    'A failed silent renewal must stop safely after one 401');
+  assert.equal(requests.length,1,'Never loop Google Login on a rejected token');
+}finally{ctx.fetch=beforeRenewFetch;}
+assert.ok(app.includes('async function ensureImporterGoogleAuth(force=false,interactive=false)')&&
+  app.includes('state.accountSub!==expectedSub')&&
+  app.includes("requestAccessToken({prompt:interactive?'select_account':''})"),
+  'Importer renewal must verify and preserve the same Google account');
+assert.ok(page.includes('id="cloud-import-reauthorize"'),
+  'Paused work must expose a manual Google reconnection control');
+
 const importUi=read('cloud-import.js');
 assert.ok(importUi.includes('input[data-import-group],input[data-import-item]')&&
   importUi.includes('checkbox.dataset.importItem=entry.key'),
