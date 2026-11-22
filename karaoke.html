@@ -261,7 +261,8 @@
               </div>
               <div class="transport-right">
                 <label class="volume-control"><span aria-hidden="true">◖))</span><span class="sr-only">ระดับเสียง</span><input id="volume" type="range" min="0" max="100" value="80" aria-label="ระดับเสียง"></label>
-                <span id="stage-volume-value" class="transport-volume-value">80%</span>
+                <span id="stage-volume-value" class="transport-volume-value" title="เสียงเฉพาะเว็บ (ยังไม่เชื่อม Windows)">80%</span>
+                <button id="windows-volume-connect" class="windows-volume-connect" type="button" aria-haspopup="dialog" aria-controls="windows-volume-dialog" aria-pressed="false" title="เชื่อมกับเสียงหลัก Windows ผ่านโปรแกรมช่วย">↔ Win</button>
                 
                 <label class="speed-control">ความเร็ว <select id="speed" aria-label="ความเร็วเพลง"><option value="0.75">0.75×</option><option value="0.9">0.90×</option><option value="1" selected>1.00×</option><option value="1.1">1.10×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option></select></label>
                 <label class="repeat-control"><input id="repeat" type="checkbox"> วนเพลง</label>
@@ -355,6 +356,22 @@
     
     <footer class="bottom-bar"><span>© X-Stage Karaoke · Personal Google Drive Player</span><span id="connection"><span class="footer-dot"></span> Private & Secure</span><a href="privacy.html">ความเป็นส่วนตัว</a></footer>
   </div>
+  <dialog id="windows-volume-dialog" class="windows-volume-dialog" aria-labelledby="windows-volume-title">
+    <div class="windows-volume-modal">
+      <h2 id="windows-volume-title">เชื่อมระดับเสียงหลัก Windows</h2>
+      <p>Chrome ควบคุมระดับเสียงระบบ Windows โดยตรงไม่ได้ ต้องเปิด <strong>XStageWindowsVolumeBridge.exe</strong> บนเครื่องนี้ก่อน การเชื่อมต้องกรอกรหัสที่โปรแกรมแสดง และสามารถยกเลิกได้ตลอดเวลา</p>
+      <p><a href="https://github.com/webbase-x/xstage/actions/workflows/build-web-volume-bridge.yml" target="_blank" rel="noopener noreferrer">รับโปรแกรมช่วย Windows จาก GitHub Actions</a> · ดาวน์โหลด Artifact และเปิด EXE โดยผู้ใช้เอง</p>
+      <label for="windows-volume-code">รหัสเชื่อมต่อจากโปรแกรมช่วย (10 หลัก)</label>
+      <input id="windows-volume-code" type="text" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" autocomplete="off" placeholder="รหัส 10 หลัก">
+      <p id="windows-volume-status" role="status" aria-live="polite">ยังไม่เชื่อม · ขณะนี้แถบเสียงปรับเฉพาะเว็บ</p>
+      <div class="windows-volume-modal-actions">
+        <button id="windows-volume-pair" type="button">เชื่อมเสียง Windows</button>
+        <button id="windows-volume-disconnect" type="button" hidden>ตัดการเชื่อมต่อ</button>
+        <button id="windows-volume-close" type="button">ปิด</button>
+      </div>
+      <small>โปรแกรมช่วยทำงานเฉพาะเครื่องนี้บน 127.0.0.1 โดยต้องอนุญาตการเชื่อมต่อและยืนยันรหัสก่อน ไม่มีการส่งรหัสหรือระดับเสียงไปยังเซิร์ฟเวอร์ X-Stage</small>
+    </div>
+  </dialog>
   <dialog id="cloud-import-dialog" class="cloud-import-dialog" aria-labelledby="cloud-import-title">
     <div class="cloud-import-panel">
       <header class="cloud-import-header">
@@ -484,7 +501,8 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="mobile-layout.js?v=1136" defer></script>
   <script src="android-apk-download.js?v=1136" defer></script>
 
-  <script src="stage-ui.js?v=1153-wheel-volume" defer></script>
+  <script src="windows-volume-bridge.js?v=1136-system-volume-bridge" defer></script>
+  <script src="stage-ui.js?v=1154-wheel-volume-bridge" defer></script>
   <script src="stage-lighting.js?v=1136-live" defer></script>
 </body>
 </html>
