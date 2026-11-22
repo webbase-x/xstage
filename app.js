@@ -2987,8 +2987,20 @@ async function resumePlaybackFromSystem(){
   state.userStopped=false;
   state.resumeAfterInterruption=false;
   try{await window.XStageResumeAudioGraph?.();}catch{}
-  try{await player.play();updateTransport();return true;}
-  catch{state.resumeAfterInterruption=true;updateTransport();return false;}
+  try{
+    await player.play();
+    // Safari can resolve the virtual MIDI transport play() while its actual
+    // SoundFont AudioContext or iPhone media relay remains suspended.
+    if(midiTransport.active&&state.liveMidiPlayback?.resumeAudio){
+      const audible=await state.liveMidiPlayback.resumeAudio();
+      if(audible===false){
+        state.resumeAfterInterruption=true;
+        updateTransport();
+        return false;
+      }
+    }
+    updateTransport();return true;
+  }catch{state.resumeAfterInterruption=true;updateTransport();return false;}
 }
 function togglePlayback(){
   try{window.XStageIOSMidiAudio?.activate?.();}catch{}
@@ -3001,7 +3013,7 @@ function togglePlayback(){
     return;
   }
   if(player.paused)resumePlaybackFromSystem();
-  else{state.userPaused=true;state.resumeAfterInterruption=false;player.pause();}
+  else{state.userPaused=true;state.resumeAfterInterruption=false;screenSleepIntent=null;wakeNeedsGesture=false;player.pause();}
 }
 
 async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt=0,autoplay=true}={}) {
@@ -4211,7 +4223,7 @@ function setupMediaSession(){
   if(!('mediaSession' in navigator))return;
   const bind=(action,handler)=>{try{navigator.mediaSession.setActionHandler(action,handler);}catch{}};
   bind('play',()=>{resumePlaybackFromSystem();});
-  bind('pause',()=>{state.userPaused=true;state.resumeAfterInterruption=false;player.pause();});
+  bind('pause',()=>{state.userPaused=true;state.resumeAfterInterruption=false;screenSleepIntent=null;wakeNeedsGesture=false;player.pause();});
   bind('stop',stopSong);
   bind('nexttrack',()=>playNext());
   bind('previoustrack',playPrevious);
@@ -4221,10 +4233,78 @@ function setupMediaSession(){
 }
 setupMediaSession();
 
-function tryRecoverInterruptedPlayback(){
-  if(nativeAudioFocusBlocked||!state.resumeAfterInterruption||state.userPaused||state.userStopped||!state.current||state.loading)return;
-  setTimeout(()=>{if(state.resumeAfterInterruption&&!state.userPaused&&!state.userStopped)resumePlaybackFromSystem();},180);
+// Safari can suspend a MIDI AudioContext / MediaStream relay on screen lock
+// WITHOUT pausing the virtual transport. Remember playback intent while hidden
+// and restore the actual output graph on wake without restarting the song.
+let screenSleepIntent=null;
+let wakeRecoveryInFlight=false;
+let wakeNeedsGesture=false;
+function saveScreenSleepPlaybackIntent(){
+  if(!state.current||state.loading||state.userPaused||state.userStopped)return;
+  if(player.paused&&!state.resumeAfterInterruption)return;
+  screenSleepIntent={song:state.current,requestId:state.requestId};
+  savePlaybackResumeState();
 }
+function mayRestoreScreenAudio(){
+  return !document.hidden&&!nativeAudioFocusBlocked&&!!state.current&&
+    !state.loading&&!state.userPaused&&!state.userStopped&&
+    (state.resumeAfterInterruption||
+     screenSleepIntent?.song===state.current&&screenSleepIntent.requestId===state.requestId||
+     midiTransport.active&&!player.paused);
+}
+async function recoverScreenAudio(){
+  if(wakeRecoveryInFlight||!mayRestoreScreenAudio())return false;
+  wakeRecoveryInFlight=true;
+  const requestId=state.requestId;
+  try{
+    let restored=true;
+    if(player.paused){
+      restored=await resumePlaybackFromSystem();
+    }else if(midiTransport.active){
+      // Do not call the virtual player.play() again: it is already running.
+      // Recover AudioContext + iOS HTMLMediaElement relay in place.
+      if(state.liveMidiPlayback?.resumeAudio)
+        restored=await state.liveMidiPlayback.resumeAudio();
+      else if(window.XStageBrowserMidi?.unlockAudio)
+        restored=await window.XStageBrowserMidi.unlockAudio()!==false;
+    }else if(window.XStageResumeAudioGraph){
+      restored=await window.XStageResumeAudioGraph();
+    }
+    if(requestId!==state.requestId||!state.current||state.userPaused||state.userStopped)
+      return false;
+    if(restored===false){
+      state.resumeAfterInterruption=true;
+      wakeNeedsGesture=true;
+      setPlayStatus('iPhone พักเสียงขณะล็อกหน้าจอ · แตะ ▶ เพื่อเล่นต่อจากตำแหน่งเดิม');
+      updateTransport();
+      return false;
+    }
+    wakeNeedsGesture=false;
+    state.resumeAfterInterruption=false;
+    screenSleepIntent=null;
+    updateTransport();
+    return true;
+  }catch(error){
+    if(requestId===state.requestId&&!state.userPaused&&!state.userStopped){
+      state.resumeAfterInterruption=true;
+      wakeNeedsGesture=true;
+      setPlayStatus('ระบบเสียงถูกพัก · แตะ ▶ เพื่อเล่นต่อจากตำแหน่งเดิม');
+      console.warn('Screen wake audio recovery:',error);
+    }
+    return false;
+  }finally{wakeRecoveryInFlight=false;}
+}
+function tryRecoverInterruptedPlayback(){
+  if(!mayRestoreScreenAudio())return;
+  setTimeout(()=>{
+    if(mayRestoreScreenAudio())void recoverScreenAudio();
+  },180);
+}
+// iOS may require a fresh user gesture after screen lock. Reuse that gesture
+// only when an automatic recovery was denied, never after manual pause/stop.
+document.addEventListener('pointerdown',()=>{
+  if(wakeNeedsGesture&&mayRestoreScreenAudio())void recoverScreenAudio();
+},{capture:true,passive:true});
 window.addEventListener('xstage-audio-interrupted',()=>{
   if(!state.userPaused&&!state.userStopped)state.resumeAfterInterruption=true;
 });
@@ -4247,9 +4327,11 @@ window.addEventListener('xstage-native-audio-focus',event=>{
   }
 });
 document.addEventListener('visibilitychange',()=>{
-  // Background MIDI is scheduled by the AudioWorklet, not a tab timer.
-  // Resume lyric/transport rendering only when the page becomes visible.
-  // Do not pause, start, or seek music merely because visibility changed.
+  // Record a playing song before Safari freezes its audio/context. Never
+  // interpret an explicit user pause as permission to resume automatically.
+  if(document.hidden){saveScreenSleepPlaybackIntent();return;}
+  // Background MIDI is sequenced by AudioWorklet, not a hidden-tab timer.
+  // On return, inspect the AUDIBLE engine even if the UI says "playing".
   if(!document.hidden){
     updateTransport();
     scheduleLyricsDraw();
