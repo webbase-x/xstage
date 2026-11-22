@@ -658,10 +658,10 @@ public sealed partial class MainForm
             var completed = jobs.Count(job => job.Status == "Completed");
             var failed = jobs.Count(job => job.Status == "Failed");
             MessageBox.Show(this,
-                $"รายการทั้งหมด: {jobs.Length:N0}\\n" +
-                $"กำลังดาวน์โหลด: {active:N0}\\n" +
-                $"รอคิว: {queued:N0}\\n" +
-                $"สำเร็จ: {completed:N0}\\n" +
+                $"รายการทั้งหมด: {jobs.Length:N0}\n" +
+                $"กำลังดาวน์โหลด: {active:N0}\n" +
+                $"รอคิว: {queued:N0}\n" +
+                $"สำเร็จ: {completed:N0}\n" +
                 $"ข้อผิดพลาด: {failed:N0}",
                 "สรุปการใช้งาน · X-Stage", MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
