@@ -9,6 +9,7 @@ on:
       - "scripts/test-songstudio-pro-actions.mjs"
       - "scripts/test_songstudio_pro_exe_smoke.py"
       - "scripts/test_songstudio_pro_popup_smoke.py"
+      - "scripts/test_songstudio_pro_ui_matrix.py"
       - "scripts/test-songstudio-pro-portal.mjs"
       - ".github/workflows/test-songstudio-pro.yml"
   push:
@@ -20,6 +21,7 @@ on:
       - "scripts/test-songstudio-pro-portal.mjs"
       - "scripts/test-songstudio-pro-native-picker.py"
       - "scripts/test_songstudio_pro_popup_smoke.py"
+      - "scripts/test_songstudio_pro_ui_matrix.py"
       - ".github/workflows/test-songstudio-pro.yml"
   workflow_dispatch:
 
@@ -123,6 +125,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Desktop standalone contract failed" }
           python scripts/test_songstudio_pro_popup_smoke.py
           if ($LASTEXITCODE -ne 0) { throw "Qt WebEngine popup smoke failed" }
+          python scripts/test_songstudio_pro_ui_matrix.py
+          if ($LASTEXITCODE -ne 0) { throw "Qt all-menu responsive smoke failed" }
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: X-Stage-Song-Studio-Pro-Qt-Viewport-Evidence
+          path: dist/songstudio-viewport-evidence/
+          retention-days: 14
+          if-no-files-found: warn
       - name: Build stable-name desktop app payload
         shell: pwsh
         run: |
@@ -156,25 +167,25 @@ jobs:
           if (!(Test-Path $compiler)) { throw "ISCC.exe missing" }
           & $compiler 'songstudio-plus/installer/XStageSongStudioPro.iss'
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
-          if (!(Test-Path "songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.38-win-x64-Setup.exe")) { throw "Setup EXE missing" }
+          if (!(Test-Path "songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.39-win-x64-Setup.exe")) { throw "Setup EXE missing" }
       - name: Verify Setup SHA-256 and create evidence
         shell: pwsh
         run: |
-          $setup="songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.38-win-x64-Setup.exe"
+          $setup="songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.39-win-x64-Setup.exe"
           $hash=(Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
-          "X-Stage Song Studio Pro v0.1.38 Windows x64 Program Files Setup" | Out-File "dist/README-Setup.txt" -Encoding UTF8
+          "X-Stage Song Studio Pro v0.1.39 Windows x64 Program Files Setup" | Out-File "dist/README-Setup.txt" -Encoding UTF8
           "SHA-256: $hash" | Out-File "dist/README-Setup.txt" -Encoding UTF8 -Append
           "Inno Setup (unsigned); requires Windows UAC, retains user SQLite workspace." | Out-File "dist/README-Setup.txt" -Encoding UTF8 -Append
           Write-Host "SETUP SHA-256 $hash"
       - uses: actions/upload-artifact@v6
         with:
-          name: X-Stage-Song-Studio-Pro-v0.1.38-Windows-Setup
-          path: songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.38-win-x64-Setup.exe
+          name: X-Stage-Song-Studio-Pro-v0.1.39-Windows-Setup
+          path: songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.39-win-x64-Setup.exe
           retention-days: 14
           if-no-files-found: error
       - uses: actions/upload-artifact@v6
         with:
-          name: X-Stage-Song-Studio-Pro-v0.1.38-Windows-Setup-Metadata
+          name: X-Stage-Song-Studio-Pro-v0.1.39-Windows-Setup-Metadata
           path: dist/README-Setup.txt
           retention-days: 14
           if-no-files-found: error

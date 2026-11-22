@@ -54,7 +54,7 @@ class ImportObservabilityTests(unittest.TestCase):
     def test_session_is_canonical_updater_version(self):
         from inspect import getsource
         self.assertIn('"version":updater.VERSION', getsource(app.Handler.handle_get))
-        self.assertEqual(updater.VERSION, "0.1.38")
+        self.assertEqual(updater.VERSION, "0.1.39")
 
 
 if __name__ == "__main__":

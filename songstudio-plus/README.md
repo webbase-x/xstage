@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.38
+# X-Stage Song Studio Pro — Technical Preview v0.1.39
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -8,6 +8,34 @@ modify the older X-Stage Song Studio application.
 the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
+
+## v0.1.39 — File import, direct HTTPS song download, responsive QA
+
+- New native **single-file importer**: MID/MIDI/KAR, MP3/M4A/WAV/FLAC,
+  and supported videos. It indexes only the selected file instead of
+  re-scanning other media in the same folder. Original music, sidecar
+  timing files and the existing SQLite workspace remain untouched.
+- New **direct HTTPS download + import** workflow accepts authorized,
+  public .mid/.midi/.kar/.mp3/.m4a/.wav/.flac/.mp4/... links. It refuses
+  localhost/private addresses even through redirects, rejects HTML responses,
+  caps size at 8 GiB, cleans partial downloads on cancel/failure and keeps
+  full original media in user Downloads/XStageSongStudioPro for subsequent
+  XMID export. It is NOT a social-video extractor or Google Drive login.
+- Import UX now exposes dedicated file picker and HTTPS link input next to
+  the existing folder flow, with job progress and explanatory error messages.
+  A quick link leads to Karaoke Online, which accepts XMID; output is not
+  automatically synced to private Google Drive or Windows Karaoke PC.
+- Fixed the three-tab XMID build status layout, keyboard focus, narrow-width
+  wrapping and natural scrolling for short/compact displays.
+- Windows CI now checks all eight menus at 390×680, 600×800, 768×720,
+  900×720, 1024×768, 1366×768, 1920×1080 and 2560×1440 in an actual
+  Qt WebEngine software-rendered window. JSON geometry results and screenshots
+  are attached as workflow artifacts; these are simulations, not physical
+  display, audio device or MIDI hardware certification.
+- Release remains gated by Python SQLite tests, direct-download security tests,
+  JavaScript contracts, native Windows picker tests, Qt UI/popup navigation,
+  real packaged EXE smoke and signed-checksum **SHA-256** (the Preview EXE
+  itself is not code-signed). Existing SQLITE databases are preserved.
 
 ## v0.1.38 — Entire-catalog batch build and persistent deduplication
 
