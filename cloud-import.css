@@ -131,3 +131,54 @@
  .cloud-import-folder-files .cloud-import-file-choice{grid-template-columns:18px minmax(0,1fr)}
  .cloud-import-file-choice small{grid-column:2;text-align:left}
 }
+
+/* Import action consistency: scroll the content, never scroll Start out of sight. */
+.cloud-import-dialog{overflow:hidden;max-height:92dvh}
+.cloud-import-panel{
+  box-sizing:border-box;display:flex;flex-direction:column;min-height:0;
+  max-height:92dvh;overflow:hidden
+}
+.cloud-import-panel>.cloud-import-header{flex:0 0 auto}
+.cloud-import-body{
+  flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;
+  overscroll-behavior:contain;padding-right:4px;scrollbar-gutter:stable
+}
+.cloud-import-body>.cloud-import-safety-note{margin:12px 0 4px}
+.cloud-import-panel>.cloud-import-footer{
+  position:relative;bottom:auto;flex:0 0 auto;z-index:2;
+  display:flex;flex-direction:column;align-items:stretch;gap:5px;
+  min-width:0;margin-top:8px;padding:10px 0 0;
+  border-top:1px solid #367288;background:#09182b
+}
+.cloud-import-footer>.cloud-import-progress{margin:0 0 2px}
+.cloud-import-footer>.cloud-import-status{
+  margin:0;max-height:3.5em;overflow-y:auto;line-height:1.55
+}
+.cloud-import-action-hint{
+  margin:0 0 4px;font-size:.73rem;line-height:1.4;
+  color:#a9d6e8;overflow-wrap:anywhere
+}
+.cloud-import-footer-buttons{
+  display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;min-width:0
+}
+.cloud-import-footer-buttons #cloud-import-start{
+  flex:1 1 255px;min-width:175px;min-height:48px
+}
+.cloud-import-footer-buttons #cloud-import-resume,
+.cloud-import-footer-buttons #cloud-import-pause{flex:1 1 130px}
+.cloud-import-footer-buttons #cloud-import-done{flex:0 1 auto}
+.cloud-import-footer-buttons #cloud-import-start:not(:disabled){
+  box-shadow:0 0 0 1px rgba(112,247,211,.2),0 6px 20px rgba(0,156,149,.16)
+}
+@media(max-width:700px){
+  .cloud-import-dialog,.cloud-import-panel{max-height:94dvh}
+  .cloud-import-footer-buttons #cloud-import-start{flex:1 1 100%}
+  .cloud-import-footer-buttons #cloud-import-done{flex:1 1 120px}
+}
+@media(max-height:560px){
+  .cloud-import-dialog,.cloud-import-panel{max-height:97dvh}
+  .cloud-import-panel{padding:9px 13px}
+  .cloud-import-panel>.cloud-import-footer{gap:3px;padding-top:6px}
+  .cloud-import-footer>.cloud-import-status{max-height:2.8em}
+  .cloud-import-footer-buttons #cloud-import-start{min-height:40px}
+}
