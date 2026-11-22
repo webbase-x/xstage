@@ -5,8 +5,8 @@ const read=path=>fs.readFileSync(new URL('../'+path,import.meta.url),'utf8');
 const app=read('app.js'),importer=read('cloud-import.js'),midi=read('browser-midi.js');
 const html=read('karaoke.html'),config=read('config.js');
 const version=JSON.parse(read('version.json'));
-assert.equal(version.build,1134);
-assert.equal(version.version,'1.0.134');
+assert.equal(version.build,1136);
+assert.equal(version.version,'1.0.136');
 assert.ok(config.includes("root:'XStageKaraoke'"));
 assert.ok(config.includes("songs:'SONGS'"));
 assert.ok(config.includes("db:'DB'"));
@@ -20,7 +20,7 @@ assert.ok(importer.includes("for(const folder of ['SONGS','DB','SOUNDFONT','BACK
 assert.ok(!midi.includes("name==='AUDIO'"),'No SoundFont fallback to legacy AUDIO');
 assert.ok(midi.includes("x.name==='SOUNDFONT'"));
 assert.ok(midi.includes("['SF2','SF3']"));
-assert.ok(html.includes('cloud-import.js?v=1134-sqlite3'));
+assert.ok(html.includes('cloud-import.js?v=1135-retired-root'));
 assert.ok(html.includes('browser-midi.js?v=1134-fast-gm-start'));
 
 const first=importer.indexOf('function pathFor(');
