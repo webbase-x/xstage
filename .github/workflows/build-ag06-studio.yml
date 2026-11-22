@@ -28,6 +28,7 @@ jobs:
           node --check ag06/audio-engine.js
           node --check ag06/studio-session.js
           node --check ag06/studio-advanced.js
+          node --check ag06/noise-reduction.js
           node --check ag06/presets.js
           node --test ag06/tests/*.test.mjs
       - name: Verify no unintentional production downloads
