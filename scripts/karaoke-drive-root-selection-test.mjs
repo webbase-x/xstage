@@ -6,7 +6,7 @@ const app=read('app.js'),imp=read('cloud-import.js'),html=read('karaoke.html');
 const version=JSON.parse(read('version.json'));
 assert.equal(version.build,1136);
 assert.equal(version.version,'1.0.136');
-assert.ok(html.includes('app.js?v=1162-no-voice-search'));
+assert.ok(html.includes('app.js?v=1164-mobile-lyrics'));
 assert.ok(html.includes('cloud-import.js?v=1140-google-session-renew'));
 assert.ok(app.includes('createdTime,sharedWithMeTime'));
 assert.ok(html.includes('id="library-drive-link"'));
