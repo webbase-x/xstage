@@ -231,6 +231,32 @@ class RestoreTests(unittest.TestCase):
         self.assertEqual(self.title(),'ปัจจุบัน')
 
 
+    def test_live_settings_link_swapped_during_snapshot_is_rejected(self):
+        restore.stage_restore(self.source, self.data)
+        outside = self.root/'external-live-settings.json'
+        write_json(outside, {'title':'external'})
+        current = self.data/'settings.json'
+        original_settings = current.read_bytes()
+        original_copy = restore.copy_database
+
+        def swap_after_first_snapshot(source, target):
+            result = original_copy(source, target)
+            if 'restore-safety-' in str(target):
+                current.unlink()
+                try:
+                    current.symlink_to(outside)
+                except (OSError, NotImplementedError):
+                    current.write_bytes(original_settings)
+                    self.skipTest('filesystem cannot create symlinks')
+            return result
+
+        with patch.object(restore, 'copy_database', side_effect=swap_after_first_snapshot):
+            with self.assertRaisesRegex(ValueError, 'ไฟล์ข้อมูลปัจจุบันเปลี่ยน'):
+                restore.apply_pending(self.data)
+        self.assertEqual(outside.read_text(encoding='utf-8'), '{"title":"external"}')
+        self.assertFalse(list(self.data.glob('restore-safety-*')))
+        self.assertTrue((self.data/'restore-pending').exists())
+
     def test_snapshot_failure_removes_safety_folder_and_preserves_live_data(self):
         restore.stage_restore(self.source,self.data)
         original=restore.copy_database
