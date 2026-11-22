@@ -236,7 +236,16 @@ try{
   await page.waitForFunction(()=>{const el=document.getElementById('cloud-import-open-gate');return el&&!el.hidden;},null,{timeout:20000});
   await page.click('#cloud-import-open-gate');
   await page.locator('#cloud-import-dialog[open]').waitFor();
-  await page.locator('#cloud-import-input').setInputFiles(dir);
+  // Chromium may reject sensitive directories with AbortError, even when the
+  // user did not intend to cancel. Keep an explicit legacy picker available.
+  await page.evaluate(()=>Object.defineProperty(window,'showDirectoryPicker',{
+    configurable:true,value:()=>Promise.reject(new DOMException('Restricted directory','AbortError'))
+  }));
+  await page.click('#cloud-import-pick');
+  await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.includes('Chrome'));
+  const fallbackChooser=page.waitForEvent('filechooser');
+  await page.click('#cloud-import-pick-fallback');
+  await (await fallbackChooser).setFiles(dir);
   await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='2');
   assert.equal(await page.locator('#cloud-import-fonts').textContent(),'1');
   assert.equal(await page.locator('#cloud-import-blocked').textContent(),'3',
