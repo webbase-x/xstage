@@ -89,6 +89,13 @@ class WindowsVolume:
             checked(invoke(volume, 14, (BOOL, C.c_void_p), (int(value == 0), None)))
             return self._read(volume)
 
+    def set_muted(self, muted):
+        if not isinstance(muted, bool):
+            raise ValueError('Muted must be boolean')
+        with self.endpoint() as volume:
+            checked(invoke(volume, 14, (BOOL, C.c_void_p), (int(muted), None)))
+            return self._read(volume)
+
     def close(self):
         if not self.closed:
             self.closed = True
