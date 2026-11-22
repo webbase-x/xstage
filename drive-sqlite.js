@@ -1,7 +1,8 @@
 /* X-Stage Karaoke Online: real SQLite catalog snapshots on private Drive.
  * SQL.js (SQLite compiled to WebAssembly, MIT) is initialized only when the
  * user downloads/publishes a catalog. No OAuth token goes to the CDN.
- * Each committed catalog is immutable; current.json is only an atomic pointer.
+ * DB/songs.sqlite3 is the canonical song catalog. A legacy current.json is
+ * readable for one-time migration only; new catalogs need no JSON pointer.
  */
 (function(scope){
 'use strict';
