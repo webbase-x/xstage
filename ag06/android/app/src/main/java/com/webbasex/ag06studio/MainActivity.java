@@ -133,7 +133,8 @@ public class MainActivity extends Activity {
         if(meta.startsWith("data:audio/webm")){mime="audio/webm";extension="webm";}
         else if(meta.startsWith("data:audio/ogg")){mime="audio/ogg";extension="ogg";}
         else if(meta.startsWith("data:audio/mp4")){mime="audio/mp4";extension="m4a";}
-        else{notifyWeb(false,"รองรับเฉพาะเสียง WebM, Ogg หรือ MP4");return;}
+        else if(meta.startsWith("data:audio/wav")){mime="audio/wav";extension="wav";}
+        else{notifyWeb(false,"รองรับเฉพาะเสียง WebM, Ogg, MP4 หรือ WAV");return;}
         Uri created=null;
         try{
             byte[] bytes=Base64.decode(dataUrl.substring(comma+1),Base64.DEFAULT);
