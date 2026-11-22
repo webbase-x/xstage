@@ -76,16 +76,29 @@ const legacyRecords=new Map([
   ['another_mid_same_code', {webSongId:'another_mid_same_code',
     code:'100',midi:{md5Checksum:digestB}}]
 ]);
-const {fiveDigitXmidCode}=ctx.XStageCloudImport;
-assert.equal(fiveDigitXmidCode('00000001'),'00001');
-assert.equal(fiveDigitXmidCode('1'),'00001');
-assert.equal(fiveDigitXmidCode('99999'),'99999');
-assert.throws(()=>fiveDigitXmidCode('100000'),/00001/);
-assert.throws(()=>fiveDigitXmidCode('AB001'),/ตัวเลข/);
+const {sourceXmidName,sameMidiBytes}=ctx.XStageCloudImport;
+assert.equal(sourceXmidName('00001.XMID'),'00001.XMID');
+assert.equal(sourceXmidName('00000001.xmid'),'00001.XMID');
+assert.equal(sourceXmidName('00002.xmid'),'00002.XMID');
+assert.equal(sourceXmidName('batch/Song-A.XMID'),'Song-A.XMID');
+assert.throws(()=>sourceXmidName('00001.mid'),/XMID/);
+const exampleSize=240;
+const md5ContentA='1'.repeat(32),md5ContentB='2'.repeat(32);
+const fingerprints=new Map([[md5ContentA,{midiSize:exampleSize}]]);
+assert.equal(sameMidiBytes(fingerprints,md5ContentA,exampleSize),true,
+  'Repeated source filenames with matching inner-MIDI bytes and MD5 are duplicates');
+assert.equal(sameMidiBytes(fingerprints,md5ContentB,exampleSize),false,
+  'Equal file size alone must NEVER discard different MIDI content');
+assert.equal(sameMidiBytes(fingerprints,md5ContentB,exampleSize+1),false,
+  'Different byte size and hash must be distinct');
+assert.throws(()=>sameMidiBytes(fingerprints,md5ContentA,exampleSize+1),/ขนาดไบต์ต่างกัน/,
+  'An inconsistent hash/byte-size pair must fail rather than lose a different MIDI');
 const xmidCode=read('cloud-import.js');
 assert.ok(xmidCode.includes("const sourceCode=opened.code")&&
-  xmidCode.includes("const name=isXmid?embeddedCode+'.XMID'"),
-  'XMID stored basename must use the embedded song code, not the input filename');
+  xmidCode.includes("const name=isXmid?sourceXmidName(item.file.name)")&&
+  xmidCode.includes("if(isXmid)path.push(rawMidiHash)")&&
+  xmidCode.includes("midiSize:rawMidiSize,originalFilename:item.file.name"),
+  'Every 00001.XMID batch must preserve the source basename but isolate distinct MIDI content');
 const indexed=await buildMidiIndex(legacyRecords,{getSqlite:async()=>{throw Error('unexpected fetch');}},()=>{});
 assert.equal(indexed.duplicates,1,'Repeated MIDI must collapse even if codes differ');
 assert.equal(legacyRecords.size,2,'A different MIDI must remain available');
