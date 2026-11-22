@@ -165,6 +165,15 @@ def rollback(data,safety,existed,replaced=FILES):
                 raise ValueError('ไฟล์สำรองเพื่อย้อนคืนไม่ปลอดภัย: ' + name)
     # Verify every saved database before touching any live target. A corrupt
     # snapshot must never be copied over a still-recoverable user database.
+    # Fail closed on corrupt JSON safety snapshots before restoring any live file.
+    # A late parse error must not leave an earlier file partially rolled back.
+    for name in replaced:
+        if name in existed and name.endswith('.json'):
+            source = safety/name
+            try:
+                parse_json(source.read_text(encoding='utf-8-sig'))
+            except (OSError, UnicodeError, ValueError, TypeError) as error:
+                raise ValueError('ไฟล์ JSON สำรองเพื่อย้อนคืนเสียหาย: ' + name) from error
     for name in replaced:
         if name in existed and name.endswith('.sqlite3'):
             with closing(readonly(safety/name)) as db:
