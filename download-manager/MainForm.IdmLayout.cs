@@ -27,11 +27,11 @@ public sealed partial class MainForm
     private readonly Dictionary<string, Label> _overviewCounts = new();
     private readonly Dictionary<string, Image> _rowIcons = new();
 
-    private static readonly Color DarkTop = Color.FromArgb(13, 29, 43);
-    private static readonly Color DarkPanel = Color.FromArgb(17, 45, 59);
-    private static readonly Color DarkGrid = Color.FromArgb(18, 38, 49);
-    private static readonly Color MutedText = Color.FromArgb(178, 191, 211);
-    private static readonly Color Accent = Color.FromArgb(47, 204, 179);
+    private static readonly Color DarkTop = Color.FromArgb(4, 19, 43);
+    private static readonly Color DarkPanel = Color.FromArgb(6, 29, 60);
+    private static readonly Color DarkGrid = Color.FromArgb(5, 24, 49);
+    private static readonly Color MutedText = Color.FromArgb(176, 203, 233);
+    private static readonly Color Accent = Color.FromArgb(0, 189, 255);
 
     private void CreateXStageWorkspace()
     {
@@ -44,11 +44,11 @@ public sealed partial class MainForm
             BackColor = DarkTop
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56)); // branded menu
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 94)); // large-icon command deck
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); // branded menu
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 90)); // large-icon command deck
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));  // URL input, expandable
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Sidebar + main list
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); // live status strip
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); // live status strip
         _workspaceRoot = root;
 
         root.Controls.Add(CreateBrandHeader(), 0, 0);
@@ -104,8 +104,8 @@ public sealed partial class MainForm
     {
         var menu = new MenuStrip
         {
-            Dock = DockStyle.Fill, AutoSize = false, Height = 56,
-            Padding = new Padding(2, 11, 5, 3),
+            Dock = DockStyle.Fill, AutoSize = false, Height = 48,
+            Padding = new Padding(2, 7, 5, 3),
             BackColor = DarkTop, ForeColor = Color.White,
             Font = new Font("Segoe UI", 9, FontStyle.Regular),
             GripStyle = ToolStripGripStyle.Hidden,
