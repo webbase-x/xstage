@@ -4470,14 +4470,14 @@ let importerGoogleRenewalRetryAfter=0;
 // the SAME verified account without resetting catalog/queue or prompting users
 // once per chunk. GIS prompt:'' reuses an existing consent when Google allows it;
 // it can still require a real user gesture after revocation/blocked cookies.
-async function ensureImporterGoogleAuth(force=false){
+async function ensureImporterGoogleAuth(force=false,interactive=false){
   const margin=3*60*1000;
   if(!force&&state.token&&state.accountSub&&
      state.tokenExpiresAt>Date.now()+margin)return true;
   if(importerGoogleRenewal)return importerGoogleRenewal;
   if(!state.accountSub||!state.token)
     throw Error('ยังไม่มีบัญชี Google ที่ยืนยันแล้ว · กรุณาเชื่อมต่อบัญชีเพื่อทำต่อ');
-  if(Date.now()<importerGoogleRenewalRetryAfter)
+  if(!interactive&&Date.now()<importerGoogleRenewalRetryAfter)
     throw Error('Google ไม่อนุญาตให้ต่ออายุอัตโนมัติในขณะนี้ · กดเชื่อม Google หนึ่งครั้งแล้วทำต่อ');
   if(typeof google==='undefined'||!google.accounts?.oauth2?.initTokenClient||
      !cfg.googleClientId)
@@ -4498,7 +4498,6 @@ async function ensureImporterGoogleAuth(force=false){
           const client=google.accounts.oauth2.initTokenClient({
             client_id:cfg.googleClientId,
             scope:'openid email https://www.googleapis.com/auth/drive.file',
-            hint:state.accountSub,
             callback:result=>{
               if(result?.error||!result?.access_token)
                 settle(Error('Google ต้องการการยืนยันสิทธิ์อีกครั้ง'));
@@ -4506,7 +4505,7 @@ async function ensureImporterGoogleAuth(force=false){
             },
             error_callback:()=>settle(Error('Google ต้องการให้ผู้ใช้ยืนยันสิทธิ์อีกครั้ง'))
           });
-          client.requestAccessToken({prompt:''});
+          client.requestAccessToken({prompt:interactive?'select_account':''});
         }catch(error){settle(error);}
       });
       if(state.authId!==authId||state.accountSub!==expectedSub)
@@ -4549,6 +4548,7 @@ const xstageCloudImporter=window.XStageCloudImport?.init({
     rootId:state.libraryRootId,owned:state.libraryRootOwnedByMe,
     expiresAt:state.tokenExpiresAt}),
   ensureAuth:ensureImporterGoogleAuth,
+  reconnect:()=>ensureImporterGoogleAuth(true,true),
   refresh:async()=>{
     if(!state.token||!state.accountSub)return;
     // Reload the canonical XStageKaraoke current.json/catalog after publishing.
