@@ -2,6 +2,12 @@
 
 Independent audio-capture, software-FX, metering and recording for Windows, Android and secure browsers. Supports OS-recognized USB audio devices including first-generation Yamaha AG06. Not affiliated with Yamaha or Steinberg. Brand names appear only to describe device compatibility.
 
+## Studio Workspace (independent implementation)
+
+- Import up to 12 locally held audio files/takes (80 MiB per file, up to 10 minutes each); mix with per-track volume, mute/solo, trim in/out, offset, playback and offline stereo 44.1 kHz/16-bit WAV export.
+- Tracks are a local in-memory session: save/export finished mixes before closing the app. Importing individual recordings does not grant multichannel AG06 hardware access. Browsers and mobile devices may have insufficient memory for large sessions.
+- This is not Cubase AI, Cubasis LE, WaveLab Cast, or Yamaha AG Controller, and does not incorporate their proprietary code, licenses, DSP protocol, or assets.
+
 ## Supported behavior
 
 - Browser/Web: open /ag06/ over HTTPS, grant microphone access, choose the OS-recognized AG06 input, view live stereo USB digital input levels, and record software-processed audio.
