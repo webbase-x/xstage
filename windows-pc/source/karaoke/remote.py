@@ -138,7 +138,12 @@ class RemoteServer:
                                 owner.failures[ip] = attempts+[now]
                                 return self.response(401,{'error':'รหัสไม่ถูกต้อง หรือปิดสิทธิ์ควบคุมอยู่'})
                             owner.expire_sessions()
-                            if len(owner.sessions)>=owner.policy['max_clients']: return self.response(503,{'error':'ผู้ใช้งานเต็ม กรุณารอสักครู่ กำลังลองเชื่อมต่อใหม่','full':True,'retry_after':5})
+                            # Sleeping phones retain their short-lived LAN
+                            # pairing, but do not occupy an *active* client
+                            # slot until they return to the foreground.
+                            active_clients=sum(now-record.get('seen',0)<45
+                                               for record in owner.sessions.values())
+                            if active_clients>=owner.policy['max_clients']: return self.response(503,{'error':'ผู้ใช้งานเต็ม กรุณารอสักครู่ กำลังลองเชื่อมต่อใหม่','full':True,'retry_after':5})
                             token = secrets.token_urlsafe(32)
                             owner.sessions[token] = dict(owner=secrets.token_hex(16), role=role, seen=now, active=now, latency_ms=0, generation=owner.generation)
                         return self.response(200, {'token':token})
@@ -218,17 +223,23 @@ class RemoteServer:
     def expire_sessions(self):
         now=time.monotonic()
         with self.lock:
-            # A live foreground client polls /api/state every ~500ms.  Its GET
-            # heartbeat is not an input action, but must keep its session alive.
-            # A backgrounded/lost client stops polling and expires normally.
+            # Guest phones may sleep/lock while the show continues. Retain
+            # their random 256-bit session token for up to six hours since
+            # last activity. Operator privileges expire after five minutes
+            # idle. Rotating PINs or pressing Stop revokes both immediately.
             self.sessions={token:s for token,s in self.sessions.items()
-                           if now-s.get('seen',0)<90 or now-s.get('active',s['seen'])<300}
+                           if now-s.get('seen',0)<(300 if s.get('role')=='operator' else 6*3600)}
+            if len(self.sessions)>512:
+                oldest=sorted(self.sessions,key=lambda token:self.sessions[token].get('seen',0))
+                for token in oldest[:len(self.sessions)-512]:self.sessions.pop(token,None)
 
     def capacity_stats(self):
         with self.lock:
             self.expire_sessions()
-            latencies=[s.get('latency_ms',0) for s in self.sessions.values() if s.get('latency_ms',0)>0]
-            return len(self.sessions),max(latencies,default=0)
+            now=time.monotonic()
+            active=[s for s in self.sessions.values() if now-s.get('seen',0)<45]
+            latencies=[s.get('latency_ms',0) for s in active if s.get('latency_ms',0)>0]
+            return len(active),max(latencies,default=0)
 
     def connected_count(self):
         with self.lock: return sum(time.monotonic()-s['seen']<15 for s in self.sessions.values())
