@@ -94,10 +94,12 @@
   function syncVolume(){
     const n=Math.round(Number(volume.value)||0);
     const player=$('player');
-    const muted=!!player?.muted;
+    const bridge=window.XStageWindowsVolumeBridge;
+    const muted=bridge?.connected?bridge.muted:!!player?.muted;
     if(volumeLabel){
       volumeLabel.textContent=muted?'ปิดเสียง · '+n+'%':n+'%';
       volumeLabel.classList.toggle('is-muted',muted);
+      volumeLabel.title=bridge?.connected?'ระดับเสียงหลัก Windows · ซิงก์จากเครื่อง':'ระดับเสียงเฉพาะเว็บ · Windows ปรับแยกต่างหาก';
     }
   }
   function syncRepeat(){
@@ -201,38 +203,55 @@
   });
   volume.addEventListener('input',syncVolume);
   $('player')?.addEventListener('volumechange',syncVolume);
-  // Wheel adjusts audio without scrolling the stage; never intercept normal page scrolling elsewhere.
+  // A real mouse notch is ~100 pixels, while precision trackpads emit many
+  // fractional wheel events. Accumulate instead of jumping 5% per pixel event.
+  let wheelRemainder=0;
   function adjustWheelVolume(event){
-    if(event.ctrlKey||event.altKey||event.metaKey||!event.deltaY)return;
-    // Search/results, forms, EQ sliders, and menus retain their own scrolling.
-    if(event.currentTarget===stage&&event.target.closest('input,textarea,select,.remote-pair-panel,.mobile-stage-menu,.song-results,.queue-list,.xstage-eq-panel'))return;
+    if(event.ctrlKey||event.altKey||event.metaKey||event.shiftKey||!event.deltaY)return;
+    // Never steal scroll/zoom from search, forms, EQ, queues or overlays.
+    if(event.currentTarget===stage&&event.target.closest?.(
+      'input,textarea,select,.volume-control,.remote-pair-panel,.mobile-stage-menu,.song-results,.queue-list,.xstage-eq-panel'))return;
     event.preventDefault();
-    const next=Math.max(0,Math.min(100,Number(volume.value)+(event.deltaY<0?5:-5)));
+    const delta=event.deltaMode===1?event.deltaY*40:event.deltaMode===2?event.deltaY*120:event.deltaY;
+    wheelRemainder+=delta;
+    const notches=Math.trunc(wheelRemainder/100);
+    if(!notches)return;
+    wheelRemainder-=notches*100;
+    const next=Math.max(0,Math.min(100,Number(volume.value)-notches*5));
     if(Number(volume.value)!==next){
       volume.value=String(next);
       volume.dispatchEvent(new Event('input',{bubbles:true}));
       const player=$('player');
-      if(player?.muted){player.muted=false;}
+      if(!window.XStageWindowsVolumeBridge?.connected&&player?.muted)
+        player.muted=false;
     }
   }
   stage.addEventListener('wheel',adjustWheelVolume,{passive:false});
-  // The player toolbar sits outside #stage in some responsive layouts.
+  // Always support the volume slider itself, even if it lives inside #stage.
+  // The stage listener skips .volume-control so a single notch applies once.
   const volumeControl=volume.closest('.volume-control');
-  if(volumeControl&&!stage.contains(volumeControl))
-    volumeControl.addEventListener('wheel',adjustWheelVolume,{passive:false});
+  if(volumeControl)volumeControl.addEventListener('wheel',adjustWheelVolume,{passive:false});
   const speaker=document.querySelector('.volume-control span[aria-hidden]');
   if(speaker){
     speaker.style.cursor='pointer';speaker.setAttribute('role','button');
     speaker.setAttribute('tabindex','0');speaker.setAttribute('aria-label','ปิดหรือเปิดเสียง');
     function syncMute(){const player=$('player');if(!player)return;
-      speaker.textContent=player.muted?'🔇':'🔊';
-      speaker.setAttribute('aria-pressed',String(player.muted));
-      speaker.title=player.muted?'เปิดเสียง':'ปิดเสียง';
+      const bridge=window.XStageWindowsVolumeBridge;
+      const muted=bridge?.connected?bridge.muted:player.muted;
+      speaker.textContent=muted?'🔇':'🔊';
+      speaker.setAttribute('aria-pressed',String(muted));
+      speaker.title=muted?'เปิดเสียง':'ปิดเสียง';
       syncVolume();}
-    function toggleMute(){const player=$('player');if(!player)return;player.muted=!player.muted;syncMute();}
+    function toggleMute(){
+      const bridge=window.XStageWindowsVolumeBridge;
+      if(bridge?.connected){void bridge.toggleMute();return;}
+      const player=$('player');if(!player)return;player.muted=!player.muted;syncMute();
+    }
     speaker.addEventListener('click',toggleMute);
     speaker.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleMute();}});
-    $('player')?.addEventListener('volumechange',syncMute);syncMute();
+    $('player')?.addEventListener('volumechange',syncMute);
+    window.addEventListener('xstage:windows-volume',syncMute);
+    syncMute();
   }
   repeat.addEventListener('change',syncRepeat);
   const queueCount=$('queue-count');
