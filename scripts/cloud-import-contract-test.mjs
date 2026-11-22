@@ -194,7 +194,7 @@ assert.ok(style.includes('.cloud-import-body{')&&
   style.includes('.cloud-import-footer-buttons{')&&
   style.includes('flex:0 0 auto'),
   'Import Start and status must be anchored outside scrollable contents');
-assert.ok(page.includes('cloud-import.js?v=1138-visible-import-cta')&&
+assert.ok(page.includes('cloud-import.js?v=1139-auth-ready-import-cta')&&
   page.includes('cloud-import.css?v=1138-visible-import-cta')&&
   page.includes('video-metadata-editor.js?v=1138-verified-video-selection'),
   'Updated scripts and styles must bypass stale browser caches');
@@ -225,7 +225,7 @@ ctx.XStageImportCore.scan=()=>({
 });
 try{
   const importer=ctx.XStageCloudImport.init({
-    session:()=>({token:'test-token',sub:''}),refresh:async()=>{}
+    session:()=>({token:'test-token',sub:'SUB_UI_TEST'}),refresh:async()=>{}
   });
   await importer.acceptFiles([
     {file:sourceFile,relative:'MIDI/NCN/SONG/R/READY.mid'},
@@ -248,6 +248,15 @@ try{
   importer.saved={status:'paused'};
   importer.refreshButtons();
   assert.equal(importer.dom.resume.hidden,false,'A paused upload must expose Resume');
+  const fullyVerified=importer.options.session;
+  importer.options.session=()=>({token:'test-token',sub:''});
+  importer.refreshButtons();
+  assert.equal(importer.dom.start.disabled,true,'Unverified account must not start a Drive import');
+  assert.equal(importer.dom.resume.disabled,true,'Unverified account must not resume a Drive import');
+  assert.equal(importer.dom.open.hidden,true,'Upload entry must await verified Google identity');
+  importer.options.session=fullyVerified;
+  importer.refreshButtons();
+  assert.equal(importer.dom.open.hidden,false,'Upload opens once Google account is verified');
 }finally{
   ctx.document=oldDoc;ctx.addEventListener=oldAdd;
   ctx.XStageImportCore.scan=oldScan;delete ctx.XStageVideoEditor;
