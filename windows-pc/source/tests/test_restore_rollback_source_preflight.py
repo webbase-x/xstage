@@ -7,6 +7,42 @@ from karaoke.restore import rollback
 
 
 class RollbackSourcePreflightTests(unittest.TestCase):
+    def test_linked_safety_directory_never_changes_live_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            base = Path(root)
+            data, real_safety = base / "live", base / "real-safety"
+            data.mkdir()
+            real_safety.mkdir()
+            (data / "settings.json").write_text('{"title":"live"}', encoding="utf-8")
+            (real_safety / "settings.json").write_text('{"title":"old"}', encoding="utf-8")
+            linked_safety = base / "safety-link"
+            try:
+                linked_safety.symlink_to(real_safety, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("Directory symlinks unavailable on this host")
+            with self.assertRaisesRegex(ValueError, "safety"):
+                rollback(data, linked_safety, ["settings.json"], ("settings.json",))
+            self.assertEqual((data / "settings.json").read_text(encoding="utf-8"),
+                             '{"title":"live"}')
+
+    def test_linked_live_directory_never_changes_external_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            base = Path(root)
+            real_data, safety = base / "real-live", base / "safety"
+            real_data.mkdir()
+            safety.mkdir()
+            (real_data / "settings.json").write_text('{"title":"live"}', encoding="utf-8")
+            (safety / "settings.json").write_text('{"title":"old"}', encoding="utf-8")
+            linked_data = base / "live-link"
+            try:
+                linked_data.symlink_to(real_data, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("Directory symlinks unavailable on this host")
+            with self.assertRaisesRegex(ValueError, "data"):
+                rollback(linked_data, safety, ["settings.json"], ("settings.json",))
+            self.assertEqual((real_data / "settings.json").read_text(encoding="utf-8"),
+                             '{"title":"live"}')
+
     def test_missing_later_safety_file_leaves_earlier_live_file_untouched(self):
         with tempfile.TemporaryDirectory() as root:
             data = Path(root) / "live"
