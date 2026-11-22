@@ -4658,7 +4658,13 @@ async function ensureImporterGoogleAuth(force=false,interactive=false){
             },
             error_callback:()=>settle(Error('Google ต้องการให้ผู้ใช้ยืนยันสิทธิ์อีกครั้ง'))
           });
-          client.requestAccessToken({prompt:interactive?'select_account':''});
+          // Renewal is always tied to the already verified immutable
+          // Google account ID. Reuse its consent and never switch accounts.
+          const hint=rememberedGoogleAccount();
+          client.requestAccessToken({
+            prompt:'',
+            ...(hint?.email?{login_hint:hint.email}:{})
+          });
         }catch(error){settle(error);}
       });
       if(state.authId!==authId||state.accountSub!==expectedSub)
@@ -4693,6 +4699,41 @@ async function ensureImporterGoogleAuth(force=false,interactive=false){
   try{return await importerGoogleRenewal;}
   finally{importerGoogleRenewal=null;}
 }
+// A Google access token's lifetime is fixed by Google. This control appears
+// before expiry and lets the user renew with one explicit tap; Google may
+// still require consent. Never request an OAuth popup from a timer.
+function updateGoogleRenewNotice(){
+  const button=$('google-renew');
+  if(!button)return;
+  const remaining=Number(state.tokenExpiresAt||0)-Date.now();
+  const needed=!androidTvNativeBridgeReady()&&!!state.token&&!!state.accountSub&&
+    remaining<=8*60*1000;
+  button.hidden=!needed;
+  if(needed){
+    button.textContent=remaining<=0?'เชื่อม Google อีกครั้ง':'ต่ออายุ Google';
+    button.title='ยืนยัน Google เพื่อใช้งาน Drive ต่อโดยไม่ล้างเพลงและคิว';
+  }
+}
+$('google-renew')?.addEventListener('click',async()=>{
+  const button=$('google-renew');
+  if(!state.token||!state.accountSub||!button||button.disabled)return;
+  button.disabled=true;button.textContent='กำลังต่ออายุ…';
+  try{
+    await ensureImporterGoogleAuth(true,true);
+    setStatus('ต่ออายุ Google Drive สำเร็จ · เพลงและคิวเดิมไม่เปลี่ยน','success');
+  }catch(error){
+    setStatus('Google ต้องการยืนยันสิทธิ์อีกครั้ง · '+String(error?.message||error),'error');
+  }finally{button.disabled=false;updateGoogleRenewNotice();}
+});
+setInterval(updateGoogleRenewNotice,60_000);
+window.addEventListener('focus',updateGoogleRenewNotice);
+window.addEventListener('pageshow',updateGoogleRenewNotice);
+window.addEventListener('xstage:auth-refreshed',updateGoogleRenewNotice);
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden)updateGoogleRenewNotice();
+});
+updateGoogleRenewNotice();
+
 window.XStageEnsureImporterGoogleAuth=ensureImporterGoogleAuth;
 const xstageCloudImporter=window.XStageCloudImport?.init({
   // The browser importer obtains only an in-memory short-lived token and the
