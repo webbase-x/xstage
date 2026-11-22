@@ -1809,6 +1809,10 @@ class Importer {
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิงออนไลน์ชนกับเพลงอื่น');
             const identity=core.songIdentity(doc,code,same);
             const record={...(same||{}),webSongId:ident,code,
+              sourceCode:String(item.code||code),
+              originalFilename:audioFile.name,
+              originalRelativePath:item.audio?.relative||item.video?.relative||audioFile.name,
+              originalFileSize:audioFile.size,
               title:identity.title,artist:identity.artist,sourceFormat:uploadKind,
               lyricsMode:doc.lyricsMode==='embedded-video'?'embedded-video':'timed',
               audio:media,lyrics:lyric,
