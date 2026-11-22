@@ -61,7 +61,7 @@
           gradient.addColorStop(1,'#7561ff');
         }
         ctx.fillStyle=gradient||'#49caff';
-        ctx.globalAlpha=active?.34+.66*level:.18;
+        ctx.globalAlpha=active ? (.34+.66*level) : .18;
         ctx.fillRect(x,y,barWidth,barHeight);
       }
       ctx.globalAlpha=1;
