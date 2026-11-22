@@ -22,6 +22,7 @@
     <div class="side-heading">STUDIO WORKSPACE</div>
     <nav class="side-nav" aria-label="เมนูหลัก">
       <button class="nav-link active" data-view="import" type="button"><span class="nav-icon">01</span><span>นำเข้าเพลง<small>NCN · SHA-256 · SQLite</small></span></button>
+      <button class="nav-link" data-view="drive" type="button"><span class="nav-icon">☁</span><span>Google Drive<small>ดาวน์โหลด · นำเข้าเพลง</small></span></button>
       <button class="nav-link" data-view="lyrics" type="button"><span class="nav-icon">02</span><span>แก้ไขเนื้อร้อง<small>ค้นคำ · กลุ่ม · Timing</small></span></button>
       <button class="nav-link" data-view="media" type="button"><span class="nav-icon">03</span><span>เสียงและวิดีโอ<small>เพิ่มเนื้อร้องที่มีเวลา</small></span></button>
       <button class="nav-link" data-view="preview" type="button"><span class="nav-icon">04</span><span>ทดสอบก่อนสร้าง<small>เสียงจริง · เนื้อร้อง · ปาดสี</small></span></button>
@@ -139,6 +140,38 @@
             </section>
           </div>
         </details>
+      </section>
+      <section class="view" id="view-drive" aria-labelledby="drive-title">
+        <div class="page-eyebrow"><span class="eyebrow-line"></span> GOOGLE DRIVE · XSTAGEKARAOKE</div>
+        <div class="page-intro"><div><h1 id="drive-title">นำเข้าและดาวน์โหลด <span class="gradient-text">Google Drive</span></h1><p>ใช้คลัง XStageKaraoke ที่มีอยู่แล้วเท่านั้น · ดาวน์โหลดเพลงลงเครื่องโดยเก็บโครงสร้างเดิม · นำเข้ารายการเพลงสู่ SQLite ของ Song Studio Pro</p></div><span class="section-symbol">☁</span></div>
+        <div class="drive-workspace">
+          <article class="panel drive-source">
+            <div class="panel-head"><div><span class="label-top">01 · CONNECT LIBRARY</span><h2>เลือกคลัง XStageKaraoke</h2></div><span class="status-badge">Google Drive for desktop</span></div>
+            <label class="field-label" for="drive-folder">ตำแหน่งโฟลเดอร์ Drive ที่ซิงก์ใน Windows</label>
+            <div class="input-wrap"><span class="folder-glyph">▤</span><input id="drive-folder" spellcheck="false" autocomplete="off" placeholder="เช่น G:\My Drive\XStageKaraoke"><button type="button" class="browse-btn" id="drive-browse">เลือกโฟลเดอร์</button></div>
+            <p class="field-hint">ใช้ Google Drive สำหรับเดสก์ท็อปที่ลงชื่อเข้าใช้แล้ว หากไม่ได้ระบุพาธ โปรแกรมจะค้นหาตำแหน่ง Drive มาตรฐานให้อัตโนมัติ ไม่สร้างคลังใหม่หรืออ่านคลังเก่า</p>
+            <div class="drive-commands">
+              <button type="button" class="quiet-btn" id="drive-check">ตรวจสอบโครงสร้าง</button>
+              <button type="button" class="primary-btn" id="drive-download">ดาวน์โหลดและนำเข้าเพลง <span>↗</span></button>
+            </div>
+            <p class="drive-operation-status" id="drive-status" role="status" aria-live="polite">ยังไม่เชื่อมต่อ · เลือกคลัง XStageKaraoke หรือกดตรวจสอบโครงสร้าง</p>
+            <a class="drive-open-link" href="https://drive.google.com/drive/u/0/my-drive" target="_blank" rel="noopener noreferrer">เปิด Google Drive ในเบราว์เซอร์ ↗</a>
+          </article>
+          <article class="panel drive-layout">
+            <div class="panel-head"><div><span class="label-top">02 · STORAGE LAYOUT</span><h2>โครงสร้างคลังเพลงล่าสุด</h2></div></div>
+            <div class="drive-tree" aria-label="โครงสร้าง XStageKaraoke">
+              <div class="drive-tree-root">▤ XStageKaraoke</div>
+              <div class="drive-tree-row"><strong>SONGS/</strong><span>ดาวน์โหลดและนำเข้า</span></div>
+              <div class="drive-tree-branch">MIDI/ · MID/SONG · NCN · XMID · KAR</div>
+              <div class="drive-tree-branch">AUDIO/ · MP3 · M4A · WAV · FLAC</div>
+              <div class="drive-tree-branch">VIDEO/ · MP4 · MKV · WEBM</div>
+              <div class="drive-tree-row"><strong>DB/</strong><span>เก็บ .sqlite3 ของ Karaoke Online · ไม่เขียนทับ</span></div>
+              <div class="drive-tree-row"><strong>SOUNDFONT/</strong><span>SF2 · SF3 · ไม่ดาวน์โหลดเข้าฐานเพลง</span></div>
+              <div class="drive-tree-muted">BACKUP/ · CACHE/ · LOGS/ (ไม่แตะต้อง)</div>
+            </div>
+            <div class="drive-safe-note"><strong>ปลอดภัยต่อคลังเดิม</strong><p>เก็บเพลงที่ดาวน์โหลดไว้ใน Downloads/XStageSongStudioPro/XStageKaraoke/SONGS · ข้ามไฟล์ที่ตรวจ SHA-256 แล้วตรงกัน · ไม่คัดลอก DB ของ Karaoke Online มาทับฐาน Song Studio</p></div>
+          </article>
+        </div>
       </section>
       <section class="view" id="view-lyrics" aria-labelledby="lyrics-title">
         <div class="page-eyebrow"><span class="eyebrow-line"></span> SMART LYRICS EDITOR</div>
@@ -356,20 +389,21 @@
       <section class="view" id="view-build" aria-labelledby="build-title">
         <div class="page-eyebrow"><span class="eyebrow-line"></span> EMBEDDED KARAOKE FILES</div>
         <div class="page-intro"><div><h1 id="build-title">หนึ่งเพลง <span class="gradient-text">หนึ่งไฟล์ X-Stage</span></h1><p>นำสื่อดั้งเดิมและเนื้อร้องพร้อมเวลาจาก SQLite รวมไว้ในไฟล์เดียว โดยไม่แปลงเสียงหรือวิดีโอซ้ำ</p></div><span class="section-symbol">X</span></div>
-        <div class="two-col">
-          <article class="panel">
-            <div class="panel-head"><div><span class="label-top">CHOOSE SONGS</span><h2>เลือกเพลงสำหรับสร้างไฟล์</h2></div><span class="count-pill" id="build-count">0 เพลง</span></div>
-            <div class="build-status-tabs" role="group" aria-label="สถานะเพลงที่จะสร้างไฟล์"><button type="button" id="build-tab-ready" class="quiet-btn active" aria-pressed="true">ยังไม่แปลง · พร้อม</button><button type="button" id="build-tab-converted" class="quiet-btn" aria-pressed="false">แปลงแล้ว</button><button type="button" id="build-tab-attention" class="quiet-btn" aria-pressed="false">ต้องปรับปรุง</button></div>
-            <div class="toolbar"><button class="quiet-btn" id="build-all" type="button">เลือกที่ยังไม่แปลงทั้งหมด</button><button class="quiet-btn" id="build-page-all" type="button">เลือกทั้งหมดหน้านี้</button><button class="quiet-btn" id="build-clear" type="button">ยกเลิกทั้งหมด</button><button class="quiet-btn" id="build-page-clear" type="button">ยกเลิกหน้านี้</button></div>
-            <div class="build-list" id="build-list" role="region" aria-label="รายการเพลง เลื่อนเพื่อโหลดเพิ่มเติม" tabindex="0"><p class="empty-small">ยังไม่มีเพลงในคลัง</p></div>
-            <div class="scroll-load-footer"><span id="build-page-info" aria-live="polite">กำลังเตรียมรายการ</span><span id="build-scroll-status" role="status">เลื่อนเพื่อโหลดเพิ่มเติม</span><button type="button" id="build-retry" class="quiet-btn" hidden>ลองโหลดเพิ่ม</button></div>
-          </article>
+        <div class="two-col build-action-layout">
+          <!-- Preserve internal selectors used by older selection and build diagnostics,
+               but never display the retired CHOOSE SONGS interface. -->
+          <div class="build-selection-internal" hidden aria-hidden="true">
+            <span id="build-count"></span>
+            <button id="build-tab-ready" type="button"></button><button id="build-tab-converted" type="button"></button><button id="build-tab-attention" type="button"></button>
+            <button id="build-all" type="button"></button><button id="build-page-all" type="button"></button><button id="build-clear" type="button"></button><button id="build-page-clear" type="button"></button>
+            <div id="build-list"></div><span id="build-page-info"></span><span id="build-scroll-status"></span><button id="build-retry" type="button"></button>
+          </div>
           <article class="panel">
             <div class="panel-head"><div><span class="label-top">EXPORT ENGINE</span><h2>สร้างไฟล์พร้อมเนื้อร้อง</h2></div></div>
             <div class="format-chip-list"><span>.XMID</span><span>.XMP3</span><span>.XM4A</span><span>.XMP4</span><span>+ MORE</span></div>
             <div class="build-art"><span>X<span class="spark">✦</span></span><p>Embedded Lyrics<br>&amp; Timing</p></div>
             <div class="notice"><span>◈</span><p>รุ่นนี้สร้างไฟล์ X-Stage Plus แบบไบนารีที่มีสื่อและเนื้อร้องในตัว พร้อมตัวตรวจความถูกต้องของไฟล์ การเล่นพร้อมเสียงจริงต้องใช้ Player ที่รองรับรูปแบบใหม่นี้</p></div>
-            <button class="primary-btn full" id="build-start" type="button" disabled>สร้างไฟล์ที่เลือก <span>↗</span></button>
+            <button class="primary-btn full" id="build-start" type="button" disabled hidden aria-hidden="true">สร้างไฟล์ที่เลือก <span>↗</span></button>
             <button class="primary-btn full" id="build-everything" type="button" disabled>สร้างทั้งหมด (ทุกเพลงในฐานข้อมูล) <span>↗</span></button>
             <button class="quiet-btn full" id="build-ready-all" type="button" disabled>สร้างเฉพาะที่พร้อม <span>↗</span></button>
             <p class="field-hint">สร้างทั้งหมดจะตรวจทุกเพลงใน SQLite · เพลง MIDI เป็น XMID และชนิดอื่นเป็น X ตามชนิดสื่อ · เพลง MIDI ตรวจซ้ำจาก SHA-256 ของ MID ใน SQLite และสร้าง XMID เพียงไฟล์เดียวแม้คนละรอบ · ไฟล์เดิมข้ามซ้ำ · เนื้อร้องหรือ CUR ไม่ครบให้บันทึกสาเหตุ ไม่สร้างไฟล์เสีย</p>
@@ -380,7 +414,7 @@
               <p id="build-progress-results" class="build-progress-results">สร้าง 0 · ข้ามซ้ำ 0 · ข้อมูลไม่ครบ 0 · ผิดพลาด 0</p>
               <p id="build-progress-current" class="field-hint">เปอร์เซ็นต์คำนวณจากจำนวนเพลงที่ตรวจเสร็จจริงในฐานข้อมูล SQLite</p>
             </section>
-            <p class="field-hint" id="build-feedback">แสดงเพลงที่ยังไม่แปลงและแปลงแล้วแยกกัน · ข้ามเพลงที่แปลงแล้วโดยไม่สร้างซ้ำ · เพลงต้องปรับปรุงต้องตรวจหรือยืนยันก่อน</p>
+            <p class="field-hint" id="build-feedback">สร้างทั้งหมดหรือสร้างเฉพาะที่พร้อมได้ทันทีจาก SQLite · ข้ามรายการที่สร้างแล้วโดยไม่ทำซ้ำ · เพลงที่ข้อมูลไม่ครบให้ดูสาเหตุใน Log</p>
           </article>
         </div>
       </section>
