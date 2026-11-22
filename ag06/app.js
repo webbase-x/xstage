@@ -198,6 +198,12 @@ function studioRender(){
   const item=document.createElement("div");item.className="studio-track";
   const title=document.createElement("strong");title.textContent=track.name+" · "+track.buffer.duration.toFixed(1)+" วินาที";item.append(title);
   const controls=document.createElement("div");controls.className="studio-controls";
+  const roleLabel=document.createElement("label");roleLabel.textContent="ประเภท";
+  const role=document.createElement("select");role.setAttribute("aria-label","ประเภทแทร็ก "+track.name);
+  for(const [value,label] of [["music","ดนตรี"],["voice","เสียงพูด/ร้อง"]]){const option=new Option(label,value);role.add(option);}
+  role.value=track.role||"music";
+  role.addEventListener("change",()=>{track.role=role.value;studio.stop();});
+  roleLabel.append(role);controls.append(roleLabel);
   const number=(label,key,min,max,step)=>{
    const wrap=document.createElement("label");wrap.textContent=label;
    const field=document.createElement("input");field.type="number";field.min=min;field.max=max;field.step=step;field.value=track[key];
@@ -230,7 +236,7 @@ async function studioImport(files){
 $("studio-files").addEventListener("change",async e=>{await studioImport([...e.target.files]);e.target.value="";});
 $("studio-add-take").addEventListener("click",async()=>{
  if(!latestBlob)return;
- await studioImport([new File([latestBlob],"Recorded take."+("webm"),{type:latestBlob.type})]);
+ await studioImport([new File([latestBlob],"Recorded take."+(latestBlob.type.includes("ogg")?"ogg":latestBlob.type.includes("mp4")?"m4a":"webm"),{type:latestBlob.type})]);
 });
 $("studio-play").addEventListener("click",async()=>{
  try{studioStatus("กำลังเล่นมิกซ์…");await studio.play();}
@@ -256,6 +262,16 @@ $("studio-export").addEventListener("click",async()=>{
  }catch(e){studioStatus("ส่งออกไม่สำเร็จ: "+e.message,true);}
  finally{button.disabled=false;}
 });
+$("studio-ducking").addEventListener("change",e=>{studio.ducking=e.target.checked;studio.stop();studioStatus(e.target.checked?"เปิด Auto Ducking สำหรับแทร็กดนตรีแล้ว":"ปิด Auto Ducking แล้ว");});
+$("studio-normalize").addEventListener("change",e=>{studio.normalize=e.target.checked;studioStatus(e.target.checked?"เปิด Peak Normalization สำหรับไฟล์ WAV":"ปิด Peak Normalization แล้ว");});
+function dspMode(simple){
+ $("dsp-controls").classList.toggle("simple-mode",simple);
+ $("dsp-simple").setAttribute("aria-pressed",String(simple));
+ $("dsp-detail").setAttribute("aria-pressed",String(!simple));
+}
+$("dsp-simple").addEventListener("click",()=>dspMode(true));
+$("dsp-detail").addEventListener("click",()=>dspMode(false));
+dspMode(false);
 renderParams();
 changeState(false);
 void refreshDevices();
