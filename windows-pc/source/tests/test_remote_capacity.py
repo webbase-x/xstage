@@ -36,11 +36,17 @@ class CapacityTests(unittest.TestCase):
             # v0.9.38: a foreground GET counts as presence even without taps.
             case.remote.sessions[token]['active']=time.monotonic()-301
             self.assertEqual(case.call('/api/state',token=token)[0],200)
-            # An offline/background client sends no requests: both clocks expire.
+            # A sleeping iPhone leaves the active slot, but its guest token
+            # remains usable for the next six hours without rescanning QR.
             case.remote.sessions[token]['seen']=time.monotonic()-301
             case.remote.sessions[token]['active']=time.monotonic()-301
+            self.assertEqual(case.remote.capacity_stats()[0],0)
+            another=case.login()
+            self.assertNotEqual(another,token)
+            self.assertEqual(case.call('/api/state',token=token)[0],200)
+            # Dormant guest pairing is bounded, never a permanent credential.
+            case.remote.sessions[token]['seen']=time.monotonic()-6*3600-1
             self.assertEqual(case.call('/api/state',token=token)[0],401)
-            self.assertNotEqual(case.login(),token)
         finally:case.tearDown()
 
     def test_lower_limit_keeps_existing_users(self):
