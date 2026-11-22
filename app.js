@@ -750,6 +750,17 @@ const player=new Proxy(nativePlayer,{
   }
 });
 
+// Lighting and stage EQ must follow the same transport clock as the audible
+// song. During MIDI playback the HTMLMediaElement is deliberately paused, so
+// reading nativePlayer.paused/currentTime would always blank or freeze the LEDs.
+window.XStageStagePlaybackClock=()=>({
+  midi:midiTransport.active,
+  playing:!player.paused&&!player.ended,
+  currentTime:Number(player.currentTime)||0,
+  muted:!!player.muted,
+  volume:Number(player.volume)||0
+});
+
 // Only the currently attached MIDI synthesizer may complete a song. A
 // delayed end event from a replaced SoundFont must never skip the next item.
 function attachProfessionalMidiEngine(prepared,options){
