@@ -790,6 +790,33 @@ try
     if (saturated.ActiveCount != 0 || saturated.WaitingCount != 0)
         throw new Exception("32-transfer backpressure did not release all slots.");
 
+    // Partial cancellation under saturation must preserve the surviving FIFO
+    // waiters and reclaim all leases, not just the all-canceled case.
+    var partialQueue = new TransferSlotQueue(1, 1);
+    var occupied = await partialQueue.EnterAsync("partial-active", "partial.test", 1, CancellationToken.None);
+    using (var canceled = new CancellationTokenSource())
+    {
+        var firstWaiting = partialQueue.EnterAsync("partial-canceled", "partial.test", 1, canceled.Token);
+        var surviving = partialQueue.EnterAsync("partial-survivor", "partial.test", 1, CancellationToken.None);
+        if (partialQueue.WaitingCount != 2 || surviving.IsCompleted)
+            throw new Exception("Partial cancellation test did not saturate the queue.");
+        canceled.Cancel();
+        try { using var unexpected = await firstWaiting.WaitAsync(TimeSpan.FromSeconds(3));
+            throw new Exception("Canceled first waiter acquired capacity."); }
+        catch (OperationCanceledException) { }
+        if (partialQueue.WaitingCount != 1 || surviving.IsCompleted)
+            throw new Exception("Canceling one waiter disturbed the surviving reservation.");
+        occupied.Dispose();
+        using (var survivorLease = await surviving.WaitAsync(TimeSpan.FromSeconds(3)))
+        {
+            if (partialQueue.ActiveCount != 1 || partialQueue.WaitingCount != 0)
+                throw new Exception("Surviving waiter did not inherit the released slot.");
+        }
+    }
+    occupied.Dispose();
+    if (partialQueue.ActiveCount != 0 || partialQueue.WaitingCount != 0)
+        throw new Exception("Partial cancellation leaked scheduler capacity.");
+
     // Canceling the last reservation must preserve the earlier reader's debt.
     var sharedGate = new TransferRateGate(64);
     using (var earlierStop = new CancellationTokenSource())
