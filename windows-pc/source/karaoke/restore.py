@@ -98,7 +98,9 @@ def stage_restore(folder,data):
         validate_backup(temp)
         write_json(temp/'state.json',dict(status='prepared'))
         temp.rename(pending)
-    except Exception:
+    except BaseException:
+        # Even cancellation during staging must not leave an orphaned partial
+        # backup. No live data has been changed at this point.
         shutil.rmtree(temp,ignore_errors=True);raise
     return info
 
