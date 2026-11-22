@@ -30,6 +30,7 @@
           "index.html",
           "app.js",
           "audio-engine.js",
+          "studio-session.js",
           "presets.js",
           "style.css",
           "icon.svg"
