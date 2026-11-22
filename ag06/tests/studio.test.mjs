@@ -26,5 +26,5 @@ test("workspace UI and packaging include independent module",()=>{
  assert.match(read("studio-session.js"),/voiceLevelAt/);
  assert.match(read("index.html"),/id="studio-ducking"/);
  assert.match(read("index.html"),/id="studio-normalize"/);
- assert.match(read("android/app/src/main/java/com/webbasex/ag06studio/MainActivity.java"),/data:audio\\/wav/);
+ assert.match(read("android/app/src/main/java/com/webbasex/ag06studio/MainActivity.java"),new RegExp("data:audio/wav"));
 });
