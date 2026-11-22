@@ -1,8 +1,74 @@
+using System.Drawing;
+using System.Reflection;
+using System.Windows.Forms;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using XStageDownloadManager;
+
+// CI smoke: instantiate and paint the exact desktop UI across window sizes.
+// Unlike source-only contracts, this reaches WinForms/GDI+ at runtime and
+// catches the "Parameter is not valid" failure in icon or panel painting.
+// Run on an isolated Windows CI runner; never import or replace user files.
+if (args.Contains("--ui-smoke", StringComparer.Ordinal))
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            using var main = new MainForm(new[] { "--ui-smoke" });
+            main.Show();
+            foreach (var (width, height) in new[]
+            {
+                (880, 590), (1024, 768), (1250, 780), (1366, 768),
+                (1920, 1080), (880, 590)
+            })
+            {
+                main.Size = new Size(width, height);
+                main.PerformLayout();
+                for (var i = 0; i < 3; i++) Application.DoEvents();
+                using var target = new Bitmap(width, height);
+                main.DrawToBitmap(target, new Rectangle(0, 0, width, height));
+                Application.DoEvents();
+            }
+            // Test every custom GDI+ glyph using the same code as menus,
+            // category image lists and transfer table image cells.
+            var draw = typeof(MainForm).GetMethod("DrawToolbarGlyph",
+                BindingFlags.Static | BindingFlags.NonPublic) ??
+                throw new Exception("X-Stage vector icon renderer not found.");
+            foreach (var glyph in new[]
+            {
+                "add", "play", "pause", "queue", "gauge", "browser",
+                "video", "folder", "refresh", "trash", "check", "alert",
+                "eye", "settings", "info", "file"
+            })
+            {
+                using var rendered = (Image)(draw.Invoke(null, new object[]
+                {
+                    glyph, Color.FromArgb(45, 207, 176)
+                }) ?? throw new Exception("Vector glyph renderer returned null."));
+                using var target = new Bitmap(40, 40);
+                using var graphics = Graphics.FromImage(target);
+                graphics.DrawImage(rendered, 0, 0, 40, 40);
+            }
+            main.Close();
+        }
+        catch (Exception error) { failure = error; }
+    }) { IsBackground = true };
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    if (!thread.Join(TimeSpan.FromSeconds(45)))
+        throw new Exception("WinForms/GDI+ UI smoke timed out after 45 seconds.");
+    if (failure is not null)
+        throw new Exception("X-Stage desktop UI render smoke failed: " +
+            failure, failure);
+    Console.WriteLine("PASS: WinForms desktop, six viewport changes and 16 vector glyphs render without GDI+ parameter errors");
+    return;
+}
 
 // Real FFmpeg/FFprobe integration: invoked after pinned tools are downloaded
 // in GitHub Actions. Synthetic video only, never a copyrighted user clip.
