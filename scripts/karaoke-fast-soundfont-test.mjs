@@ -8,7 +8,7 @@ const html=fs.readFileSync(new URL('../karaoke.html',import.meta.url),'utf8');
 const version=JSON.parse(fs.readFileSync(new URL('../version.json',import.meta.url),'utf8'));
 assert.equal(version.build,1136);
 assert.ok(html.includes('browser-midi.js?v=1139-soundfont-extension'));
-assert.ok(html.includes('app.js?v=1136-stage-lighting'));
+assert.ok(html.includes('app.js?v=1140-google-session-renew'));
 assert.ok(app.includes('window.XStageBrowserMidi.prefersCompactGm?.()'));
 assert.ok(app.includes('},12000);'),'Slow chosen SoundFont cannot hold first note for 45 seconds');
 
