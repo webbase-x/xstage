@@ -27,6 +27,46 @@
   let midiBands=null,activeSource='audio',frame=0,lastFrame=0,playing=false;
   const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)');
   const colorBands=[0,1,2,1];
+  const sideMeters=['stage-viz-left','stage-viz-right'].map(id=>document.getElementById(id));
+  // MIDI uses the live sequencer rather than the HTML5 audio element; its
+  // actual note-on data must drive the existing left/right banner canvases.
+  // The HTML5 analyser remains the sole writer for ordinary audio playback.
+  function paintMidiSideMeters(bands,active){
+    sideMeters.forEach((canvas,side)=>{
+      if(!canvas||typeof canvas.getContext!=='function')return;
+      const box=canvas.getBoundingClientRect?.();
+      const width=Number(box?.width)||0,height=Number(box?.height)||0;
+      if(width<2||height<2)return;
+      const dpr=Math.min(2,Number(window.devicePixelRatio)||1);
+      const w=Math.max(2,Math.round(width*dpr)),h=Math.max(2,Math.round(height*dpr));
+      if(canvas.width!==w)canvas.width=w;
+      if(canvas.height!==h)canvas.height=h;
+      const ctx=canvas.getContext('2d');
+      if(!ctx)return;
+      ctx.clearRect(0,0,w,h);
+      const count=Math.max(7,Math.min(22,Math.floor(w/Math.max(3,dpr*2.5))));
+      const gap=Math.max(1,Math.round(w/count*.16));
+      const barWidth=Math.max(1,(w-gap*(count-1))/count);
+      for(let i=0;i<count;i++){
+        const index=side?count-1-i:i;
+        const band=bands[index/count<.33?0:index/count<.7?1:2]||0;
+        const variation=.62+.38*Math.abs(Math.sin((index+1)*.79));
+        const level=active?clamp(band*variation):0;
+        const barHeight=Math.max(2,level*h*.92);
+        const x=i*(barWidth+gap),y=h-barHeight;
+        const gradient=ctx.createLinearGradient?.(0,y,0,h);
+        if(gradient){
+          gradient.addColorStop(0,'#b4fff4');
+          gradient.addColorStop(.55,'#37cbff');
+          gradient.addColorStop(1,'#7561ff');
+        }
+        ctx.fillStyle=gradient||'#49caff';
+        ctx.globalAlpha=active?.34+.66*level:.18;
+        ctx.fillRect(x,y,barWidth,barHeight);
+      }
+      ctx.globalAlpha=1;
+    });
+  }
   function setMidiNotes(notes,duration){
     if(!Array.isArray(notes)||!notes.length){
       clearMidiNotes();return;
@@ -50,8 +90,12 @@
       }
     }
     midiBands=bands;activeSource='midi';
+    paintMidiSideMeters([0,0,0],false);
   }
-  function clearMidiNotes(){midiBands=null;activeSource='audio';}
+  function clearMidiNotes(){
+    midiBands=null;activeSource='audio';
+    // The regular audio analyser reclaims these canvases on the next frame.
+  }
   function readMidiBands(position){
     if(!midiBands)return [0,0,0];
     const index=Math.max(0,Math.min(midiBands[0].length-1,Math.floor((Number(position)||0)*RATE)));
@@ -80,6 +124,7 @@
       ?readMidiBands(typeof player!=='undefined'?player.currentTime:media.currentTime)
       :readAudioBands();
     const master=clamp(bands.reduce((a,b)=>a+b,0)/3);
+    if(activeSource==='midi')paintMidiSideMeters(bands,true);
     deck.classList.add('is-active');
     for(let i=0;i<beams.length;i++){
       const channel=bands[colorBands[i]];
@@ -99,6 +144,7 @@
   function onStop(){
     playing=false;
     if(frame){cancelAnimationFrame(frame);frame=0;}
+    if(activeSource==='midi')paintMidiSideMeters([0,0,0],false);
     dark();
   }
   for(const event of ['play','playing'])media.addEventListener(event,onPlay);
