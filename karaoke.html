@@ -382,7 +382,7 @@
         <button type="button" id="cloud-import-close" aria-label="ปิดหน้าต่างนำเข้า">✕</button>
       </header>
       <div class="cloud-import-body" id="cloud-import-body">
-      <p class="cloud-import-lead">นำเข้าเพลงได้หลายรอบจากหลายเครื่องและหลายโฟลเดอร์ · ตรวจ MIDI ซ้ำจากเนื้อไฟล์จริง ไม่ใช่ชื่อหรือรหัสเพลง · เก็บรายการเพลงใน DB/songs.sqlite3 ไฟล์เดียว · ไม่ลบหรือแก้ไฟล์ต้นฉบับบนเครื่อง</p>
+      <p class="cloud-import-lead">ใช้รหัสเพลงภายใน XMID เป็นชื่อไฟล์ เช่น รหัส 00001 → 00001.XMID · ตรวจ MIDI ซ้ำทุกแหล่ง · นำเข้าได้หลายรอบหลายเครื่อง · เก็บฐานใน DB/songs.sqlite3 ไฟล์เดียว</p>
       <p class="cloud-import-note" id="cloud-import-ios-help">iPhone/iPad: Safari 18.4 ขึ้นไปสามารถเลือกโฟลเดอร์ในแอป Files ได้โดยแตะ “เลือกโฟลเดอร์เพลง” หากเบราว์เซอร์รุ่นเก่าแสดงเฉพาะไฟล์รายตัว อาจไม่ส่งโครงสร้างโฟลเดอร์ครบ ระบบจะตรวจรายการก่อนนำเข้า และจะไม่อัปโหลดชุดเพลงที่องค์ประกอบไม่ครบ</p>
       <div class="cloud-import-actions">
         <button id="cloud-import-pick" type="button">📁 เลือกโฟลเดอร์เพลง</button>
@@ -444,7 +444,7 @@
       <p class="cloud-import-note">รองรับ XMID จาก Song Studio Pro และ XSK2 จาก Song Studio PC โดยตรง ไม่ต้องใช้ไฟล์กุญแจหรือรหัสผ่าน · XSK1 รุ่นเก่าต้องสร้างใหม่เป็น XSK2</p>
       <label class="cloud-import-consent"><input type="checkbox" id="cloud-import-allow-create"> หากไม่มี XStageKaraoke ที่บัญชีนี้เข้าถึงได้ ยืนยันว่าเป็นคลังใหม่ว่างและอนุญาตให้สร้าง (ไม่ลบคลังเดิม)</label>
       <p id="cloud-import-detail" class="cloud-import-detail">รองรับ XMID จาก Song Studio Pro, XSK2, MP3/M4A/WAV/AAC/FLAC/OGG พร้อม LRC/JSON, MIDI/KAR, NCN (MID + LYR + CUR), SoundFont SF2/SF3 และ Video Karaoke MP4/WebM (มีหรือไม่มี LRC/JSON หากเนื้อร้องฝังในภาพ) · AVI/MPEG/MPG/DAT/VOB/MKV/MOV/WMV/FLV เก็บไฟล์ต้นฉบับไว้ใน Drive และสร้าง MP4 สำหรับเว็บเมื่อเบราว์เซอร์เล่นต้นฉบับไม่ได้ (สูงสุด 192 MB/ไฟล์) · ใช้ Song Studio PC สำหรับวิดีโอขนาดใหญ่ · รูปแบบที่เล่นต้นฉบับโดยตรงได้ขึ้นกับ Codec/เบราว์เซอร์ · วิดีโอไม่มีเนื้อร้องต้องใส่ LRC พร้อมเวลาจริง</p>
-      <small class="cloud-import-safety-note">ปิดแท็บหรือเครื่องระหว่างงานจะหยุดอัปโหลดเอง เมื่อเปิดใหม่ให้กดทำต่อหรือเลือกโฟลเดอร์เดิม · ระบบไม่เก็บรหัสผ่านหรือโทเค็น Google</small>
+      <small class="cloud-import-safety-note">ปิดหน้าต่างจะพักงานไว้ เมื่อเปิดอีกครั้งกด “เริ่ม” เพื่อทำต่อ โดยเลือกโฟลเดอร์เดิมหากระบบร้องขอ · ระบบไม่เก็บรหัสผ่านหรือโทเค็น Google</small>
       </div>
       <footer class="cloud-import-footer" aria-label="คำสั่งนำเข้าเพลง">
         <div class="cloud-import-progress">
@@ -454,12 +454,7 @@
         <p id="cloud-import-status" class="cloud-import-status" role="status" aria-live="polite">ยังไม่มีงานนำเข้า</p>
         <p id="cloud-import-action-hint" class="cloud-import-action-hint">เลือกโฟลเดอร์เพลงก่อนเริ่ม · ระบบยังไม่มีรายการพร้อมนำเข้า</p>
         <div class="cloud-import-footer-buttons">
-          <button id="cloud-import-start" type="button" disabled>เริ่มตรวจ MD5 และนำเข้า (0)</button>
-          <button id="cloud-import-consolidate" type="button" disabled title="รวมฐานเพลงเดิมเป็น SQLite3 ไฟล์เดียว โดยเก็บฉบับเก่าใน BACKUP">รวมฐานเป็น songs.sqlite3</button>
-          <button id="cloud-import-pause" type="button" disabled hidden>หยุดชั่วคราว</button>
-          <button id="cloud-import-resume" type="button" disabled hidden>ทำต่อ</button>
-          <button id="cloud-import-reauthorize" type="button" hidden>เชื่อม Google ใหม่และทำต่อ</button>
-          <button id="cloud-import-cancel" type="button" disabled hidden>ยกเลิก (เก็บจุดทำต่อ)</button>
+          <button id="cloud-import-start" type="button" disabled>เริ่ม</button>
           <button id="cloud-import-done" type="button">ปิดหน้าต่าง</button>
         </div>
       </footer>
