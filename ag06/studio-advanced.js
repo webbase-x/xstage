@@ -36,13 +36,13 @@ export function noteSequence(notes,bpm=120){
  const beat=60/limit(bpm,40,240);
  return notes.map(n=>({pitch:Math.round(limit(n.pitch,36,96)),start:limit(n.beat,0,128)*beat,duration:limit(n.length,.125,16)*beat,velocity:limit(n.velocity,0,1)}));
 }
-export async function renderSynth(notes,bpm=120){
+export async function renderSynth(notes,bpm=120,instrument="triangle"){
  const sequence=noteSequence(notes,bpm);if(!sequence.length)throw new Error("เพิ่มโน้ตก่อนสร้างเสียง");
  const duration=Math.max(...sequence.map(n=>n.start+n.duration))+.25;
  if(duration>180)throw new Error("ความยาวเกิน 3 นาที");
  const rate=44100,ctx=new OfflineAudioContext(2,Math.ceil(duration*rate),rate);
  for(const n of sequence){
-  const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type="triangle";osc.frequency.value=midiFrequency(n.pitch);
+  const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type=["triangle","sine","square","sawtooth"].includes(instrument)?instrument:"triangle";osc.frequency.value=midiFrequency(n.pitch);
   const start=n.start,stop=start+n.duration;
   gain.gain.setValueAtTime(.0001,start);gain.gain.exponentialRampToValueAtTime(Math.max(.0002,n.velocity*.16),start+.012);
   gain.gain.setTargetAtTime(.0001,Math.max(start+.02,stop-.04),.025);
