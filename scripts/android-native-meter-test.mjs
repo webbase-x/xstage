@@ -23,7 +23,11 @@ assert.ok(css.includes('html body.xstage-native-tv.xstage-native-audio-direct.xs
   'native TV must restore the right EQ meter beside the single banner');
 assert.ok(meter.includes('const rightCanvas=document.getElementById(\'stage-viz-right\')'),
   'native meter must render on both physical EQ side canvases');
-assert.ok(meter.includes('view.mirror?LEVELS-1-i:i'),
+assert.ok(meter.includes('const count=Math.max(1,Math.min(LEVELS,Math.floor(w/4.5)))'),
+  'native EQ meter must adapt bar count to the actual canvas width');
+assert.ok(meter.includes('window.XStageStageLiveSpectrum=()=>stageLiveSpectrum'),
+  'native meter must publish the actual measured three-band spectrum');
+assert.ok(meter.includes('view.mirror?LEVELS-1-index:index'),
   'right meter must mirror real measured FFT bins, not play a fake animation');
 
 function fakeEnvironment({native=true,captureSupported=true}={}){
