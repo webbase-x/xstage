@@ -35,9 +35,9 @@ const state={loading:true,preparingSong:song,current:{title:'เพลงก่�
 const player={currentTime:0,paused:true,ended:false};
 const ui={stage:{querySelector:()=>null,classList:{contains:()=>false}},lyrics:{getBoundingClientRect:()=>({width:380,height:670})}};
 const pen={clearRect(){}};
-const paint=new Function('ui','state','player','window','pen','resizeCanvas','drawLine','lineProgress','matchMedia','scheduleLyricsDraw',
+const paint=new Function('ui','state','player','window','document','pen','resizeCanvas','drawLine','lineProgress','matchMedia','scheduleLyricsDraw',
  app.slice(drawStart,drawEnd)+';return drawLyrics;')(
- ui,state,player,{devicePixelRatio:1},pen,()=>({w:380,h:670}),
+ ui,state,player,{devicePixelRatio:1},{body:{classList:{contains:()=>false}}},pen,()=>({w:380,h:670}),
  (...args)=>painted.push(args[0]),()=>0,()=>({matches:false}),()=>{});
 paint();
 assert.deepEqual(painted,[song.title,song.artist],'Song selection paints title/artist, not previous lyrics');
