@@ -187,7 +187,7 @@ media.emit('pause');
 assert.equal(lights.status().energy,0,'Stopped virtual MIDI must clear the lights');
 
 const meterGuardStart=webEq.indexOf('function drawStageBrandVisualizer(');
-const meterGuardEnd=webEq.indexOf('\\nfunction startStageBrandVisualizer(',meterGuardStart);
+const meterGuardEnd=webEq.indexOf('\nfunction startStageBrandVisualizer(',meterGuardStart);
 assert.ok(meterGuardStart>=0&&meterGuardEnd>meterGuardStart,
   'Web audio visualizer must expose a separate guarded drawing loop');
 let conflictingFFTWrites=0,followupFrames=0;
@@ -200,7 +200,7 @@ const meterScope={
   Date
 };
 const drawAudioMeter=vm.runInNewContext(webEq.slice(meterGuardStart,meterGuardEnd)+
-  '\\ndrawStageBrandVisualizer;',meterScope);
+  '\ndrawStageBrandVisualizer;',meterScope);
 drawAudioMeter(100);
 assert.equal(conflictingFFTWrites,0,
   'The silent HTML analyser must never paint over MIDI's side EQ meters');
