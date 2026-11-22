@@ -1,6 +1,8 @@
 # EXE includes its runtime. Source rendering dependency:
 Pillow>=10.4
 numpy>=1.26,<3
+# Optional Chromakey decoder is bundled with the Windows EXE
+opencv-python-headless==4.14.0.94
 
 qrcode>=8.2,<9
 
