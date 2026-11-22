@@ -158,7 +158,7 @@
     text("engine-subtitle",enabled?"SQLite · 127.0.0.1":"เปิดผ่าน Song Studio Pro บน PC");
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
-    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","source-browse","source-open","workspace-open","lrc-browse","manual-find","db-health-check","db-detail-audit"]){
+    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","build-ready-all","source-browse","source-open","workspace-open","lrc-browse","manual-find","db-health-check","db-detail-audit"]){
       const control=$(id);
       if(control)control.disabled=!enabled;
     }
@@ -494,6 +494,7 @@
     text("build-count",number(count)+" เพลง"+
       (state.allReadySelected?" (ทั้งคลัง)":""));
     $("build-start").disabled=!state.ready||state.buildTab!=="ready"||count===0||Boolean(state.activeJob);
+    $("build-ready-all").disabled=!state.ready||Boolean(state.activeJob);
   }
   function renderLyricPage(){
     const entries=state.lyricShowDraft?state.lyricDraft:state.lyricTimed;
@@ -2806,6 +2807,22 @@
         else state.selectedSongs.delete(song.id);
       }
       renderBuildRows(true);
+    });
+    $("build-ready-all").addEventListener("click",async()=>{
+      if(!state.ready||state.activeJob)return;
+      const button=$("build-ready-all");
+      button.disabled=true;
+      try{
+        const result=await api("/api/build/eligible");
+        const count=Number(result.ready_total||0);
+        if(!count)return toast("ไม่มีเพลงที่พร้อมสร้างไฟล์และยังไม่แปลง");
+        // Resolve eligible IDs server-side at job start; do not rely on paged UI rows.
+        await startJob("build",{all_ready:true,excluded:[]});
+      }catch(error){
+        toast("ตรวจรายการพร้อมสร้างไม่สำเร็จ: "+error.message,true);
+      }finally{
+        updateBuildSelection();
+      }
     });
     $("build-start").addEventListener("click",()=>{
       if(state.buildTab!=="ready")return toast("เลือกเพลงจากหมวดยังไม่แปลงเท่านั้น",true);
