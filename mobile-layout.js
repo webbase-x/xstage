@@ -22,6 +22,17 @@
   const searchAnchor=searchSlot&&searchToolbar?document.createComment('original search toolbar slot'):null;
   if(searchAnchor)searchToolbar.insertBefore(searchAnchor,searchSlot);
   const bottomSearchQuery=window.matchMedia('(max-width:820px), (max-height:540px) and (pointer:coarse)');
+  // Move the original MIDI transpose and Next controls, never clone their IDs.
+  const transpose=$('midi-transpose-control');
+  const transposeToolbar=transpose?.parentNode||null;
+  const transposeAnchor=transpose&&transposeToolbar?document.createComment('transpose toolbar position'):null;
+  if(transposeAnchor)transposeToolbar.insertBefore(transposeAnchor,transpose);
+  const transportPanel=stage.querySelector('.transport-panel');
+  const transportRow=transportPanel?.querySelector('.transport-row');
+  const mainControls=transportPanel?.querySelector('.transport-main');
+  const nextButton=$('next'),cancelButton=$('cancel-current');
+  const nextAnchor=nextButton&&mainControls?document.createComment('original next song position'):null;
+  if(nextAnchor)mainControls.insertBefore(nextAnchor,nextButton);
   const visualViewport=window.visualViewport;
   function syncSearchKeyboardInset(){
     if(!document.body.classList.contains('xstage-mobile-search-bottom'))return;
@@ -44,6 +55,17 @@
       stage.insertBefore(searchSlot,stage.querySelector('.mobile-stage-menu'));
     }else if(!mobile&&searchSlot.parentNode!==searchToolbar){
       searchToolbar.insertBefore(searchSlot,searchAnchor);
+    }
+    if(mobile){
+      if(transpose&&transportPanel&&transportRow&&transpose.parentNode!==transportPanel)
+        transportPanel.insertBefore(transpose,transportRow);
+      if(nextButton&&cancelButton&&mainControls&&nextButton.nextElementSibling!==cancelButton)
+        mainControls.insertBefore(nextButton,cancelButton);
+    }else{
+      if(transpose&&transposeToolbar&&transposeAnchor&&transpose.parentNode!==transposeToolbar)
+        transposeToolbar.insertBefore(transpose,transposeAnchor);
+      if(nextButton&&nextAnchor&&nextButton.nextSibling!==nextAnchor)
+        nextAnchor.parentNode?.insertBefore(nextButton,nextAnchor);
     }
     document.body.classList.toggle('xstage-mobile-search-bottom',mobile);
     if(!mobile)document.documentElement.style.removeProperty('--xs-search-keyboard-inset');
