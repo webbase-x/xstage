@@ -7,7 +7,7 @@ const version=JSON.parse(read('version.json'));
 assert.equal(version.build,1136);
 assert.equal(version.version,'1.0.136');
 assert.ok(html.includes('app.js?v=1136-stage-lighting'));
-assert.ok(html.includes('cloud-import.js?v=1135-retired-root'));
+assert.ok(html.includes('cloud-import.js?v=1138-visible-import-cta'));
 assert.ok(app.includes('createdTime,sharedWithMeTime'));
 assert.ok(html.includes('id="library-drive-link"'));
 assert.ok(app.includes("ui.libraryDriveLink.href='https://drive.google.com/drive/folders/'"));
