@@ -107,20 +107,64 @@ public sealed class LiveBackgroundMonitor
         }
     }
 
+    public static Uri? SelectHlsVariant(Uri masterUri, string manifest)
+    {
+        if (!manifest.TrimStart('\uFEFF', ' ', '\t', '\r', '\n')
+            .StartsWith("#EXTM3U", StringComparison.Ordinal))
+            return null;
+        var lines = manifest.Split('\n');
+        for (var i = 0; i < lines.Length - 1; i++)
+        {
+            if (!lines[i].Trim().StartsWith("#EXT-X-STREAM-INF:",
+                StringComparison.OrdinalIgnoreCase))
+                continue;
+            for (var j = i + 1; j < lines.Length; j++)
+            {
+                var item = lines[j].Trim();
+                if (item.Length == 0) continue;
+                if (item.StartsWith("#", StringComparison.Ordinal)) break;
+                if (!Uri.TryCreate(masterUri, item, out var variant) ||
+                    !DownloadEngine.TryParseUrl(variant.AbsoluteUri, out _) ||
+                    !variant.AbsolutePath.EndsWith(".m3u8",
+                        StringComparison.OrdinalIgnoreCase))
+                    break;
+                return variant;
+            }
+        }
+        return null;
+    }
+
     private static async Task<bool> ProbeManifestAsync(string url, CancellationToken ct)
+    {
+        var uri = new Uri(url);
+        var manifest = await ReadPublicManifestAsync(uri, ct);
+        if (uri.AbsolutePath.EndsWith(".mpd", StringComparison.OrdinalIgnoreCase))
+            return IsActiveDashManifest(manifest);
+        if (IsActiveHlsManifest(manifest)) return true;
+        // The top-level HLS master may exist even while offline.
+        // Follow at most ONE advertised media playlist before deciding,
+        // instead of claiming the master alone means "on air".
+        var mediaUri = SelectHlsVariant(uri, manifest);
+        if (mediaUri is null) return false;
+        var mediaManifest = await ReadPublicManifestAsync(mediaUri, ct);
+        return IsActiveHlsManifest(mediaManifest);
+    }
+
+    private static async Task<string> ReadPublicManifestAsync(
+        Uri uri, CancellationToken ct)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(12));
-        using var response = await ManifestHttp.GetAsync(url,
+        using var response = await ManifestHttp.GetAsync(uri,
             HttpCompletionOption.ResponseHeadersRead, timeout.Token);
         if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized)
             throw new UnauthorizedAccessException(
                 "แหล่งสตรีมต้องได้รับอนุญาตให้เข้าถึง ไม่รองรับการข้ามสิทธิ์");
-        if (!response.IsSuccessStatusCode) return false;
+        if (!response.IsSuccessStatusCode) return "";
         await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
         using var reader = new StreamReader(stream, Encoding.UTF8, true, 1024, leaveOpen: false);
-        // Bound memory and network traffic, even if a hostile URL returns a
-        // large file rather than a text manifest.
+        // Bound memory and network traffic, even if a hostile URL returns
+        // an enormous file rather than a text manifest.
         var buffer = new char[64 * 1024];
         var count = 0;
         while (count < buffer.Length)
@@ -130,10 +174,7 @@ public sealed class LiveBackgroundMonitor
             if (read == 0) break;
             count += read;
         }
-        var manifest = new string(buffer, 0, count);
-        var uri = new Uri(url);
-        return uri.AbsolutePath.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase)
-            ? IsActiveHlsManifest(manifest) : IsActiveDashManifest(manifest);
+        return new string(buffer, 0, count);
     }
 
     private static async Task<bool> ProbePublicPlatformAsync(string url, CancellationToken ct)
