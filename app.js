@@ -1671,9 +1671,24 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       hideCatalogLoading();
       setAndroidTvStageAccess(true,account.sub);
       setStatus(pointers.length?
-        'พบฐานเดิมใน DB · เปิดเมนูนำเข้าเพลง แล้วกด “รวมฐานเป็น songs.sqlite3” ก่อนเล่นเพลง':
+        'พบฐานเดิม · กำลังย้ายไปยัง DB/songs.sqlite3 อัตโนมัติ (ไม่ลบต้นฉบับ)':
         'เชื่อม Google Drive แล้ว · ยังไม่มี songs.sqlite3 · นำเข้าเพลงจากหน้าเว็บเพื่อสร้างฐานเดียว',
-        pointers.length?'error':'success');
+        'success');
+      if(pointers.length===1){
+        const key=String(account.sub)+':'+String(root.id);
+        if(state.legacyMigrationKey!==key){
+          state.legacyMigrationKey=key;
+          // This one-time upgrade runs only after the signed-in account and
+          // selected root have been verified. The importer performs its own
+          // Drive lock, backup and checks before publishing the new SQLite.
+          queueMicrotask(()=>{
+            if(state.accountSub===account.sub&&state.libraryRootId===root.id){
+              if(xstageCloudImporter)void xstageCloudImporter.consolidate();
+              else setStatus('ไม่พบระบบย้ายฐาน · กรุณาอัปเดตหน้าเว็บ','error');
+            }
+          });
+        }
+      }
       return;
     }
     const pointer=directCatalogPointer(canonical[0]);
@@ -4677,9 +4692,11 @@ const xstageCloudImporter=window.XStageCloudImport?.init({
     expiresAt:state.tokenExpiresAt}),
   ensureAuth:ensureImporterGoogleAuth,
   reconnect:()=>ensureImporterGoogleAuth(true,true),
+  onConsolidationStatus:message=>setStatus(message,
+    /ไม่สำเร็จ|ไม่พบ|หมดอายุ|ปฏิเสธ|ไม่ตรง/.test(message)?'error':'success'),
   refresh:async()=>{
     if(!state.token||!state.accountSub)return;
-    // Reload the canonical XStageKaraoke current.json/catalog after publishing.
+    // Reload only the canonical DB/songs.sqlite3 after publishing.
     // Use a NEW auth request ID but never silently switch Google accounts.
     const token=state.token,id=++state.authId;
     await openDrive(token,id,state.tokenExpiresAt);
