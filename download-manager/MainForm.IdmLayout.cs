@@ -5,7 +5,7 @@ using System.Windows.Forms;
 
 namespace XStageDownloadManager;
 
-// An IDM-inspired desktop workspace, not a copy of IDM branding or artwork.
+// Original X-Stage workspace: branded command deck, distinct visual language.
 // Commands are wired to the existing engine and updater, not dummy controls.
 public sealed partial class MainForm
 {
@@ -20,13 +20,13 @@ public sealed partial class MainForm
     private bool _sortDescending;
     private ToolStrip? _toolbar;
 
-    private static readonly Color DarkTop = Color.FromArgb(23, 26, 34);
-    private static readonly Color DarkPanel = Color.FromArgb(33, 38, 50);
-    private static readonly Color DarkGrid = Color.FromArgb(30, 35, 45);
+    private static readonly Color DarkTop = Color.FromArgb(13, 29, 43);
+    private static readonly Color DarkPanel = Color.FromArgb(17, 45, 59);
+    private static readonly Color DarkGrid = Color.FromArgb(18, 38, 49);
     private static readonly Color MutedText = Color.FromArgb(178, 191, 211);
-    private static readonly Color Accent = Color.FromArgb(47, 158, 235);
+    private static readonly Color Accent = Color.FromArgb(47, 204, 179);
 
-    private void CreateIdmLayout()
+    private void CreateXStageWorkspace()
     {
         SuspendLayout();
         var root = new TableLayoutPanel
@@ -38,7 +38,7 @@ public sealed partial class MainForm
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 31)); // Traditional application menu
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82)); // Icon-and-caption toolbar
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64)); // X-Stage command deck
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));  // URL input, expandable
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Sidebar + main list
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 84)); // Status and details
@@ -117,12 +117,12 @@ public sealed partial class MainForm
     {
         var bar = new ToolStrip
         {
-            Dock = DockStyle.Fill, AutoSize = false, Height = 82,
+            Dock = DockStyle.Fill, AutoSize = false, Height = 64,
             GripStyle = ToolStripGripStyle.Hidden, LayoutStyle = ToolStripLayoutStyle.HorizontalStackWithOverflow,
             BackColor = DarkTop, ForeColor = Color.White,
             RenderMode = ToolStripRenderMode.System,
-            ImageScalingSize = new Size(29, 29),
-            Padding = new Padding(11, 3, 8, 2),
+            ImageScalingSize = new Size(22, 22),
+            Padding = new Padding(14, 6, 8, 6),
             Font = new Font("Segoe UI", 9)
         };
         void Button(string label, string symbol, Color iconColor, EventHandler callback, string tooltip)
@@ -131,16 +131,21 @@ public sealed partial class MainForm
             {
                 Text = label, Image = DrawToolbarGlyph(symbol, iconColor),
                 DisplayStyle = ToolStripItemDisplayStyle.ImageAndText,
-                TextImageRelation = TextImageRelation.ImageAboveText,
+                TextImageRelation = TextImageRelation.ImageBeforeText,
                 ImageAlign = ContentAlignment.MiddleCenter,
                 TextAlign = ContentAlignment.BottomCenter,
-                AutoSize = false, Size = new Size(label.Length > 14 ? 136 : 96, 69),
+                AutoSize = false, Size = new Size(label.Length > 14 ? 150 : 104, 46),
                 Margin = new Padding(0, 0, 3, 0), Padding = new Padding(3),
-                ToolTipText = tooltip, ForeColor = Color.White
+                ToolTipText = tooltip, ForeColor = Color.White, BackColor = DarkPanel
             };
             item.Click += callback;
             bar.Items.Add(item);
         }
+        bar.Items.Add(new ToolStripLabel("X-STAGE  /  TRANSFERS")
+        {
+            ForeColor = Accent, Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            Margin = new Padding(4, 0, 18, 0)
+        });
         Button("เพิ่ม URL", "＋", Color.FromArgb(89, 204, 176),
             (_, _) => ShowAddUrlFromClipboard(), "เปิดช่องเพิ่ม URL และเติมลิงก์จากคลิปบอร์ดอัตโนมัติ");
         Button("เริ่ม / ต่อ", "▶", Color.FromArgb(140, 193, 255),
@@ -296,7 +301,7 @@ public sealed partial class MainForm
         side.BackColor = DarkPanel;
         var section = new Label
         {
-            Text = "  หมวดหมู่ดาวน์โหลด", Dock = DockStyle.Top, Height = 41,
+            Text = "  X-STAGE  /  คลังงาน", Dock = DockStyle.Top, Height = 41,
             TextAlign = ContentAlignment.MiddleLeft,
             Font = new Font("Segoe UI", 10, FontStyle.Bold),
             ForeColor = Color.White, BackColor = Color.FromArgb(42, 48, 63)
