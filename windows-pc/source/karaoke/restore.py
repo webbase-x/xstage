@@ -223,6 +223,12 @@ def rollback(data,safety,existed,replaced=FILES):
             with closing(readonly(safety/name)) as db:
                 if db.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
                     raise ValueError('ฐานข้อมูลสำรองเพื่อย้อนคืนเสียหาย: ' + name)
+    # Integrity alone is insufficient: a valid SQLite file without the plays
+    # schema cannot be used as a restored statistics ledger. Fail before any
+    # earlier live file is replaced.
+    if 'play_stats.sqlite3' in existed:
+        from .play_stats import validate_stats
+        validate_stats(safety/'play_stats.sqlite3')
     for name in replaced:
         target=data/name
         if name.endswith('.sqlite3'):
