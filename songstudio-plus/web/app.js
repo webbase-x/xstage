@@ -40,7 +40,7 @@
   let confirmationPending=false;
   let lyricDialogLoading=false;
   let issuesDialogLoading=false;
-  const labels={import:"นำเข้าเพลง",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
+  const labels={import:"นำเข้าเพลง",drive:"Google Drive",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
                 library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
   const number = v => Number(v||0).toLocaleString("en-US");
@@ -159,7 +159,7 @@
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
     for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","build-ready-all","build-everything",
-      "media-source-browse","import-file-start","song-download-start","source-browse","source-open","workspace-open","lrc-browse","manual-find","db-health-check","db-detail-audit"]){
+      "media-source-browse","import-file-start","song-download-start","drive-browse","drive-check","drive-download","source-browse","source-open","workspace-open","lrc-browse","manual-find","db-health-check","db-detail-audit"]){
       const control=$(id);
       if(control)control.disabled=!enabled;
     }
@@ -942,7 +942,7 @@
     try{
       const endpoint=kind==="import"?"/api/import":
         kind==="import-file"?"/api/import/file":
-        kind==="song-download"?"/api/import/download":kind==="recover"?"/api/recover-lyrics":
+        kind==="song-download"?"/api/import/download":kind==="drive-import"?"/api/import/google-drive":kind==="recover"?"/api/recover-lyrics":
         kind==="swipe-audit"?"/api/swipe/scan":kind==="db-audit"?"/api/db/audit":
         kind==="db-clean"?"/api/db/cleanup":
         kind==="db-compact"?"/api/db/compact":"/api/build";
@@ -979,6 +979,8 @@
       $("import-start").disabled=!state.ready||Boolean(state.activeJob);
       $("import-file-start").disabled=!state.ready||Boolean(state.activeJob);
       $("song-download-start").disabled=!state.ready||Boolean(state.activeJob);
+      $("drive-download").disabled=!state.ready||Boolean(state.activeJob);
+      $("drive-check").disabled=!state.ready||Boolean(state.activeJob);
       $("recover-lyrics").disabled=!state.ready||Boolean(state.activeJob);
       $("risk-scan").disabled=!state.ready||Boolean(state.activeJob);
       $("db-health-check").disabled=!state.ready||Boolean(state.activeJob);
@@ -1003,6 +1005,7 @@
           job.status==="completed"?"เสร็จเรียบร้อย":job.status==="failed"?"ข้อผิดพลาด":"หยุดแล้ว");
       text("activity-title",job.kind==="lyrics-edit"?"แทนที่เนื้อร้องเป็นชุด":
           job.kind==="song-download"?"ดาวน์โหลดและนำเข้าเพลง HTTPS":
+          job.kind==="drive-import"?"ดาวน์โหลดเพลงจาก XStageKaraoke":
           job.kind==="update"?"ดาวน์โหลดและตรวจ SHA-256 โปรแกรมใหม่":
           job.kind==="import"?"นำเข้าและตรวจ SHA-256":
           job.kind==="db-audit"?"ตรวจพื้นที่และความสมบูรณ์ของ SQLite":
@@ -1087,6 +1090,17 @@
             "แทนที่ไม่สำเร็จ ฐานข้อมูลยังไม่เปลี่ยน: "+(job.error||job.message));
         }
       }
+      if(job.kind==="drive-import"){
+        const latest=job.status==="completed"?"ดาวน์โหลดและนำเข้าเสร็จสิ้น":
+          job.status==="failed"?"ดำเนินการไม่สำเร็จ: "+(job.error||job.message):
+          job.status==="cancelled"?"ยกเลิกแล้ว · ไฟล์ที่ดาวน์โหลดสำเร็จยังอยู่":
+          p.phase==="index"?"กำลังจัดทำดัชนีเพลงใน SQLite":
+          "กำลังดาวน์โหลดไฟล์เพลงจากโฟลเดอร์ที่ซิงก์";
+        text("drive-status",latest+" · ดาวน์โหลด "+number(p.downloaded)+
+          " · ข้ามไฟล์ตรงกัน "+number(p.unchanged)+
+          " · ตรวจแล้ว "+number(p.files_seen)+" รายการ"+
+          (job.status==="running"?" · "+(job.message||""):""));
+      }
       text("progress-detail",job.kind==="lyrics-edit"?
           "แทนที่เนื้อร้อง "+number(p.done)+" / "+number(p.total)+
           " เพลง · เติม > "+number(p.silent_slots)+" จุด"+
@@ -1097,6 +1111,10 @@
           "ดาวน์โหลด "+number((p.downloaded_bytes||0)/1048576>>0)+" MB"+
           (p.total?" / "+number((p.total/1048576)>>0)+" MB":"")+
           " · ตรวจ SHA-256 ก่อนติดตั้ง":
+          job.kind==="drive-import"?
+          (p.phase==="index"?"นำเข้าคลัง SQLite · ":"ดาวน์โหลด Google Drive · ")+
+          "ดาวน์โหลดใหม่ "+number(p.downloaded)+" · ข้ามซ้ำ "+number(p.unchanged)+
+          " · ตรวจแล้ว "+number(p.files_seen)+" ไฟล์":
           job.kind==="song-download"?
           (p.phase==="import"?"ดาวน์โหลดสำเร็จ · กำลังตรวจ SHA-256 และลงทะเบียน SQLite":
           "ดาวน์โหลดเพลง "+number((p.downloaded_bytes||0)/1048576>>0)+" MB"+
@@ -1134,6 +1152,7 @@
         number(p.done||0)+" / "+number(p.total||0)+" เพลง":
         job.kind==="lyrics-edit"?
         number(p.done)+" / "+number(p.total)+" เพลง":
+        job.kind==="drive-import"?number(p.files_seen||0)+" ไฟล์":
         job.kind==="update"||job.kind==="song-download"?
         number(p.downloaded_bytes||0)+" ไบต์":
         number(p.processed||p.files_seen||p.done||0)+
@@ -1240,18 +1259,19 @@
     }
   }
   async function openPicker(kind,target){
-    const button=$(kind==="folder"?"source-browse":
+    const button=$(target==="drive-folder"?"drive-browse":kind==="folder"?"source-browse":
       kind==="media"?"media-source-browse":"lrc-browse");
+    const folderStatus=target==="drive-folder"?"drive-status":"folder-picker-status";
     void diagnostic("ui.picker.click",{kind,current:$(target).value.trim()});
     button.disabled=true;
-    if(kind==="folder")text("folder-picker-status","กำลังเปิดหน้าต่างเลือกโฟลเดอร์ของ Windows...");
+    if(kind==="folder")text(folderStatus,"กำลังเปิดหน้าต่างเลือกโฟลเดอร์ของ Windows...");
     try{
       const result=await api("/api/pick",{kind,current:$(target).value.trim()},0);
       if(result.path){
         $(target).value=result.path;
         $(target).dispatchEvent(new Event("input",{bubbles:true}));
         if(kind==="folder"){
-          text("folder-picker-status","เลือกโฟลเดอร์แล้ว: "+result.path);
+          text(folderStatus,"เลือกโฟลเดอร์แล้ว: "+result.path);
           void diagnostic("ui.picker.selected",{kind,path:result.path});
           toast("เลือกโฟลเดอร์สำเร็จ");
         }else if(kind==="media"){
@@ -1261,14 +1281,14 @@
         }
       }else if(kind==="folder"){
         void diagnostic("ui.picker.cancelled",{kind});
-        text("folder-picker-status","ยกเลิกการเลือก · โฟลเดอร์เดิมยังอยู่");
+        text(folderStatus,"ยกเลิกการเลือก · โฟลเดอร์เดิมยังอยู่");
       }
     }catch(error){
       const label=kind==="folder"?"โฟลเดอร์":
         kind==="media"?"ไฟล์เพลง":"ไฟล์ LRC";
       const msg="เลือก"+label+"ไม่สำเร็จ: "+error.message;
       void diagnostic("ui.picker.error",{kind,error:error.message});
-      if(kind==="folder")text("folder-picker-status",msg);
+      if(kind==="folder")text(folderStatus,msg);
       else if(kind==="media")text("single-import-status",msg);
       else text("media-feedback",msg);
       toast(msg,true);
@@ -2453,6 +2473,24 @@
       $("confirm-dialog").returnValue="cancel";
     });
     $("source-browse").addEventListener("click",()=>void openPicker("folder","source-folder"));
+    $("drive-browse").addEventListener("click",()=>void openPicker("folder","drive-folder"));
+    $("drive-check").addEventListener("click",async()=>{
+      if(!state.ready||state.activeJob)return;
+      const button=$("drive-check");button.disabled=true;
+      text("drive-status","กำลังตรวจโครงสร้าง XStageKaraoke บนเครื่อง...");
+      try{
+        const found=await api("/api/drive/check",{folder:$("drive-folder").value.trim()});
+        $("drive-folder").value=found.root;
+        text("drive-status","พบคลังที่ถูกต้อง · "+found.root+" · "+found.sqlite_policy);
+        toast("พบ XStageKaraoke พร้อมนำเข้า");
+      }catch(error){text("drive-status",error.message);toast(error.message,true);}
+      finally{button.disabled=!state.ready||Boolean(state.activeJob);}
+    });
+    $("drive-download").addEventListener("click",()=>{
+      if(!state.ready||state.activeJob)return;
+      text("drive-status","เริ่มดาวน์โหลดจาก XStageKaraoke · กำลังตรวจโครงสร้าง");
+      void startJob("drive-import",{folder:$("drive-folder").value.trim()});
+    });
     $("media-source-browse").addEventListener("click",()=>void openPicker("media","single-media-file"));
     $("import-file-start").addEventListener("click",()=>{
       if(!state.ready||state.activeJob)return;
