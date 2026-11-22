@@ -3006,6 +3006,13 @@ function togglePlayback(){
   try{window.XStageIOSMidiAudio?.activate?.();}catch{}
   try{window.XStageBrowserMidi?.unlockAudio?.();}catch{}
   if(state.loading)return;
+  // iOS can report a running virtual transport with silent output after
+  // lock-screen wake. A tap on Play must recover the audio route, not pause
+  // the song and force the user to tap twice.
+  if(wakeNeedsGesture&&!state.userPaused&&!state.userStopped){
+    void recoverScreenAudio();
+    return;
+  }
   if(!player.src){
     if(state.queue.length)playNext();
     else if(state.shown.length)playSong(state.shown[state.selectedIndex]);
@@ -3353,7 +3360,7 @@ function updateTransport(){
   const musicLoader=document.getElementById('music-loader');
   if(musicLoader)musicLoader.setAttribute('aria-hidden',String(!state.loading));
   ui.playPause.disabled=state.loading||(!state.current&&!state.queue.length&&!state.shown.length);
-  ui.playPause.textContent=player.src&&!player.paused?'Ⅱ':'▶';
+  ui.playPause.textContent=player.src&&!player.paused&&!wakeNeedsGesture?'Ⅱ':'▶';
   const searchReady=!player.src&&!state.current&&!!state.shown.length;
   ui.playPause.title=searchReady?'เล่นเพลงที่เลือกจากผลค้นหา':'เล่น/พัก (F5)';
   ui.playPause.setAttribute('aria-label',searchReady?'เล่นเพลงที่เลือกจากผลค้นหา':'เล่นหรือพัก');
