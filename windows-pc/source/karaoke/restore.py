@@ -93,6 +93,9 @@ def stage_restore(folder,data):
         write_json(temp/FILES[1],info['settings']);write_json(temp/FILES[2],info['queue'])
         for name in OPTIONAL_FILES:
             source = Path(folder)/name
+            if (source.is_symlink() or getattr(source, 'is_junction', lambda: False)()
+                    or (source.exists() and not source.is_file())):
+                raise ValueError('ไฟล์เสริมชุดสำรองไม่ปลอดภัย: ' + name)
             if source.is_file():
                 if name.endswith('.sqlite3'):
                     copy_database(source,temp/name)
