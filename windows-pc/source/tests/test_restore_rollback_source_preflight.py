@@ -1,4 +1,5 @@
 """P0.6: a damaged later safety source must not cause partial rollback."""
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -89,6 +90,23 @@ class RollbackSourcePreflightTests(unittest.TestCase):
                     rollback(data, safety, list(live), tuple(live))
                 for filename, value in live.items():
                     self.assertEqual((data / filename).read_text(encoding="utf-8"), value)
+
+    def test_valid_sqlite_without_play_stats_schema_never_partially_rolls_back(self):
+        with tempfile.TemporaryDirectory() as root:
+            data, safety = Path(root) / "live", Path(root) / "safety"
+            data.mkdir()
+            safety.mkdir()
+            (data / "settings.json").write_text('{"title":"current"}', encoding="utf-8")
+            (safety / "settings.json").write_text('{"title":"old"}', encoding="utf-8")
+            # SQLite integrity_check succeeds, but the required plays table is absent.
+            with sqlite3.connect(safety / "play_stats.sqlite3") as db:
+                db.execute("CREATE TABLE unrelated (id INTEGER)")
+            with self.assertRaisesRegex(ValueError, "สถิติ"):
+                rollback(data, safety, ["settings.json", "play_stats.sqlite3"],
+                         ("settings.json", "play_stats.sqlite3"))
+            self.assertEqual((data / "settings.json").read_text(encoding="utf-8"),
+                             '{"title":"current"}')
+            self.assertFalse((data / "play_stats.sqlite3").exists())
 
     def test_linked_later_safety_file_does_not_mutate_live_files(self):
         with tempfile.TemporaryDirectory() as root:
