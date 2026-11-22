@@ -285,6 +285,22 @@ function renderTimeline(){
   const canvas=document.createElement("canvas");canvas.setAttribute("aria-label","Waveform "+track.name);
   row.append(title,canvas);host.append(row);
   drawWaveform(canvas,track,Number($("studio-zoom").value));
+  const trim=document.createElement("span");trim.className="wave-trim-info";
+  trim.textContent="ช่วง "+track.start.toFixed(2)+"–"+track.end.toFixed(2)+"s · แตะ = Trim Start · Shift+แตะ = Trim End";
+  row.append(trim);
+  const segment=document.createElement("div");segment.className="wave-trim-bar";row.append(segment);
+  const update=()=>{
+   segment.style.marginLeft=(100*track.start/track.buffer.duration)+"%";
+   segment.style.width=(100*(track.end-track.start)/track.buffer.duration)+"%";
+  };update();
+  canvas.addEventListener("pointerdown",event=>{
+   const rect=canvas.getBoundingClientRect(),fraction=clamp((event.clientX-rect.left)/Math.max(rect.width,1),0,1);
+   const position=Math.round(fraction*track.buffer.duration*100)/100;
+   studio.stop();
+   if(event.shiftKey||event.button===2)track.end=clamp(position,track.start+.01,track.buffer.duration);
+   else track.start=clamp(position,0,track.end-.01);
+   studioRender();
+  });
  }
 }
 const projectSave=$("studio-save-project");
