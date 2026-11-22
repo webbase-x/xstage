@@ -637,6 +637,23 @@ try
             AdaptiveSegmentPlanner.Recommend(parts, 1L << 40, double.NaN, false) != parts)
             throw new Exception("Adaptive planner changed user cap or persisted geometry.");
     }
+    // Invalid telemetry and unknown content lengths must not repartition a
+    // transfer. In particular, an infinite EWMA sample is not high bandwidth.
+    foreach (var parts in DownloadEngine.AllowedParts)
+    foreach (var rate in new[] { double.NaN, double.PositiveInfinity,
+                                  double.NegativeInfinity, -1d, 0d })
+    foreach (var length in new[] { -1L, 0L, 1L << 40 })
+    {
+        if (AdaptiveSegmentPlanner.Recommend(parts, length, rate, false) != parts ||
+            AdaptiveSegmentPlanner.Recommend(parts, length, rate, true) != parts)
+            throw new Exception("Invalid throughput telemetry changed persisted or requested segments.");
+    }
+    foreach (var parts in DownloadEngine.AllowedParts)
+    {
+        if (AdaptiveSegmentPlanner.Recommend(parts, -1, 64 * 1024 * 1024, false) != parts ||
+            AdaptiveSegmentPlanner.Recommend(parts, 0, 64 * 1024 * 1024, false) != parts)
+            throw new Exception("Unknown Content-Length must not alter segment geometry.");
+    }
     // First transfer has no measured rate: do not silently override a user's
     // requested 1/8/32 connections. On resume, even slow throughput must
     // preserve the existing byte-boundary geometry.
