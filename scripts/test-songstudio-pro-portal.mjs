@@ -38,7 +38,7 @@ assert.ok(workflow.includes('--name "XStageSongStudioPro"'),
  'PyInstaller must build the same stable application payload for every release');
 assert.ok(workflow.includes('dist/XStageSongStudioPro.exe'),
  'Windows build must verify the native desktop payload');
-const setupExe='X-Stage-Song-Studio-Pro-v0.1.39-win-x64-Setup.exe';
+const setupExe='X-Stage-Song-Studio-Pro-v0.1.40-win-x64-Setup.exe';
 assert.ok(workflow.includes('path: songstudio-plus/installer/output/'+setupExe),
  'The published app must be an installer, not a portable EXE');
 assert.ok(installer.includes('DefaultDirName={autopf}\\X-Stage\\Song Studio Pro'),
