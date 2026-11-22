@@ -1355,6 +1355,25 @@ def songs(workspace,query="",limit=80,offset=0):
             (term,term,term,max(1,min(int(limit),200)),max(0,int(offset)))).fetchall()
         return [dict(x) for x in items]
 
+def suspicious_lyric_text(value):
+    """Identify encoded-looking machine payloads, not normal long lyric lines.
+
+    Restrict to long uninterrupted ASCII tokens with mixed upper/lower case
+    and digits (or Base64 punctuation); never discard Thai or spaced lyrics.
+    This is display/edit eligibility only; source SQLite stays untouched.
+    """
+    text=str(value or "").strip()
+    if len(text)<64 or any(ch.isspace() for ch in text):
+        return False
+    if not re.fullmatch(r"[A-Za-z0-9+/=_-]+",text):
+        return False
+    letters=sum(ch.isalpha() for ch in text)
+    digits=sum(ch.isdigit() for ch in text)
+    return (letters>=24 and digits>=4 and
+            any(ch.islower() for ch in text) and
+            any(ch.isupper() for ch in text))
+
+
 def groups(workspace,query,limit=100,offset=0):
     """Find matching text in CURRENT timed lyrics only.
 
@@ -1365,26 +1384,47 @@ def groups(workspace,query,limit=100,offset=0):
     init(workspace)
     q=norm(query)
     if not q or len(q)>100: return []
+    size=max(1,min(int(limit),500))
+    skip=max(0,int(offset))
+    # Scan grouped candidates in bounded chunks so filtering does not create
+    # sparse result pages, while offset applies to visible lyric groups.
+    visible=[]
+    cursor=0
     with connect(workspace) as db:
-        return [dict(x) for x in db.execute("""WITH ranked AS (
-            SELECT l.normalized_text AS group_key,
-              count(*) AS lines,count(DISTINCT v.song_id) AS songs
-            FROM xstage_lyric_lines l INDEXED BY xstage_lyric_search
-            JOIN xstage_lyric_versions v ON v.id=l.version_id AND v.is_current=1
-            WHERE instr(l.normalized_text,?)>0
-            GROUP BY l.normalized_text
-            ORDER BY lines DESC,l.normalized_text
-            LIMIT ? OFFSET ?
-          )
-          SELECT ranked.group_key,
-            (SELECT min(t.text) FROM xstage_lyric_lines t
-              JOIN xstage_lyric_versions vt ON vt.id=t.version_id
-                 AND vt.is_current=1
-              WHERE t.normalized_text=ranked.group_key) AS text,
-            ranked.lines,ranked.songs
-          FROM ranked ORDER BY ranked.lines DESC,ranked.group_key""",
-          (q,max(1,min(int(limit),500)),max(0,int(offset))))]
-
+        while len(visible)<size:
+            candidates=[dict(x) for x in db.execute("""WITH ranked AS (
+                SELECT l.normalized_text AS group_key,
+                  count(*) AS lines,count(DISTINCT v.song_id) AS songs
+                FROM xstage_lyric_lines l INDEXED BY xstage_lyric_search
+                JOIN xstage_lyric_versions v ON v.id=l.version_id AND v.is_current=1
+                WHERE instr(l.normalized_text,?)>0
+                GROUP BY l.normalized_text
+                ORDER BY lines DESC,l.normalized_text
+                LIMIT 500 OFFSET ?
+              )
+              SELECT ranked.group_key,
+                (SELECT min(t.text) FROM xstage_lyric_lines t
+                  JOIN xstage_lyric_versions vt ON vt.id=t.version_id
+                     AND vt.is_current=1
+                  WHERE t.normalized_text=ranked.group_key) AS text,
+                ranked.lines,ranked.songs
+              FROM ranked ORDER BY ranked.lines DESC,ranked.group_key""",
+              (q,cursor))]
+            if not candidates:
+                break
+            cursor+=len(candidates)
+            for item in candidates:
+                if suspicious_lyric_text(item["text"] or item["group_key"]):
+                    continue
+                if skip:
+                    skip-=1
+                    continue
+                visible.append(item)
+                if len(visible)>=size:
+                    break
+            if len(candidates)<500:
+                break
+    return visible
 
 def search_context(workspace,query,limit=12):
     """Search song metadata and untimed lyric drafts separately from groups.
@@ -1427,6 +1467,8 @@ def search_context(workspace,query,limit=12):
 def chosen_rows(db,query,group_keys):
     q=norm(query)
     keys=[norm(x) for x in group_keys]
+    if any(suspicious_lyric_text(x) for x in group_keys):
+        raise ValueError("รายการนี้มีลักษณะเป็นข้อมูลเข้ารหัส ไม่อนุญาตให้แก้ไขทั้งกลุ่ม")
     if not q or not keys or len(keys)>1000 or any(q not in k for k in keys):
         raise ValueError("กรุณาค้นคำและเลือกกลุ่มบรรทัดที่ตรงกับคำค้น")
     placeholders=",".join("?" for _ in keys)
