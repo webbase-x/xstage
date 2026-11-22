@@ -138,7 +138,11 @@ async function stageWebUpdateFiles(remote){
     // Two concurrent requests avoid saturating the link carrying live music.
     for(let i=0;i<assets.length;i+=2){
       const batch=assets.slice(i,i+2);
-      const results=await Promise.allSettled(batch.map(url=>fetch(url.href,{cache:'reload'})));
+      const results=await Promise.allSettled(batch.map(async url=>{
+        const response=await fetch(url.href,{cache:'reload'});
+        if(response.ok)await response.arrayBuffer(); // Complete download into browser HTTP cache.
+        return response;
+      }));
       if(results.some(result=>result.status!=='fulfilled'||!result.value.ok))
         throw Error('ไฟล์อัปเดตบางส่วนยังดาวน์โหลดไม่สำเร็จ');
       if(webUpdateStageBuild!==build)return false;
@@ -156,8 +160,8 @@ async function stageWebUpdateFiles(remote){
   renderAppUpdateNotice();
   return task;
 }
-async function performAppUpdateReload(){
-  try{savePlaybackResumeState();}catch{}
+async function performAppUpdateReload({preserveSnapshot=false}={}){
+  if(!preserveSnapshot)try{savePlaybackResumeState();}catch{}
   const next=new URL(location.href);
   next.searchParams.set('xstage_update',String(Date.now()));
   location.replace(next.href);
@@ -2981,6 +2985,28 @@ function releaseFinishedMedia(){
   trimQueueCache();
 }
 function playNext(){
+  if(state.updateAfterTrack&&state.updateAvailable&&!webGoogleAuthFlow&&!state.authRecovering){
+    // The outgoing song has ended or the owner skipped to the next one.
+    // Preserve the requested next song instead of reloading into the
+    // already-ended song. Do not consume/mutate the queue before snapshot.
+    const upcoming=state.queue[0]||(state.medley?nextMedleyCandidate():null);
+    if(upcoming){
+      try{
+        sessionStorage.setItem(PLAYBACK_RESUME_KEY,JSON.stringify({
+          savedAt:Date.now(),rootId:String(state.libraryRootId||''),
+          songKey:songIdentity(upcoming),
+          songCode:String(upcoming.code||''),
+          songTitle:String(upcoming.title||''),
+          currentTime:0,wasPlaying:true,
+          queueKeys:state.queue[0]===upcoming
+            ?state.queue.slice(1).map(songIdentity):state.queue.map(songIdentity)
+        }));
+      }catch{}
+    }else clearPlaybackResumeState();
+    state.updateAfterTrack=false;
+    void performAppUpdateReload({preserveSnapshot:true});
+    return;
+  }
   const queued=state.queue.shift();
   const preparedQueued=queued?(state.queuePreparedCache.get(queued)||null):null;
   if(queued)state.queuePreparedCache.delete(queued);
@@ -3093,7 +3119,8 @@ function clearIdleStage(message){
   setPlayStatus(message);
   updateTransport();
   if(state.updateAfterTrack&&state.updateAvailable){
-    setTimeout(performAppUpdateReload,180);
+    state.updateAfterTrack=false;
+    setTimeout(()=>performAppUpdateReload(),180);
   }
 }
 function stopSong(){
