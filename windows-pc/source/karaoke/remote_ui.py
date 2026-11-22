@@ -40,20 +40,27 @@ def validate_remote_command(app, command):
 
 def sync_wifi_invite(app):
     monitor=app.__dict__.get('_wifi_monitor')
-    if not monitor:return
-    state=monitor.snapshot()
+    state=monitor.snapshot() if monitor else None
     server=getattr(app,'remote',None)
-    if server and state.ready and app.settings.get('remote_capacity_auto',True) and time.monotonic()-app.__dict__.get('_capacity_checked',0)>5:
+    if server and state and state.ready and app.settings.get('remote_capacity_auto',True) and time.monotonic()-app.__dict__.get('_capacity_checked',0)>5:
         from .remote_capacity import recommended_clients
         server.configure(max_clients=recommended_clients(state,server.policy.get('audio',False),server.capacity_stats()[1]))
         app.__dict__['_capacity_checked']=time.monotonic()
-    if not server or not state.ready:
+    if not server:
         app.remote_invite=None
         return
+    # The desktop may use Ethernet while the phone uses Wi-Fi. A valid LAN
+    # address is sufficient; WLAN location permission is not a prerequisite.
+    from .remote_boot import lan_address
+    address=lan_address(state)
+    if not address:
+        app.remote_invite=None
+        return
+    wifi=state.ssid if state and state.ready and state.address==address else 'LAN / Wi-Fi วงเดียวกัน'
     old=getattr(app,'remote_invite',None)
-    url=f'http://{state.address}:{server.port}/'
-    if not old or (old['url'],old['code'],old['wifi'])!=(url,server.request_key,state.ssid):
-        app.remote_invite=make_invite(state.address,server.port,server.request_key,state.ssid)
+    url=f'http://{address}:{server.port}/'
+    if not old or (old['url'],old['code'],old['wifi'])!=(url,server.request_key,wifi):
+        app.remote_invite=make_invite(address,server.port,server.request_key,wifi)
 
 
 def stage_invite(app):
