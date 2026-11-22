@@ -69,6 +69,10 @@ public sealed class LiveBackgroundMonitor
             throw new ArgumentException("ต้องระบุลิงก์ไลฟ์สาธารณะ HLS, DASH หรือแพลตฟอร์มที่รองรับ");
         if (!AllowedPollSeconds.Contains(pollSeconds))
             throw new ArgumentOutOfRangeException(nameof(pollSeconds));
+        if (SocialVideoDownloader.IsVideoUrl(url) &&
+            !File.Exists(Path.Combine(AppContext.BaseDirectory, "tools", "yt-dlp.exe")))
+            throw new FileNotFoundException(
+                "ไม่พบ yt-dlp ในตัวติดตั้ง ไม่สามารถเฝ้ารอแพลตฟอร์มวิดีโอได้");
         var attempts = 0;
         while (true)
         {
@@ -83,8 +87,8 @@ public sealed class LiveBackgroundMonitor
                     : await ProbeManifestAsync(url, cancellationToken);
             }
             catch (Exception exception) when (
-                exception is HttpRequestException or IOException or
-                Win32Exception or OperationCanceledException &&
+                (exception is HttpRequestException or IOException or
+                 Win32Exception or OperationCanceledException) &&
                 !cancellationToken.IsCancellationRequested)
             {
                 // Offline/upcoming streams can fail extraction or networking.
@@ -127,7 +131,8 @@ public sealed class LiveBackgroundMonitor
             count += read;
         }
         var manifest = new string(buffer, 0, count);
-        return url.Contains(".m3u8", StringComparison.OrdinalIgnoreCase)
+        var uri = new Uri(url);
+        return uri.AbsolutePath.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase)
             ? IsActiveHlsManifest(manifest) : IsActiveDashManifest(manifest);
     }
 
