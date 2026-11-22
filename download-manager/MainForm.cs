@@ -964,13 +964,14 @@ public sealed partial class MainForm : Form
         }
 
         var selectedId = Selected()?.Id;
-        var visible = DownloadTableSort.Sort(jobs.Where(InSelectedCategory),
+        var visible = DownloadTableSort.Sort(jobs.Where(job => InSelectedCategory(job) && MatchesSearch(job)),
             _sortColumn, _sortDescending, jobs);
         var listChanged = _grid.Rows.Count != visible.Count ||
             visible.Where((job, index) => index < _grid.Rows.Count &&
                 !Equals(_grid.Rows[index].Tag, job.Id)).Any();
         _visibleJobs = visible;
         UpdateCategoryCounts(jobs);
+        UpdateOverviewCounts(jobs);
         if (listChanged)
         {
             _grid.SuspendLayout();
