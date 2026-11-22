@@ -74,5 +74,40 @@ class RollbackCorruptSnapshotTests(unittest.TestCase):
                 self.assertEqual(db.execute('SELECT value FROM marker').fetchone()[0], 'live')
             self.assertEqual((data / 'queue.json').read_text(encoding='utf-8'), '[]')
 
+    def test_direct_rollback_rejects_path_escape_without_mutating_live_files(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            data, safety = root / 'data', root / 'safety'
+            data.mkdir()
+            safety.mkdir()
+            outside = root / 'outside.json'
+            outside.write_text('{"safe":true}', encoding='utf-8')
+            (data / 'settings.json').write_text('{"live":true}', encoding='utf-8')
+            (safety / 'settings.json').write_text('{"live":false}', encoding='utf-8')
+            for invalid in ('../outside.json', 'settings.json/../outside.json', 'unknown.json'):
+                with self.subTest(invalid=invalid):
+                    with self.assertRaises(ValueError):
+                        restore.rollback(data, safety, ['settings.json'], ('settings.json', invalid))
+                    self.assertEqual((data / 'settings.json').read_text(encoding='utf-8'), '{"live":true}')
+                    self.assertEqual(outside.read_text(encoding='utf-8'), '{"safe":true}')
+
+    def test_direct_rollback_rejects_duplicate_and_unlisted_sources(self):
+        with tempfile.TemporaryDirectory() as root:
+            data, safety = Path(root) / 'data', Path(root) / 'safety'
+            data.mkdir()
+            safety.mkdir()
+            (data / 'settings.json').write_text('{"live":true}', encoding='utf-8')
+            (safety / 'settings.json').write_text('{"live":false}', encoding='utf-8')
+            for existed, replaced in (
+                (['settings.json'], ('settings.json', 'settings.json')),
+                (['queue.json'], ('settings.json',)),
+                (['settings.json', 'settings.json'], ('settings.json',)),
+            ):
+                with self.subTest(existed=existed, replaced=replaced):
+                    with self.assertRaises(ValueError):
+                        restore.rollback(data, safety, existed, replaced)
+                    self.assertEqual((data / 'settings.json').read_text(encoding='utf-8'), '{"live":true}')
+
+
 if __name__ == '__main__':
     unittest.main()
