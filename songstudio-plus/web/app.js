@@ -1014,6 +1014,35 @@
         (job.error||job.message||"ดำเนินการไม่สำเร็จ"):
         (job.message||""));
       const p=job.progress||{};
+      // Use the engine's completed-song count; a running build must never
+      // claim 100% because the UI drew an estimated animation.
+      if(job.kind==="build"){
+        const result=job.result||{};
+        const stats=Object.keys(p).length?p:result;
+        const done=Math.max(0,Number(stats.done||0));
+        const total=Math.max(0,Number(stats.total||0));
+        const percent=total>0?Math.min(100,Math.max(0,100*done/total)):0;
+        const finished=job.status!=="running";
+        const label=job.status==="running"?"กำลังตรวจและสร้างไฟล์":
+          job.status==="completed"?"สร้างไฟล์เสร็จแล้ว":
+          job.status==="cancelled"?"หยุดงานแล้ว":"สร้างไฟล์ไม่สำเร็จ";
+        text("build-progress-state",label);
+        text("build-progress-percent",total>0?percent.toFixed(1)+"%":"0%");
+        text("build-progress-count","ดำเนินการแล้ว "+number(done)+" / "+number(total)+" เพลง");
+        text("build-progress-results","สร้าง "+number(stats.built)+
+          " · ข้ามซ้ำ "+number(stats.skipped)+
+          " (MID ซ้ำ "+number(stats.duplicate_mid)+")"+
+          " · ข้อมูลไม่ครบ "+number(stats.blocked)+
+          " · ผิดพลาด "+number(stats.failed));
+        text("build-progress-current",job.message||
+          (finished?"ดูผลการสร้างไฟล์และรายละเอียดข้อผิดพลาดได้ใน Log":"กำลังเตรียมงาน"));
+        const buildFill=$("build-progress-fill");
+        buildFill.style.width=percent.toFixed(1)+"%";
+        const buildTrack=$("build-progress-track");
+        buildTrack.setAttribute("aria-valuenow",percent.toFixed(1));
+        buildTrack.setAttribute("aria-valuetext",number(done)+" จาก "+number(total)+" เพลง");
+        buildTrack.classList.toggle("is-running",!finished);
+      }
       if(job.kind==="update"){
         text("settings-update-progress",job.status==="running"?
           "ดาวน์โหลดแล้ว "+number(Math.floor(Number(p.downloaded_bytes||0)/1048576))+
@@ -1101,7 +1130,9 @@
           " · เวลาประมาณ "+number(p.estimated_songs)+
           " · CUR ไม่ครบ "+number(p.blocked_songs):
           "สร้าง "+number(p.built)+" · ข้าม "+number(p.skipped)+" · ไม่สำเร็จ "+number(p.failed));
-      text("progress-count",job.kind==="lyrics-edit"?
+      text("progress-count",job.kind==="build"?
+        number(p.done||0)+" / "+number(p.total||0)+" เพลง":
+        job.kind==="lyrics-edit"?
         number(p.done)+" / "+number(p.total)+" เพลง":
         job.kind==="update"||job.kind==="song-download"?
         number(p.downloaded_bytes||0)+" ไบต์":
@@ -1125,7 +1156,7 @@
       }
       const progressBar=$("progress-fill");
       const downloaded=(job.kind==="update"||job.kind==="song-download"||
-        job.kind==="lyrics-edit")&&p.total>0;
+        job.kind==="lyrics-edit"||job.kind==="build")&&p.total>0;
       progressBar.classList.toggle("indeterminate",job.status==="running"&&!downloaded);
       progressBar.style.width=job.status==="completed"?"100%":
         downloaded?Math.min(100,100*(p.done||p.downloaded_bytes||0)/p.total).toFixed(1)+"%":
