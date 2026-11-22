@@ -639,9 +639,37 @@ public sealed partial class MainForm
             e.Graphics.DrawString("X-Stage", titleFont, titleBrush, 67, 16);
             e.Graphics.DrawString("Download Manager", captionFont, captionBrush, 67, 42);
         };
+        var usageSummary = new Button
+        {
+            Dock = DockStyle.Bottom, Height = 43,
+            Text = "▥  สรุปการใช้งาน",
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            ForeColor = Color.White, BackColor = Color.FromArgb(13, 50, 78),
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+            AccessibleName = "สรุปจำนวนรายการดาวน์โหลดทั้งหมด"
+        };
+        usageSummary.FlatAppearance.BorderColor = Color.FromArgb(31, 95, 138);
+        usageSummary.Click += (_, _) =>
+        {
+            var jobs = _engine.Jobs.ToArray();
+            var active = jobs.Count(job => job.Status == "Running");
+            var queued = jobs.Count(job => job.Status == "Queued");
+            var completed = jobs.Count(job => job.Status == "Completed");
+            var failed = jobs.Count(job => job.Status == "Failed");
+            MessageBox.Show(this,
+                $"รายการทั้งหมด: {jobs.Length:N0}\\n" +
+                $"กำลังดาวน์โหลด: {active:N0}\\n" +
+                $"รอคิว: {queued:N0}\\n" +
+                $"สำเร็จ: {completed:N0}\\n" +
+                $"ข้อผิดพลาด: {failed:N0}",
+                "สรุปการใช้งาน · X-Stage", MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        };
         side.Controls.Add(_categories);
         side.Controls.Add(section);
         side.Controls.Add(brand);
+        side.Controls.Add(usageSummary);
 
         _categories.Dock = DockStyle.Fill;
         _categories.BorderStyle = BorderStyle.None;
@@ -690,7 +718,8 @@ public sealed partial class MainForm
         };
         _categories.Nodes.Add(priorityGroups);
         AddCategory(priorityGroups, "priority-normal", "คิวปกติ");
-        AddCategory(priorityGroups, "priority-high", "ความสำคัญสูง");
+        var urgent = AddCategory(priorityGroups, "priority-high", "ความสำคัญสูง");
+        urgent.ForeColor = Color.FromArgb(251, 152, 159);
         AddCategory(priorityGroups, "priority-low", "ความสำคัญต่ำ");
         var type = new TreeNode("ประเภทไฟล์")
         {
