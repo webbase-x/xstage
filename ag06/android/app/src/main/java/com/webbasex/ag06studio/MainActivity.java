@@ -19,6 +19,8 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient.FileChooserParams;
 import android.webkit.WebResourceResponse;
 import androidx.webkit.WebViewAssetLoader;
 import android.widget.Toast;
@@ -32,6 +34,8 @@ public class MainActivity extends Activity {
     private static final int MAX_DATA_URL_CHARS=33_000_000;
     private WebView web;
     private PermissionRequest waitingMicrophone;
+    private static final int FILE_PICKER=722;
+    private ValueCallback<Uri[]> pendingFiles;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override public void onCreate(Bundle state){
@@ -69,6 +73,20 @@ public class MainActivity extends Activity {
             }
         });
         web.setWebChromeClient(new WebChromeClient(){
+            @Override public boolean onShowFileChooser(WebView view,ValueCallback<Uri[]> callback,FileChooserParams params){
+                if(!trustedPage())return false;
+                if(pendingFiles!=null)pendingFiles.onReceiveValue(null);
+                pendingFiles=callback;
+                try{
+                    Intent intent=new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("*/*");
+                    intent.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"audio/*","application/json","application/octet-stream"});
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,params.getMode()==FileChooserParams.MODE_OPEN_MULTIPLE);
+                    startActivityForResult(Intent.createChooser(intent,"เลือกไฟล์เสียงหรือโปรเจกต์"),FILE_PICKER);
+                }catch(Exception error){pendingFiles=null;callback.onReceiveValue(null);}
+                return true;
+            }
             @Override public void onPermissionRequest(PermissionRequest request){
                 runOnUiThread(()->handleWebPermission(request));
             }
@@ -81,6 +99,19 @@ public class MainActivity extends Activity {
         web.loadUrl(BASE_URL);
     }
 
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode!=FILE_PICKER)return;
+        ValueCallback<Uri[]> callback=pendingFiles;pendingFiles=null;
+        if(callback==null)return;
+        if(resultCode!=RESULT_OK||data==null){callback.onReceiveValue(null);return;}
+        if(data.getClipData()!=null){
+            int count=Math.min(data.getClipData().getItemCount(),12);
+            Uri[] result=new Uri[count];
+            for(int i=0;i<count;i++)result[i]=data.getClipData().getItemAt(i).getUri();
+            callback.onReceiveValue(result);
+        }else callback.onReceiveValue(data.getData()==null?null:new Uri[]{data.getData()});
+    }
     private void handleWebPermission(PermissionRequest request){
         if(web==null||!web.getUrl().startsWith(BASE_URL)
                 ||!TRUSTED_ORIGIN.equals(request.getOrigin().toString())){
@@ -177,6 +208,7 @@ public class MainActivity extends Activity {
     }
     @Override protected void onDestroy(){
         if(waitingMicrophone!=null){waitingMicrophone.deny();waitingMicrophone=null;}
+        if(pendingFiles!=null){pendingFiles.onReceiveValue(null);pendingFiles=null;}
         if(web!=null){web.destroy();web=null;}
         super.onDestroy();
     }
