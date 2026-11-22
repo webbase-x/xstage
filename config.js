@@ -6,8 +6,10 @@ window.XSTAGE_CONFIG = {
   // and to Google Picker API + Google Drive API.
   googlePickerApiKey: 'AIzaSyDbFTXZX8GuWMct5KhkviVg5t1Iff2nYoY'
 };
+// Explicitly retired Google Drive library. Never select, read or upload here.
+window.XSTAGE_RETIRED_DRIVE_ROOT_IDS=Object.freeze(['1RYekUHCC3qs661cUrbxkNauUz_SuqZvy']);
 window.XSTAGE_DRIVE_LAYOUT=Object.freeze({
   root:'XStageKaraoke',songs:'SONGS',db:'DB',
   soundfont:'SOUNDFONT',backup:'BACKUP',cache:'CACHE',logs:'LOGS'
 });
-window.XSTAGE_RELEASE = { version: '1.0.134', build: 1134 };
+window.XSTAGE_RELEASE = { version: '1.0.135', build: 1135 };
