@@ -885,13 +885,13 @@ assert.ok(noRootBranch.includes('state.songs=[]') &&
 
 // Newly created XStageKaraoke may be empty or contain SOUNDFONT first. The
 // player should stay usable with 0 entries, not throw a missing DB error.
-const missingPointerBranch=app.split('if(!pointers.length){')[1]?.split("if(pointers.length!==1)throw")[0]||'';
+const missingPointerBranch=app.split('if(!canonical.length&&!pointers.length){')[1]?.split("if(!canonical.length&&pointers.length!==1)")[0]||'';
 assert.ok(missingPointerBranch.includes('state.songs=[]') &&
           missingPointerBranch.includes('state.queue=[]') &&
           missingPointerBranch.includes('state.catalogCache.clear()') &&
           missingPointerBranch.includes("ui.songTotal.textContent='0 เพลง'") &&
           missingPointerBranch.includes('setAndroidTvStageAccess(true,account.sub)') &&
-          missingPointerBranch.includes('X-Stage Song Studio'),
+          missingPointerBranch.includes('songs.sqlite3'),
           'Empty or SoundFont-first XStageKaraoke must show a clean 0-song stage');
 assert.ok(app.includes("พบ current.json หลายรายการ · ไม่เลือกฐานเพลงโดยคาดเดา"),
           'Duplicate current pointers must remain an explicit integrity error');
