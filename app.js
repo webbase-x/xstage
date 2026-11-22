@@ -1159,7 +1159,7 @@ async function driveList(q, token) {
   const seenPageTokens = new Set();
   let pageToken = '';
   do {
-    const params = new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,parents,ownedByMe,createdTime,sharedWithMeTime,capabilities(canShare),owners(displayName,emailAddress))',pageSize:'1000'});
+    const params = new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,parents,ownedByMe,createdTime,modifiedTime,md5Checksum,size,sharedWithMeTime,capabilities(canShare),owners(displayName,emailAddress))',pageSize:'1000'});
     if (pageToken) params.set('pageToken',pageToken);
     const result = await googleFetch(`https://www.googleapis.com/drive/v3/files?${params}`,
       {headers: requestHeaders(token),cache:'no-store'},'Google Drive');
@@ -1419,10 +1419,11 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
   };
   async function fetchImmutable(id,label){
     if(typeof id!=='string'||!id)throw Error('ฐานเพลงไม่มี Drive File ID');
-    if(state.catalogCache.has(id)){report(label+' · พร้อมแล้ว',true);return state.catalogCache.get(id);}
-    const persisted=await loadCatalogPiece(sub,id);
+    const cacheKey=pointer.directFile?id+':'+pointer.generation:id;
+    if(state.catalogCache.has(cacheKey)){report(label+' · พร้อมแล้ว',true);return state.catalogCache.get(cacheKey);}
+    const persisted=await loadCatalogPiece(sub,cacheKey);
     if(persisted){
-      state.catalogCache.set(id,persisted);
+      state.catalogCache.set(cacheKey,persisted);
       report(label+' · ใช้ส่วนที่โหลดไว้แล้ว',true);
       return persisted;
     }
@@ -1432,8 +1433,8 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
     const buffer=await response.arrayBuffer();
     if(buffer.byteLength>192*1048576)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกิน 192 MB');
     const data=await codec.read(new Uint8Array(buffer));
-    state.catalogCache.set(id,data);
-    await saveCatalogPiece(sub,id,data);
+    state.catalogCache.set(cacheKey,data);
+    await saveCatalogPiece(sub,cacheKey,data);
     if(state.catalogCache.size>40){
       const oldest=state.catalogCache.keys().next().value;
       state.catalogCache.delete(oldest);
@@ -1444,7 +1445,7 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
   const base=await fetchImmutable(pointer.catalogFileId,'ฐานหลัก');
   if(base?.schemaVersion!==1||base.kind!=='snapshot'||!Array.isArray(base.songs))
     throw Error('ฐานข้อมูล SQLite3 หลักบน Drive ไม่รองรับ');
-  if(pointer.layoutVersion===6&&base.generation!==pointer.generation)
+  if(pointer.layoutVersion===6&&!pointer.directFile&&base.generation!==pointer.generation)
     throw Error('ฐาน SQLite3 ไม่ตรงกับ current.json · กรุณาซิงก์ใหม่');
   if(!deltaIds.length){
     if(Number.isSafeInteger(pointer.songCount)&&base.songs.length!==pointer.songCount)
@@ -1474,13 +1475,31 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
     throw Error('จำนวนเพลงที่เผยแพร่บางชุดไม่ตรงกัน กรุณาตรวจการซิงค์');
   return {schemaVersion:1,generation:pointer.generation,songs:[...songs.values()]};
 }
+// The canonical XStageKaraoke/DB/songs.sqlite3 file IS the manifest.
+// File ID/MD5 from Drive listings identify revisions; no current.json needed.
+function directCatalogPointer(file){
+  if(!file?.id||file.name!=='songs.sqlite3')throw Error('DB/songs.sqlite3 ไม่ถูกต้อง');
+  return {schemaVersion:1,layoutVersion:6,format:'xstage-sqlite3-v1',
+    directFile:true,catalogFileId:file.id,deltaFileIds:[],
+    generation:'sqlite:'+file.id+':'+String(file.md5Checksum||file.modifiedTime||file.size||'')};
+}
+async function activeDriveCatalog(dbId,token,legacyPointerId=''){
+  if(dbId){
+    const direct=await driveList(`'${dbId}' in parents and name='songs.sqlite3' and trashed=false`,token);
+    if(direct.length>1)throw Error('พบ songs.sqlite3 ซ้ำใน DB');
+    if(direct.length)return {pointer:directCatalogPointer(direct[0]),legacy:false};
+  }
+  if(!legacyPointerId)return null;
+  return {pointer:await privateJson(legacyPointerId,token),legacy:true};
+}
 async function pollPublishedCatalog(){
-  if(!state.token||!state.catalogPointerId||state.catalogPolling)return;
+  if(!state.token||(!state.catalogDbDirId&&!state.catalogPointerId)||state.catalogPolling)return;
   const authId=state.authId,token=state.token;
   state.catalogPolling=true;
   try{
-    const pointer=await privateJson(state.catalogPointerId,token);
-    if(authId!==state.authId||state.token!==token||!pointer?.generation||
+    const published=await activeDriveCatalog(state.catalogDbDirId,token,state.catalogPointerId);
+    const pointer=published?.pointer;
+    if(!pointer||authId!==state.authId||state.token!==token||!pointer.generation||
        pointer.generation===state.catalogGeneration)return;
     const cacheOwner=libraryCacheOwner(state.accountSub,state.libraryRootId);
     const catalog=await readPublishedCatalog(pointer,token,{sub:cacheOwner});
@@ -1489,6 +1508,7 @@ async function pollPublishedCatalog(){
     state.manifest=catalog;
     state.songs=catalog.songs.filter(playable);
     state.catalogGeneration=pointer.generation;
+    if(!published.legacy)state.catalogPointerId='';
     void saveCachedCatalog(cacheOwner,pointer,catalog);
     state.medleyPoolSource=null;
     ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
@@ -1496,10 +1516,8 @@ async function pollPublishedCatalog(){
     ui.libraryState.textContent='Google Drive · '+(state.libraryRootOwnedByMe?'คลังของฉัน':state.libraryRootOwnerEmail?'แชร์โดย '+state.libraryRootOwnerEmail:'คลังที่แชร์ให้ฉัน')+' · อัปเดตแล้ว';
     setStatus(`ฐานเพลงอัปเดต: ${num(countBefore)} → ${num(state.songs.length)} เพลง`,'success');
   }catch(error){
-    // Keep the last known good catalog playable if a batch is unreachable.
-    if(state.token===token&&authId===state.authId){
+    if(state.token===token&&authId===state.authId)
       console.warn('X-Stage catalog refresh:',error?.message||error);
-    }
   }finally{state.catalogPolling=false;}
 }
 setInterval(pollPublishedCatalog,45000);
@@ -1647,11 +1665,16 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     // Only the new XStageKaraoke/DB/current.json is authoritative.
     const dbDirs=await driveList(`'${root.id}' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
     if(dbDirs.length>1)throw Error('พบ DB ซ้ำใน '+driveLayout.root);
-    const pointers=dbDirs.length
-      ?await driveList(`'${dbDirs[0].id}' in parents and name='current.json' and trashed=false`,token)
+    const dbId=dbDirs[0]?.id||'';
+    const canonical=dbId
+      ?await driveList(`'${dbId}' in parents and name='songs.sqlite3' and trashed=false`,token)
       :[];
-    if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านข้อมูลรุ่นฐานเพลง…',34);
-    if(!pointers.length){
+    if(canonical.length>1)throw Error('พบ songs.sqlite3 ซ้ำใน DB');
+    const pointers=!canonical.length&&dbId
+      ?await driveList(`'${dbId}' in parents and name='current.json' and trashed=false`,token)
+      :[];
+    if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านฐาน SQLite3 จาก DB โดยตรง…',34);
+    if(!canonical.length&&!pointers.length){
       // A newly created XStageKaraoke may contain only empty category folders or
       // a SoundFont uploaded first. It is not a broken catalog. Discard the
       // previous session's visible songs, but NEVER delete any Drive data.
@@ -1660,6 +1683,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       if(authId!==state.authId)return;
       state.manifest=null;
       state.catalogPointerId='';
+      state.catalogDbDirId='';
       state.catalogGeneration='';
       state.songs=[];
       state.shown=[];
@@ -1676,11 +1700,13 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       ui.libraryState.textContent='Google Drive · '+libraryLabel(root)+' · ยังไม่มี DB เพลงที่เข้าถึงได้';
       hideCatalogLoading();
       setAndroidTvStageAccess(true,account.sub);
-      setStatus('เชื่อม Google Drive แล้ว · ยังไม่พบ current.json ที่เข้าถึงได้ · สร้าง DB/อัปโหลดเพลงผ่าน X-Stage Song Studio Pro','success');
+      setStatus('เชื่อม Google Drive แล้ว · ยังไม่พบ songs.sqlite3 หรือฐานเก่าสำหรับย้าย · นำเข้าผ่าน X-Stage Online','success');
       return;
     }
-    if(pointers.length!==1)throw Error('พบ current.json หลายรายการ · ไม่เลือกฐานเพลงโดยคาดเดา');
-    const pointer=await privateJson(pointers[0].id,token);
+    if(!canonical.length&&pointers.length!==1)
+      throw Error('พบ current.json หลายรายการ · ไม่เลือกฐานเพลงโดยคาดเดา');
+    const pointer=canonical.length?directCatalogPointer(canonical[0]):
+      await privateJson(pointers[0].id,token);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังดาวน์โหลดเฉพาะฐานรายชื่อเพลง…',42);
     if(authId!==state.authId)return;
 
@@ -1714,7 +1740,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     }
 
     state.manifest=catalog;
-    state.catalogPointerId=pointers[0].id;
+    state.catalogPointerId=canonical.length?'':pointers[0].id;
+    state.catalogDbDirId=dbId;
     state.catalogGeneration=String(pointer.generation||'');
     if(downloaded||!instant){
       state.songs=catalog.songs.filter(playable);
@@ -1940,7 +1967,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
   state.objectUrl = ''; state.token = '';state.tokenExpiresAt=0; state.accountSub = ''; state.manifest = null;
   state.songs = [];state.shown = [];state.queue = [];state.history = [];
-  state.catalogPointerId='';state.catalogGeneration='';state.catalogCache.clear();
+  state.catalogPointerId='';state.catalogDbDirId='';state.catalogGeneration='';state.catalogCache.clear();
   state.libraryRootId='';state.libraryRootCanShare=false;state.libraryRootOwnedByMe=false;state.libraryRootOwnerEmail='';state.availableLibraries=[];
   if(ui.librarySelect)ui.librarySelect.replaceChildren();
   if(ui.librarySwitcher)ui.librarySwitcher.hidden=true;
