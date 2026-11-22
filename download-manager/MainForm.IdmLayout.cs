@@ -197,13 +197,6 @@ public sealed partial class MainForm
                             "เลือกรายการวิดีโอที่ไม่ได้กำลังทำงานหรือรอคิว",
                             "X-Stage", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 })),
-            Action("ดูข้อผิดพลาดของรายการ...",
-                (_, _) => WithSelectedJob(ShowJobError)),
-            Action("เปิดบันทึกข้อผิดพลาดวิดีโอ...",
-                (_, _) => WithSelectedJob(job =>
-                {
-                    if (job.Kind == "Video") OpenVideoLog(job);
-                })),
             new ToolStripSeparator(),
             Action("แสดงเฉพาะวิดีโอ", (_, _) => SelectCategory("video"))));
 
@@ -213,12 +206,32 @@ public sealed partial class MainForm
             new ToolStripSeparator(),
             Action("ลบรายการจากประวัติ", (_, _) => RemoveSelectedJob()),
             Action("ลบเฉพาะประวัติที่เสร็จแล้ว", (_, _) => ClearCompletedHistory())));
+        var diagnostics = Menu("ตรวจสอบปัญหา",
+            Action("ดูสาเหตุข้อผิดพลาดของงานที่เลือก...",
+                (_, _) => WithSelectedJob(ShowJobError)),
+            Action("เปิดบันทึกการดาวน์โหลดวิดีโอ...",
+                (_, _) => WithSelectedJob(job =>
+                {
+                    if (job.Kind == "Video") OpenVideoLog(job);
+                    else MessageBox.Show(this, "เลือกรายการวิดีโอก่อน",
+                        "X-Stage", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                })));
         menu.Items.Add(Menu("ตั้งค่า",
             Action("ประสิทธิภาพ / การเชื่อมต่อ...", (_, _) => ConfigurePerformance()),
             Action("จำนวนครั้งลองใหม่...", (_, _) => ConfigureNetworkRetry()),
             Action("รับดาวน์โหลดจาก Chrome / Edge...", (_, _) => SetupBrowserIntegration()),
             new ToolStripSeparator(),
+            diagnostics,
             Action("ตรวจสอบอัปเดต", async (_, _) => await CheckForUpdatesAsync(true))));
+        var findJob = Action("ค้นหารายการ (Ctrl+F)", (_, _) => _jobSearch.Focus());
+        findJob.ShortcutKeys = Keys.Control | Keys.F;
+        var fileTypes = Menu("แสดงตามประเภทไฟล์",
+            Action("วิดีโอ", (_, _) => SelectCategory("video")),
+            Action("เพลงและเสียง", (_, _) => SelectCategory("music")),
+            Action("เอกสาร", (_, _) => SelectCategory("document")),
+            Action("โปรแกรม", (_, _) => SelectCategory("program")),
+            Action("ไฟล์บีบอัด", (_, _) => SelectCategory("archive")),
+            Action("อื่น ๆ", (_, _) => SelectCategory("other")));
         menu.Items.Add(Menu("มุมมอง",
             Action("งานทั้งหมด", (_, _) => SelectCategory("all")),
             Action("กำลังดาวน์โหลด", (_, _) => SelectCategory("active")),
@@ -226,6 +239,8 @@ public sealed partial class MainForm
             Action("ข้อผิดพลาด", (_, _) => SelectCategory("failed")),
             Action("ดาวน์โหลดเสร็จแล้ว", (_, _) => SelectCategory("completed")),
             new ToolStripSeparator(),
+            fileTypes,
+            findJob,
             Action("แสดง/ซ่อนช่องเพิ่ม URL", (_, _) => ShowInputPanel(!_inputVisible))));
         menu.Items.Add(Menu("ช่วยเหลือ",
             Action("เกี่ยวกับ X-Stage Download Manager", (_, _) =>
@@ -278,17 +293,17 @@ public sealed partial class MainForm
             item.Click += callback;
             bar.Items.Add(item);
         }
-        Button("＋ เพิ่มงาน", "add", Accent,
+        Button("เพิ่มงาน", "add", Accent,
             (_, _) => ShowAddUrlFromClipboard(), "เพิ่ม URL หรือวิดีโอ โดยไม่เริ่มอัตโนมัติจากคลิปบอร์ด");
-        Button("▶ เริ่ม / ต่อ", "play", Color.FromArgb(140, 193, 255),
+        Button("เริ่ม / ต่อ", "play", Color.FromArgb(140, 193, 255),
             (_, _) => SelectedAction(_engine.Start), "เริ่มงานที่เลือก");
-        Button("Ⅱ พัก", "pause", Color.FromArgb(245, 185, 125),
+        Button("พักงาน", "pause", Color.FromArgb(245, 185, 125),
             (_, _) => SelectedAction(_engine.Pause), "พักงานที่เลือก");
-        Button("◷ คิว", "queue", Color.FromArgb(228, 204, 153),
+        Button("ดูคิว", "queue", Color.FromArgb(228, 204, 153),
             (_, _) => SelectCategory("queued"), "ดูรายการที่กำลังรอคิว");
-        Button("⚙ ความเร็ว", "gauge", Color.FromArgb(165, 186, 244),
+        Button("ความเร็ว", "gauge", Color.FromArgb(165, 186, 244),
             (_, _) => ConfigurePerformance(), "ตั้งค่าความเร็วและจำนวนงานพร้อมกัน");
-        Button("↧ เบราว์เซอร์", "browser", Color.FromArgb(137, 216, 255),
+        Button("เบราว์เซอร์", "browser", Color.FromArgb(137, 216, 255),
             (_, _) => SetupBrowserIntegration(), "ตั้งค่าการรับดาวน์โหลดจาก Chrome / Edge");
         _toolbar = bar;
         return bar;
