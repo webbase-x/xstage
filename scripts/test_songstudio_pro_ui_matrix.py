@@ -1,4 +1,4 @@
-"""Exercise eight Song Studio menus at common small/large Qt WebEngine viewports.
+"""Exercise every Song Studio menu at common small/large Qt WebEngine viewports.
 
 Runs in real Windows Qt WebEngine software rendering, without relying on
 static HTML screenshots. It checks navigation wiring and per-view horizontal
@@ -33,7 +33,7 @@ EVIDENCE=ROOT/"dist"/"songstudio-viewport-evidence"
 EVIDENCE.mkdir(parents=True,exist_ok=True)
 SIZES=[(390,680),(600,800),(768,720),(900,720),
        (1024,768),(1366,768),(1920,1080),(2560,1440)]
-MENUS=["import","lyrics","media","preview","manual",
+MENUS=["import","drive","lyrics","media","preview","manual",
        "build","library","risks"]
 app=QApplication([])
 web=QWebEngineView()
@@ -60,7 +60,7 @@ def finish(message=None):
     if failures:
         print("FAILURES: "+repr(failures[-10:]),flush=True)
     else:
-        print("PASS: all 8 menus across 8 Qt viewport dimensions",flush=True)
+        print("PASS: all 9 menus across 8 Qt viewport dimensions",flush=True)
     web.close()
     app.quit()
 
@@ -76,7 +76,7 @@ def probe(idx):
 
 def check(idx,width,height):
     js=r"""(() => {
-      const menus=["import","lyrics","media","preview","manual",
+      const menus=["import","drive","lyrics","media","preview","manual",
                    "build","library","risks"];
       const issues=[];
       let visibleCount=0;
@@ -103,15 +103,39 @@ def check(idx,width,height):
         }
       }
       const topbar=document.querySelector(".topbar");
-      const buttons=document.querySelectorAll(".build-status-tabs button");
-      if(buttons.length!==3)issues.push("build-status-not-three-tabs");
+      // The CHOOSE SONGS panel and three status tabs were intentionally
+      // retired. Validate the new build action surface rather than
+      // expecting old tabs to remain visible.
+      const buildPanel=document.getElementById("view-build");
+      const legacySelection=buildPanel.querySelector(".build-selection-internal");
+      const hasHiddenLegacy=legacySelection &&
+        (legacySelection.hidden || getComputedStyle(legacySelection).display==="none");
+      if(!hasHiddenLegacy)issues.push("build-legacy-song-selection-visible");
+      if([...buildPanel.querySelectorAll(".build-status-tabs button")]
+          .some(button=>button.getClientRects().length))
+        issues.push("build-retired-status-tabs-visible");
+      if([...buildPanel.querySelectorAll("#build-all,#build-page-all,#build-clear,#build-page-clear")]
+          .some(button=>button.getClientRects().length))
+        issues.push("build-retired-selection-buttons-visible");
+      const all=buildPanel.querySelector("#build-everything");
+      const ready=buildPanel.querySelector("#build-ready-all");
+      const visibleAction=button=>Boolean(button)&&
+        button.getClientRects().length>0 &&
+        getComputedStyle(button).visibility!=="hidden";
+      if(!visibleAction(all)||!visibleAction(ready))
+        issues.push("build-main-actions-not-visible");
+      const drive=document.getElementById("view-drive");
+      if(!drive||!drive.querySelector("#drive-browse")||
+         !drive.querySelector("#drive-check")||
+         !drive.querySelector("#drive-download"))
+        issues.push("drive-missing-import-controls");
       const source=document.getElementById("source-folder");
       const direct=document.getElementById("song-download-url");
       const single=document.getElementById("single-media-file");
       if(!source||!direct||!single)issues.push("missing-import-download-controls");
       document.querySelector('[data-view="import"]').click();
       const viewport={width:innerWidth,height:innerHeight};
-      return JSON.stringify({ok:issues.length===0 && visibleCount===8,
+      return JSON.stringify({ok:issues.length===0 && visibleCount===menus.length,
         menus:visibleCount,issues,viewport,
         importScrollHeight:document.getElementById("view-import").scrollHeight,
         importClientHeight:document.getElementById("view-import").clientHeight,
