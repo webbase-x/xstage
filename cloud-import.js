@@ -698,6 +698,8 @@ class Importer {
         this.lockPending?'กำลังเตรียมงานนำเข้า…':
         approved.length?'พร้อมตรวจเนื้อหา/MD5 และนำเข้า '+approved.length.toLocaleString('th-TH')+
           ' รายการ · จะข้ามไฟล์ซ้ำและชุดที่ตรวจไม่ผ่าน':
+        candidates.some(entry=>!entry.item.video||this.videoEditor?.get(entry.item))?
+          'ยังไม่ได้เลือกรายการ · เลือกในรายการด้านบนหรือกด “เลือกทั้งหมด”':
         pending?'มีวิดีโอ '+pending.toLocaleString('th-TH')+
           ' รายการรอยืนยันข้อมูล · บันทึกข้อมูลวิดีโอหรือเลือกไฟล์เพลงอื่นก่อนเริ่ม':
         candidates.length?'ยังไม่ได้เลือกรายการ · เลือกในรายการด้านบนหรือกด “เลือกทั้งหมด”':
