@@ -985,3 +985,14 @@ html.xstage-native-auth-pending .android-tv-auth-panel{visibility:visible!import
   .midi-piano-key.is-black{height:75px}
 }
 @media(max-height:450px){.midi-piano-panel{top:36px;max-height:calc(100% - 42px);overflow-y:auto}}
+
+/* Independent concert lighting: MIDI engines need not feed the HTML audio analyser. */
+.stage .stage-ambience{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden;opacity:0;transition:opacity .45s ease;isolation:isolate}
+.stage.playing:not(:has(#karaoke-video:not([hidden]))) .stage-ambience{opacity:1}
+.stage .stage-ambience::before,.stage .stage-ambience::after{content:"";position:absolute;top:-32%;width:56%;height:112%;transform-origin:50% 0;background:linear-gradient(180deg,rgba(38,212,255,.31),rgba(38,212,255,.09) 42%,transparent 89%);clip-path:polygon(48% 0,52% 0,100% 100%,0 100%);filter:blur(8px);mix-blend-mode:screen;will-change:transform}
+.stage .stage-ambience::before{left:2%;animation:xstage-spot-left 5.5s ease-in-out infinite alternate}
+.stage .stage-ambience::after{right:2%;background:linear-gradient(180deg,rgba(194,67,255,.30),rgba(194,67,255,.08) 42%,transparent 89%);animation:xstage-spot-right 6.8s ease-in-out infinite alternate}
+.stage:not(.playing) .stage-ambience::before,.stage:not(.playing) .stage-ambience::after{animation-play-state:paused}
+@keyframes xstage-spot-left{from{transform:rotate(-23deg)}to{transform:rotate(28deg)}}
+@keyframes xstage-spot-right{from{transform:rotate(23deg)}to{transform:rotate(-28deg)}}
+@media(prefers-reduced-motion:reduce){.stage .stage-ambience::before,.stage .stage-ambience::after{animation:none;transform:rotate(0)}}
