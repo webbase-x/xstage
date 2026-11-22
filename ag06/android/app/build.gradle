@@ -9,7 +9,7 @@ dependencies {
 
 tasks.register('copyAg06Frontend', Copy) {
     from(rootProject.file('../')) {
-        include 'index.html', 'app.js', 'audio-engine.js', 'presets.js', 'style.css', 'icon.svg'
+        include 'index.html', 'app.js', 'audio-engine.js', 'studio-session.js', 'presets.js', 'style.css', 'icon.svg'
     }
     into(file('src/main/assets/ag06'))
 }
