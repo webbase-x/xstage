@@ -110,6 +110,31 @@ assert.ok(importerText.includes('core.hashBlob(opened.midi,()=>this.check())'),
 assert.ok(importerText.includes('if(byMidi.has(midiHash))') &&
   importerText.includes('byMidi.set(midiHash,record)'),
   'Every round must skip a previously imported raw MIDI');
+// Two computers share a Drive-scoped publication lease in CACHE, never DB.
+// The holder verifies ownership and releases the app-owned lock after success.
+const leases=new Map();
+let releasedLockId='';
+const fakeLeasingDrive={
+  upload:async(parent,blob,name,mime,md5)=>{
+    assert.equal(parent,'cacheFolder123');
+    assert.ok(name.startsWith('.xstage-import-lock-')&&name.endsWith('.json'));
+    assert.equal(mime,'application/json');
+    const id='lock-file-001';
+    leases.set(id,{id,name,createdTime:new Date().toISOString(),md5Checksum:md5});
+    return {id};
+  },
+  list:async query=>{
+    assert.ok(query.includes("'cacheFolder123' in parents"));
+    return [...leases.values()];
+  },
+  trashFile:async id=>{assert.ok(leases.has(id));leases.delete(id);releasedLockId=id;}
+};
+const lease=await ctx.XStageCloudImport.acquireCatalogLease(fakeLeasingDrive,
+  'cacheFolder123',()=>{},()=>{});
+await lease.assertOwner();
+await lease.release();
+assert.equal(releasedLockId,'lock-file-001');
+assert.equal(leases.size,0,'Writer lease must not linger after publication');
 const uploaded=new Map(),children=new Map(),sessions=new Map();
 let serial=0,sessionNumber=0,putRequests=0;
 const id=()=>('item'+String(++serial).padStart(7,'0'));
