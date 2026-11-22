@@ -5014,3 +5014,83 @@ html body.xstage-ui-v2 .stage .transport-song-info .transport-song-title #toolba
     margin-left:auto
   }
 }
+
+/* 1.0.136 — search must remain the topmost interactive stage surface.
+ * Preserve the iPhone safe area and the onscreen keyboard's usable height. */
+html body.xstage-ui-v2 .stage:has(.stage-search-slot .search-dock.pc-expanded) .stage-toolbar{
+  z-index:210!important;
+}
+html body.xstage-ui-v2 .stage .stage-search-slot{
+  overflow:visible!important;
+}
+html body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded{
+  z-index:220!important;
+  isolation:isolate;
+  background:rgba(3,11,27,.985)!important;
+  border-color:#62d9ff!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+  box-shadow:0 16px 54px #000e,0 0 0 2px #54c8f488!important;
+  pointer-events:auto!important;
+}
+html body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded .song-results{
+  position:relative;z-index:1;min-height:0!important;
+  background:#07182d!important;
+  overflow-y:auto!important;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  pointer-events:auto!important;
+}
+html body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded .song-item{
+  position:relative;z-index:1;
+}
+html body.xstage-ui-v2 .stage.keyboard-open .stage-search-slot .search-dock.pc-expanded{
+  max-height:max(90px,calc(100dvh - var(--xs-top) - var(--xs-bottom) - var(--virtual-keyboard-height,250px) - 16px))!important;
+}
+@media(max-width:760px){
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-search-slot .search-dock.pc-expanded{
+    max-height:max(105px,min(59dvh,calc(100dvh - var(--xs-top) - var(--xs-bottom) - 14px)))!important;
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage.keyboard-open .stage-search-slot .search-dock.pc-expanded{
+    max-height:max(88px,calc(100dvh - var(--xs-top) - var(--xs-bottom) - var(--virtual-keyboard-height,250px) - 14px))!important;
+  }
+}
+
+/* Four visual-only concert spots above the backdrop and behind lyric/search UI.
+ * Power comes from real Audio Analyser levels or timestamped MIDI note events. */
+html body.xstage-ui-v2 .stage .xstage-stage-lights{
+  position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none;
+  opacity:0;visibility:hidden;isolation:isolate;
+  transition:opacity .14s linear,visibility .14s linear;
+}
+html body.xstage-ui-v2 .stage .xstage-stage-lights.is-active{
+  opacity:1;visibility:visible;
+}
+html body.xstage-ui-v2 .stage .xstage-light-beam{
+  position:absolute;top:-27%;height:110%;width:42%;
+  pointer-events:none;transform-origin:50% 0;
+  clip-path:polygon(47% 0,53% 0,100% 100%,0 100%);
+  background:linear-gradient(180deg,
+    hsla(var(--light-hue),100%,65%,.8) 0%,
+    hsla(var(--light-hue),100%,58%,.24) 36%,transparent 96%);
+  filter:blur(clamp(4px,.7vw,10px));
+  mix-blend-mode:screen;will-change:transform,opacity;
+  animation:xstage-live-beam-left 5.5s ease-in-out infinite alternate;
+}
+html body.xstage-ui-v2 .stage .xstage-light-beam-1{left:-2%;--light-hue:190;animation-duration:4.9s}
+html body.xstage-ui-v2 .stage .xstage-light-beam-2{left:20%;--light-hue:279;animation-name:xstage-live-beam-right;animation-duration:6.2s}
+html body.xstage-ui-v2 .stage .xstage-light-beam-3{right:19%;--light-hue:327;animation-duration:5.7s}
+html body.xstage-ui-v2 .stage .xstage-light-beam-4{right:-3%;--light-hue:42;animation-name:xstage-live-beam-right;animation-duration:6.6s}
+html body.xstage-ui-v2 .stage .xstage-light-floor{
+  position:absolute;bottom:3%;left:13%;right:13%;height:28%;
+  pointer-events:none;
+  background:radial-gradient(ellipse at 50% 100%,rgba(59,188,255,.48),rgba(128,56,244,.18) 35%,transparent 72%);
+  filter:blur(15px);mix-blend-mode:screen;
+}
+@keyframes xstage-live-beam-left{from{transform:rotate(-26deg)}to{transform:rotate(29deg)}}
+@keyframes xstage-live-beam-right{from{transform:rotate(28deg)}to{transform:rotate(-27deg)}}
+html body.xstage-ui-v2 .stage:has(#karaoke-video:not([hidden])) .xstage-stage-lights{
+  display:none!important;
+}
+@media(prefers-reduced-motion:reduce){
+  html body.xstage-ui-v2 .stage .xstage-light-beam{animation:none!important;transform:none!important}
+}
