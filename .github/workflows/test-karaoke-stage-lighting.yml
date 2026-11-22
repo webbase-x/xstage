@@ -1,0 +1,43 @@
+name: Karaoke search and live stage lighting checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "karaoke.html"
+      - "app.js"
+      - "stage-lighting.js"
+      - "xstage-ux.css"
+      - "scripts/karaoke-stage-lighting-test.mjs"
+      - "scripts/karaoke-responsive-search-test.mjs"
+      - ".github/workflows/test-karaoke-stage-lighting.yml"
+  pull_request:
+    paths:
+      - "karaoke.html"
+      - "app.js"
+      - "stage-lighting.js"
+      - "xstage-ux.css"
+      - "scripts/karaoke-stage-lighting-test.mjs"
+      - "scripts/karaoke-responsive-search-test.mjs"
+      - ".github/workflows/test-karaoke-stage-lighting.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stage-search-lighting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax checks
+        run: |
+          node --check stage-lighting.js
+          node --check app.js
+      - name: Search viewport, dropdown and interactive light checks
+        run: |
+          node scripts/karaoke-responsive-search-test.mjs
+          node scripts/karaoke-stage-lighting-test.mjs
