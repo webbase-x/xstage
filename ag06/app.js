@@ -1,4 +1,5 @@
 import {AG06AudioEngine} from "./audio-engine.js";
+import {StudioSession,clamp} from "./studio-session.js";
 import {DEFAULT_PRESET,PRESETS,sanitizeParams,formatParam} from "./presets.js";
 
 const $=(id)=>document.getElementById(id);
@@ -12,6 +13,7 @@ try{
   }
 }catch{}
 let latestBlob=null,latestUrl=null,recordTimer=null,busy=false;
+const studio=new StudioSession();
 const setStatus=(message,error=false)=>{const el=$("status-message");el.textContent=message;el.style.color=error?"#ffafaf":"#91e7d0";};
 function persist(){try{localStorage.setItem(settingsKey,JSON.stringify(settings));}catch{}}
 function renderParams(){
@@ -109,6 +111,7 @@ function clearOldRecording(){
   if(latestUrl)URL.revokeObjectURL(latestUrl);
   latestBlob=null;latestUrl=null;
   $("download-recording").hidden=true;
+  $("studio-add-take").disabled=true;
 }
 async function finishRecording(){
   stopTimer();
@@ -124,6 +127,7 @@ async function finishRecording(){
     link.download="X-Stage-Audio-"+new Date().toISOString().replace(/[:.]/g,"-")+"."+file.extension;
     link.textContent=window.AG06Android?"บันทึกไฟล์ลง Android":"ดาวน์โหลดไฟล์ "+file.extension.toUpperCase();
     link.hidden=false;
+    $("studio-add-take").disabled=false;
     $("record-info").textContent="บันทึกแล้ว "+(file.blob.size/1024/1024).toFixed(1)+" MB · "+file.type+" · ไฟล์ยังอยู่ในหน่วยความจำจนกดบันทึก";
     setStatus("บันทึกเสียงเสร็จแล้ว เลือกดาวน์โหลดหรือบันทึกลงเครื่อง");
   }catch(error){setStatus("บันทึกไม่สำเร็จ: "+error.message,true);}
@@ -183,8 +187,68 @@ document.querySelectorAll("[data-param]").forEach(slider=>slider.addEventListene
   renderParams();persist();
 }));
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&engine.connected)void refreshDevices();});
-window.addEventListener("pagehide",()=>{void engine.disconnect();if(latestUrl)URL.revokeObjectURL(latestUrl);});
+window.addEventListener("pagehide",()=>{studio.stop();void engine.disconnect();if(latestUrl)URL.revokeObjectURL(latestUrl);});
 if(navigator.mediaDevices?.addEventListener)navigator.mediaDevices.addEventListener("devicechange",()=>{if(!engine.connected)void refreshDevices();});
+// All track editing and bounce operations are local, never sent to a server.
+const studioStatus=(message,error=false)=>{const el=$("studio-state");el.textContent=message;el.style.color=error?"#ffafaf":"#95a6ba";};
+function studioRender(){
+ const root=$("studio-tracks");root.replaceChildren();
+ if(!studio.tracks.length){const p=document.createElement("p");p.className="subtle-text";p.textContent="ยังไม่มีแทร็ก · เริ่มจากนำเข้าไฟล์เสียง";root.append(p);return;}
+ for(const track of studio.tracks){
+  const item=document.createElement("div");item.className="studio-track";
+  const title=document.createElement("strong");title.textContent=track.name+" · "+track.buffer.duration.toFixed(1)+" วินาที";item.append(title);
+  const controls=document.createElement("div");controls.className="studio-controls";
+  const number=(label,key,min,max,step)=>{
+   const wrap=document.createElement("label");wrap.textContent=label;
+   const field=document.createElement("input");field.type="number";field.min=min;field.max=max;field.step=step;field.value=track[key];
+   field.setAttribute("aria-label",label+" "+track.name);
+   field.addEventListener("change",()=>{const v=clamp(field.value,+min,+max);track[key]=key==="start"?Math.min(v,track.end-.01):key==="end"?Math.max(v,track.start+.01):v;field.value=track[key];studio.stop();});
+   wrap.append(field);controls.append(wrap);
+  };
+  number("Volume","volume",0,2,.1);number("Start (s)","start",0,track.buffer.duration,.1);
+  number("End (s)","end",.01,track.buffer.duration,.1);number("Offset (s)","offset",0,600,.1);
+  for(const [key,label] of [["mute","Mute"],["solo","Solo"]]){
+   const wrap=document.createElement("label");wrap.className="studio-check";
+   const check=document.createElement("input");check.type="checkbox";check.checked=track[key];
+   check.addEventListener("change",()=>{track[key]=check.checked;studio.stop();});
+   wrap.append(check,document.createTextNode(label));controls.append(wrap);
+  }
+  const remove=document.createElement("button");remove.type="button";remove.className="button subtle";remove.textContent="ลบแทร็ก";
+  remove.addEventListener("click",()=>{studio.stop();studio.remove(track.id);studioRender();});
+  controls.append(remove);item.append(controls);root.append(item);
+ }
+}
+async function studioImport(files){
+ studio.stop();
+ for(const file of files){
+  try{studioStatus("กำลังอ่านไฟล์ "+file.name+"…");await studio.addFile(file);}
+  catch(error){studioStatus("ข้าม "+file.name+": "+error.message,true);}
+  studioRender();
+ }
+ if(studio.tracks.length)studioStatus("พร้อมมิกซ์ "+studio.tracks.length+" แทร็ก · "+studio.duration().toFixed(1)+" วินาที");
+}
+$("studio-files").addEventListener("change",async e=>{await studioImport([...e.target.files]);e.target.value="";});
+$("studio-add-take").addEventListener("click",async()=>{
+ if(!latestBlob)return;
+ await studioImport([new File([latestBlob],"Recorded take."+("webm"),{type:latestBlob.type})]);
+});
+$("studio-play").addEventListener("click",async()=>{
+ try{studioStatus("กำลังเล่นมิกซ์…");await studio.play();}
+ catch(e){studioStatus("เล่นไม่สำเร็จ: "+e.message,true);}
+});
+$("studio-stop").addEventListener("click",()=>{studio.stop();studioStatus("หยุดเล่นแล้ว");});
+$("studio-export").addEventListener("click",async()=>{
+ const button=$("studio-export");button.disabled=true;studio.stop();
+ try{
+  studioStatus("กำลังเรนเดอร์ WAV ในเครื่อง…");
+  const wav=await studio.bounce(),url=URL.createObjectURL(wav),link=document.createElement("a");
+  link.href=url;link.download="X-Stage-Audio-Mix-"+new Date().toISOString().slice(0,19).replace(/:/g,"-")+".wav";
+  document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  studioStatus("ส่งออก WAV สำเร็จ · "+(wav.size/1048576).toFixed(1)+" MB");
+ }catch(e){studioStatus("ส่งออกไม่สำเร็จ: "+e.message,true);}
+ finally{button.disabled=false;}
+});
 renderParams();
 changeState(false);
 void refreshDevices();
