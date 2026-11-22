@@ -9,6 +9,20 @@ the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
 
+## v0.1.38 — Entire-catalog batch build and persistent deduplication
+
+- **สร้างทั้งหมด** scans every registered SQLite song in small batches
+  rather than only already-approved songs. Unsupported/incomplete entries
+  count as blocked with an explanation; nothing is fabricated.
+- **สร้างเฉพาะที่พร้อม** continues to use the separate reviewed/timed
+  catalog. Both operations skip unchanged existing exports.
+- Duplicate prevention is persisted in `xstage_exports` with the exact
+  lyric version ID, destination and file SHA-256. Later runs — including
+  after a restart — leave verified output bytes and modification times
+  unchanged. A new lyric version is eligible for rebuilding.
+- The UI gets a total-catalog count endpoint and does not need to load
+  every song into the browser before building.
+
 ## v0.1.38 — Verified Windows popup stability release
 
 - Carry forward the native Windows file/LRC picker window-ownership fix,

@@ -141,9 +141,28 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(manual.approved_build_ids(self.workspace),[])
         self.assertEqual(manual.ready_count(self.workspace),0)
         self.assertEqual(manual.approved_selected_ids(self.workspace,[song["id"]]),set())
-        second=plus.build_song(self.workspace,song["id"])
-        self.assertTrue(second["skipped"])
-        self.assertEqual(second["sha256"],first["sha256"])
+        # A later build must query the on-disk SQLite export record, not an
+        # ephemeral selection in memory. Even when the original has moved,
+        # an unchanged, verified output must not be written again.
+        result_path=Path(first["path"])
+        original_bytes=result_path.read_bytes()
+        initial_mtime=result_path.stat().st_mtime_ns
+        with plus.connect(self.workspace) as db:
+            record=db.execute("""SELECT version_id,sha256,output_path
+              FROM xstage_exports WHERE song_id=?""",(song["id"],)).fetchone()
+            self.assertEqual(record["version_id"],song["version_id"])
+            self.assertEqual(record["sha256"],first["sha256"])
+        for repeat in range(2):
+            second=plus.build_song(self.workspace,song["id"])
+            self.assertTrue(second["skipped"])
+            self.assertEqual(second["sha256"],first["sha256"])
+            self.assertEqual(result_path.stat().st_mtime_ns,initial_mtime)
+            self.assertEqual(result_path.read_bytes(),original_bytes)
+        # Drop the per-process initialization cache to exercise a reopened
+        # workspace connection as happens after restarting the application.
+        plus._INITIALIZED.clear()
+        self.assertTrue(plus.build_song(self.workspace,song["id"])["skipped"])
+        self.assertEqual(result_path.stat().st_mtime_ns,initial_mtime)
 
     def test_schema_all_tables_prefixed_and_separate_from_legacy(self):
         with plus.connect(self.workspace) as db:

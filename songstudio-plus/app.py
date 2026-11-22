@@ -323,6 +323,11 @@ class Handler(BaseHTTPRequestHandler):
                 q.get("status",["ready"])[0],
                 q.get("offset",[0])[0],q.get("limit",[40])[0],
                 q.get("q",[""])[0]));return
+        if path=="/api/build/catalog-count":
+            # The count covers every song in persistent SQLite, regardless
+            # of approval, lyric completeness or prior conversion.
+            self.send_json(200,{"total":core.catalog_song_count(
+                self.state.workspace)});return
         if path=="/api/build/eligible":
             self.send_json(200,{"ready_total":manual.ready_count(
                 self.state.workspace)});return

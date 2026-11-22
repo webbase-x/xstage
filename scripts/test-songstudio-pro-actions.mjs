@@ -209,7 +209,9 @@ assert.ok(popupPickerSource.includes("XSTAGE_PICKER_PARENT_PID")&&
           popupPickerSource.includes("_PICKER_LOCK.acquire(blocking=False)")&&
           !popupPickerSource.includes("$null=$owner.Show()"),
   'Windows file picker must use a stable owner and serialize competing requests');
-assert.ok(html.includes('id="build-everything"')&&
+assert.ok(server.includes('if path=="/api/build/catalog-count":')&&
+          server.includes('core.catalog_song_count(')&&
+          html.includes('id="build-everything"')&&
           html.includes('สร้างทั้งหมด (ทุกเพลงในฐานข้อมูล)')&&
           html.includes('สร้างเฉพาะที่พร้อม')&&
           js.includes('await startJob("build",{all_catalog:true})')&&
