@@ -198,7 +198,11 @@ def rollback(data,safety,existed,replaced=FILES):
         if name in existed and name.endswith('.json'):
             source = safety/name
             try:
-                parse_json(source.read_text(encoding='utf-8-sig'))
+                snapshot = parse_json(source.read_text(encoding='utf-8-sig'))
+                if name == 'settings.json' and not isinstance(snapshot, dict):
+                    raise ValueError('settings snapshot must be an object')
+                if name == 'queue.json' and not isinstance(snapshot, (list, dict)):
+                    raise ValueError('queue snapshot must be a list or object')
             except (OSError, UnicodeError, ValueError, TypeError) as error:
                 raise ValueError('ไฟล์ JSON สำรองเพื่อย้อนคืนเสียหาย: ' + name) from error
     for name in replaced:
