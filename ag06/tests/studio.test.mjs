@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {StudioSession,encodeWav,clamp,safeName} from "../studio-session.js";
+import {reduceSpectralNoise} from "../noise-reduction.js";
 import {waveformPeaks,noteSequence,encodeProject,decodeProject,midiFrequency,encodeMidi,decodeMidi} from "../studio-advanced.js";
 const read=path=>readFileSync(new URL(path,new URL("../",import.meta.url)),"utf8");
 test("WAV encoder writes valid RIFF mono samples",()=>{
@@ -69,4 +70,22 @@ test("Android bridge and MIDI UI expose real file import/export actions",()=>{
  assert.match(native,/onShowFileChooser/);assert.match(native,/saveProjectFile/);assert.match(native,/saveMidiFile/);
  for(const id of ["midi-import","midi-export","midi-instrument"])assert.match(ui,new RegExp('id="'+id+'"'));
  assert.match(read("app.js"),/decodeMidi/);assert.match(read("app.js"),/encodeMidi/);
+});
+
+test("spectral reduction refuses to derive noise profile from continuous foreground speech",()=>{
+ const rate=8000,samples=new Float32Array(rate);
+ for(let i=0;i<samples.length;i++)samples[i]=.2*Math.sin(2*Math.PI*440*i/rate);
+ const output=reduceSpectralNoise(samples,rate);
+ assert.equal(output.length,samples.length);
+ assert.ok(Math.abs(output[100]-samples[100])<1e-7);
+});
+test("spectral reduction with quiet sections produces finite samples",()=>{
+ const rate=8000,samples=new Float32Array(rate);
+ for(let i=0;i<samples.length;i++)samples[i]=.003*Math.sin(2*Math.PI*1800*i/rate)+(i>2000?.15*Math.sin(2*Math.PI*300*i/rate):0);
+ const output=reduceSpectralNoise(samples,rate);
+ assert.equal(output.length,samples.length);
+ assert.ok(output.every(Number.isFinite));
+ assert.match(read("desktop/package.json"),/noise-reduction\\.js/);
+ assert.match(read("android/app/build.gradle"),/noise-reduction\\.js/);
+ assert.match(read("index.html"),/id="studio-spectral"/);
 });
