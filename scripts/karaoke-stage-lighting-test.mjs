@@ -7,7 +7,7 @@ const app=read('app.js');
 const css=read('xstage-ux.css');
 const source=read('stage-lighting.js');
 assert.match(html,/stage-lighting\.js\?v=1136-live/,'Web shell loads live lighting');
-assert.ok(html.indexOf('app.js?v=1140-google-session-renew')<html.indexOf('stage-lighting.js?v=1136-live'),
+assert.ok(html.indexOf('app.js?v=1162-no-voice-search')<html.indexOf('stage-lighting.js?v=1136-live'),
   'Playback code must load before its lighting hookup');
 assert.match(app,/setMidiNotes\?\.\(parsedLiveMidi\.notes,parsedLiveMidi\.duration\)/);
 const topRules=css.split('/* 1.0.136 — search must remain the topmost')[1];
