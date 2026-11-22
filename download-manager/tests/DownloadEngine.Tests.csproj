@@ -17,6 +17,8 @@
     <Compile Include="../MainForm.cs" Link="MainForm.cs" />
     <Compile Include="../MainForm.IdmLayout.cs" Link="MainForm.IdmLayout.cs" />
     <Compile Include="../MainForm.XStagePreview.cs" Link="MainForm.XStagePreview.cs" />
+    <Compile Include="../LiveStreamCapture.cs" Link="LiveStreamCapture.cs" />
+    <Compile Include="../LiveStreamCaptureForm.cs" Link="LiveStreamCaptureForm.cs" />
     <Compile Include="../MainForm.Performance.cs" Link="MainForm.Performance.cs" />
     <Compile Include="../DownloadFileNaming.cs" Link="DownloadFileNaming.cs" />
     <Compile Include="../DownloadJob.cs" Link="DownloadJob.cs" />
