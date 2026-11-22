@@ -4,26 +4,23 @@ import fs from 'node:fs';
 const get=path=>fs.readFileSync(new URL('../'+path,import.meta.url),'utf8');
 const css=get('xstage-ux.css');
 const html=get('karaoke.html');
-const patch=css.split('/* iPhone / Android / small-tablet search: exact viewport-fit')[1];
-assert.ok(patch,'Responsive search overrides must be appended after legacy rules');
+const patch=css.split('/* 1.16.2 — Phone search lives at the screen')[1];
+assert.ok(patch,'Mobile bottom search rules must override previous top-toolbar positioning');
 assert.match(patch,/@media\s*\(max-width:760px\)/);
 assert.match(patch,/@media\s*\(max-width:350px\)/);
-assert.match(patch,/@media\s*\(orientation:landscape\)\s*and\s*\(max-height:540px\)/);
-assert.match(patch,/env\(safe-area-inset-left\)/);
-assert.match(patch,/env\(safe-area-inset-right\)/);
-assert.match(patch,/env\(safe-area-inset-top\)/);
-assert.match(patch,/10svh/,'Toolbar positioning must use stable Safari viewport height');
-assert.match(patch,/grid-template-columns:minmax\(0,1fr\)!important/);
-assert.match(patch,/\.stage-search-slot\s*\{[\s\S]*?width:100%!important/);
-assert.match(patch,/\.search-dock\.pc-expanded\s*\{[\s\S]*?max-width:100%!important/);
-assert.match(patch,/\.search-box\s*\{[\s\S]*?overflow:hidden/);
-assert.match(patch,/#search\s*\{[\s\S]*?flex:1 1 0!important/);
-assert.match(patch,/#search\s*\{[\s\S]*?font-size:16px!important/);
-assert.match(patch,/\.voice-search-button\s*\{[\s\S]*?flex-shrink:0!important/);
+assert.match(patch,/@media\s*\(max-height:540px\)/);
+assert.match(patch,/env\(safe-area-inset-left,0px\)/);
+assert.match(patch,/env\(safe-area-inset-right,0px\)/);
+assert.match(patch,/env\(safe-area-inset-bottom,0px\)/);
+assert.match(patch,/--xs-search-keyboard-inset/);
+assert.match(patch,/\.stage-search-slot\{[\s\S]*?position:fixed!important/);
+assert.match(patch,/\.search-dock\.pc-expanded\{[\s\S]*?flex-direction:column-reverse!important/);
+assert.match(patch,/\.transport-panel\{[\s\S]*?bottom:calc\(55px/);
+assert.match(patch,/#search\{[\s\S]*?font-size:16px!important/);
 assert.match(html,/meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/);
 assert.match(html,/id="search" type="search"/);
-assert.match(html,/id="voice-search" class="voice-search-button"/);
-assert.match(html,/xstage-ux\.css\?v=1136-search-and-live-lights/);
+assert.doesNotMatch(html,/id="voice-search"/,'Voice microphone must be removed completely');
+assert.match(html,/xstage-ux\.css\?v=1162-mobile-bottom-search/);
 for(const [viewport,leftSafe,rightSafe] of [
   [320,0,0],[375,0,0],[390,0,0],[402,0,0],[430,0,0],[440,0,0],
   [667,44,44],[844,59,59],[932,59,59],[1024,0,0]
@@ -34,7 +31,16 @@ for(const [viewport,leftSafe,rightSafe] of [
   const searchWidth=viewport-insetLeft-insetRight;
   assert.ok(searchWidth>0&&searchWidth<=viewport,'Search must fit '+viewport+'px viewport');
 }
-const ui=get('stage-ui.js'),app=get('app.js');
+const ui=get('stage-ui.js'),app=get('app.js'),mobile=get('mobile-layout.js');
+assert.doesNotMatch(app,/SpeechRecognition|setupVoiceSearch|voiceSearch/,
+  'Removed microphone must never initialize voice recognition');
+assert.ok(mobile.includes('function syncBottomSearch()')&&
+  mobile.includes('stage.insertBefore(searchSlot')&&
+  mobile.includes('searchToolbar.insertBefore(searchSlot,searchAnchor)'),
+  'One search dock must move to bottom and return to the desktop header at breakpoints');
+assert.ok(mobile.includes('visualViewport.height+visualViewport.offsetTop'),
+  'Mobile keyboard must not cover bottom search');
+assert.match(html,/mobile-layout\.js\?v=1162-mobile-bottom-search/);
 const topHeader=html.split('<header class="mobile-stage-header stage-toolbar"')[1]?.split('</header>')[0]||'';
 const songStatus=html.split('<div class="transport-song-info">')[1]?.split('<div class="timeline">')[0]||'';
 assert.doesNotMatch(topHeader,/id="toolbar-song-key"/,
@@ -71,4 +77,4 @@ assert.match(css,/\.stage-toolbar #midi-transpose-control\{[\s\S]*?display:inlin
   'Transpose controls must occupy a compact slot after search');
 assert.match(finalStyles,/#stage-tools-toggle\{\s*display:none!important/,
   'The bottom hamburger must be removed when the top menu exists');
-console.log('PASS: mobile search, actual top MIDI key replacement, one top menu');
+console.log('PASS: voice search removed, bottom mobile search with upward results, safe-area/keyboard, one top menu');
