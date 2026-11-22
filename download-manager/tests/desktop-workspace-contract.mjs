@@ -109,4 +109,13 @@ assert.doesNotMatch(background, /ShellExecute = true|Process\.Start\("https?:|_s
   'background monitoring must not open a web player or mutate SQLite');
 assert.doesNotMatch(live, /_state\.Save|Jobs\.Add|File\.Delete\(RecordingPath\)/,
   'live capture must not touch SQLite or delete source recordings');
+// CS0160 regression: ObjectDisposedException derives from InvalidOperationException.
+// A trailing catch after its base catch is unreachable and breaks Windows builds.
+const stopHandler = live.split('public void RequestStop()')[1]
+  ?.split('private async Task<int> RunCaptureProcessAsync(')[0] ?? '';
+assert.match(stopHandler, /catch \(InvalidOperationException\)/,
+  'stop handler must handle process disposal races');
+assert.doesNotMatch(stopHandler, /catch \(ObjectDisposedException\)/,
+  'CS0160: stop handler must not catch a derived exception after its base');
+
 console.log(`PASS: ${contracts.length} X-Stage desktop workspace, menu and state-preservation contracts`);
