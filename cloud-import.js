@@ -372,14 +372,6 @@ class Drive {
     this.rememberChild(parent,entry);
     return {id:answer.id,md5Checksum:md5,size:file.size,reused:false};
   }
-  async updatePointer(id,blob,hash){
-    const response=await this.fetch(UPLOAD+'/'+driveId(id)+'?uploadType=media&fields=id,name,md5Checksum,size',{
-      method:'PATCH',headers:{'Content-Type':'application/json'},body:blob});
-    const result=await response.json();
-    const meta=result.md5Checksum?result:await this.metadata(id);
-    if(String(meta.md5Checksum||'').toLowerCase()!==hash||Number(meta.size)!==blob.size)
-      fail('อัปเดต current.json แล้ว Google Drive ยืนยัน MD5 ไม่ตรง');
-  }
   async trashFile(id){
     const response=await this.fetch(API+'/'+driveId(id)+'?fields=id,trashed',{
       method:'PATCH',headers:{'Content-Type':'application/json'},
@@ -1380,7 +1372,7 @@ class Importer {
         fail('ยังไม่โหลดตัวอ่าน XSK2 ของเบราว์เซอร์');
       if(this.plan.xsks.some(x=>x.kind==='XMID')&&!scope.XStageXmid)
         fail('ยังไม่โหลดตัวอ่าน XMID ของเบราว์เซอร์');
-      this.status('กำลังตรวจ XStageKaraoke/DB/current.json บน Google Drive…');
+      this.status('กำลังตรวจ XStageKaraoke/DB/songs.sqlite3 บน Google Drive…');
       // Discover the same accessible libraries as Karaoke Online, including
       // folders nested in My Drive and folders shared by another owner.
       // Restricting this search to 'root' would create another XStageKaraoke
@@ -1404,6 +1396,8 @@ class Importer {
         rootId=await drive.folder('root',driveLayout.root);
       }
       let {pointerFile,pointer,rows}=await loadCatalog(drive,rootId);
+      if(pointer&&!pointer.directFile)
+        this.status('พบฐานข้อมูลรุ่นเก่า · จะย้ายไป songs.sqlite3 หลังตรวจข้อมูลครบ โดยสำรองต้นฉบับไว้');
       // Create only missing directories in the NEW root, never migrate old files.
       for(const folder of ['SONGS','DB','SOUNDFONT','BACKUP','CACHE','LOGS'])
         await drive.folder(rootId,folder);
