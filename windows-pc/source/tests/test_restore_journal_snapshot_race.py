@@ -8,6 +8,42 @@ from karaoke import restore
 
 
 class JournalRaceTests(unittest.TestCase):
+    def test_snapshot_rejects_redirected_destination(self):
+        import sqlite3
+        from contextlib import closing
+        with tempfile.TemporaryDirectory() as root:
+            base = Path(root)
+            source = base / "source.sqlite3"
+            with closing(sqlite3.connect(source)) as db:
+                db.execute("CREATE TABLE marker (id INTEGER)")
+                db.commit()
+            external = base / "external.sqlite3"
+            external.write_bytes(b"preserve")
+            destination = base / "snapshot.sqlite3"
+            try:
+                destination.symlink_to(external)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlinks unavailable")
+            with self.assertRaisesRegex(ValueError, "SQLite"):
+                restore.copy_database(source, destination)
+            self.assertEqual(external.read_bytes(), b"preserve")
+            self.assertTrue(destination.is_symlink())
+
+    def test_snapshot_rejects_directory_destination(self):
+        import sqlite3
+        from contextlib import closing
+        with tempfile.TemporaryDirectory() as root:
+            base = Path(root)
+            source = base / "source.sqlite3"
+            with closing(sqlite3.connect(source)) as db:
+                db.execute("CREATE TABLE marker (id INTEGER)")
+                db.commit()
+            destination = base / "snapshot.sqlite3"
+            destination.mkdir()
+            with self.assertRaisesRegex(ValueError, "SQLite"):
+                restore.copy_database(source, destination)
+            self.assertTrue(destination.is_dir())
+
     def test_new_directory_sidecar_is_not_deleted_during_apply(self):
         with tempfile.TemporaryDirectory() as root:
             data = Path(root)
