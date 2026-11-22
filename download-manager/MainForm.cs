@@ -26,6 +26,7 @@ public sealed partial class MainForm : Form
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 800 };
     private bool _networkAvailable = System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable();
     private volatile bool _sleeping;
+    private long _lastSpeedMeasurementTick;
 
     public MainForm(string[] args)
     {
@@ -953,20 +954,30 @@ public sealed partial class MainForm : Form
         if (IsDisposed || _grid.IsDisposed) return;
         var jobs = _engine.Jobs.ToArray();
 
-        // Calculate current transfer rates before numeric sorting so the
-        // Speed and ETA column headers sort on the live underlying values.
+        // UI selection/search may refresh rows between timer ticks.
+        // Only measure throughput on a real elapsed-time interval; otherwise
+        // those extra refreshes would create fake zeros/spikes in the chart.
+        var tick = Environment.TickCount64;
+        var elapsedMs = _lastSpeedMeasurementTick == 0
+            ? _timer.Interval : Math.Max(0, tick - _lastSpeedMeasurementTick);
+        var measureRate = _lastSpeedMeasurementTick == 0 ||
+            elapsedMs >= Math.Max(400, _timer.Interval * 3 / 4);
+        if (measureRate) _lastSpeedMeasurementTick = tick;
         double speedTotal = 0;
         foreach (var job in jobs)
         {
-            var current = Interlocked.Read(ref job.DownloadedBytes);
-            var diff = Math.Max(0L, current - job.PreviousBytes);
-            job.SpeedBytesPerSecond = job.Status == "Running"
-                ? diff / (_timer.Interval / 1000.0) : 0;
-            job.SmoothedSpeedBytesPerSecond = TransferRateMath.Smooth(
-                job.SmoothedSpeedBytesPerSecond, job.SpeedBytesPerSecond,
-                job.Status == "Running");
-            job.PreviousBytes = current;
-            speedTotal += job.SpeedBytesPerSecond;
+            if (measureRate)
+            {
+                var current = Interlocked.Read(ref job.DownloadedBytes);
+                var diff = Math.Max(0L, current - job.PreviousBytes);
+                job.SpeedBytesPerSecond = job.Status == "Running"
+                    ? diff / (Math.Max(1, elapsedMs) / 1000.0) : 0;
+                job.SmoothedSpeedBytesPerSecond = TransferRateMath.Smooth(
+                    job.SmoothedSpeedBytesPerSecond, job.SpeedBytesPerSecond,
+                    job.Status == "Running");
+                job.PreviousBytes = current;
+            }
+            speedTotal += job.Status == "Running" ? job.SpeedBytesPerSecond : 0;
         }
 
         var selectedId = Selected()?.Id;
@@ -1085,7 +1096,7 @@ public sealed partial class MainForm : Form
         _transferHeading.Text = "▣  รายการดาวน์โหลด (" + visible.Count.ToString("N0") + ")";
         _summary.Text = $"พร้อมทำงาน  ·  ทั้งหมด {jobs.Length:N0} งาน  ·  กำลังดาวน์โหลด {active:N0}  ·  เสร็จแล้ว {completed:N0}";
         _details.Text = $"ความเร็วรวม {FormatBytes((long)speedTotal)}/s  ·  รอคิว {queued:N0}  ·  ผิดพลาด {failed:N0}";
-        RecordTransferSpeed(speedTotal);
+        if (measureRate) RecordTransferSpeed(speedTotal);
         UpdateDetails();
         _engine.SaveProgressIfDue();
         if (_engine.LastStorageError.Length > 0)
