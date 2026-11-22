@@ -192,7 +192,46 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void saveProjectFile(String encoded){
+        final String prefix="data:application/json;base64,";
+        if(encoded==null||encoded.length()>MAX_DATA_URL_CHARS||!encoded.startsWith(prefix)){
+            notifyWeb(false,"โปรเจกต์ไม่ถูกต้องหรือใหญ่เกิน 24 MB");return;
+        }
+        Uri created=null;
+        try{
+            byte[] bytes=Base64.decode(encoded.substring(prefix.length()),Base64.DEFAULT);
+            if(bytes.length<20||bytes.length>24*1024*1024)throw new IllegalArgumentException("ขนาดโปรเจกต์ไม่ถูกต้อง");
+            JSONObject project=new JSONObject(new String(bytes,java.nio.charset.StandardCharsets.UTF_8));
+            if(!"xstage-audio-project".equals(project.optString("format"))||project.optInt("version")!=1)
+                throw new IllegalArgumentException("รูปแบบโปรเจกต์ไม่ถูกต้อง");
+            ContentValues values=new ContentValues();
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME,"X-Stage-Audio-Project-"+System.currentTimeMillis()+".json");
+            values.put(MediaStore.MediaColumns.MIME_TYPE,"application/json");
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH,Environment.DIRECTORY_DOWNLOADS+"/XStageAudio");
+            values.put(MediaStore.MediaColumns.IS_PENDING,1);
+            created=getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI,values);
+            if(created==null)throw new IllegalStateException("สร้างไฟล์ไม่ได้");
+            try(OutputStream out=getContentResolver().openOutputStream(created)){
+                if(out==null)throw new IllegalStateException("เปิดไฟล์ไม่ได้");
+                out.write(bytes);
+            }
+            ContentValues ready=new ContentValues();
+            ready.put(MediaStore.MediaColumns.IS_PENDING,0);
+            getContentResolver().update(created,ready,null,null);
+            notifyWeb(true,"บันทึกโปรเจกต์ใน Downloads/XStageAudio แล้ว");
+        }catch(Exception e){
+            if(created!=null)getContentResolver().delete(created,null,null);
+            notifyWeb(false,"บันทึกโปรเจกต์ไม่สำเร็จ: "+e.getMessage());
+        }
+    }
+
     public final class RecordingBridge {
+        @JavascriptInterface public void saveProject(String encoded){
+            runOnUiThread(()->{
+                if(!trustedPage())return;
+                new Thread(()->saveProjectFile(encoded),"audio-project-export").start();
+            });
+        }
         @JavascriptInterface public void saveAudio(String dataUrl){
             // JavaScriptInterface runs off UI thread; validate current top-level page on UI thread.
             runOnUiThread(()->{
