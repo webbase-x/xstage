@@ -95,7 +95,16 @@ async function routeDrive(route){
   }
   if(url.pathname.startsWith('/drive/v3/files/')&&method==='PATCH'){
     const itemId=url.pathname.split('/').pop();
-    const item=records.get(itemId);assert.ok(item,'Move must target a real Drive file');
+    const item=records.get(itemId);assert.ok(item,'Move or trash must target a real Drive file');
+    const metadata=JSON.parse(req.postData()||'{}');
+    if(metadata.trashed===true){
+      for(const values of children.values()){
+        const index=values.findIndex(x=>x.id===itemId);
+        if(index>=0){values.splice(index,1);break;}
+      }
+      item.trashed=true;
+      return send(200,{id:itemId,trashed:true});
+    }
     const from=url.searchParams.get('removeParents');
     const to=url.searchParams.get('addParents');
     assert.ok(from&&to&&from!==to,'Move must specify source and target folder');
@@ -103,7 +112,6 @@ async function routeDrive(route){
     const index=before.findIndex(x=>x.id===itemId);
     assert.ok(index>=0,'Moved file must be in its current folder');
     before.splice(index,1);
-    const metadata=JSON.parse(req.postData()||'{}');
     Object.assign(item,metadata,{parents:[to]});
     group(to).push(item);
     return send(200,item);
