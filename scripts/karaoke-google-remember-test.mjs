@@ -52,6 +52,9 @@ assert.ok(!app.includes('refresh_token:'),
   'Never persist or request a long-lived refresh token from static web JavaScript');
 assert.ok(html.includes('id="google-renew"')&&css.includes('.google-renew-button'),
   'Near-expiry renewal must expose a mobile-friendly, explicit button');
+assert.ok(html.includes('id="gate-switch-google"')&&
+  app.includes('rememberLogin(false);clearActiveAuth();clearPendingAuth();'),
+  'Users must be able to choose another account and clear remembered state explicitly');
 const noticeStart=app.indexOf('function updateGoogleRenewNotice(){');
 const noticeEnd=app.indexOf("$('google-renew')?.addEventListener",noticeStart);
 assert.ok(noticeStart>0&&noticeEnd>noticeStart);
