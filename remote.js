@@ -405,12 +405,12 @@
         if(data.eqPreset&&[...$('owner-eq-preset').options].some(o=>o.value===data.eqPreset))$('owner-eq-preset').value=data.eqPreset;
         const direct=!!data.nativeAudioDirect;
         const eqSelect=$('owner-eq-preset');
-        eqSelect.disabled=direct;
-        for(const button of document.querySelectorAll('[data-admin="eq-reset"],[data-admin="eq-bypass"]'))button.disabled=direct;
+        eqSelect.disabled=direct||!data.eqActive;
+        for(const button of document.querySelectorAll('[data-admin="eq-reset"],[data-admin="eq-bypass"]'))button.disabled=direct||!data.eqActive;
         $('owner-eq-state').textContent=direct
           ? 'ANDROID DIRECT · เสียงออกลำโพงตรง · มิเตอร์แสดงผลเท่านั้น'+
             (data.nativeMeterStatus==='unsupported'?' · WebView ไม่รองรับมิเตอร์สด':'')
-          : data.eqActive?'EQ ทำงาน · '+String(data.eqPreset||'').toUpperCase():'เสียง Native · EQ ยังไม่ทำงาน';
+          : 'เสียงต้นฉบับไม่ผ่าน EQ · มิเตอร์แสดงผลอย่างเดียว';
         const visual=data.visualSettings||{};
         if(visual.background&&[...$('owner-background').options].some(o=>o.value===visual.background))$('owner-background').value=visual.background;
         if(visual.brandTheme&&[...$('owner-brand-theme').options].some(o=>o.value===visual.brandTheme))$('owner-brand-theme').value=visual.brandTheme;
