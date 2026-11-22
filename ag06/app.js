@@ -1,6 +1,6 @@
 import {AG06AudioEngine} from "./audio-engine.js";
 import {StudioSession,clamp} from "./studio-session.js";
-import {drawWaveform,encodeProject,decodeProject,renderSynth} from "./studio-advanced.js";
+import {drawWaveform,encodeProject,decodeProject,renderSynth,encodeMidi,decodeMidi} from "./studio-advanced.js";
 import {DEFAULT_PRESET,PRESETS,sanitizeParams,formatParam} from "./presets.js";
 
 const $=(id)=>document.getElementById(id);
@@ -368,7 +368,7 @@ $("midi-clear").addEventListener("click",()=>{midiNotes=[];renderNotes();midiSta
 let midiPreview=null;
 $("midi-play").addEventListener("click",async()=>{
  try{
-  const buf=await renderSynth(midiNotes,$("midi-bpm").value);
+  const buf=await renderSynth(midiNotes,$("midi-bpm").value,$("midi-instrument").value);
   if(midiPreview){midiPreview.pause();URL.revokeObjectURL(midiPreview.src);}
   const wavBuffer=await import("./studio-session.js").then(m=>m.encodeWav(buf));
   const url=URL.createObjectURL(wavBuffer);midiPreview=new Audio(url);await midiPreview.play();
@@ -384,6 +384,24 @@ $("midi-to-track").addEventListener("click",async()=>{
    buffer:buf,volume:1,mute:false,solo:false,role:"music",start:0,end:buf.duration,offset:0});
   studioRender();midiStatus("สร้างเสียงสังเคราะห์ลงแทร็กแล้ว");
  }catch(e){midiStatus("สร้างแทร็กไม่สำเร็จ: "+e.message,true);}
+});
+$("midi-import").addEventListener("change",async event=>{
+ const file=event.target.files?.[0];event.target.value="";if(!file)return;
+ try{
+  if(file.size>1024*1024)throw new Error("ไฟล์ MIDI ใหญ่เกิน 1 MB");
+  const parsed=decodeMidi(await file.arrayBuffer());midiNotes=parsed.notes;
+  $("midi-bpm").value=clamp(parsed.bpm,40,240);renderNotes();
+  midiStatus("นำเข้า MIDI แล้ว · "+midiNotes.length+" โน้ต");
+ }catch(e){midiStatus("นำเข้า MIDI ไม่สำเร็จ: "+e.message,true);}
+});
+$("midi-export").addEventListener("click",()=>{
+ try{
+  if(!midiNotes.length)throw new Error("ยังไม่มีโน้ต MIDI");
+  const bytes=encodeMidi(midiNotes,$("midi-bpm").value),url=URL.createObjectURL(new Blob([bytes],{type:"audio/midi"}));
+  const link=document.createElement("a");link.href=url;link.download="X-Stage-Audio-Notes.mid";
+  document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  midiStatus("ส่งออก Standard MIDI File แล้ว");
+ }catch(e){midiStatus("ส่งออก MIDI ไม่สำเร็จ: "+e.message,true);}
 });
 renderNotes();renderTimeline();
 renderParams();
