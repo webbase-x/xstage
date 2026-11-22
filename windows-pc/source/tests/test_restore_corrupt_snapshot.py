@@ -1,4 +1,5 @@
 """Rollback must not overwrite live user data with a corrupt safety database."""
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,7 +17,7 @@ class RollbackCorruptSnapshotTests(unittest.TestCase):
             (safety / 'settings.json').write_text('old', encoding='utf-8')
             (data / 'songs.sqlite3').write_bytes(b'live database sentinel')
             (safety / 'songs.sqlite3').write_bytes(b'corrupt sqlite')
-            with self.assertRaises(Exception):
+            with self.assertRaises(sqlite3.DatabaseError):
                 restore.rollback(
                     data, safety,
                     ['settings.json', 'songs.sqlite3'],
