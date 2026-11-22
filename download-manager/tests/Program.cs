@@ -22,6 +22,25 @@ if (args.Contains("--ui-smoke", StringComparer.Ordinal))
             Application.SetCompatibleTextRenderingDefault(false);
             using var main = new MainForm(new[] { "--ui-smoke" });
             main.Show();
+            // Reference UI contract: preserve the navy/cyan visual identity
+            // and the compact menu/deck/status proportions at every DPI.
+            var rootField = typeof(MainForm).GetField("_workspaceRoot",
+                BindingFlags.NonPublic | BindingFlags.Instance) ??
+                throw new Exception("Download workspace root not found.");
+            var root = (TableLayoutPanel)(rootField.GetValue(main) ??
+                throw new Exception("Download workspace root is null."));
+            if (root.RowStyles.Count != 5 ||
+                root.RowStyles[0].Height != 48 ||
+                root.RowStyles[1].Height != 90 ||
+                root.RowStyles[4].Height != 38)
+                throw new Exception("Reference menu, command deck or status bar proportions regressed.");
+            var accentField = typeof(MainForm).GetField("Accent",
+                BindingFlags.NonPublic | BindingFlags.Static) ??
+                throw new Exception("Download workspace accent not found.");
+            if ((Color)(accentField.GetValue(null) ??
+                throw new Exception("Download workspace accent is null.")) !=
+                Color.FromArgb(0, 189, 255))
+                throw new Exception("Reference cyan accent regressed.");
             foreach (var (width, height) in new[]
             {
                 (880, 590), (1024, 768), (1250, 780), (1366, 768),
