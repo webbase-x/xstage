@@ -5094,3 +5094,51 @@ html body.xstage-ui-v2 .stage:has(#karaoke-video:not([hidden])) .xstage-stage-li
 @media(prefers-reduced-motion:reduce){
   html body.xstage-ui-v2 .stage .xstage-light-beam{animation:none!important;transform:none!important}
 }
+
+/* Explicit Windows Core Audio pairing. Browser-only volume stays independent. */
+body.xstage-ui-v2 .windows-volume-connect{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:52px;min-height:35px;padding:4px 7px;border-radius:10px;
+  border:1px solid #397093;background:#09243c;color:#c9ddf1;
+  font-size:.69rem;font-weight:750;white-space:nowrap;cursor:pointer;
+}
+body.xstage-ui-v2 .windows-volume-connect.is-connected{
+  background:#0b463d;border-color:#46d2af;color:#b3ffdf;
+}
+body.xstage-ui-v2 .windows-volume-connect:focus-visible{
+  outline:2px solid #fff;outline-offset:2px
+}
+.windows-volume-dialog{
+  width:min(480px,calc(100vw - 24px));max-height:calc(100dvh - 24px);
+  overflow:auto;box-sizing:border-box;border:1px solid #387a9a;
+  border-radius:18px;padding:0;background:#091c32;color:#e8f8ff;
+  box-shadow:0 20px 70px #000b
+}
+.windows-volume-dialog::backdrop{background:rgba(0,6,15,.85)}
+.windows-volume-modal{display:flex;flex-direction:column;gap:12px;padding:22px}
+.windows-volume-modal h2{font-size:1.12rem;margin:0;color:#b9f9e7}
+.windows-volume-modal p{font-size:.85rem;line-height:1.6;margin:0}
+.windows-volume-modal small{font-size:.72rem;line-height:1.5;color:#9fbfd1}
+.windows-volume-modal a{color:#63dafe;text-decoration:underline}
+.windows-volume-modal label{font-size:.83rem;font-weight:700}
+.windows-volume-modal input{
+  background:#102d43;border:1px solid #5196b2;color:#e9ffff;
+  padding:12px;border-radius:9px;min-height:44px;box-sizing:border-box;
+  font-size:1.02rem;letter-spacing:.13em
+}
+.windows-volume-modal #windows-volume-status{
+  min-height:35px;color:#b9d8ea;overflow-wrap:anywhere
+}
+.windows-volume-modal-actions{display:flex;flex-wrap:wrap;gap:8px}
+.windows-volume-modal-actions button{
+  flex:1 1 110px;min-height:42px;border:1px solid #397b9a;
+  background:#143950;color:#e4f9fd;border-radius:9px;
+  font-size:.81rem;font-weight:750;padding:7px 11px;cursor:pointer
+}
+.windows-volume-modal-actions #windows-volume-pair{background:#117c7a}
+.windows-volume-modal-actions button:disabled{opacity:.45;cursor:not-allowed}
+.windows-volume-modal-actions button[hidden]{display:none!important}
+@media(max-width:630px){
+  body.xstage-ui-v2 .windows-volume-connect{min-width:44px;font-size:.64rem;padding:4px}
+  .windows-volume-modal{padding:15px}
+}
