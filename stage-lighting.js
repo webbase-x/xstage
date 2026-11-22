@@ -1,0 +1,115 @@
+/* X-Stage concert lights: visual only, driven by existing audio meters
+ * or timestamped MIDI notes. Never opens another audio output or microphone. */
+'use strict';
+(()=>{
+  const stage=document.getElementById('stage');
+  const media=document.getElementById('player');
+  if(!stage||!media)return;
+  const deck=document.createElement('div');
+  deck.className='xstage-stage-lights';
+  deck.setAttribute('aria-hidden','true');
+  const beams=Array.from({length:4},(_,index)=>{
+    const element=document.createElement('span');
+    element.className='xstage-light-beam xstage-light-beam-'+(index+1);
+    deck.append(element);
+    return element;
+  });
+  const floor=document.createElement('span');
+  floor.className='xstage-light-floor';
+  deck.append(floor);
+  // In DOM order, lights sit over the background but behind the stage logo
+  // and all selectable text, including the search dropdown.
+  stage.querySelector('.stage-hero')?.before(deck) || stage.append(deck);
+  const clamp=value=>Math.max(0,Math.min(1,Number(value)||0));
+  const RATE=20;
+  let midiBands=null,activeSource='audio',frame=0,lastFrame=0,playing=false;
+  const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)');
+  const colorBands=[0,1,2,1];
+  function setMidiNotes(notes,duration){
+    if(!Array.isArray(notes)||!notes.length){
+      clearMidiNotes();return;
+    }
+    const bins=Math.max(2,Math.min(18005,Math.ceil((Number(duration)||0)*RATE)+2));
+    const bands=Array.from({length:3},()=>new Float32Array(bins));
+    for(const note of notes){
+      const t=Number(note?.start),end=Number(note?.end),velocity=Number(note?.velocity);
+      if(!Number.isFinite(t)||t<0||t*RATE>=bins||!Number.isFinite(velocity))continue;
+      const group=note.channel===9||Number(note.key)<53?0:Number(note.key)>=76?2:1;
+      const strength=clamp(velocity/127)*clamp(Number(note.channelVolume??100)/127)*
+        clamp(Number(note.channelExpression??127)/127);
+      // Lighting reacts to actual MIDI note-on timestamps. A drum hit is
+      // short; sustained notes fade slowly, without inventing extra beats.
+      const hold=note.channel===9?.28:Math.min(.85,Math.max(.18,(end||t+.18)-t));
+      const first=Math.floor(t*RATE);
+      const last=Math.min(bins-1,Math.ceil((t+hold)*RATE));
+      for(let i=first;i<=last;i++){
+        const seconds=(i/RATE)-t;
+        bands[group][i]+=strength*Math.exp(-Math.max(0,seconds)/(note.channel===9?.12:.33));
+      }
+    }
+    midiBands=bands;activeSource='midi';
+  }
+  function clearMidiNotes(){midiBands=null;activeSource='audio';}
+  function readMidiBands(position){
+    if(!midiBands)return [0,0,0];
+    const index=Math.max(0,Math.min(midiBands[0].length-1,Math.floor((Number(position)||0)*RATE)));
+    return [clamp(midiBands[0][index]*.66),clamp(midiBands[1][index]*.52),clamp(midiBands[2][index]*.63)];
+  }
+  function readAudioBands(){
+    // Reuse the real post-EQ analyser on the Web and the visual-only
+    // native meter on Android. Neither changes the actual audio route.
+    const styles=getComputedStyle(stage);
+    const energy=clamp(parseFloat(styles.getPropertyValue('--xstage-viz-energy')));
+    const bass=clamp(parseFloat(styles.getPropertyValue('--xstage-viz-bass')));
+    return [bass,energy,clamp(energy*1.12-bass*.15)];
+  }
+  function dark(){
+    deck.classList.remove('is-active');
+    for(const beam of beams)beam.style.opacity='0';
+    floor.style.opacity='0';
+  }
+  function render(timestamp){
+    frame=requestAnimationFrame(render);
+    if(timestamp-lastFrame<45)return;
+    lastFrame=timestamp;
+    if(!playing||!stage.classList.contains('playing')||
+       !document.getElementById('karaoke-video')?.hidden){dark();return;}
+    const bands=activeSource==='midi'
+      ?readMidiBands(typeof player!=='undefined'?player.currentTime:media.currentTime)
+      :readAudioBands();
+    const master=clamp(bands.reduce((a,b)=>a+b,0)/3);
+    deck.classList.add('is-active');
+    for(let i=0;i<beams.length;i++){
+      const channel=bands[colorBands[i]];
+      // Low ambient floor is intentional; highlights follow audible energy
+      // or the actual MIDI note events, not a random lighting sequence.
+      beams[i].style.opacity=(.11+.83*clamp(channel*.8+master*.32)).toFixed(3);
+    }
+    floor.style.opacity=(.15+.7*master).toFixed(3);
+    deck.style.setProperty('--xstage-light-power',master.toFixed(3));
+    if(reducedMotion?.matches)deck.classList.add('still');
+    else deck.classList.remove('still');
+  }
+  function onPlay(){
+    playing=true;
+    if(!frame)frame=requestAnimationFrame(render);
+  }
+  function onStop(){
+    playing=false;
+    if(frame){cancelAnimationFrame(frame);frame=0;}
+    dark();
+  }
+  for(const event of ['play','playing'])media.addEventListener(event,onPlay);
+  for(const event of ['pause','ended','emptied'])media.addEventListener(event,onStop);
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden)onStop();
+    else if(stage.classList.contains('playing')&&typeof player!=='undefined'&&!player.paused)onPlay();
+  });
+  window.addEventListener('pagehide',onStop);
+  window.XStageStageLighting={
+    setMidiNotes,clearMidiNotes,
+    status:()=>({active:playing,source:activeSource,hasMidiNotes:!!midiBands,
+      beamCount:beams.length,energy:Number(deck.style.getPropertyValue('--xstage-light-power'))||0})
+  };
+  dark();
+})();
