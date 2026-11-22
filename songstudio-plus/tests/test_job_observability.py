@@ -47,6 +47,8 @@ class ImportObservabilityTests(unittest.TestCase):
         code=getsource(updater.install_and_restart)
         self.assertIn("Get-Process -Name 'XStageSongStudioPro'",code)
         self.assertIn("last-setup.log",code)
+        self.assertIn("$n -lt 60",code)
+        self.assertIn("remainingPids",code)
         self.assertIn("System.Windows.Forms.MessageBox",code)
         self.assertIn("Out-File -LiteralPath $log",code)
         self.assertIn("/CLOSEAPPLICATIONS",code)
@@ -54,7 +56,7 @@ class ImportObservabilityTests(unittest.TestCase):
     def test_session_is_canonical_updater_version(self):
         from inspect import getsource
         self.assertIn('"version":updater.VERSION', getsource(app.Handler.handle_get))
-        self.assertEqual(updater.VERSION, "0.1.39")
+        self.assertEqual(updater.VERSION, "0.1.40")
 
 
 if __name__ == "__main__":
