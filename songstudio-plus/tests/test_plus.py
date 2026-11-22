@@ -332,7 +332,7 @@ class PlusTests(unittest.TestCase):
     def test_encoded_looking_lyric_groups_are_hidden_but_source_preserved(self):
         plain=self.put("encoded.mp3",b"ENCODED-MEDIA"*500)
         token=("bw3woQ5X2H2lgLFMsIMNVxkmG9iXBN4p"
-               "P10eyckXWBD4IWU7f4535O15oW5s")
+               "P10eyckXWBD4IWU7f4535O15oW5sR9Y4q8T7n2W6")
         self.lrc(plain,f"[00:01.00]{token}\n[00:05.00]GMM Grammy\n")
         plus.import_folder(self.workspace,self.src)
         self.assertTrue(plus.suspicious_lyric_text(token))
