@@ -322,7 +322,7 @@ public sealed partial class MainForm
     private void ShowDiagnosticsPanel()
     {
         if (_transferSplit is not null && _transferSplit.Panel2Collapsed &&
-            _transferSplit.Height >= 240)
+            _transferSplit.Height >= 335)
             _transferSplit.Panel2Collapsed = false;
         if (_previewTabs is not null && !_previewTabs.IsDisposed)
             _previewTabs.SelectedIndex = 2;
@@ -705,42 +705,109 @@ public sealed partial class MainForm
     {
         var desk = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3,
+            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2,
             BackColor = DarkGrid, Padding = Padding.Empty, Margin = Padding.Empty
         };
         desk.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        desk.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
         desk.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         desk.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        desk.Controls.Add(CreateOverviewTiles(), 0, 0);
-
-        var filterBar = new TableLayoutPanel
+        var heading = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1,
-            BackColor = DarkGrid, Padding = Padding.Empty
+            Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1,
+            BackColor = Color.FromArgb(12, 45, 80),
+            Padding = new Padding(7, 4, 8, 3)
         };
-        filterBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        filterBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 250));
-        filterBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        filterBar.Controls.Add(new Label
-        {
-            Text = "  TRANSFER ACTIVITY  /  รายการดาวน์โหลด",
-            Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft,
-            ForeColor = Color.FromArgb(227, 238, 246),
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            AutoEllipsis = true
-        }, 0, 0);
+        heading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        heading.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 240));
+        heading.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42));
+        heading.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42));
+        heading.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        _transferHeading.Text = "▣  รายการดาวน์โหลด";
+        _transferHeading.Dock = DockStyle.Fill;
+        _transferHeading.TextAlign = ContentAlignment.MiddleLeft;
+        _transferHeading.Font = new Font("Segoe UI", 11, FontStyle.Bold);
+        _transferHeading.ForeColor = Color.White;
+        _transferHeading.AutoEllipsis = true;
+        heading.Controls.Add(_transferHeading, 0, 0);
+
         _jobSearch.Dock = DockStyle.Fill;
-        _jobSearch.Margin = new Padding(0, 9, 13, 9);
+        _jobSearch.Margin = new Padding(0, 7, 6, 7);
         _jobSearch.BorderStyle = BorderStyle.FixedSingle;
-        _jobSearch.BackColor = Color.FromArgb(235, 244, 249);
-        _jobSearch.ForeColor = Color.FromArgb(23, 43, 56);
-        _jobSearch.PlaceholderText = "ค้นหาชื่อไฟล์ ลิงก์ หรือคิว";
+        _jobSearch.BackColor = Color.FromArgb(18, 40, 67);
+        _jobSearch.ForeColor = Color.White;
+        _jobSearch.PlaceholderText = "ค้นหางาน... (Ctrl+F)";
         _jobSearch.AccessibleName = "ค้นหารายการดาวน์โหลด";
         _jobSearch.TextChanged += (_, _) => RefreshRows();
-        filterBar.Controls.Add(_jobSearch, 1, 0);
-        desk.Controls.Add(filterBar, 0, 1);
-        desk.Controls.Add(_grid, 0, 2);
+        heading.Controls.Add(_jobSearch, 1, 0);
+
+        Button SmallAction(string name, string help, EventHandler action)
+        {
+            var button = new Button
+            {
+                Text = name, Dock = DockStyle.Fill,
+                Margin = new Padding(2, 5, 2, 4),
+                BackColor = DarkPanel, ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand, Font = new Font("Segoe UI", 12, FontStyle.Bold),
+                AccessibleName = help
+            };
+            button.FlatAppearance.BorderColor = Accent;
+            button.Click += action;
+            return button;
+        }
+        var filter = SmallAction("▼", "กรองรายการดาวน์โหลด", (_, _) => { });
+        filter.Click += (_, _) =>
+        {
+            var choices = new ContextMenuStrip();
+            choices.Closed += (_, _) => choices.Dispose();
+            foreach (var (caption, key) in new (string Caption, string Key)[]
+            {
+                ("ทั้งหมด", "all"), ("กำลังดาวน์โหลด", "active"),
+                ("รอคิว", "queued"), ("ผิดพลาด", "failed"),
+                ("เสร็จสิ้น", "completed"), ("วิดีโอ", "video"),
+                ("เสียง", "music"), ("เอกสาร", "document"),
+                ("โปรแกรม", "program"), ("ไฟล์บีบอัด", "archive")
+            })
+            {
+                var value = key;
+                choices.Items.Add(caption, null, (_, _) => SelectCategory(value));
+            }
+            choices.Show(filter, new Point(0, filter.Height));
+        };
+        heading.Controls.Add(filter, 2, 0);
+        heading.Controls.Add(SmallAction("☷", "แสดงหรือซ่อนคอลัมน์ขั้นสูง", (_, _) =>
+        {
+            foreach (var key in new[] { "FileType", "Added", "Parts", "Description" })
+                _grid.Columns[key].Visible = !_grid.Columns["FileType"].Visible;
+        }), 3, 0);
+        desk.Controls.Add(heading, 0, 0);
+
+        var split = new SplitContainer
+        {
+            Dock = DockStyle.Fill, Orientation = Orientation.Horizontal,
+            Size = new Size(1000, 540), SplitterWidth = 5,
+            Panel1MinSize = 95, Panel2MinSize = 105,
+            SplitterDistance = 305, BackColor = Color.FromArgb(22, 83, 127)
+        };
+        _transferSplit = split;
+        split.Panel1.Controls.Add(_grid);
+        split.Panel2.Controls.Add(CreateLivePreview());
+        split.SizeChanged += (_, _) =>
+        {
+            // On a short window / with the URL input expanded, keep the
+            // real transfer list available instead of overlapping controls.
+            if (split.Height < 335)
+            {
+                if (!split.Panel2Collapsed) split.Panel2Collapsed = true;
+                return;
+            }
+            if (split.Panel2Collapsed) split.Panel2Collapsed = false;
+            var maximum = split.Height - split.Panel2MinSize - split.SplitterWidth;
+            if (maximum >= split.Panel1MinSize)
+                split.SplitterDistance = Math.Clamp((int)(split.Height * .58),
+                    split.Panel1MinSize, maximum);
+        };
+        desk.Controls.Add(split, 0, 1);
         return desk;
     }
 
