@@ -202,14 +202,24 @@
   volume.addEventListener('input',syncVolume);
   $('player')?.addEventListener('volumechange',syncVolume);
   // Wheel adjusts audio without scrolling the stage; never intercept normal page scrolling elsewhere.
-  stage.addEventListener('wheel',event=>{
-    if(event.ctrlKey||event.altKey||event.metaKey||event.target.closest('input,textarea,select,.remote-pair-panel,.mobile-stage-menu'))return;
+  function adjustWheelVolume(event){
+    if(event.ctrlKey||event.altKey||event.metaKey||!event.deltaY)return;
+    // Search/results, forms, EQ sliders, and menus retain their own scrolling.
+    if(event.currentTarget===stage&&event.target.closest('input,textarea,select,.remote-pair-panel,.mobile-stage-menu,.song-results,.queue-list,.xstage-eq-panel'))return;
     event.preventDefault();
     const next=Math.max(0,Math.min(100,Number(volume.value)+(event.deltaY<0?5:-5)));
     if(Number(volume.value)!==next){
-      volume.value=String(next);volume.dispatchEvent(new Event('input',{bubbles:true}));
+      volume.value=String(next);
+      volume.dispatchEvent(new Event('input',{bubbles:true}));
+      const player=$('player');
+      if(player?.muted){player.muted=false;}
     }
-  },{passive:false});
+  }
+  stage.addEventListener('wheel',adjustWheelVolume,{passive:false});
+  // The player toolbar sits outside #stage in some responsive layouts.
+  const volumeControl=volume.closest('.volume-control');
+  if(volumeControl&&!stage.contains(volumeControl))
+    volumeControl.addEventListener('wheel',adjustWheelVolume,{passive:false});
   const speaker=document.querySelector('.volume-control span[aria-hidden]');
   if(speaker){
     speaker.style.cursor='pointer';speaker.setAttribute('role','button');
