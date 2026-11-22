@@ -466,7 +466,7 @@
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
 <script>
-window.XSTAGE_RELEASE={version:'1.0.139',build:1139};
+window.XSTAGE_RELEASE={version:'1.0.140',build:1140};
 document.addEventListener('DOMContentLoaded',function(){
   const label=document.getElementById('karaoke-release-label');
   if(!label)return;
@@ -480,7 +480,7 @@ document.addEventListener('DOMContentLoaded',function(){
   }catch(error){/* Native bridge may be unavailable in normal web browsers. */}
 });
 </script>
-<script src="config.js?v=1139"></script>
+<script src="config.js?v=1140"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
   <script src="drive-sqlite.js?v=1170-single-sqlite" defer></script>
   <script src="cloud-import-core.js?v=1137" defer></script>
