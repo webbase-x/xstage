@@ -612,6 +612,7 @@ function saveUiPrefs(patch){
 window.XStageUiPrefs={read:readUiPrefs,save:saveUiPrefs};
 const initialUiPrefs=readUiPrefs();
 const REMEMBERED_LOGIN_KEY = 'xstage-remembered-google-login';
+const REMEMBERED_ACCOUNT_KEY = 'xstage-google-account-hint-v1';
 const ACTIVE_AUTH_KEY = 'xstage-google-token-v2';
 const PENDING_AUTH_KEY = 'xstage-google-pending-token-v1';
 const LEGACY_ACTIVE_AUTH_KEY = 'xstage-tab-google-token-v1';
@@ -667,7 +668,32 @@ function readActiveAuth(){
   clearActiveAuth();return null;
 }
 function hasRememberedLogin(){try{return localStorage.getItem(REMEMBERED_LOGIN_KEY)==='1';}catch{return false;}}
-function rememberLogin(enabled){try{if(enabled)localStorage.setItem(REMEMBERED_LOGIN_KEY,'1');else localStorage.removeItem(REMEMBERED_LOGIN_KEY);}catch{/* Optional preference only. */}}
+function rememberedGoogleAccount(){
+  if(!hasRememberedLogin())return null;
+  try{
+    const account=JSON.parse(localStorage.getItem(REMEMBERED_ACCOUNT_KEY)||'null');
+    if(!account||typeof account.sub!=='string'||!account.sub||
+       typeof account.email!=='string'||!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(account.email))
+      return null;
+    return {sub:account.sub,email:account.email};
+  }catch{return null;}
+}
+function rememberVerifiedGoogleAccount(account){
+  if(!account?.sub||!account?.email_verified)return;
+  rememberLogin(true);
+  try{localStorage.setItem(REMEMBERED_ACCOUNT_KEY,JSON.stringify({
+    sub:String(account.sub),email:String(account.email||'').trim()
+  }));}catch{}
+}
+function rememberLogin(enabled){
+  try{
+    if(enabled)localStorage.setItem(REMEMBERED_LOGIN_KEY,'1');
+    else{
+      localStorage.removeItem(REMEMBERED_LOGIN_KEY);
+      localStorage.removeItem(REMEMBERED_ACCOUNT_KEY);
+    }
+  }catch{/* Account hint is optional, never contains a token. */}
+}
 // MIDI owns its own transport clock. The DOM audio element remains the event
 // surface for lyrics, queue, media controls and existing non-MIDI tracks.
 // Cue only a verified silent MIDI tail; never cut an audible note or a
@@ -1522,7 +1548,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
   if (reuseExistingSession && state.token && state.accountSub===account.sub && state.libraryRootId && !isRetiredDriveRoot(state.libraryRootId)) {
     state.token=token;
     state.tokenExpiresAt=tokenExpiresAt;
-    rememberLogin(true);
+    rememberVerifiedGoogleAccount(account);
     saveActiveAuth(token,tokenExpiresAt,account.sub);
     clearPendingAuth();
     setStatus('ต่ออายุ Google Drive สำเร็จ · เพลงและคิวเดิมเล่นต่อเนื่อง','success');
@@ -1541,7 +1567,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
   state.tokenExpiresAt=tokenExpiresAt;
   state.accountSub=account.sub;
   window.dispatchEvent(new CustomEvent('xstage:auth-ready',{detail:{sub:String(account.sub)}}));
-  rememberLogin(true);
+  rememberVerifiedGoogleAccount(account);
   saveActiveAuth(token,tokenExpiresAt,account.sub);
   clearPendingAuth();
   ui.account.textContent=account.email||'Google';
@@ -1826,7 +1852,7 @@ function googleAuthErrorMessage(error){
   return 'เข้าสู่ระบบ Google ไม่สำเร็จ · กรุณาตรวจอินเทอร์เน็ต การอนุญาต Pop-up และการตั้งค่า OAuth แล้วลองอีกครั้ง';
 }
 
-function login({automatic=false} = {}) {
+function login({automatic=false,remembered=false} = {}) {
   if(webGoogleAuthFlow?.phase==='verifying'){
     setStatus('ได้รับสิทธิ์จาก Google แล้ว · กำลังตรวจสอบบัญชีและคลังเพลง…');
     return;
@@ -1884,7 +1910,8 @@ function login({automatic=false} = {}) {
         const expiresIn=Number(result.expires_in);
         const expiresAt=Date.now()+Math.max(0,Math.min(3600,Number.isFinite(expiresIn)?expiresIn:3600))*1000;
         savePendingAuth(result.access_token,expiresAt);
-        try { await openDrive(result.access_token,authId,expiresAt,'',true); }
+        const known=(automatic||remembered)?rememberedGoogleAccount():null;
+        try { await openDrive(result.access_token,authId,expiresAt,known?.sub||'',true); }
         catch (e) {
           if (authId === state.authId) {
             if(state.awaitingSharedLibrary){
@@ -1912,7 +1939,10 @@ function login({automatic=false} = {}) {
     // A manual click should always use Google's normal account chooser. An empty
     // prompt is reserved for reconnecting an existing session and can leave a
     // stale/invalid OAuth warning flow open in some multi-account browser sessions.
-    client.requestAccessToken(automatic?{prompt:''}:{prompt:'select_account'});
+    const hint=(automatic||remembered)?rememberedGoogleAccount():null;
+    client.requestAccessToken(automatic||remembered
+      ?{prompt:'',...(hint?.email?{login_hint:hint.email}:{})}
+      :{prompt:'select_account'});
   } catch (e) { finish();setStatus(e.message, 'error'); }
 }
 function resetPrivate({revoke = false, keepAuth = false} = {}) {
@@ -4295,7 +4325,9 @@ function startManualGoogleLogin(){
     startAndroidTvDeviceLogin(false);
     return;
   }
-  login();
+  // Explicit tap: reuse the last verified Google account and existing Drive
+  // consent. Sign out first to deliberately choose a different account.
+  login({remembered:hasRememberedLogin()});
 }
 ui.login.addEventListener('click',startManualGoogleLogin);ui.gateLogin.addEventListener('click',startManualGoogleLogin);
 $('gate-close')?.addEventListener('click',dismissLoginGate);
@@ -4731,7 +4763,7 @@ async function recoverPendingGoogleAuth(reason='กำลังกู้คื�
   const saved=readActiveAuth();
   if(!saved){
     if(readPendingAuth()){void recoverPendingGoogleAuth();}
-    else if(hasRememberedLogin())setStatus('เคยเข้าสู่ระบบแล้ว · กรุณากดเชื่อมต่อ Google เมื่อเซสชันหมดอายุ');
+    else if(hasRememberedLogin())setStatus('จำบัญชี Google เดิมไว้แล้ว · แตะเชื่อม Google อีกครั้งเพื่อรับสิทธิ์ใหม่ (ไม่ต้องเลือกบัญชีซ้ำ)');
     return;
   }
   ui.gate.hidden=true;
@@ -4760,7 +4792,7 @@ window.addEventListener('online',()=>{
   if(state.token)return;
   if(readPendingAuth()){void recoverPendingGoogleAuth('กลับมาออนไลน์แล้ว · กำลังกู้คืนการเข้าสู่ระบบ Google…');return;}
   const saved=readActiveAuth();
-  if(!saved){if(hasRememberedLogin())setStatus('กลับมาออนไลน์แล้ว · กดเข้าสู่ระบบ Google เพื่อเชื่อมต่ออีกครั้ง');return;}
+  if(!saved){if(hasRememberedLogin())setStatus('กลับมาออนไลน์แล้ว · แตะเชื่อมต่อ Google เดิมเพื่อรับสิทธิ์ใหม่');return;}
   ui.gate.hidden=true;ui.login.disabled=ui.gateLogin.disabled=true;
   setStatus('กลับมาออนไลน์แล้ว · กำลังกู้คืนเซสชัน Google…');
   const id=++state.authId;
