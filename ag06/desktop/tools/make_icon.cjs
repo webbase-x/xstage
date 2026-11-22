@@ -1,5 +1,5 @@
 "use strict";
-// Generate a deterministic X-Stage AG06 icon with only Node.js built-ins.
+// Generate a deterministic X-Stage Audio icon with only Node.js built-ins.
 const fs=require("node:fs");
 const path=require("node:path");
 const zlib=require("node:zlib");
