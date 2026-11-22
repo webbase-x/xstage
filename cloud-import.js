@@ -124,7 +124,7 @@ class Drive {
     const rows=[],seenPageTokens=new Set();let next='';
     do{
       this.assertLive();
-      const params=new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,size,md5Checksum,ownedByMe,parents)',
+      const params=new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,size,md5Checksum,createdTime,modifiedTime,ownedByMe,parents)',
         pageSize:'1000'});
       if(next)params.set('pageToken',next);
       const result=await (await this.fetch(API+'?'+params)).json();
@@ -379,6 +379,15 @@ class Drive {
     if(String(meta.md5Checksum||'').toLowerCase()!==hash||Number(meta.size)!==blob.size)
       fail('อัปเดต current.json แล้ว Google Drive ยืนยัน MD5 ไม่ตรง');
   }
+  async trashFile(id){
+    const response=await this.fetch(API+'/'+driveId(id)+'?fields=id,trashed',{
+      method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({trashed:true})
+    });
+    const updated=await response.json();
+    if(updated.id!==id||updated.trashed!==true)
+      fail('ปลดล็อกการนำเข้าบน Google Drive ไม่สำเร็จ');
+  }
   async moveToFolder(id,from,to,name){
     const url=API+'/'+driveId(id)+'?addParents='+encodeURIComponent(driveId(to))+
       '&removeParents='+encodeURIComponent(driveId(from))+
@@ -483,11 +492,60 @@ async function loadCatalog(drive,root){
 }
 // Publish the catalog as DB/songs.sqlite3 without current.json. All media,
 // legacy delta IDs and older snapshots remain recoverable in BACKUP.
+// Advisory cross-computer publisher lease. All browser devices use the same
+// Drive CACHE directory and OAuth app; no lock or pointer is stored inside DB.
+// Server-side version revalidation remains mandatory: Drive does not provide
+// a documented transaction for the move/rename pair.
+async function acquireCatalogLease(drive,cacheRoot,check,status){
+  const id=Array.from(scope.crypto.getRandomValues(new Uint8Array(12)))
+    .map(b=>b.toString(16).padStart(2,'0')).join('');
+  const name='.xstage-import-lock-'+id+'.json';
+  const blob=encode({format:'xstage-catalog-import-lock-v1',
+    token:id,createdAt:new Date().toISOString()});
+  const hash=await core.hashBlob(blob,check);
+  const mine=await drive.upload(cacheRoot,blob,name,'application/json',hash);
+  let released=false;
+  const listLocks=async()=>{
+    check();
+    const found=await drive.list("'"+driveId(cacheRoot)+"' in parents and trashed=false");
+    const now=Date.now();
+    return found.filter(x=>x.name?.startsWith('.xstage-import-lock-')&&
+      (!x.createdTime||now-Date.parse(x.createdTime)<5*60*1000)).sort((a,b)=>{
+        const byTime=String(a.createdTime||'').localeCompare(String(b.createdTime||''));
+        return byTime||String(a.id).localeCompare(String(b.id));
+      });
+  };
+  const assertOwner=async()=>{
+    const first=(await listLocks())[0];
+    if(!first||first.id!==mine.id)
+      fail('อีกเครื่องกำลังเผยแพร่ฐานเพลง · จะตรวจฐานล่าสุดก่อนทำต่อ');
+  };
+  const release=async()=>{
+    if(released)return;released=true;
+    try{await drive.trashFile(mine.id);}
+    catch(error){console.warn('Drive lock release deferred:',error.message);}
+  };
+  try{
+    // Give competing Drive clients a chance to publish their lock entries
+    // before electing a writer. Stale locks expire after five minutes.
+    await sleep(650);
+    for(let attempt=0;attempt<120;attempt++){
+      check();
+      if((await listLocks())[0]?.id===mine.id)
+        return {assertOwner,release};
+      status?.('อีกเครื่องกำลังอัปเดต songs.sqlite3 · รอคิวเผยแพร่');
+      await sleep(1000);
+    }
+    fail('มีเครื่องอื่นใช้งานฐานเพลงนานเกินไป · โปรดลองใหม่');
+  }catch(error){await release();throw error;}
+}
 async function publishSingleCatalog({drive,rootId,pointerFile,pointer,rows,check,status}){
   check();
   const dbRoot=await drive.ensurePath(rootId,['DB']);
   const cacheRoot=await drive.ensurePath(rootId,['CACHE']);
   const backupRoot=await drive.ensurePath(rootId,['BACKUP']);
+  const lease=await acquireCatalogLease(drive,cacheRoot,check,status);
+  try{
   const codec=scope.XStageDriveSQLite;
   if(!codec)fail('ไม่พบตัวอ่าน SQLite3 บนเว็บ');
   const generation=Array.from(scope.crypto.getRandomValues(new Uint8Array(12)))
@@ -535,6 +593,7 @@ async function publishSingleCatalog({drive,rootId,pointerFile,pointer,rows,check
   if(uploaded.kind!=='snapshot'||uploaded.generation!==generation||
      uploaded.songs.length!==rows.size)
     fail('ฐาน SQLite3 บน Drive ตรวจสอบไม่ผ่าน · ยังไม่แทนที่ฐานเดิม');
+  await lease.assertOwner();
   await verifySource();
   // File IDs of the old v5 snapshots/deltas remain valid after moving them.
   // The old pointer stays available until the new DB is verified in place.
@@ -587,6 +646,7 @@ async function publishSingleCatalog({drive,rootId,pointerFile,pointer,rows,check
     deltaFileIds:[],songCount:rows.size};
   status?.('เผยแพร่ DB/songs.sqlite3 โดยตรง · '+rows.size.toLocaleString('th-TH')+' เพลง');
   return {pointerFile:null,pointer:next};
+  }finally{await lease.release();}
 }
 // Global raw-MIDI content identity. Package filenames, lyrics, source codes and
 // folders cannot create a second song when the enclosed MIDI bytes match.
