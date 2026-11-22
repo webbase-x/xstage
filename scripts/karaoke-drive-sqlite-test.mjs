@@ -19,12 +19,12 @@ assert.ok(importer.includes("x.name==='current.json'||x.name==='.xstage-songstud
 assert.ok(!importer.includes("drive.upload(dbRoot,marker,'current.json'"));
 assert.ok(app.includes("name='songs.sqlite3' and trashed=false"));
 assert.ok(app.includes("function directCatalogPointer(file)"));
-assert.ok(app.includes("activeDriveCatalog(state.catalogDbDirId,token,state.catalogPointerId)"));
+assert.ok(app.includes("activeDriveCatalog(state.catalogDbDirId,token)"));
 assert.ok(importer.includes("moveToFolder"));
 assert.ok(!importer.includes("catalog-base-'+generation+'.json"));
-assert.ok(app.includes("![5,6].includes(pointer?.layoutVersion)"));
+assert.ok(app.includes("pointer?.layoutVersion!==6"));
 assert.ok(importer.includes("![5,6].includes(pointer.layoutVersion)"));
-assert.ok(app.includes("pointer.layoutVersion===6&&deltaIds.length"));
+assert.ok(app.includes("pointer?.directFile!==true"));
 
 const SQL=await initSqlJs();
 const scope={initSqlJs:()=>Promise.resolve(SQL),Uint8Array,ArrayBuffer,Blob,
