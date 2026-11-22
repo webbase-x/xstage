@@ -528,6 +528,45 @@ try
         if (scheduler.WaitingCount != 0)
             throw new Exception("Canceled queue entries must be removed promptly.");
     }
+    // Invalid and pre-canceled requests must never enter the scheduler or
+    // consume capacity. This protects recovery paths that retry canceled jobs.
+    var admission = new TransferSlotQueue(1, 1);
+    using (var preCanceled = new CancellationTokenSource())
+    {
+        preCanceled.Cancel();
+        try
+        {
+            using var unexpected = await admission.EnterAsync(
+                "already-stopped", "safe.test", 1, preCanceled.Token);
+            throw new Exception("A pre-canceled transfer acquired a slot.");
+        }
+        catch (OperationCanceledException) { }
+    }
+    try
+    {
+        using var unexpected = await admission.EnterAsync(
+            "invalid-priority", "safe.test", 3, CancellationToken.None);
+        throw new Exception("Invalid priority entered the scheduler.");
+    }
+    catch (ArgumentOutOfRangeException) { }
+    try
+    {
+        using var unexpected = await admission.EnterAsync(
+            "invalid-host", "  ", 1, CancellationToken.None);
+        throw new Exception("A blank host entered the scheduler.");
+    }
+    catch (ArgumentException) { }
+    if (admission.ActiveCount != 0 || admission.WaitingCount != 0)
+        throw new Exception("Rejected scheduler admissions leaked slots.");
+    using (var accepted = await admission.EnterAsync(
+        "valid-after-rejections", "safe.test", 1, CancellationToken.None))
+    {
+        if (admission.ActiveCount != 1 || admission.WaitingCount != 0)
+            throw new Exception("Rejected admissions prevented a valid transfer.");
+    }
+    if (admission.ActiveCount != 0)
+        throw new Exception("Scheduler did not release the post-rejection lease.");
+
     // Reducing limits must not revoke active leases or dispatch queued work
     // until capacity is genuinely available. Increasing limits should wake it.
     var resizing = new TransferSlotQueue(2, 2);
