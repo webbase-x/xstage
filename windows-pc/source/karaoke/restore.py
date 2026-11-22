@@ -72,6 +72,13 @@ def validate_backup(folder):
 
 
 def copy_database(source,target):
+    # Recheck immediately before opening SQLite: the selected backup can be
+    # modified after validate_backup() but before staging reaches this file.
+    source = Path(source)
+    if (source.is_symlink() or getattr(source, 'is_junction', lambda: False)()
+            or not source.is_file()):
+        raise ValueError('ไฟล์ฐานข้อมูลสำรองไม่ปลอดภัย: ' + source.name)
+    validate_sqlite_sidecars(source.parent, (source.name,))
     with closing(readonly(source)) as src, closing(sqlite3.connect(target)) as dst:
         src.backup(dst)
 
