@@ -11,6 +11,14 @@ Independent X-Stage .NET 8 Windows download manager with original UI, icons and 
 - Explicitly pausing an offline job cancels automatic recovery. Network-link availability is not the same as internet or site availability, so server errors still rely on the bounded HTTP retry policy.
 - Windows Sleep/resume and offline/online transitions still require physical-device validation. Named queues and priority filters are available; automatic start/stop schedules are not yet implemented.
 
+## Live Background Recorder — development, not yet released
+
+- In **สื่อ → บันทึกไลฟ์สด**, check **เฝ้ารอไลฟ์อัตโนมัติ** (on by default), confirm the user's recording rights, choose a direct public HLS/DASH or supported public-platform live URL and a polling interval of **15/30/60 seconds**. The application checks HLS/DASH manifest state or yt-dlp `live_status` metadata only; it **does not open a browser/player or play a video**. A VOD playlist with `#EXT-X-ENDLIST`, a master playlist alone and an upcoming platform video are not treated as live.
+- Once on-air status is detected, the existing Live Capture engine starts recording one session automatically. On stream end or Stop it preserves the original MKV and splits the recording into speech-pause-aligned MP4 clips after capture. This is a **one-session watcher**, not a perpetual channel recorder.
+- Minimize the Live Capture window while waiting/recording to keep it running in the **Windows system tray**. Double-click the icon to restore, or use its menu to stop/cancel. The Windows app and PC must remain running; **closing the app, logging out, sleep/shutdown or switching off the PC is not unattended cloud recording**.
+- The watcher does not use login cookies, protected playback, DRM or private APIs. Some platforms/channel URLs do not expose usable public live status or muxed audio/video streams, so they may remain in the waiting state or report a limitation. Direct manifests may change or expire. Network faults are reported and retried at the selected bounded cadence; explicit access-denied errors stop monitoring.
+- Do not label this version published until a new Windows CI, verified GitHub Release Setup EXE and matching SHA-256 manifest all pass.
+
 ## Live Capture — development, not yet released
 
 - Open **สื่อ → บันทึกไลฟ์สด · ตัดคลิปตามช่วงหยุดพูด** or the **บันทึกไลฟ์สด** command-deck button. This opens a separate, non-modal window and leaves normal downloads and their SQLite history unchanged.
