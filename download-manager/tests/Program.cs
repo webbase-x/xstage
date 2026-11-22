@@ -641,6 +641,48 @@ try
     }
     catch (ArgumentOutOfRangeException) { }
 
+    // Boundary matrix for adaptive segment sizing: a measured rate must
+    // never increase user-selected parallelism or repartition saved chunks.
+    // Check exact threshold transitions rather than just representative speeds.
+    var mib = 1024L * 1024;
+    foreach (var (bytes, expected) in new (long Bytes, int Parts)[]
+    {
+        (2 * mib - 1, 1), (2 * mib, 2),
+        (8 * mib - 1, 2), (8 * mib, 4),
+        (32 * mib - 1, 4), (32 * mib, 8),
+        (128 * mib - 1, 8), (128 * mib, 16),
+        (512 * mib - 1, 16), (512 * mib, 32)
+    })
+    {
+        var actual = AdaptiveSegmentPlanner.Recommend(32, bytes,
+            64 * mib, false);
+        if (actual != expected)
+            throw new Exception($"Adaptive size boundary {bytes}: expected {expected}, got {actual}.");
+        if (AdaptiveSegmentPlanner.Recommend(8, bytes, 64 * mib, false) >
+            8 || AdaptiveSegmentPlanner.Recommend(32, bytes, 64 * mib, true) != 32)
+            throw new Exception("Adaptive size threshold overrode user or checkpoint geometry.");
+    }
+    foreach (var (speed, expected) in new (double Speed, int Parts)[]
+    {
+        (256 * 1024 - 1, 1), (256 * 1024, 2),
+        (mib - 1, 2), (mib, 4),
+        (4 * mib - 1, 4), (4 * mib, 8),
+        (12 * mib - 1, 8), (12 * mib, 16),
+        (32 * mib - 1, 16), (32 * mib, 32)
+    })
+    {
+        var actual = AdaptiveSegmentPlanner.Recommend(32, 1L << 40,
+            speed, false);
+        if (actual != expected)
+            throw new Exception($"Adaptive speed boundary {speed}: expected {expected}, got {actual}.");
+    }
+    foreach (var invalidSpeed in new[] { double.NaN,
+        double.PositiveInfinity, double.NegativeInfinity, -1d, 0d })
+    {
+        if (AdaptiveSegmentPlanner.Recommend(8, 1L << 40, invalidSpeed, false) != 8)
+            throw new Exception("Unusable throughput telemetry must preserve user Range geometry.");
+    }
+
     // Very large files previously overflowed long when computing size * index.
     // Verify exact coverage and continuity for 1, 8 and 32 segments.
     foreach (var size in new long[] { 1, 256 * 1024, 1L << 40, long.MaxValue })
