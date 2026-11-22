@@ -119,6 +119,8 @@ public sealed class LiveStreamCapture
                 return new LiveCaptureResult(session, RecordingPath,
                     Array.Empty<string>(), Status);
             }
+            var sourceMedia = await MediaIntegrity.VerifyAsync(
+                RecordingPath, ffprobe, audioOnly: true, cancellationToken);
             var silences = await DetectSilencesAsync(ffmpeg, RecordingPath, cancellationToken);
             var cuts = LiveSpeechSegmentPlanner.Plan(duration, clipMinutes * 60, silences);
             Status = cuts.Count == 1
@@ -157,6 +159,11 @@ public sealed class LiveStreamCapture
                     !File.Exists(partial) || !MediaIntegrity.HasCompleteMp4Boxes(partial))
                     throw new IOException("สร้างหรือยืนยันคลิป MP4 ไม่สำเร็จ: " + filename +
                         " · ไฟล์ต้นฉบับยังอยู่ และไฟล์ไม่สมบูรณ์จะไม่ถูกประกาศว่าเสร็จ");
+                var verifiedClip = await MediaIntegrity.VerifyAsync(
+                    partial, ffprobe, audioOnly: true, cancellationToken);
+                if (verifiedClip.AudioCodec != "aac" ||
+                    (sourceMedia.HasVideo && verifiedClip.VideoCodec != "h264"))
+                    throw new IOException("คลิปที่แปลงไม่ครบทั้งภาพ/เสียง · เก็บต้นฉบับไว้แล้ว");
                 File.Move(partial, destination); // no overwrite
                 outputs.Add(destination);
             }
