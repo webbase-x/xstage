@@ -351,19 +351,9 @@
         await window.XStageClearCache();
       }
       else if(action==='logout')ui.logout?.click();
-      else if(action==='eq-preset'){
-        if(window.XStageNativeAudioBypass?.())throw Error('Android APK ใช้เสียงตรง · EQ ปิดถาวร');
-        const next=String(value||'flat');
-        if(typeof window.XStageEnableEqPreset!=='function')throw Error('EQ ยังไม่พร้อม');
-        await window.XStageEnableEqPreset(next);
-      }else if(action==='eq-reset'){
-        if(window.XStageNativeAudioBypass?.())throw Error('Android APK ใช้เสียงตรง · EQ ปิดถาวร');
-        if(typeof window.XStageResetEq!=='function')throw Error('EQ ยังไม่พร้อม');
-        await window.XStageResetEq();
-      }else if(action==='eq-bypass'){
-        if(window.XStageNativeAudioBypass?.())throw Error('Android APK ใช้เสียงตรง · EQ ปิดถาวร');
-        if(typeof window.XStageToggleEqBypass!=='function')throw Error('EQ ยังไม่พร้อม');
-        await window.XStageToggleEqBypass();
+      else if(['eq-preset','eq-reset','eq-bypass'].includes(action)){
+        // These controls must not report success for a visual-only meter.
+        throw Error('เสียงลำโพงไม่ผ่าน EQ · ระบบแสดงระดับเสียงเท่านั้น');
       }
       else if(action==='export-queue'){
         adminResult(entry,action,true,'ส่งออกคิวไปยังมือถือแล้ว',state.queue.slice(0,150).map(songSummary));return;
