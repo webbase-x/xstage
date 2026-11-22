@@ -44,6 +44,23 @@ jobs:
           python-version: "3.13"
       - name: Compile standalone app
         run: python -m compileall -q songstudio-plus
+      - name: Verify v0.1.40 updater and installer agree
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, "songstudio-plus")
+          import pro_updater
+          version=pro_updater.VERSION
+          installer=Path("songstudio-plus/installer/XStageSongStudioPro.iss").read_text(encoding="utf-8")
+          workflow=Path(".github/workflows/test-songstudio-pro.yml").read_text(encoding="utf-8")
+          assert version=="0.1.40"
+          assert f'#define MyAppVersion "{version}"' in installer
+          assert f"X-Stage-Song-Studio-Pro-v{version}-win-x64-Setup.exe" in workflow
+          source=Path("songstudio-plus/pro_updater.py").read_text(encoding="utf-8")
+          assert "remainingPids" in source and "$n -lt 60" in source
+          print("PASS: updater, installer, CI version and process-exit safeguards")
+          PY
       - name: Test SHA-256, NCN, versioned lyrics, undo and embedded file
         run: python -m unittest discover -s songstudio-plus/tests -p "test_*.py" -v
       - name: Ensure manual lyric editor and build scope controls are wired
