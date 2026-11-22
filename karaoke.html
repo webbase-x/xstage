@@ -466,7 +466,7 @@
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
 <script>
-window.XSTAGE_RELEASE={version:'1.0.140',build:1140};
+window.XSTAGE_RELEASE={version:'1.0.141',build:1141};
 document.addEventListener('DOMContentLoaded',function(){
   const label=document.getElementById('karaoke-release-label');
   if(!label)return;
@@ -480,9 +480,9 @@ document.addEventListener('DOMContentLoaded',function(){
   }catch(error){/* Native bridge may be unavailable in normal web browsers. */}
 });
 </script>
-<script src="config.js?v=1140"></script>
+<script src="config.js?v=1141"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="drive-sqlite.js?v=1170-single-sqlite" defer></script>
+  <script src="drive-sqlite.js?v=1176-catalog-index" defer></script>
   <script src="cloud-import-core.js?v=1137" defer></script>
   <script src="xsk-browser.js?v=1137" defer></script>
   <script src="xmid-browser.js?v=1137" defer></script>
@@ -492,7 +492,7 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="midi-pro-engine.js?v=1137-playback-restore-1168-screen-wake" defer></script>
   <script src="video-metadata-editor.js?v=1138-verified-video-selection" defer></script>
   <script src="video-transcode.js?v=1137" defer></script>
-  <script src="cloud-import.js?v=1175-mid-bytes-and-md5" defer></script>
+  <script src="cloud-import.js?v=1176-fast-import" defer></script>
   <script src="tv-refresh.js?v=1137" defer></script>
   <script src="app.js?v=1174-auto-migrate-mid" defer></script><script src="pc-extensions.js?v=1137-unfiltered-output-visual-only-1166-midi-eq-canvas" defer></script>
   <script src="midi-keyboard-ui.js?v=1137-clean-title-1157-top-song-key-single-menu" defer></script>
