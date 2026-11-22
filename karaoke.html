@@ -24,7 +24,7 @@
   </script>
   <link rel="stylesheet" href="style.css?v=1153-concert-lights">
   <link rel="stylesheet" href="xstage-ux.css?v=1136-search-and-live-lights">
-  <link rel="stylesheet" href="cloud-import.css?v=1137-individual-select">
+  <link rel="stylesheet" href="cloud-import.css?v=1138-visible-import-cta">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
   logo.onload=function(){document.documentElement.classList.add('xstage-uploaded-logo-ready')};
@@ -361,6 +361,7 @@
         <div><span class="cloud-import-label">PRIVATE GOOGLE DRIVE</span><h2 id="cloud-import-title">นำเข้าเพลงและ SoundFont</h2></div>
         <button type="button" id="cloud-import-close" aria-label="ปิดหน้าต่างนำเข้า">✕</button>
       </header>
+      <div class="cloud-import-body" id="cloud-import-body">
       <p class="cloud-import-lead">เลือกโฟลเดอร์เพลงบนเครื่อง ตรวจและแก้ข้อมูลวิดีโอ ก่อนส่งเข้า XStageKaraoke พร้อมเก็บไฟล์ต้นฉบับส่วนตัว · ไม่ลบหรือแก้ไฟล์บนเครื่อง</p>
       <p class="cloud-import-note" id="cloud-import-ios-help">iPhone/iPad: Safari 18.4 ขึ้นไปสามารถเลือกโฟลเดอร์ในแอป Files ได้โดยแตะ “เลือกโฟลเดอร์เพลง” หากเบราว์เซอร์รุ่นเก่าแสดงเฉพาะไฟล์รายตัว อาจไม่ส่งโครงสร้างโฟลเดอร์ครบ ระบบจะตรวจรายการก่อนนำเข้า และจะไม่อัปโหลดชุดเพลงที่องค์ประกอบไม่ครบ</p>
       <div class="cloud-import-actions">
@@ -422,20 +423,24 @@
       </section>
       <p class="cloud-import-note">รองรับ XMID จาก Song Studio Pro และ XSK2 จาก Song Studio PC โดยตรง ไม่ต้องใช้ไฟล์กุญแจหรือรหัสผ่าน · XSK1 รุ่นเก่าต้องสร้างใหม่เป็น XSK2</p>
       <label class="cloud-import-consent"><input type="checkbox" id="cloud-import-allow-create"> หากไม่มี XStageKaraoke ที่บัญชีนี้เข้าถึงได้ ยืนยันว่าเป็นคลังใหม่ว่างและอนุญาตให้สร้าง (ไม่ลบคลังเดิม)</label>
-      <div class="cloud-import-progress">
-        <progress id="cloud-import-progress" value="0" max="100"></progress>
-        <span id="cloud-import-progress-label">0%</span>
-      </div>
-      <p id="cloud-import-status" class="cloud-import-status" role="status" aria-live="polite">ยังไม่มีงานนำเข้า</p>
       <p id="cloud-import-detail" class="cloud-import-detail">รองรับ XMID จาก Song Studio Pro, XSK2, MP3/M4A/WAV/AAC/FLAC/OGG พร้อม LRC/JSON, MIDI/KAR, NCN (MID + LYR + CUR), SoundFont SF2/SF3 และ Video Karaoke MP4/WebM (มีหรือไม่มี LRC/JSON หากเนื้อร้องฝังในภาพ) · AVI/MPEG/MPG/DAT/VOB/MKV/MOV/WMV/FLV เก็บไฟล์ต้นฉบับไว้ใน Drive และสร้าง MP4 สำหรับเว็บเมื่อเบราว์เซอร์เล่นต้นฉบับไม่ได้ (สูงสุด 192 MB/ไฟล์) · ใช้ Song Studio PC สำหรับวิดีโอขนาดใหญ่ · รูปแบบที่เล่นต้นฉบับโดยตรงได้ขึ้นกับ Codec/เบราว์เซอร์ · วิดีโอไม่มีเนื้อร้องต้องใส่ LRC พร้อมเวลาจริง</p>
-      <footer class="cloud-import-footer">
-        <button id="cloud-import-start" type="button" disabled>นำเข้ารายการที่เลือก</button>
-        <button id="cloud-import-pause" type="button" disabled>หยุดชั่วคราว</button>
-        <button id="cloud-import-resume" type="button" disabled>ทำต่อ</button>
-        <button id="cloud-import-cancel" type="button" disabled hidden>ยกเลิก (เก็บจุดทำต่อ)</button>
-        <button id="cloud-import-done" type="button">ปิดหน้าต่าง</button>
+      <small class="cloud-import-safety-note">ปิดแท็บหรือเครื่องระหว่างงานจะหยุดอัปโหลดเอง เมื่อเปิดใหม่ให้กดทำต่อหรือเลือกโฟลเดอร์เดิม · ระบบไม่เก็บรหัสผ่านหรือโทเค็น Google</small>
+      </div>
+      <footer class="cloud-import-footer" aria-label="คำสั่งนำเข้าเพลง">
+        <div class="cloud-import-progress">
+          <progress id="cloud-import-progress" value="0" max="100"></progress>
+          <span id="cloud-import-progress-label">0%</span>
+        </div>
+        <p id="cloud-import-status" class="cloud-import-status" role="status" aria-live="polite">ยังไม่มีงานนำเข้า</p>
+        <p id="cloud-import-action-hint" class="cloud-import-action-hint">เลือกโฟลเดอร์เพลงก่อนเริ่ม · ระบบยังไม่มีรายการพร้อมนำเข้า</p>
+        <div class="cloud-import-footer-buttons">
+          <button id="cloud-import-start" type="button" disabled>เริ่มตรวจ MD5 และนำเข้า (0)</button>
+          <button id="cloud-import-pause" type="button" disabled hidden>หยุดชั่วคราว</button>
+          <button id="cloud-import-resume" type="button" disabled hidden>ทำต่อ</button>
+          <button id="cloud-import-cancel" type="button" disabled hidden>ยกเลิก (เก็บจุดทำต่อ)</button>
+          <button id="cloud-import-done" type="button">ปิดหน้าต่าง</button>
+        </div>
       </footer>
-      <small>ปิดแท็บหรือเครื่องระหว่างงานจะหยุดอัปโหลดเอง เมื่อเปิดใหม่ให้กดทำต่อหรือเลือกโฟลเดอร์เดิม · ระบบไม่เก็บรหัสผ่านหรือโทเค็น Google</small>
     </div>
   </dialog>
 
@@ -468,9 +473,9 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="ios-midi-audio.js?v=1151-queue-handoff" defer></script>
   <script src="browser-midi.js?v=1134-fast-gm-start" defer></script>
   <script src="midi-pro-engine.js?v=1134-playback-restore" defer></script>
-  <script src="video-metadata-editor.js?v=1134" defer></script>
+  <script src="video-metadata-editor.js?v=1138-verified-video-selection" defer></script>
   <script src="video-transcode.js?v=1134" defer></script>
-  <script src="cloud-import.js?v=1135-retired-root-folder-picker-fallback" defer></script>
+  <script src="cloud-import.js?v=1138-visible-import-cta" defer></script>
   <script src="tv-refresh.js?v=1134" defer></script>
   <script src="app.js?v=1136-stage-lighting" defer></script><script src="pc-extensions.js?v=1134" defer></script>
   <script src="midi-keyboard-ui.js?v=1134-clean-title-1157-top-song-key-single-menu" defer></script>
