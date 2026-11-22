@@ -224,6 +224,12 @@ public sealed class LiveStreamCaptureForm : Form
         _stop.Enabled = false;
         _stop.Text = "กำลังหยุด...";
         _capture.RequestStop();
+        if (_capture.Status.Contains("เตรียมแหล่งสตรีม", StringComparison.Ordinal))
+        {
+            // Cancel a possibly slow public-platform extractor before FFmpeg
+            // has started. A stopped recording still gets a graceful "q".
+            _processingCancellation?.Cancel();
+        }
         _state.Text = "กำลังปิดไฟล์ต้นฉบับอย่างปลอดภัย...";
     }
 
