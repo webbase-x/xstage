@@ -1352,15 +1352,66 @@ class Importer {
         if(failure)throw failure.reason;
         return tasks.map(task=>task.value);
       };
+      let normalizePending=!!(olderDuplicates||olderHashes);
       const publish=async()=>{
-        if(!revisions.length&&!olderDuplicates&&!olderHashes&&(!pointer||pointer.directFile))return;
-        ({pointerFile,pointer}=await publishSingleCatalog({
-          drive,rootId,pointerFile,pointer,rows,check:()=>this.check(),
-          status:message=>this.status(message)
-        }));
-        revisions=[];
-        await this.save({status:'publishing',done:finished,total:work.length,
-          generation:pointer.generation,songCount:rows.size});
+        if(!revisions.length&&!normalizePending&&(!pointer||pointer.directFile))return;
+        for(let attempt=0;attempt<3;attempt++){
+          try{
+            ({pointerFile,pointer}=await publishSingleCatalog({
+              drive,rootId,pointerFile,pointer,rows,check:()=>this.check(),
+              status:message=>this.status(message)
+            }));
+            revisions=[];normalizePending=false;
+            await this.save({status:'publishing',done:finished,total:work.length,
+              generation:pointer.generation,songCount:rows.size});
+            return;
+          }catch(error){
+            if(attempt>=2||!/จากอีกอุปกรณ์|มีฐาน songs.sqlite3 ใหม่แล้ว|ฐานเดิม current.json เปลี่ยน/.test(
+              String(error.message||'')))throw error;
+            // Another computer published before ours. Re-read the ONE current
+            // DB, rebase our newly uploaded song references, and retry. Never
+            // replace the other writer's songs with our stale snapshot.
+            this.status('มีการนำเข้าเพลงจากเครื่องอื่น · รวมข้อมูลล่าสุดแล้วลองใหม่');
+            await sleep(200*(attempt+1));
+            drive.children.clear();drive.childNames.clear();
+            const fresh=await loadCatalog(drive,rootId);
+            const indexed=await buildMidiIndex(fresh.rows,drive,()=>this.check());
+            const pending=[...revisions];
+            const newCodes=new Map();
+            for(const row of fresh.rows.values()){
+              const code=String(row.code||'').toLowerCase();
+              if(!newCodes.has(code))newCodes.set(code,[]);
+              newCodes.get(code).push(row);
+            }
+            for(const row of pending){
+              const midiHash=String(row.midiHash||row.midi?.md5Checksum||'').toLowerCase();
+              if(midiHash&&indexed.hashes.has(midiHash)){
+                this.stats.duplicates++;continue;
+              }
+              if(fresh.rows.has(row.webSongId)){
+                this.stats.duplicates++;continue;
+              }
+              const code=String(row.code||'').toLowerCase();
+              if(newCodes.get(code)?.length){
+                if(!midiHash){this.stats.conflicts++;continue;}
+                row.sourceCode ||= row.code;
+                row.code=distinctImportCode(row.sourceCode,midiHash,newCodes);
+              }
+              fresh.rows.set(row.webSongId,row);
+              if(midiHash)indexed.hashes.set(midiHash,row);
+              const alias=String(row.code||'').toLowerCase();
+              if(!newCodes.has(alias))newCodes.set(alias,[]);
+              newCodes.get(alias).push(row);
+            }
+            rows=fresh.rows;pointer=fresh.pointer;pointerFile=fresh.pointerFile;
+            revisions=pending.filter(row=>rows.get(row.webSongId)===row);
+            normalizePending=!!(indexed.backfilled||indexed.duplicates);
+            byPair.clear();byCode.clear();byMidi.clear();
+            for(const row of rows.values())addMaps(row);
+            for(const [hash,row] of indexed.hashes)byMidi.set(hash,row);
+            if(!revisions.length&&!normalizePending&&pointer?.directFile)return;
+          }
+        }
       };
       for(const originalItem of work){
         this.check();
