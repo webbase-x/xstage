@@ -169,6 +169,16 @@ CREATE TABLE IF NOT EXISTS xstage_exports(
  song_id TEXT PRIMARY KEY REFERENCES xstage_songs(id), version_id TEXT NOT NULL
  REFERENCES xstage_lyric_versions(id), output_path TEXT NOT NULL,
  sha256 TEXT NOT NULL, created_at TEXT NOT NULL);
+-- Persistent content identity for created XMIDs; protects across runs.
+CREATE TABLE IF NOT EXISTS xstage_midi_export_registry(
+ midi_sha256 TEXT PRIMARY KEY,
+ song_id TEXT NOT NULL REFERENCES xstage_songs(id),
+ version_id TEXT NOT NULL REFERENCES xstage_lyric_versions(id),
+ output_path TEXT NOT NULL,
+ output_sha256 TEXT NOT NULL,
+ created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS xstage_midi_registry_song
+ ON xstage_midi_export_registry(song_id);
 """
 def _quality(status):
     # Complete, independently timed lyrics outrank incomplete CUR fragments.
@@ -1578,6 +1588,67 @@ def destination_for(workspace,song,ext):
         return root_folder(workspace)/"VDO"/("X"+kind.upper())/bucket/(name+".x"+kind)
     return root_folder(workspace)/"AUDIO"/("X"+kind.upper())/bucket/(name+".x"+kind)
 
+def _verified_midi_export(workspace,row,midi_sha256):
+    """Only reuse a registered, workspace-contained and SHA-256-verified XMID."""
+    if not row:
+        return None
+    root=root_folder(workspace).resolve()
+    rel=Path(str(row["output_path"]))
+    if rel.is_absolute() or ".." in rel.parts:
+        return None
+    output=(root/rel).resolve()
+    if not output.is_relative_to(root) or not output.is_file():
+        return None
+    try:
+        info=inspect_xfile(output,full_verify=False)
+        if info["media_sha256"]!=midi_sha256 or digest(output)!=row["output_sha256"]:
+            return None
+    except (OSError,ValueError):
+        return None
+    return output
+
+
+def _midi_export_for_build(db,workspace,midi_sha256,song_id,version_id):
+    """Check durable MIDI SHA ledger and adopt verified legacy X exports."""
+    row=db.execute("""SELECT * FROM xstage_midi_export_registry
+        WHERE midi_sha256=?""",(midi_sha256,)).fetchone()
+    if row:
+        path=_verified_midi_export(workspace,row,midi_sha256)
+        if path:
+            if row["song_id"]!=song_id or row["version_id"]==version_id:
+                return {"path":str(path),"skipped":True,
+                        "duplicate_mid":row["song_id"]!=song_id,
+                        "sha256":row["output_sha256"]}
+            # This canonical song has revised lyrics: rebuild same output.
+            return None
+        db.execute("DELETE FROM xstage_midi_export_registry WHERE midi_sha256=?",
+                   (midi_sha256,))
+    # Existing 0.1.37 exports must not be rebuilt merely because the new
+    # MID registry did not exist in that version.
+    old=db.execute("""SELECT e.song_id,e.version_id,e.output_path,
+        e.sha256 AS output_sha256 FROM xstage_exports e
+        JOIN xstage_songs s ON s.id=e.song_id
+        JOIN xstage_media m ON m.id=s.media_id
+        WHERE m.sha256=? AND lower(m.extension) IN ('.mid','.midi','.kar')
+        ORDER BY s.code LIMIT 1""",(midi_sha256,)).fetchone()
+    path=_verified_midi_export(workspace,old,midi_sha256)
+    if path:
+        db.execute("""INSERT INTO xstage_midi_export_registry
+          (midi_sha256,song_id,version_id,output_path,output_sha256,created_at)
+          VALUES (?,?,?,?,?,?)
+          ON CONFLICT(midi_sha256) DO UPDATE SET
+          song_id=excluded.song_id,version_id=excluded.version_id,
+          output_path=excluded.output_path,
+          output_sha256=excluded.output_sha256,created_at=excluded.created_at""",
+          (midi_sha256,old["song_id"],old["version_id"],old["output_path"],
+           old["output_sha256"],now()))
+        if old["song_id"]!=song_id or old["version_id"]==version_id:
+            return {"path":str(path),"skipped":True,
+                    "duplicate_mid":old["song_id"]!=song_id,
+                    "sha256":old["output_sha256"]}
+    return None
+
+
 def build_song(workspace,song_id):
     init(workspace)
     with WRITE_LOCK,connect(workspace) as db:
@@ -1585,8 +1656,14 @@ def build_song(workspace,song_id):
           FROM xstage_songs s JOIN xstage_media m ON m.id=s.media_id WHERE s.id=?""",
           (song_id,)).fetchone()
         if not pair: raise ValueError("ไม่พบเพลง")
+        is_midi=pair["extension"].lower() in MIDI_EXT
         version=db.execute("""SELECT * FROM xstage_lyric_versions
           WHERE song_id=? AND is_current=1""",(song_id,)).fetchone()
+        if is_midi:
+            existing=_midi_export_for_build(
+                db,workspace,pair["sha256"],song_id,version["id"] if version else None)
+            if existing:
+                return existing
         if not version: raise ValueError("เพลงนี้ยังไม่มีเนื้อร้องพร้อมเวลา · ยังสร้าง Karaoke ไม่ได้")
         if version["timing_status"]=="incomplete":
             raise ValueError("เพลงนี้มีเนื้อร้องบางส่วนแต่ CUR ยังไม่ครบ · ตรวจสอบเวลาปาดสีก่อนสร้าง XMID")
@@ -1637,13 +1714,22 @@ def build_song(workspace,song_id):
                 raise ValueError("ปลายทางมีไฟล์ที่ไม่ตรงกับทะเบียน · ไม่เขียนทับ")
             os.replace(stage,dest)
             output_sha=output_digest.hexdigest()
+            output_rel=str(dest.relative_to(root_folder(workspace)))
             db.execute("""INSERT INTO xstage_exports
               (song_id,version_id,output_path,sha256,created_at) VALUES (?,?,?,?,?)
               ON CONFLICT(song_id) DO UPDATE SET version_id=excluded.version_id,
               output_path=excluded.output_path,sha256=excluded.sha256,
               created_at=excluded.created_at""",
-              (song_id,version["id"],str(dest.relative_to(root_folder(workspace))),
-               output_sha,now()))
+              (song_id,version["id"],output_rel,output_sha,now()))
+            if is_midi:
+                db.execute("""INSERT INTO xstage_midi_export_registry
+                  (midi_sha256,song_id,version_id,output_path,output_sha256,created_at)
+                  VALUES (?,?,?,?,?,?)
+                  ON CONFLICT(midi_sha256) DO UPDATE SET
+                  song_id=excluded.song_id,version_id=excluded.version_id,
+                  output_path=excluded.output_path,
+                  output_sha256=excluded.output_sha256,created_at=excluded.created_at""",
+                  (pair["sha256"],song_id,version["id"],output_rel,output_sha,now()))
             return {"path":str(dest),"skipped":False,"sha256":output_sha,
                     "timing_status":version["timing_status"]}
         finally:
