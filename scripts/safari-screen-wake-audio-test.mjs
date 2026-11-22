@@ -19,16 +19,16 @@ function setup({midi=true,recover=true}={}){
   let engineCalls=0,playCalls=0,snapshotCalls=0;
   const window={XStageBrowserMidi:{unlockAudio:async()=>true}};
   const document={hidden:false,addEventListener:(name,listener)=>listeners.set(name,listener)};
-  const engine={async resumeAudio(){engineCalls++;return recover;}};
+  const engine={async resumeAudio(){engineCalls++;return recover==='hang'?new Promise(()=>{}):recover;}};
   state.liveMidiPlayback=engine;
   const factory=new Function('state','player','midiTransport','window','document',
     'nativeAudioFocusBlocked','savePlaybackResumeState','setPlayStatus','updateTransport',
-    'resumePlaybackFromSystem','setTimeout','console',code+
+    'resumePlaybackFromSystem','setTimeout','clearTimeout','console',code+
     '\nreturn {saveScreenSleepPlaybackIntent,mayRestoreScreenAudio,recoverScreenAudio,tryRecoverInterruptedPlayback};');
   const api=factory(state,player,midiTransport,window,document,false,
     ()=>snapshotCalls++,message=>messages.push(message),()=>{},
     async()=>{playCalls++;player.paused=false;return recover;},
-    fn=>{timers.push(fn);return timers.length},console);
+    fn=>{timers.push(fn);return timers.length},()=>{},console);
   return {api,state,player,document,listeners,timers,messages,
     engineCalls:()=>engineCalls,playCalls:()=>playCalls,snapshotCalls:()=>snapshotCalls};
 }
@@ -86,6 +86,19 @@ function setup({midi=true,recover=true}={}){
   await Promise.resolve();
   assert.equal(t.engineCalls(),1,'Deferred wake resumes the audio engine');
 }
+{
+  const t=setup({recover:'hang'});
+  t.document.hidden=true;t.api.saveScreenSleepPlaybackIntent();t.document.hidden=false;
+  const pending=t.api.recoverScreenAudio();
+  await Promise.resolve();
+  const timeout=t.timers.shift();
+  assert.equal(typeof timeout,'function','Hanging AudioContext.resume must be bounded');
+  timeout();
+  assert.equal(await pending,false,'Timed-out Safari audio recovery must become retryable');
+  assert.equal(t.state.resumeAfterInterruption,true,
+    'Keep resume intent after an unresolved iOS AudioContext promise');
+}
+
 // A Safari autoplay denial leaves the virtual MIDI transport at "playing"
 // while the sound is silent. Tapping the main Play button must recover output
 // immediately; it must NOT pause the track and require a second tap.
