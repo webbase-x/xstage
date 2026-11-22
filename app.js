@@ -1953,15 +1953,36 @@ function control(label,handler,title = label) {
   const b = element('button','',label); b.type='button';b.title=title;b.setAttribute('aria-label',title);
   b.addEventListener('click',handler);return b;
 }
+// Never split a Thai consonant from its combining vowels or tone marks when
+// highlighting a partial search match. Separate DOM nodes break glyph shaping
+// on iOS Safari (e.g. a search for "ร" in "รู้" or "รัก").
+function expandMatchToGrapheme(raw,start,end) {
+  const clusters=typeof Intl.Segmenter==='function'
+    ? Array.from(new Intl.Segmenter('th',{granularity:'grapheme'}).segment(raw),item=>item.segment)
+    : Array.from(raw).reduce((parts,char)=>{
+        if(/[\p{M}\u200d]/u.test(char)&&parts.length)parts[parts.length-1]+=char;
+        else parts.push(char);
+        return parts;
+      },[]);
+  let offset=0,from=start,to=end;
+  for(const cluster of clusters){
+    const next=offset+cluster.length;
+    if(offset<=start&&start<next)from=offset;
+    if(offset<end&&end<=next)to=next;
+    offset=next;
+  }
+  return [from,to];
+}
 function renderMatchedText(node, value, term) {
   const raw=String(value ?? '');
   const hit=term ? raw.toLocaleLowerCase('th').indexOf(term) : -1;
   if(hit<0){node.textContent=raw;return;}
-  node.append(document.createTextNode(raw.slice(0,hit)));
+  const [start,end]=expandMatchToGrapheme(raw,hit,hit+term.length);
+  node.append(document.createTextNode(raw.slice(0,start)));
   const match=document.createElement('mark');
   match.className='song-match';
-  match.textContent=raw.slice(hit,hit+term.length);
-  node.append(match,document.createTextNode(raw.slice(hit+term.length)));
+  match.textContent=raw.slice(start,end);
+  node.append(match,document.createTextNode(raw.slice(end)));
 }
 
 function normalizeSearchText(value){
