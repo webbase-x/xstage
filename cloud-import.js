@@ -545,15 +545,37 @@ async function publishSingleCatalog({drive,rootId,pointerFile,pointer,rows,check
     status?.('สำรองฐานก่อนหน้า '+(i+1)+'/'+older.length);
     await drive.moveToFolder(older[i].id,dbRoot,backupRoot);
   }
-  await drive.moveToFolder(staged.id,cacheRoot,dbRoot,'songs.sqlite3');
-  const active=(await drive.listChildren(dbRoot)).filter(x=>
-    /\.sqlite3$/i.test(x.name)&&x.mimeType!==MIME_FOLDER);
-  if(active.length!==1||active[0].id!==staged.id||active[0].name!=='songs.sqlite3')
-    fail('DB ต้องมี songs.sqlite3 เพียงไฟล์เดียว');
-  const final=await codec.read(await drive.getSqlite(staged.id));
-  if(final.kind!=='snapshot'||final.generation!==generation||
-     final.songs.length!==rows.size)
-    fail('อ่าน SQLite3 จาก DB หลังเผยแพร่ไม่ผ่าน · สำเนาเก่าอยู่ BACKUP');
+  try{
+    await drive.moveToFolder(staged.id,cacheRoot,dbRoot,'songs.sqlite3');
+    const active=(await drive.listChildren(dbRoot)).filter(x=>
+      /\.sqlite3$/i.test(x.name)&&x.mimeType!==MIME_FOLDER);
+    if(active.length!==1||active[0].id!==staged.id||active[0].name!=='songs.sqlite3')
+      fail('DB ต้องมี songs.sqlite3 เพียงไฟล์เดียว');
+    const final=await codec.read(await drive.getSqlite(staged.id));
+    if(final.kind!=='snapshot'||final.generation!==generation||
+       final.songs.length!==rows.size)
+      fail('อ่าน SQLite3 จาก DB หลังเผยแพร่ไม่ผ่าน · สำเนาเก่าอยู่ BACKUP');
+  }catch(error){
+    // Restore the same known-good DB File ID if an in-place switch fails.
+    if(pointer?.directFile){
+      try{
+        const suspect=await drive.list("'"+driveId(dbRoot)+
+          "' in parents and name='songs.sqlite3' and trashed=false");
+        for(const file of suspect){
+          if(file.id===pointer.catalogFileId)continue;
+          await drive.moveToFolder(file.id,dbRoot,backupRoot,
+            'songs-failed-'+generation+'.sqlite3');
+        }
+        const present=await drive.list("'"+driveId(dbRoot)+
+          "' in parents and name='songs.sqlite3' and trashed=false");
+        if(!present.some(x=>x.id===pointer.catalogFileId))
+          await drive.moveToFolder(pointer.catalogFileId,backupRoot,dbRoot,'songs.sqlite3');
+      }catch(restoreError){
+        console.error('Cannot restore last verified SQLite; BACKUP is preserved',restoreError);
+      }
+    }
+    throw error;
+  }
   // Only after the playable snapshot is verified may the legacy JSON pointer
   // and temporary import marker leave DB. Never delete their backups.
   const oldJson=(await drive.listChildren(dbRoot)).filter(x=>
