@@ -319,8 +319,8 @@
       queueDock.classList.remove('mobile-expanded');
     }
   });
-  // Never display both hamburger menus at once. On compact screens the
-  // upper trigger is CSS-hidden, so the bottom menu stays available.
+  // Never display both hamburger menus at once. On phones the upper trigger
+  // is hidden and the single lower-right menu remains beside the queue.
   const upperMenuTrigger=$('mobile-menu-toggle');
   const lowerMenuTrigger=$('stage-tools-toggle');
   function syncMenuTriggerPlacement(){
