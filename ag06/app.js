@@ -1,5 +1,6 @@
 import {AG06AudioEngine} from "./audio-engine.js";
 import {StudioSession,clamp} from "./studio-session.js";
+import {drawWaveform,encodeProject,decodeProject,renderSynth} from "./studio-advanced.js";
 import {DEFAULT_PRESET,PRESETS,sanitizeParams,formatParam} from "./presets.js";
 
 const $=(id)=>document.getElementById(id);
@@ -14,6 +15,7 @@ try{
 }catch{}
 let latestBlob=null,latestUrl=null,recordTimer=null,busy=false;
 const studio=new StudioSession();
+let midiNotes=[];
 const setStatus=(message,error=false)=>{const el=$("status-message");el.textContent=message;el.style.color=error?"#ffafaf":"#91e7d0";};
 function persist(){try{localStorage.setItem(settingsKey,JSON.stringify(settings));}catch{}}
 function renderParams(){
@@ -223,6 +225,7 @@ function studioRender(){
   remove.addEventListener("click",()=>{studio.stop();studio.remove(track.id);studioRender();});
   controls.append(remove);item.append(controls);root.append(item);
  }
+ renderTimeline();
 }
 async function studioImport(files){
  studio.stop();
@@ -272,6 +275,91 @@ function dspMode(simple){
 $("dsp-simple").addEventListener("click",()=>dspMode(true));
 $("dsp-detail").addEventListener("click",()=>dspMode(false));
 dspMode(false);
+$("studio-noise-gate").addEventListener("change",event=>{studio.noiseGate=event.target.checked;studio.stop();studioStatus(studio.noiseGate?"เปิด Voice Cleanup (HPF + Noise Gate) แล้ว":"ปิด Voice Cleanup แล้ว");});
+$("studio-zoom").addEventListener("input",renderTimeline);
+function renderTimeline(){
+ const host=$("studio-timeline");host.replaceChildren();
+ for(const track of studio.tracks){
+  const row=document.createElement("div");row.className="waveform-row";
+  const title=document.createElement("strong");title.textContent=track.name+" · Offset "+track.offset.toFixed(2)+"s";
+  const canvas=document.createElement("canvas");canvas.setAttribute("aria-label","Waveform "+track.name);
+  row.append(title,canvas);host.append(row);
+  drawWaveform(canvas,track,Number($("studio-zoom").value));
+ }
+}
+const projectSave=$("studio-save-project");
+projectSave.addEventListener("click",()=>{
+ try{
+  if(!studio.tracks.length&&!midiNotes.length)throw new Error("โปรเจกต์ยังว่าง");
+  studioStatus("กำลังจัดเตรียมข้อมูลโปรเจกต์…");
+  const json=encodeProject(studio,midiNotes);
+  if(json.length>100*1024*1024)throw new Error("โปรเจกต์ใหญ่เกิน 100 MB กรุณาลดจำนวนแทร็ก");
+  const file=new Blob([json],{type:"application/json"}),url=URL.createObjectURL(file),a=document.createElement("a");
+  a.href=url;a.download="X-Stage-Audio-Project-"+new Date().toISOString().slice(0,10)+".xstageaudio";
+  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  studioStatus("ส่งออกไฟล์โปรเจกต์แล้ว · เก็บรักษาไฟล์นี้เพื่อเปิดแก้ไขภายหลัง");
+ }catch(e){studioStatus("บันทึกโปรเจกต์ไม่สำเร็จ: "+e.message,true);}
+});
+$("studio-open-project").addEventListener("change",async event=>{
+ const file=event.target.files?.[0];event.target.value="";if(!file)return;
+ try{
+  if(file.size>100*1024*1024)throw new Error("ไฟล์โปรเจกต์ใหญ่เกิน 100 MB");
+  const parsed=decodeProject(await file.text()),Ctx=window.AudioContext||window.webkitAudioContext;
+  if(!Ctx)throw new Error("อุปกรณ์ไม่รองรับ Web Audio");
+  const ctx=new Ctx(),tracks=[];
+  try{
+   for(const saved of parsed.tracks){
+    const {sampleRate,channels}=saved.audio,buffer=ctx.createBuffer(channels.length,channels[0].length,sampleRate);
+    channels.forEach((ch,i)=>buffer.getChannelData(i).set(ch));
+    tracks.push({id:crypto.randomUUID?.()||String(Math.random()),name:String(saved.name||"Track").slice(0,70),
+     buffer,volume:clamp(saved.volume,0,2),mute:!!saved.mute,solo:!!saved.solo,role:saved.role==="voice"?"voice":"music",
+     start:clamp(saved.start,0,buffer.duration),end:clamp(saved.end,0,buffer.duration),offset:clamp(saved.offset,0,600)});
+   }
+  }finally{await ctx.close();}
+  studio.stop();studio.tracks=tracks;studio.ducking=!!parsed.settings?.ducking;studio.normalize=!!parsed.settings?.normalize;
+  $("studio-ducking").checked=studio.ducking;$("studio-normalize").checked=studio.normalize;
+  midiNotes=Array.isArray(parsed.notes)?parsed.notes.slice(0,512).map(n=>({pitch:clamp(n.pitch,36,96),beat:clamp(n.beat,0,128),length:clamp(n.length,.125,16),velocity:clamp(n.velocity,0,1)})):[];
+  studioRender();renderNotes();studioStatus("เปิดโปรเจกต์แล้ว · "+tracks.length+" แทร็ก");
+ }catch(e){studioStatus("เปิดโปรเจกต์ไม่สำเร็จ: "+e.message,true);}
+});
+const midiStatus=(value,error=false)=>{const el=$("midi-status");el.textContent=value;el.style.color=error?"#ffafaf":"#95a6ba";};
+function renderNotes(){
+ const root=$("midi-notes");root.replaceChildren();
+ if(!midiNotes.length){root.textContent="ยังไม่มีโน้ต";return;}
+ midiNotes.forEach((n,i)=>{
+  const button=document.createElement("button");button.className="midi-note";button.type="button";
+  button.textContent="โน้ต "+n.pitch+" · Beat "+n.beat+" · "+n.length+" (กดเพื่อลบ)";
+  button.addEventListener("click",()=>{midiNotes.splice(i,1);renderNotes();});root.append(button);
+ });
+}
+$("midi-add").addEventListener("click",()=>{
+ if(midiNotes.length>=512){midiStatus("สูงสุด 512 โน้ต",true);return;}
+ midiNotes.push({pitch:clamp($("midi-pitch").value,36,96),beat:clamp($("midi-beat").value,0,128),
+  length:clamp($("midi-length").value,.125,16),velocity:.8});
+ renderNotes();midiStatus("เพิ่มโน้ตแล้ว · "+midiNotes.length+" โน้ต");
+});
+$("midi-clear").addEventListener("click",()=>{midiNotes=[];renderNotes();midiStatus("ล้างโน้ตแล้ว");});
+let midiPreview=null;
+$("midi-play").addEventListener("click",async()=>{
+ try{
+  const buf=await renderSynth(midiNotes,$("midi-bpm").value);
+  if(midiPreview){midiPreview.pause();URL.revokeObjectURL(midiPreview.src);}
+  const wavBuffer=await import("./studio-session.js").then(m=>m.encodeWav(buf));
+  const url=URL.createObjectURL(wavBuffer);midiPreview=new Audio(url);await midiPreview.play();
+  midiPreview.addEventListener("ended",()=>{URL.revokeObjectURL(url);midiPreview=null;},{once:true});
+  midiStatus("กำลังเล่นเครื่องดนตรีสังเคราะห์");
+ }catch(e){midiStatus("เล่นโน้ตไม่สำเร็จ: "+e.message,true);}
+});
+$("midi-to-track").addEventListener("click",async()=>{
+ try{
+  const buf=await renderSynth(midiNotes,$("midi-bpm").value);
+  if(studio.tracks.length>=12)throw new Error("มีแทร็กครบ 12 แทร็กแล้ว");
+  studio.stop();studio.tracks.push({id:crypto.randomUUID?.()||String(Math.random()),name:"Synth - MIDI Notes",
+   buffer:buf,volume:1,mute:false,solo:false,role:"music",start:0,end:buf.duration,offset:0});
+  studioRender();midiStatus("สร้างเสียงสังเคราะห์ลงแทร็กแล้ว");
+ }catch(e){midiStatus("สร้างแทร็กไม่สำเร็จ: "+e.message,true);}
+});
+renderNotes();renderTimeline();
 renderParams();
 changeState(false);
 void refreshDevices();
