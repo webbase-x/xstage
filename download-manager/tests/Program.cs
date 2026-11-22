@@ -683,6 +683,29 @@ try
             throw new Exception("Unusable throughput telemetry must preserve user Range geometry.");
     }
 
+    // Increasing measured bandwidth must never reduce parallelism. Conversely,
+    // a small user cap must never be exceeded, even at extreme rates. Keep this
+    // regression deterministic and independent of Windows network conditions.
+    foreach (var requested in DownloadEngine.AllowedParts)
+    {
+        var previous = 0;
+        foreach (var measured in new double[]
+        {
+            128 * 1024, 256 * 1024, 512 * 1024,
+            1024 * 1024, 4 * 1024 * 1024,
+            12 * 1024 * 1024, 32 * 1024 * 1024,
+            64 * 1024 * 1024
+        })
+        {
+            var chosen = AdaptiveSegmentPlanner.Recommend(
+                requested, 1L << 40, measured, false);
+            if (chosen < previous || chosen > requested ||
+                !DownloadEngine.AllowedParts.Contains(chosen))
+                throw new Exception("Adaptive throughput changed non-monotonically or exceeded user cap.");
+            previous = chosen;
+        }
+    }
+
     // Very large files previously overflowed long when computing size * index.
     // Verify exact coverage and continuity for 1, 8 and 32 segments.
     foreach (var size in new long[] { 1, 256 * 1024, 1L << 40, long.MaxValue })
