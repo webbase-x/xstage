@@ -411,8 +411,9 @@ try{
   await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='5');
   await page.click('#cloud-import-select-all');
   await page.click('#cloud-import-start');
-  await page.locator('#cloud-import-pause:not([disabled])').waitFor();
-  await page.click('#cloud-import-pause');
+  await page.locator('#cloud-import-start:not([disabled])').waitFor();
+  assert.equal((await page.locator('#cloud-import-start').textContent()).trim(),'พัก');
+  await page.click('#cloud-import-start');
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.includes('หยุดงานแล้ว'),null,{timeout:30000});
   await page.reload({waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>{const item=document.getElementById('cloud-import-open');return item&&!item.hidden;});
@@ -420,9 +421,10 @@ try{
   // widths. Trigger the same existing import button handler directly.
   await page.evaluate(()=>document.getElementById('cloud-import-open').click());
   await page.locator('#cloud-import-dialog[open]').waitFor();
-  await page.waitForFunction(()=>!document.getElementById('cloud-import-resume').disabled);
+  await page.locator('#cloud-import-start:not([disabled])').waitFor();
+  assert.equal((await page.locator('#cloud-import-start').textContent()).trim(),'เริ่ม');
   const chooserPromise=page.waitForEvent('filechooser');
-  await page.click('#cloud-import-resume');
+  await page.click('#cloud-import-start');
   const chooser=await chooserPromise;
   await chooser.setFiles(dir);
   try {
@@ -431,8 +433,8 @@ try{
     const diagnostic=await page.evaluate(()=>({
       status:document.getElementById('cloud-import-status')?.textContent,
       ready:document.getElementById('cloud-import-ready')?.textContent,
-      resumeDisabled:document.getElementById('cloud-import-resume')?.disabled,
-      pauseDisabled:document.getElementById('cloud-import-pause')?.disabled
+      startDisabled:document.getElementById('cloud-import-start')?.disabled,
+      startLabel:document.getElementById('cloud-import-start')?.textContent
     }));
     throw new Error('Cloud import resume stalled: '+JSON.stringify(diagnostic),{cause:error});
   }
