@@ -12,6 +12,9 @@ on:
       - "memory-budget.js"
       - "browser-midi.js"
       - "xstage-ux.css"
+      - "mobile-layout.js"
+      - "scripts/karaoke-bottom-search-browser-e2e.mjs"
+      - "scripts/karaoke-responsive-search-test.mjs"
       - "cloud-import*.css"
       - "index.html"
       - "karaoke.html"
@@ -60,6 +63,10 @@ jobs:
         run: |
           npm install --no-save --ignore-scripts playwright@1.56.0 sql.js@1.13.0
           npx playwright install --with-deps chromium
+      - name: Verify responsive bottom search in real Chromium viewports
+        run: |
+          node scripts/karaoke-responsive-search-test.mjs
+          node scripts/karaoke-bottom-search-browser-e2e.mjs
       - name: Install test-only FFmpeg to generate a real AVI fixture
         run: |
           sudo apt-get update -qq
