@@ -489,10 +489,11 @@ class Importer {
   updateOpen(){
     if(!this.dom.open)return;
     const auth=this.session();
-    this.dom.open.hidden=!auth?.token;
-    this.dom.open.disabled=this.running||this.lockPending;
-    if(this.dom.gateOpen){this.dom.gateOpen.hidden=!auth?.token;
-      this.dom.gateOpen.disabled=this.running||this.lockPending;}
+    const verified=!!auth?.token&&!!auth?.sub;
+    this.dom.open.hidden=!verified;
+    this.dom.open.disabled=this.running||this.lockPending||!verified;
+    if(this.dom.gateOpen){this.dom.gateOpen.hidden=!verified;
+      this.dom.gateOpen.disabled=this.running||this.lockPending||!verified;}
   }
   status(message){if(this.dom.status)this.dom.status.textContent=message;}
   progress(index,total,ratio=0){
@@ -678,14 +679,15 @@ class Importer {
       'เริ่มตรวจ MD5 และนำเข้าเพิ่ม ('+approved.length.toLocaleString('th-TH')+')':
       'เริ่มตรวจ MD5 และนำเข้า ('+approved.length.toLocaleString('th-TH')+')';
     if(this.dom.done)this.dom.done.textContent=this.completed?'เสร็จแล้ว · ปิด':'ปิดหน้าต่าง';
-    this.dom.start.disabled=this.running||this.lockPending||!approved.length;
+    const verified=!!this.session()?.token&&!!this.session()?.sub;
+    this.dom.start.disabled=this.running||this.lockPending||!approved.length||!verified;
     if(this.dom.done)this.dom.done.disabled=false;
     this.dom.start.hidden=!!this.running;
     this.dom.pause.disabled=!this.running;
     this.dom.pause.hidden=!this.running;
     this.dom.cancel.disabled=!this.running;
     this.dom.cancel.hidden=true;
-    this.dom.resume.disabled=this.running||this.lockPending||!resumable;
+    this.dom.resume.disabled=this.running||this.lockPending||!resumable||!verified;
     this.dom.resume.hidden=this.running||!resumable;
     this.dom.pick.disabled=this.running;
     if(this.dom.pickFallback)this.dom.pickFallback.disabled=this.running;
@@ -695,6 +697,7 @@ class Importer {
       const pending=this.videoEditor?.pendingCount()||0;
       this.dom.actionHint.textContent=this.running?
         'กำลังตรวจสอบและนำเข้า · หยุดชั่วคราวได้โดยไม่ลบไฟล์ที่อัปโหลดสำเร็จ':
+        !verified?'กำลังรอยืนยันบัญชี Google · ปุ่มนำเข้าจะพร้อมเมื่อยืนยันเสร็จ':
         this.lockPending?'กำลังเตรียมงานนำเข้า…':
         approved.length?'พร้อมตรวจเนื้อหา/MD5 และนำเข้า '+approved.length.toLocaleString('th-TH')+
           ' รายการ · จะข้ามไฟล์ซ้ำและชุดที่ตรวจไม่ผ่าน':
@@ -715,7 +718,9 @@ class Importer {
     this.status('บันทึกข้อมูลวิดีโอแล้ว · พร้อมตรวจ MD5 และนำเข้ารายการที่เลือก');
   }
   async open(){
-    if(!this.session()?.token){this.status('กรุณาเชื่อมต่อ Google Drive ก่อน');return;}
+    if(!this.session()?.token||!this.session()?.sub){
+      this.status('กรุณารอ Google Login ยืนยันบัญชีให้เสร็จก่อนเปิดงานนำเข้า');return;
+    }
     if(!this.dom.dialog.open){
       if(this.dom.dialog.showModal)this.dom.dialog.showModal();
       else this.dom.dialog.setAttribute('open','');
