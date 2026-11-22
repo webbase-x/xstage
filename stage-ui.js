@@ -21,8 +21,9 @@
     const ctxFullscreen=document.querySelector('#xstage-context-menu [data-cmd="fullscreen"]');if(ctxFullscreen)ctxFullscreen.hidden=true;
   }
   const shuffle=$('stage-shuffle');
-  // Keep only the song-key text beside the title. Relocate the SAME live
-  // transpose controls beside the search field before the clock, even when
+  // Keep only the song-key text beside the title. Reuse the SAME live
+  // transpose controls at the bottom on phones and beside search on desktop,
+  // even when
   // a cached HTML shell still contains the older Song Status layout.
   (function migrateSongKeyToToolbar(){
     const info=document.querySelector('.transport-song-info');
@@ -75,11 +76,18 @@
       label.setAttribute('aria-hidden','true');
       transpose.insertBefore(label,transpose.firstChild);
     }
-    // Move (never clone) so the original MIDI +/- event handlers and current
-    // pitch shift survive the layout migration and account changes.
-    const clock=$('mobile-stage-clock');
-    // insertBefore also reorders a legacy control without replacing it.
-    toolbar.insertBefore(transpose,clock||null);
+    // Move (never clone), retaining the original MIDI +/- event handlers.
+    // mobile-layout.js has already placed it inside the transport on phones;
+    // do not silently move it back to the hidden top toolbar.
+    const mobile=document.body.classList.contains('xstage-mobile-search-bottom');
+    const transport=stage?.querySelector('.transport-panel');
+    const transportRow=transport?.querySelector('.transport-row');
+    if(mobile&&transport&&transportRow){
+      if(transpose.parentNode!==transport)transport.insertBefore(transpose,transportRow);
+    }else{
+      const clock=$('mobile-stage-clock');
+      toolbar.insertBefore(transpose,clock||null);
+    }
   })();
   if(!stage||!queueDock||!queueBtn||!volume||!repeat)return;
   // Keep speed and repeat beside the player. Utility commands live in one canonical menu.
