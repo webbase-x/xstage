@@ -86,6 +86,27 @@ function setup({midi=true,recover=true}={}){
   await Promise.resolve();
   assert.equal(t.engineCalls(),1,'Deferred wake resumes the audio engine');
 }
+// A Safari autoplay denial leaves the virtual MIDI transport at "playing"
+// while the sound is silent. Tapping the main Play button must recover output
+// immediately; it must NOT pause the track and require a second tap.
+{
+  const from=app.indexOf('function togglePlayback(){');
+  const to=app.indexOf('\nasync function playSong(',from);
+  assert.ok(from>0&&to>from,'Main Play handler must be available');
+  let resumes=0,pauses=0;
+  const state={loading:false,userPaused:false,userStopped:false,
+    resumeAfterInterruption:true,queue:[],shown:[]};
+  const player={src:'midi:live',paused:false,pause(){pauses++;}};
+  const mainPlay=new Function('window','state','player','wakeNeedsGesture',
+    'recoverScreenAudio',app.slice(from,to)+'\nreturn togglePlayback;')(
+      {XStageIOSMidiAudio:{activate(){}},XStageBrowserMidi:{unlockAudio(){}}},
+      state,player,true,()=>{resumes++;});
+  mainPlay();
+  assert.equal(resumes,1,'First Play tap must call the audible recovery path');
+  assert.equal(pauses,0,'Never pause a silent but running virtual transport');
+  assert.equal(state.userPaused,false,'Recovery must not set manual pause');
+}
+
 assert.ok(app.includes("window.addEventListener('pagehide',saveScreenSleepPlaybackIntent)"),
   'Safari pagehide must preserve playing intent');
 assert.ok(app.includes("document.addEventListener('pointerdown'"),
