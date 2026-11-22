@@ -676,6 +676,7 @@ class Handler(BaseHTTPRequestHandler):
                     expected=total_songs if all_catalog else len(ids)
                     total={"done":0,"total":expected,"built":0,"skipped":0,
                            "duplicate_mid":0,"blocked":0,"failed":0,"errors":[]}
+                    progress(dict(total),f"เริ่มตรวจและสร้างไฟล์ 0/{expected:,} เพลง")
                     catalog=(core.catalog_song_ids(self.state.workspace)
                              if all_catalog else iter(ids))
                     for song_id in catalog:
