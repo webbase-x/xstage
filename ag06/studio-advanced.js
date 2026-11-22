@@ -50,3 +50,57 @@ export async function renderSynth(notes,bpm=120){
  }
  return ctx.startRendering();
 }
+
+// Standard MIDI File Type 0, ticks per quarter=480; no proprietary instruments.
+function vlq(value){
+ let n=Math.max(0,Math.floor(value)),bytes=[n&127];n>>=7;
+ while(n){bytes.unshift((n&127)|128);n>>=7;}
+ return bytes;
+}
+export function encodeMidi(notes,bpm=120){
+ const tempo=Math.round(60000000/limit(bpm,40,240)),events=[];
+ for(const n of notes.slice(0,512)){
+  const start=Math.round(limit(n.beat,0,128)*480),end=start+Math.round(limit(n.length,.125,16)*480),pitch=Math.round(limit(n.pitch,36,96));
+  events.push({tick:start,bytes:[0x90,pitch,Math.max(1,Math.round(limit(n.velocity,.01,1)*127))],order:1});
+  events.push({tick:end,bytes:[0x80,pitch,0],order:0});
+ }
+ events.sort((a,b)=>a.tick-b.tick||a.order-b.order);
+ const data=[0,0xff,0x51,3,(tempo>>16)&255,(tempo>>8)&255,tempo&255];
+ let prev=0;for(const e of events){data.push(...vlq(e.tick-prev),...e.bytes);prev=e.tick;}
+ data.push(0,0xff,0x2f,0);
+ const length=data.length,header=[77,84,104,100,0,0,0,6,0,0,0,1,1,224];
+ return new Uint8Array([...header,77,84,114,107,(length>>>24)&255,(length>>>16)&255,(length>>>8)&255,length&255,...data]);
+}
+export function decodeMidi(array){
+ const data=array instanceof Uint8Array?array:new Uint8Array(array);
+ if(data.length>1024*1024||data.length<22||String.fromCharCode(...data.slice(0,4))!=="MThd")throw new Error("ไฟล์ MIDI ไม่ถูกต้องหรือใหญ่เกิน 1 MB");
+ const view=new DataView(data.buffer,data.byteOffset,data.byteLength);
+ const headerSize=view.getUint32(4),format=view.getUint16(8),trackCount=view.getUint16(10),division=view.getUint16(12);
+ if(headerSize<6||headerSize>100||format>1||trackCount>32||(division&0x8000)||!division)throw new Error("รูปแบบ MIDI ไม่รองรับ");
+ let pos=8+headerSize,tempo=500000,notes=[],active=new Map(),events=[];
+ for(let track=0;track<trackCount;track++){
+  if(pos+8>data.length||String.fromCharCode(...data.slice(pos,pos+4))!=="MTrk")throw new Error("ส่วนข้อมูล MIDI เสีย");
+  const size=view.getUint32(pos+4);pos+=8;const end=pos+size;if(end>data.length)throw new Error("ขนาดแทร็ก MIDI ไม่ถูกต้อง");
+  let tick=0,status=0;
+  const next=()=>{if(pos>=end)throw new Error("ข้อมูล MIDI ไม่ครบ");return data[pos++];};
+  const readVlq=()=>{let n=0;for(let i=0;i<4;i++){const b=next();n=(n<<7)|(b&127);if(!(b&128))return n;}throw new Error("MIDI delta ยาวเกินไป");};
+  while(pos<end){
+   tick+=readVlq();let b=next();
+   if(b===0xff){const type=next(),len=readVlq();if(pos+len>end)throw new Error("MIDI meta เสีย");
+    if(type===0x51&&len===3&&!events.length)tempo=(data[pos]<<16)|(data[pos+1]<<8)|data[pos+2];
+    pos+=len;continue;}
+   if(b===0xf0||b===0xf7){const len=readVlq();if(pos+len>end)throw new Error("MIDI SysEx เสีย");pos+=len;continue;}
+   if(b&0x80)status=b;else pos--;
+   const type=status&0xf0,channel=status&15;
+   if(type<0x80||type>0xe0)throw new Error("MIDI status ไม่ถูกต้อง");
+   const pitch=next(),velocity=(type===0xc0||type===0xd0)?0:next();
+   if(type===0x90&&velocity>0){active.set(channel+":"+pitch,{tick,velocity});}
+   else if(type===0x80||(type===0x90&&velocity===0)){
+    const key=channel+":"+pitch,begin=active.get(key);active.delete(key);
+    if(begin&&tick>begin.tick&&notes.length<512)notes.push({pitch,beat:begin.tick/division,length:(tick-begin.tick)/division,velocity:begin.velocity/127});
+   }
+  }
+  pos=end;
+ }
+ return {notes:notes.filter(n=>n.pitch>=36&&n.pitch<=96&&n.beat<=128).slice(0,512),bpm:Math.round(60000000/tempo)};
+}
