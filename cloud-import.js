@@ -693,7 +693,7 @@ class Importer {
     this.options=options;this.selected=null;this.plan=null;this.running=false;this.paused=false;this.stopRequested=false;
     this.controller=null;this.folderHandle=null;this.saved=null;this.chosenItems=new Set();this.completed=false;this.authRequired=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,fonts:0,errors:0};
     this.dom={};
-    for(const key of ['open','dialog','close','pick','input','scan','start','pause','resume','cancel',
+    for(const key of ['open','dialog','close','pick','input','scan','start',
       'allow-create',
       'source','total','ready','fonts','blocked','examples','progress','progress-label',
       'status','detail'])this.dom[key]=$('cloud-import-'+key);
@@ -703,10 +703,8 @@ class Importer {
     this.dom.selectionCount=$('cloud-import-selection-count');
     this.dom.actionHint=$('cloud-import-action-hint');
     this.dom.done=$('cloud-import-done');
-    this.dom.reauthorize=$('cloud-import-reauthorize');
-    this.dom.consolidate=$('cloud-import-consolidate');
-    this.dom.consolidate?.addEventListener('click',()=>{void this.consolidate();});
-    this.dom.reauthorize?.addEventListener('click',()=>{void this.reauthorize();});
+    // The import footer intentionally has only one Start/Pause toggle and Close.
+    // OAuth renewal, checkpoint resume, and legacy DB migration remain internal.
     this.dom.done?.addEventListener('click',()=>this.close());
     $('cloud-import-select-all')?.addEventListener('click',()=>this.selectEveryItem(true));
     $('cloud-import-select-none')?.addEventListener('click',()=>this.selectEveryItem(false));
@@ -749,10 +747,7 @@ class Importer {
     this.dom.pick?.addEventListener('click',()=>this.choose());
     this.dom.pickFallback?.addEventListener('click',()=>this.chooseLegacy());
     this.dom.scan?.addEventListener('click',()=>this.inspect());
-    this.dom.start?.addEventListener('click',()=>this.start());
-    this.dom.pause?.addEventListener('click',()=>this.stop('พักงาน'));
-    this.dom.cancel?.addEventListener('click',()=>this.stop('ยกเลิกงาน · เก็บรายการที่ทำเสร็จไว้บน Drive'));
-    this.dom.resume?.addEventListener('click',()=>this.resume());
+    this.dom.start?.addEventListener('click',()=>{void this.toggleStartPause();});
     this.dom.input?.addEventListener('change',async()=>{
       const files=Array.from(this.dom.input.files||[]);
       const shouldResume=this.resumeAfterPicker;
@@ -777,7 +772,7 @@ class Importer {
           this.saved.error='';
           void checkpoint(auth.sub,this.saved);
         }
-        this.status('Google เชื่อมต่อแล้ว · กดทำต่อเพื่อใช้ไฟล์ที่ยังไม่เสร็จ');
+        this.status('Google เชื่อมต่อแล้ว · กด “เริ่ม” เพื่อใช้ไฟล์ที่ยังไม่เสร็จ');
       }
       this.updateOpen();this.refreshButtons();
     };
@@ -984,26 +979,20 @@ class Importer {
         String(this.saved?.error||'')));
     for(const input of this.dom.selectionList?.querySelectorAll('input[type="checkbox"]')||[])
       input.disabled=this.running;
-    this.dom.start.textContent=this.completed?
-      'เริ่มตรวจ MD5 และนำเข้าเพิ่ม ('+approved.length.toLocaleString('th-TH')+')':
-      'เริ่มตรวจ MD5 และนำเข้า ('+approved.length.toLocaleString('th-TH')+')';
-    if(this.dom.done)this.dom.done.textContent=this.completed?'เสร็จแล้ว · ปิด':'ปิดหน้าต่าง';
-    const verified=!!this.session()?.token&&!!this.session()?.sub;
-    this.dom.start.disabled=this.running||this.lockPending||!approved.length||!verified||needsGoogle;
-    if(this.dom.consolidate)this.dom.consolidate.disabled=
-      this.running||this.lockPending||!verified||needsGoogle;
-    if(this.dom.done)this.dom.done.disabled=false;
-    this.dom.start.hidden=!!this.running;
-    this.dom.pause.disabled=!this.running;
-    this.dom.pause.hidden=!this.running;
-    this.dom.cancel.disabled=!this.running;
-    this.dom.cancel.hidden=true;
-    this.dom.resume.disabled=this.running||this.lockPending||!resumable||!verified||needsGoogle;
-    this.dom.resume.hidden=this.running||!resumable||needsGoogle;
-    if(this.dom.reauthorize){
-      this.dom.reauthorize.hidden=this.running||!needsGoogle;
-      this.dom.reauthorize.disabled=this.running||this.lockPending||!this.options.reconnect;
+    this.dom.start.textContent=this.running?'พัก':'เริ่ม';
+    if(this.dom.done){
+      this.dom.done.textContent='ปิดหน้าต่าง';
+      this.dom.done.disabled=false;
     }
+    const verified=!!this.session()?.token&&!!this.session()?.sub;
+    const canReconnect=!!this.options.reconnect&&!!this.session()?.sub;
+    // A saved checkpoint can resume without an in-memory folder selection.
+    this.dom.start.disabled=!this.running&&(
+      this.lockPending||(!verified&&!canReconnect)||
+      (needsGoogle&&!canReconnect)||
+      (!approved.length&&!resumable)
+    );
+    this.dom.start.hidden=false;
     this.dom.pick.disabled=this.running;
     if(this.dom.pickFallback)this.dom.pickFallback.disabled=this.running;
     this.dom.scan.disabled=this.running||!this.selected;
@@ -1012,7 +1001,7 @@ class Importer {
       const pending=this.videoEditor?.pendingCount()||0;
       this.dom.actionHint.textContent=this.running?
         'กำลังตรวจสอบและนำเข้า · หยุดชั่วคราวได้โดยไม่ลบไฟล์ที่อัปโหลดสำเร็จ':
-        needsGoogle?'Google ต้องการยืนยันสิทธิ์ใหม่ · กด “เชื่อม Google ใหม่และทำต่อ” ครั้งเดียว':
+        needsGoogle?'Google ต้องการยืนยันสิทธิ์ใหม่ · กด “เริ่ม” เพื่อเชื่อมต่อใหม่':
         !verified?'กำลังรอยืนยันบัญชี Google · ปุ่มนำเข้าจะพร้อมเมื่อยืนยันเสร็จ':
         this.lockPending?'กำลังเตรียมงานนำเข้า…':
         approved.length?'พร้อมตรวจเนื้อหา/MD5 และนำเข้า '+approved.length.toLocaleString('th-TH')+
@@ -1043,7 +1032,7 @@ class Importer {
     }
     this.saved=await checkpoint(this.session().sub,undefined);
     if(this.saved&&['uploading','publishing','paused','running'].includes(this.saved.status)&&!this.selected){
-      this.status('พบงานค้างของบัญชีนี้ · กดทำต่อ (อาจต้องอนุญาตโฟลเดอร์เดิม)');
+      this.status('พบงานค้างของบัญชีนี้ · กด “เริ่ม” เพื่อทำต่อ (อาจต้องอนุญาตโฟลเดอร์เดิม)');
       this.dom.source.textContent='งานเดิม: '+String(this.saved.label||'โฟลเดอร์เพลง');
       if(this.saved.handle)this.folderHandle=this.saved.handle;
     }
@@ -1154,7 +1143,7 @@ class Importer {
     const selectedReady=this.selectableItems().filter(entry=>this.chosenItems.has(entry.key)&&
       (!entry.item.video||this.videoEditor?.get(entry.item))).length;
     this.status(selectedReady?'ตรวจชื่อไฟล์แล้ว · เลือกไว้ '+selectedReady.toLocaleString('th-TH')+
-      ' รายการ · กด “เริ่มตรวจ MD5 และนำเข้า” ด้านล่าง':
+      ' รายการ · กด “เริ่ม” ด้านล่าง':
       recognized?'ตรวจชื่อไฟล์แล้ว แต่ยังไม่มีรายการที่ผ่านเงื่อนไข · ตรวจ/บันทึกข้อมูลวิดีโอหรือเลือกไฟล์ที่พร้อม':
       'ไม่พบเพลงพร้อมนำเข้า · ตรวจชนิดไฟล์และโครงสร้างโฟลเดอร์ แล้วเลือกใหม่');
     await this.save({status:'selected',done:0,total:this.plan.songs.length+this.plan.midis.length+this.plan.xsks.length+this.plan.fonts.length});
@@ -1173,7 +1162,7 @@ class Importer {
     if(!this.running)return;
     this.stopRequested=true;
     this.controller?.abort();
-    this.status(message+' · สามารถกดทำต่อได้หลังเชื่อม Google Drive');
+    this.status(message+' · กด “เริ่ม” เพื่อทำต่อหลังเชื่อม Google Drive');
   }
   check(){
     if(this.stopRequested)throw new DOMException('ผู้ใช้หยุดงาน','AbortError');
@@ -1207,8 +1196,22 @@ class Importer {
     // try to silently open a protected folder after an async OAuth popup.
     if(ready){
       if(this.selected&&this.plan)await this.start();
-      else this.status('Google พร้อมแล้ว · กด “ทำต่อ” เพื่อเลือกโฟลเดอร์เดิม');
+      else this.status('Google พร้อมแล้ว · กด “เริ่ม” เพื่อเลือกโฟลเดอร์เดิม');
     }
+  }
+  async toggleStartPause(){
+    if(this.running){this.stop('พักงาน');return;}
+    if(this.lockPending)return;
+    const auth=this.session();
+    if((this.authRequired||this.saved?.error?.startsWith('auth-required:'))&&
+       this.options.reconnect){
+      await this.reauthorize();
+      return;
+    }
+    const resumable=this.saved&&
+      ['uploading','publishing','paused','running'].includes(this.saved.status);
+    if(resumable&&!this.selected){await this.resume();return;}
+    await this.start();
   }
   async resume(){
     if(this.running)return;
@@ -1814,9 +1817,9 @@ class Importer {
         /Google Login หมดอายุ|Google ต้องการการยืนยัน|Google ไม่ยืนยันสิทธิ์/.test(
           String(error.message||error));
       this.status(aborted(error)||this.stopRequested?
-        'หยุดงานแล้ว · ไฟล์ที่ส่งสำเร็จยังอยู่ · เปิดใหม่และกดทำต่อ':
-        this.authRequired?'Google ต้องการยืนยันสิทธิ์ · กด “เชื่อม Google ใหม่และทำต่อ” (ไม่เริ่มใหม่)':
-        'หยุดเพราะข้อผิดพลาด: '+(error.message||error)+' · ตรวจแล้วกดทำต่อ');
+        'พักงานแล้ว · ไฟล์ที่ส่งสำเร็จยังอยู่ · กด “เริ่ม” เพื่อทำต่อ':
+        this.authRequired?'Google ต้องการยืนยันสิทธิ์ · กด “เริ่ม” เพื่อเชื่อมต่อใหม่และทำต่อ':
+        'หยุดเพราะข้อผิดพลาด: '+(error.message||error)+' · ตรวจแล้วกด “เริ่ม”');
       await this.save({status:'paused',total:this.plan.songs.length+
         this.plan.midis.length+this.plan.xsks.length+this.plan.fonts.length,
         error:aborted(error)?'paused':this.authRequired?
