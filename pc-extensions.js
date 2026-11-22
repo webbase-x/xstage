@@ -274,6 +274,8 @@ function eqBandColor(f){return f<80?'#ff3b30':f<250?'#ff8a00':f<630?'#ffd400':f<
 /* Live stage branding reuses the existing post-EQ analyser. No duplicate AudioContext/source. */
 let stageVizFrame=0,stageVizLastSingerPost=0;
 const stageVizSmooth=Array(28).fill(0);
+let stageLiveSpectrum={bands:[0,0,0],active:false,updatedAt:0};
+window.XStageStageLiveSpectrum=()=>stageLiveSpectrum;
 function stageVizPalette(theme=brandThemePrefs.main){
   if(theme==='modern-concert')return {top:'#fff0a6',mid:'#ffad4d',bottom:'#ff4f91',wave:'#ffd06b',glow:'rgba(255,92,145,.58)'};
   if(theme==='futuristic-audio-tech')return {top:'#d5fff9',mid:'#4fffe0',bottom:'#38aaff',wave:'#71ffe9',glow:'rgba(67,246,224,.58)'};
@@ -304,9 +306,15 @@ function stageFrequencyLevels(bins){
 function paintStageBars(canvas,levels,palette,mirror=false){
   const size=resizeStageVizCanvas(canvas);if(!size)return;
   const ctx=canvas.getContext('2d'),{w,h}=size;ctx.clearRect(0,0,w,h);
-  const count=levels.length,gap=Math.max(2,w*.012),barW=Math.max(2,(w-gap*(count-1))/count);
+  // Mobile banner side panels can be under 40 CSS pixels wide. Never paint
+  // 28 fixed-width bars into a canvas too narrow to contain them.
+  const count=Math.max(1,Math.min(levels.length,Math.floor(w/4.5)));
+  const gap=Math.min(2,Math.max(.5,w/(count*8)));
+  const barW=Math.max(.5,(w-gap*(count-1))/count);
   for(let i=0;i<count;i++){
-    const source=mirror?count-1-i:i,level=Math.max(.025,levels[source]||0);
+    const index=Math.min(levels.length-1,Math.floor(i*levels.length/count));
+    const source=mirror?levels.length-1-index:index;
+    const level=Math.max(.025,levels[source]||0);
     const bh=Math.max(2,level*h*.96),x=i*(barW+gap),y=h-bh;
     const gradient=ctx.createLinearGradient(0,y,0,h);
     gradient.addColorStop(0,palette.top);gradient.addColorStop(.48,palette.mid);gradient.addColorStop(1,palette.bottom);
@@ -335,6 +343,12 @@ function drawStageBrandVisualizer(now=performance.now()){
   const levels=stageFrequencyLevels(bins),wave=sampledStageWave(timeData);
   const energy=levels.reduce((a,b)=>a+b,0)/Math.max(1,levels.length);
   const bass=levels.slice(0,7).reduce((a,b)=>a+b,0)/7;
+  const average=(start,end)=>levels.slice(start,end).reduce((a,b)=>a+b,0)/Math.max(1,end-start);
+  stageLiveSpectrum={
+    bands:[average(0,7),average(7,19),average(19,levels.length)],
+    active:!audio.paused&&!audio.ended&&!audio.muted&&audio.volume>0&&eqContext.state==='running',
+    updatedAt:Date.now()
+  };
   ui.stage.style.setProperty('--xstage-viz-energy',energy.toFixed(3));
   ui.stage.style.setProperty('--xstage-viz-bass',bass.toFixed(3));
   const palette=stageVizPalette();
