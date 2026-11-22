@@ -1,8 +1,8 @@
 /* X-Stage Karaoke Online: real SQLite catalog snapshots on private Drive.
  * SQL.js (SQLite compiled to WebAssembly, MIT) is initialized only when the
  * user downloads/publishes a catalog. No OAuth token goes to the CDN.
- * DB/songs.sqlite3 is the canonical song catalog. A legacy current.json is
- * readable for one-time migration only; new catalogs need no JSON pointer.
+ * DB/songs.sqlite3 is the only catalog consumed and published by the Web app.
+ * Legacy pointer and delta catalogs are not read or migrated.
  */
 (function(scope){
 'use strict';
@@ -151,8 +151,8 @@ async function read(bytes){
     if(metadata.format!==FORMAT||Number(metadata.schemaVersion)!==VERSION||
        !['snapshot','delta'].includes(metadata.kind))
       fail('ฐานเพลง SQLite ไม่ตรงเวอร์ชันหรือชนิดที่รองรับ');
-    // Older v1 snapshots lack the indexed fingerprint columns. Support
-    // reading them for migration, while independently checking indexed data
+    // Earlier single-file SQLite snapshots may lack fingerprint columns.
+    // Read those SQLite files without loading any old pointer or delta, and check indexed data
     // against each new record's stored payload to catch inconsistent catalogs.
     const columns=new Set((db.exec('PRAGMA table_info(songs)')[0]?.values||[])
       .map(row=>String(row[1])));
