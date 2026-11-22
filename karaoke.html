@@ -274,12 +274,12 @@
             </div>
             <p id="play-status" class="play-status" role="status"></p>
             <output id="xstage-midi-engine-status" class="xstage-midi-engine-status" role="status" hidden aria-live="polite"></output>
-            <nav class="pc-tools" aria-label="เครื่องมือ X-Stage"><button type="button" id="pc-find">⌕ ค้นหา F3</button><button type="button" id="pc-random">สุ่มเพลง</button><button type="button" id="pc-history">ประวัติ</button><button type="button" id="pc-loop-a">จุด A</button><button type="button" id="pc-loop-b">จุด B</button><button type="button" id="pc-loop-clear">เลิกวน</button><button type="button" id="pc-lyrics-settings">เนื้อร้อง / BG</button><button type="button" id="pc-eq">EQ</button><button type="button" id="pc-stage-pop">จอร้องแยก</button><button type="button" id="pc-other-tools">เครื่องมือ</button><button type="button" id="pc-share-library">⇄ แชร์โฟลเดอร์เพลง</button><button type="button" id="pc-clear-cache">เคลียร์แคช</button></nav>
+            <nav class="pc-tools" aria-label="เครื่องมือ X-Stage"><button type="button" id="pc-find">⌕ ค้นหา F3</button><button type="button" id="pc-random">สุ่มเพลง</button><button type="button" id="pc-history">ประวัติ</button><button type="button" id="pc-loop-a">จุด A</button><button type="button" id="pc-loop-b">จุด B</button><button type="button" id="pc-loop-clear">เลิกวน</button><button type="button" id="pc-lyrics-settings">เนื้อร้อง / BG</button><button type="button" id="pc-eq">EQ Monitor</button><button type="button" id="pc-stage-pop">จอร้องแยก</button><button type="button" id="pc-other-tools">เครื่องมือ</button><button type="button" id="pc-share-library">⇄ แชร์โฟลเดอร์เพลง</button><button type="button" id="pc-clear-cache">เคลียร์แคช</button></nav>
           </div>
           <aside class="dock queue-dock" id="stage-queue-panel" aria-labelledby="queue-title"><div class="dock-head"><div><span class="overline">UP NEXT</span><h2 id="queue-title">คิวเพลง</h2></div><span id="queue-count" class="count-chip">0</span></div><div class="queue-hint">เพิ่มเพลงด้วย Enter หรือปุ่ม + จากผลค้นหา</div><output id="xstage-queue-memory" class="xstage-memory-indicator" data-level="low" role="status" aria-live="polite">คิว · งบหน่วยความจำกำลังประเมิน</output><ol id="queue" class="queue-list"><li class="empty-state">ยังไม่มีเพลงในคิว</li></ol><div class="queue-footer"><div class="pc-queue-files"><button type="button" id="pc-import">นำเข้าคิว</button><button type="button" id="pc-export">ส่งออกคิว</button><input type="file" id="pc-queue-file" accept="application/json,.json" hidden></div><button id="clear-queue" type="button" class="button button-ghost" disabled>ล้างคิวทั้งหมด</button><div class="shortcut-line">F5 เล่น/พัก · F6 ถัดไป</div></div></aside>
-          <section id="xstage-eq-panel" class="xstage-eq-panel" hidden aria-label="EQ X-Stage Karaoke">
+          <section id="xstage-eq-panel" class="xstage-eq-panel" data-monitor-only="true" hidden aria-label="แสดงระดับเสียง EQ ไม่ปรับเสียงลำโพง">
             <header class="xstage-eq-head" data-eq-drag>
-              <div class="xstage-eq-brand"><img src="assets/xstage-app-icon-192.png" alt=""><strong>EQ X-Stage Karaoke</strong></div>
+              <div class="xstage-eq-brand"><img src="assets/xstage-app-icon-192.png" alt=""><strong>EQ Monitor · ไม่ปรับเสียง</strong></div>
               <div class="xstage-eq-head-actions">
                 <button type="button" id="xstage-eq-bypass" aria-pressed="false" title="Bypass EQ">BYPASS</button>
                 <button type="button" id="xstage-eq-minimize" title="ย่อ" aria-label="ย่อหน้าต่างอีควอไลเซอร์">−</button>
@@ -304,7 +304,7 @@
                 </select>
               </label>
               <button type="button" id="xstage-eq-reset">FLAT 0 dB</button>
-              <span id="xstage-eq-mode">31 BAND · 1/3 OCTAVE</span>
+              <span id="xstage-eq-mode">LIVE SPECTRUM · MONITOR ONLY</span>
             </div>
             <div class="xstage-eq-rta-wrap">
               <canvas id="xstage-eq-rta" width="1102" height="145" aria-label="Spectrum analyzer"></canvas>
@@ -316,7 +316,7 @@
                 <div><span>R</span><meter id="xstage-eq-meter-r" min="0" max="1" value="0"></meter></div>
               </div>
             </div>
-            <footer class="xstage-eq-footer"><span>±12 dB</span><span id="xstage-eq-song-style">AUTO: รอข้อมูลแนวเพลง</span><span>RTA · L/R PEAK</span></footer>
+            <footer class="xstage-eq-footer"><span>เสียงต้นฉบับ</span><span id="xstage-eq-song-style">เสียงลำโพงไม่ผ่าน EQ</span><span>RTA · L/R PEAK</span></footer>
           </section>
           <dialog id="pc-dialog"><header><strong id="pc-dialog-title">เครื่องมือ X-Stage</strong><button id="pc-dialog-close" type="button" aria-label="ปิด">✕</button></header><div id="pc-dialog-body"></div></dialog>
           <dialog id="share-library-dialog" class="share-library-dialog" aria-labelledby="share-library-title">
@@ -495,10 +495,10 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="video-transcode.js?v=1136" defer></script>
   <script src="cloud-import.js?v=1140-google-session-renew" defer></script>
   <script src="tv-refresh.js?v=1136" defer></script>
-  <script src="app.js?v=1164-mobile-lyrics-thai-grapheme" defer></script><script src="pc-extensions.js?v=1136-live-stage-eq" defer></script>
+  <script src="app.js?v=1164-mobile-lyrics-thai-grapheme" defer></script><script src="pc-extensions.js?v=1136-unfiltered-output-visual-only" defer></script>
   <script src="midi-keyboard-ui.js?v=1136-clean-title-1157-top-song-key-single-menu" defer></script>
   <script src="native-audio-meter.js?v=1136-live-stage-eq" defer></script>
-  <script src="stage-controls.js?v=1136" defer></script>
+  <script src="stage-controls.js?v=1136-monitor-only-eq" defer></script>
   <script src="mobile-layout.js?v=1164-mobile-controls-lights" defer></script>
   <script src="android-apk-download.js?v=1136" defer></script>
 
