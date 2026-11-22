@@ -210,6 +210,14 @@ def rollback(data,safety,existed,replaced=FILES):
                         raise ValueError('queue snapshot must contain a list of tracks')
             except (OSError, UnicodeError, ValueError, TypeError) as error:
                 raise ValueError('ไฟล์ JSON สำรองเพื่อย้อนคืนเสียหาย: ' + name) from error
+    # History is optional but must be structurally valid before replacing any
+    # live file; syntactically valid JSON can still be an unusable history.
+    if 'history.json' in existed:
+        from .performance_features import read_history_snapshot
+        try:
+            read_history_snapshot(safety/'history.json')
+        except (OSError, UnicodeError, ValueError, TypeError) as error:
+            raise ValueError('ไฟล์ประวัติสำรองเพื่อย้อนคืนเสียหาย: history.json') from error
     for name in replaced:
         if name in existed and name.endswith('.sqlite3'):
             with closing(readonly(safety/name)) as db:
