@@ -30,6 +30,8 @@
   label.setAttribute('aria-live','polite');
   stage.querySelector('.stage-hero')?.append(label);
   const LEVELS=28,SMOOTH=Array(LEVELS).fill(0);
+  let stageLiveSpectrum={bands:[0,0,0],active:false,updatedAt:0};
+  window.XStageStageLiveSpectrum=()=>stageLiveSpectrum;
   let stream=null,context=null,source=null,analyser=null,silent=null,sampleData=null;
   let frame=0,lastFrame=0,retryTimer=0,tries=0,epoch=0;
   let status='';
@@ -60,6 +62,7 @@
     tries=0;lastFrame=0;SMOOTH.fill(0);
     stage.style.setProperty('--xstage-viz-energy','0');
     stage.style.setProperty('--xstage-viz-bass','0');
+    stageLiveSpectrum={bands:[0,0,0],active:false,updatedAt:Date.now()};
     for(const view of views){
       const size=view.canvas.getBoundingClientRect();
       view.ctx.clearRect(0,0,Math.max(view.canvas.width,size.width),Math.max(view.canvas.height,size.height));
@@ -111,10 +114,14 @@
     // banner. Mirror their order so the spectrum balances visually.
     for(const view of views){
       const [w,h]=sizeCanvas(view.canvas),ctx=view.ctx;
-      const gap=Math.max(1.2,w*.009),barWidth=Math.max(1.5,(w-(LEVELS-1)*gap)/LEVELS);
+      // Fit the frequency bars within narrow iPhone banner side canvases.
+      const count=Math.max(1,Math.min(LEVELS,Math.floor(w/4.5)));
+      const gap=Math.min(2,Math.max(.5,w/(count*8)));
+      const barWidth=Math.max(.5,(w-(count-1)*gap)/count);
       ctx.clearRect(0,0,w,h);
-      for(let i=0;i<LEVELS;i++){
-        const level=SMOOTH[view.mirror?LEVELS-1-i:i];
+      for(let i=0;i<count;i++){
+        const index=Math.min(LEVELS-1,Math.floor(i*LEVELS/count));
+        const level=SMOOTH[view.mirror?LEVELS-1-index:index];
         const barHeight=Math.max(2,level*h*.92);
         const x=i*(barWidth+gap),y=h-barHeight;
         const gradient=ctx.createLinearGradient(0,y,0,h);
@@ -129,6 +136,12 @@
     }
     stage.style.setProperty('--xstage-viz-energy',(energy/LEVELS).toFixed(3));
     stage.style.setProperty('--xstage-viz-bass',(bass/7).toFixed(3));
+    const average=(start,end)=>SMOOTH.slice(start,end).reduce((a,b)=>a+b,0)/Math.max(1,end-start);
+    stageLiveSpectrum={
+      bands:[average(0,7),average(7,19),average(19,LEVELS)],
+      active:playing&&context.state==='running',
+      updatedAt:Date.now()
+    };
     if(context.state!=='running'&&playing)statusText('blocked');
     else if(playing)statusText('active');
     else statusText('paused');
@@ -184,6 +197,7 @@
     SMOOTH.fill(0);
     stage.style.setProperty('--xstage-viz-energy','0');
     stage.style.setProperty('--xstage-viz-bass','0');
+    stageLiveSpectrum={bands:[0,0,0],active:false,updatedAt:Date.now()};
     for(const view of views)view.ctx.clearRect(0,0,view.canvas.width,view.canvas.height);
     statusText('paused');
   });
