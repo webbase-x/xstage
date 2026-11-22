@@ -86,11 +86,11 @@
       fallback:"กำลังสร้างตัวติดตั้ง Windows Preview"
     },
     "ag06-studio":{
-      title:"X-Stage AG06 Studio",category:"WEB · WINDOWS · ANDROID · AUDIO",
-      subtitle:"มิกเซอร์ซอฟต์แวร์สำหรับ Yamaha AG06 รุ่นแรก",
+      title:"X-Stage Audio Studio",category:"WEB · WINDOWS · ANDROID · AUDIO",
+      subtitle:"มิกเซอร์เสียงและบันทึกเสียงสำหรับ USB Audio",
       description:"เลือกอุปกรณ์รับเสียง AG06/03 ผ่านระบบปฏิบัติการ วัดระดับเสียงสเตอริโอ ปรับ HPF/EQ/Compressor/Reverb/Guitar Drive แบบซอฟต์แวร์ และบันทึกเสียงลงเครื่อง โดยไม่สั่งแก้ DSP ในตัว AG06 และไม่อ้างว่าควบคุมปุ่มบนฮาร์ดแวร์",
       features:["แสดงระดับเสียง L/R แบบเรียลไทม์จากอุปกรณ์เสียงที่เลือก","ปรับเสียงด้วย Web Audio (HPF, EQ 3 ย่าน, Compressor, Reverb และ Drive)","พรีเซ็ตเสียงพูด ร้องเพลง กีตาร์ และเสียงต้นฉบับ","บันทึกเสียงจริงในเครื่องโดยไม่อัปโหลดไฟล์","เวอร์ชันเว็บพร้อมใช้เมื่ออนุญาตไมโครโฟน; Windows EXE/Android APK อยู่ระหว่างตรวจสอบ Build และฮาร์ดแวร์จริง"],
-      hero:"สตูดิโอเสียงสำหรับ AG06 รุ่นแรก",blurb:"USB Audio · Software DSP · Recording",preview:"AG06 STUDIO · FIRST GENERATION",
+      hero:"สตูดิโอเสียงและบันทึกเสียง",blurb:"USB Audio · Software DSP · Recording",preview:"AUDIO STUDIO · USB AUDIO",
       type:"web",url:"./ag06/",
       secondary:{label:"ซอฟต์แวร์ AG Controller ของ Yamaha",url:"https://usa.yamaha.com/audio/streaming-gaming/explore/guides/ag-controller.html"},
       note:"แอปเว็บต้องอนุญาตไมโครโฟน และต้องใช้ USB Audio ที่ระบบปฏิบัติการรองรับ · เอฟเฟกต์ของแอปเป็นซอฟต์แวร์ ไม่ควบคุม AG06 hardware DSP · Windows/Android ยังไม่เปิดลิงก์ EXE/APK จนกว่าจะยืนยันไฟล์"
