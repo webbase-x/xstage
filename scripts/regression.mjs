@@ -677,9 +677,16 @@ assert.ok(stageUi.includes('const punctuationOnly='),'visible stage toast must i
 assert.ok(!mobile.includes("status.textContent=$('status')?.textContent||''"),'drawer must not copy raw auth/error status text');
 assert.ok(mobile.includes("'Google Drive พร้อมใช้งาน'"),'drawer must show a stable Google Drive summary');
 assert.ok(mobile.includes("gate.hidden=false"),'drawer Google action must open the canonical PRIVATE STAGE gate');
-assert.ok(pc.includes('createMediaElementSource(audio)'),'player EQ must remain wired to HTML5 Audio through Web Audio');
+assert.ok(pc.includes('createMediaElementSource(audio)'),'Web visualizer reuses one HTML5 media source without equalizing the audible route');
 assert.ok(pc.includes('createAnalyser()'),'audio visualizer/analyser path must remain wired');
 assert.equal((pc.match(/createMediaElementSource\(audio\)/g)||[]).length,1,'stage visualizer must reuse the single existing HTML5 Audio source');
+assert.ok(pc.includes('eqMeterSink.gain.value=0'),'Spectrum monitor must end at zero gain');
+assert.ok(pc.includes('eqSource.connect(eqAnalyser);'),'Stage lights must receive an independent analyser tap');
+assert.ok(!pc.includes('node.connect(eqAnalyser);eqAnalyser.connect(eqContext.destination)'),'Never send EQ-filtered output to the speakers');
+assert.ok(index.includes('pc-extensions.js?v=1136-unfiltered-output-visual-only'),'New unfiltered audio graph must invalidate the old player script cache');
+assert.ok(index.includes('stage-controls.js?v=1136-monitor-only-eq'),'Remote control must use monitor-only service version');
+assert.ok(host.includes("throw Error('เสียงลำโพงไม่ผ่าน EQ · ระบบแสดงระดับเสียงเท่านั้น')"),
+  'Remote EQ mutation must be refused rather than falsely claiming a sound change');
 assert.ok(index.includes('id="stage-viz-left"'),'main stage must expose the left live visualizer canvas');
 const nativeMeter=read('native-audio-meter.js');
 assert.ok(index.includes('native-audio-meter.js?v='+version.build),'the silent native meter must share the current asset build');
@@ -687,7 +694,7 @@ assert.ok(nativeMeter.includes('player.captureStream()')&&nativeMeter.includes('
 assert.ok(!/\b(?:context|ctx)\.createMediaElementSource\s*\(/.test(nativeMeter),'native visualizer must never reroute the main media output');
 assert.ok(pc.includes("['android-tv','android-tablet']"),'native direct sound path must include APK TV and tablet modes');
 assert.ok(host.includes('nativeAudioDirect:!!window.XStageNativeAudioBypass'),'Owner remote must report direct-audio bypass');
-assert.ok(remote.includes('eqSelect.disabled=direct'),'Owner EQ must be disabled on Android APK');
+assert.ok(remote.includes('eqSelect.disabled=direct||!data.eqActive'),'Owner EQ controls must be disabled when the audio path is monitor-only');
 assert.ok(css.includes('.xstage-native-audio-direct'),'Android stage must render the live meter in its native layout');
 
 assert.ok(index.includes('id="stage-viz-right"'),'main stage must expose the right live visualizer canvas');
@@ -702,7 +709,7 @@ assert.ok(pc.includes("['futuristic-audio-tech','Futuristic Audio Tech']"),'Futu
 assert.ok(pc.includes('ธีมโลโก้ X-Stage Online + Audio Visualizer'),'background settings must expose brand/visualizer themes');
 assert.ok(pc.includes('stageFrequencyLevels(bins)'),'stage visualizer must derive levels from real analyser frequency bins');
 assert.ok(pc.includes('eqAnalyser.getByteFrequencyData(bins)'),'stage visualizer must read the existing audio analyser');
-assert.ok(pc.includes("if(nativeAndroidTvAudioMode())return true;")&&pc.includes("if(!ensureEqAudio())return false;"),'PC Web must keep the shared EQ/visualizer audio graph while Android TV preserves the native media path by default');
+assert.ok(pc.includes("if(nativeAndroidTvAudioMode())return true;")&&pc.includes("if(!eqContext&&!ensureEqAudio())return true;"),'The visual-only analyser must not block playback if Web Audio is unavailable');
 assert.ok(pc.includes("screen.postMessage({type:'xstage-brand-viz'"),'main stage must synchronize live visualizer data to the singer screen');
 assert.ok(singerStage.includes('id="brand-viz-left"'),'singer screen must include live visualizer canvases');
 assert.ok(singerStage.includes("e.data?.type==='xstage-brand-viz'"),'singer screen must render analyser-fed visualizer data');
@@ -773,9 +780,9 @@ assert.ok(remoteHtml.includes('https://accounts.google.com/gsi/client" defer'),'
 assert.ok(remoteHtml.includes('id="owner-background"')&&remoteHtml.includes('id="owner-brand-theme"')&&remoteHtml.includes('id="owner-lyric-scale"')&&remoteHtml.includes('id="owner-lyric-color"'),'visual/lyric settings removed from TV must live on Owner remote');
 assert.ok(remoteHtml.includes('id="owner-eq-preset"')&&remoteHtml.includes('id="owner-eq-state"'),'EQ control and native/EQ state must live on Owner remote');
 assert.ok(pc.includes('function nativeAndroidTvAudioMode()'),'audio code must distinguish Android TV APK from PC Web');
-assert.ok(pc.includes("if(nativeAndroidTvAudioMode())return true;")&&pc.includes("if(!ensureEqAudio())return false;"),'Android TV must keep native audio by default while PC Web keeps the existing WebAudio/EQ path');
-assert.ok(pc.includes("window.XStageEnableEqPreset=async function")&&pc.includes("if(nativeAndroidTvAudioMode())return false;"),'Android APK EQ must never activate, including from the Owner remote');
-assert.ok(pc.includes("window.XStageEqIsActive=()=>!nativeAndroidTvAudioMode()&&!!eqContext"),'Owner EQ status must report inactive whenever the native Android audio bypass is engaged');
+assert.ok(pc.includes("if(nativeAndroidTvAudioMode())return true;")&&pc.includes("eqSource.connect(eqContext.destination);speakerConnected=true;"),'Android retains direct audio and Web speaker audio bypasses every EQ filter');
+assert.ok(pc.includes("window.XStageEnableEqPreset=async function(){return false;}"),'EQ presets must not affect the unfiltered speaker output');
+assert.ok(pc.includes("window.XStageEqIsActive=()=>false;"),'Owner EQ status must indicate monitor-only mode on all devices');
 assert.ok(app.includes("player.preservesPitch=true"),'playback must preserve pitch when the browser supports it');
 assert.ok(singerStage.includes('id="track-time"'),'separate singer screen must show playback time');
 assert.ok(singerStage.includes("document.querySelector('#play-state').textContent=e.data.playing?'กำลังเล่น':'พัก'"),'separate singer screen must show play/pause state');
