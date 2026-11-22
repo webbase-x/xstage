@@ -3466,14 +3466,27 @@ function drawLyrics(){
         const fontSize=Math.min(76,w*.062,h*.14);
         // Keep both lyric lines above the integrated transport/virtual keyboard.
         const density=Math.min(window.devicePixelRatio||1,2);
-        const transportHeight=ui.stage.querySelector('.transport-panel')?.getBoundingClientRect().height||0;
+        const transportBox=ui.stage.querySelector('.transport-panel')?.getBoundingClientRect();
+        const transportHeight=transportBox?.height||0;
         const keyboard=ui.stage.querySelector('#virtual-keyboard');
         const keyboardHeight=keyboard&&!keyboard.hidden?keyboard.getBoundingClientRect().height+7:0;
-        const usableBottom=h-(transportHeight+keyboardHeight+12)*density;
-        // Lift both karaoke rows by about one full lyric line while preserving spacing.
-        const lyricLift=fontSize*1.45;
+        // Mobile transport sits ABOVE the docked search. Reserve the real
+        // transport's top position rather than only its height, so neither
+        // lyric line can slide underneath the player or the search field.
+        const mobileBottomSearch=document.body.classList.contains('xstage-mobile-search-bottom');
+        const canvasBox=ui.lyrics.getBoundingClientRect();
+        const canvasScale=h/Math.max(1,canvasBox.height);
+        const transportTop=transportBox?(transportBox.top-canvasBox.top)*canvasScale:h;
+        const usableBottom=mobileBottomSearch
+          ?Math.min(h-(keyboardHeight+12)*density,transportTop-16*density)
+          :h-(transportHeight+keyboardHeight+12)*density;
+        const lyricLift=fontSize*(mobileBottomSearch?1.8:1.45);
         let nextY=Math.max(h*.22,Math.min(h*.83,usableBottom-fontSize*.8)-lyricLift);
         let currentY=Math.max(h*.10,Math.min(h*.66,nextY-fontSize*1.45));
+        if(mobileBottomSearch){
+          nextY=Math.min(nextY,usableBottom-fontSize*.9);
+          currentY=Math.min(currentY,nextY-fontSize*1.45);
+        }
         // WEB lyrics overlay the banner instead of shrinking to avoid it.
         // Retain transport and QR collision handling on both platforms.
         let lyricCenter=w/2,lyricWidth=w*.93,lyricFont=fontSize*state.visualScale;
