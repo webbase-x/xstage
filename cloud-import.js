@@ -588,6 +588,46 @@ async function publishSingleCatalog({drive,rootId,pointerFile,pointer,rows,check
   status?.('เผยแพร่ DB/songs.sqlite3 โดยตรง · '+rows.size.toLocaleString('th-TH')+' เพลง');
   return {pointerFile:null,pointer:next};
 }
+// Global raw-MIDI content identity. Package filenames, lyrics, source codes and
+// folders cannot create a second song when the enclosed MIDI bytes match.
+async function buildMidiIndex(rows,drive,check){
+  const hashes=new Map();
+  let duplicates=0,backfilled=0;
+  for(const [id,row] of rows){
+    check();
+    let hash=String(row.midiHash||row.midi?.md5Checksum||'').toLowerCase();
+    if(!/^[0-9a-f]{32}$/.test(hash)){
+      const kind=row.xmid?'xmid':row.xsk?'xsk':'';
+      if(!kind)continue;
+      const media=row[kind];
+      if(!media?.fileId)fail('ฐานเพลงมี '+kind.toUpperCase()+' ที่ไม่พบ File ID');
+      const reader=kind==='xmid'?scope.XStageXmid:scope.XStageXsk;
+      if(!reader?.openPackage)fail('ไม่พบเครื่องอ่าน '+kind.toUpperCase());
+      const packed=new Blob([await drive.getSqlite(media.fileId)]);
+      const opened=await reader.openPackage(packed);
+      hash=await core.hashBlob(opened.midi,check);
+      row.midiHash=hash;backfilled++;
+    }
+    if(!/^[0-9a-f]{32}$/.test(hash))continue;
+    const prev=hashes.get(hash);
+    if(prev&&prev.webSongId!==id){
+      // Old catalog is preserved in BACKUP; new canonical DB keeps one entry.
+      rows.delete(id);duplicates++;continue;
+    }
+    hashes.set(hash,row);
+  }
+  return {hashes,duplicates,backfilled};
+}
+function distinctImportCode(requested,rawMidiHash,byCode){
+  const code=String(requested||'').trim();
+  if(!byCode.get(code.toLowerCase())?.length)return code;
+  const stem=code.slice(0,Math.max(1,64-17));
+  for(let size=8;size<=16;size+=4){
+    const alias=stem+'-'+rawMidiHash.slice(0,size);
+    if(!byCode.get(alias.toLowerCase())?.length)return alias;
+  }
+  fail('เพลง MIDI ต่างแหล่งมีรหัสที่แยกกันไม่ได้');
+}
 class Importer {
   constructor(options){
     this.options=options;this.selected=null;this.plan=null;this.running=false;this.paused=false;this.stopRequested=false;
@@ -1259,6 +1299,10 @@ class Importer {
       // No JSON marker is created in DB. Incomplete uploads are resumed from
       // browser checkpoints and verified media IDs; only a published SQLite
       // file becomes authoritative for playback.
+      const {hashes:byMidi,duplicates:olderDuplicates,backfilled:olderHashes}=
+        await buildMidiIndex(rows,drive,()=>this.check());
+      if(olderDuplicates||olderHashes)this.status(
+        'ตรวจฐาน MIDI เดิม: ซ้ำ '+olderDuplicates+' · ระบุลายนิ้วมือ '+olderHashes);
       const byPair=new Map(),byCode=new Map();
       function addMaps(row){
         const code=String(row.code||'').toLowerCase();
@@ -1309,7 +1353,7 @@ class Importer {
         return tasks.map(task=>task.value);
       };
       const publish=async()=>{
-        if(!revisions.length&&(!pointer||pointer.directFile))return;
+        if(!revisions.length&&!olderDuplicates&&!olderHashes&&(!pointer||pointer.directFile))return;
         ({pointerFile,pointer}=await publishSingleCatalog({
           drive,rootId,pointerFile,pointer,rows,check:()=>this.check(),
           status:message=>this.status(message)
@@ -1327,8 +1371,16 @@ class Importer {
             // metadata now. Extract and SHA-256-verify the MIDI at play time,
             // or progressively for the first song waiting in the queue.
             const isXmid=item.kind==='XMID';
-            const opened=await (isXmid?scope.XStageXmid:scope.XStageXsk).inspectMetadata(item.file);
-            const code=opened.code,identity=core.songIdentity(opened.document,code);
+            const reader=isXmid?scope.XStageXmid:scope.XStageXsk;
+            const opened=await reader.openPackage(item.file);
+            const sourceCode=opened.code;
+            const rawMidiHash=await core.hashBlob(opened.midi,()=>this.check());
+            if(byMidi.has(rawMidiHash)){
+              this.stats.duplicates++;finished++;
+              show('ข้าม MIDI ซ้ำในแพ็กเกจต่างแหล่ง: '+sourceCode);continue;
+            }
+            const code=distinctImportCode(sourceCode,rawMidiHash,byCode);
+            const identity=core.songIdentity(opened.document,sourceCode);
             if(!identity.identityComplete)
               throw Error('XSK: ชื่อเพลงหรือศิลปินจริงไม่ครบ');
             const xskHash=await core.hashBlob(item.file,()=>this.check());
@@ -1339,23 +1391,26 @@ class Importer {
               this.stats.duplicates++;finished++;
               show('ข้าม XSK ซ้ำ MD5: '+code);continue;
             }
-            if(candidates.length){
-              this.stats.conflicts++;finished++;
-              show('รหัส XSK ชนกับเพลงเดิม: '+code+' · ไม่เขียนทับ');continue;
-            }
             const name=safeName(code)+'-'+xskHash.slice(0,16)+(isXmid?'.xmid':'.xsk');
             const packed=await uploadMedia(item.file,code,pathFor(code,isXmid?'xmid':'xsk','',name).slice(0,-1),name,
               'application/octet-stream',xskHash,0,1);
-            const record={webSongId:ident,code,title:identity.title,
-              artist:identity.artist,sourceFormat:isXmid?'XMID':'XSK',lyricsMode:'timed',
+            const record={webSongId:ident,code,sourceCode,midiHash:rawMidiHash,
+              title:identity.title,artist:identity.artist,
+              sourceFormat:isXmid?'XMID':'XSK',lyricsMode:'timed',
               ...(isXmid?{xmid:packed}:{xsk:packed})};
-            rows.set(ident,record);addMaps(record);
+            rows.set(ident,record);addMaps(record);byMidi.set(rawMidiHash,record);
             revisions.push(record);this.stats.newSongs++;
             if(revisions.length>=25)await publish();
           }else if(item.isMidi){
             const runtime=scope.XStageBrowserMidi;
             if(!runtime)fail('ไม่พบระบบ MIDI ที่ติดมากับหน้าเว็บ · อัปเดตเว็บก่อนนำเข้า');
-            const midiFile=item.midi.file,code=item.code;
+            const midiFile=item.midi.file,sourceCode=item.code;
+            const midiHash=await core.hashBlob(midiFile,()=>this.check());
+            if(byMidi.has(midiHash)){
+              this.stats.duplicates++;finished++;
+              show('ข้าม MIDI ซ้ำแม้ต่างชื่อ/รหัส/โฟลเดอร์: '+sourceCode);continue;
+            }
+            const code=distinctImportCode(sourceCode,midiHash,byCode);
             let parsed,doc,json;
             try{
               parsed=runtime.parseMidi(await midiFile.arrayBuffer());
@@ -1377,21 +1432,12 @@ class Importer {
               doc.songCode=code;
               json=encode(doc);
             }catch(error){throw Error('ไฟล์ MIDI/NCN ไม่สมบูรณ์: '+error.message);}
-            const [midiHash,jsonHash]=await Promise.all([
-              core.hashBlob(midiFile,()=>this.check()),
-              core.hashBlob(json,()=>this.check())
-            ]);
+            const jsonHash=await core.hashBlob(json,()=>this.check());
             const pair=midiHash+':'+jsonHash;
             if(byPair.has(pair)){this.stats.duplicates++;finished++;show('ข้าม MIDI ซ้ำ MD5: '+code);continue;}
             const candidates=byCode.get(code.toLowerCase())||[];
-            const same=candidates.find(x=>String(x.midi?.md5Checksum||'').toLowerCase()===midiHash);
-            const existingMidi=rows.get('browser/midi/'+midiHash);
-            if(existingMidi&&!same){
-              this.stats.duplicates++;finished++;
-              show('ข้าม MIDI เนื้อไฟล์ซ้ำรหัสอื่น: '+code);continue;
-            }
-            if(candidates.length&&!same){this.stats.conflicts++;finished++;
-              show('รหัส MIDI ชนกับเพลงเดิม: '+code+' · ไม่เขียนทับ');continue;}
+            const same=null;
+            if(candidates.length)fail('เพลง MIDI คนละแหล่งมีรหัสที่แยกกันไม่ได้');
             const type=item.kind==='XSK'?'XSK':item.kind==='NCN'?'NCN':
               item.kind==='KAR'?'KAR':'SMF';
             const base=safeName(code);
@@ -1430,7 +1476,7 @@ class Importer {
             const ident=same?.webSongId||('browser/midi/'+midiHash);
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิง MIDI ชนเพลงอื่น');
             const identity=core.songIdentity(doc,code,same);
-            const record={...(same||{}),webSongId:ident,code,
+            const record={...(same||{}),webSongId:ident,code,sourceCode,midiHash,
               title:identity.title,artist:identity.artist,
               sourceFormat:type,midi:media,lyrics,
               ...(ncnSource?{ncnSource}: {})};
@@ -1442,6 +1488,7 @@ class Importer {
               byCode.set(oldCode,(byCode.get(oldCode)||[]).filter(x=>x.webSongId!==ident));
             }
             rows.set(ident,record);addMaps(record);byPair.set(pair,record);
+            byMidi.set(midiHash,record);
             revisions.push(record);this.stats[same?'updated':'newSongs']++;
             if(revisions.length>=25)await publish();
           }else if(item.isFont){
