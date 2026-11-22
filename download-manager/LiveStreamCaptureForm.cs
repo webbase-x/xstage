@@ -11,6 +11,11 @@ namespace XStageDownloadManager;
 public sealed class LiveStreamCaptureForm : Form
 {
     private readonly LiveStreamCapture _capture = new();
+    private readonly LiveBackgroundMonitor _monitor = new();
+    private readonly CheckBox _autoWait = new();
+    private readonly ComboBox _pollSeconds = new();
+    private readonly NotifyIcon _trayIcon = new();
+    private bool _waitingForLive;
     private readonly TextBox _source = new();
     private readonly TextBox _destination = new();
     private readonly ComboBox _minutes = new();
@@ -40,11 +45,11 @@ public sealed class LiveStreamCaptureForm : Form
 
         var root = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 10,
+            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 11,
             Padding = new Padding(22, 16, 22, 15), AutoScroll = true
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        foreach (var height in new[] { 60, 32, 43, 32, 43, 37, 56, 40, 67, 90 })
+        foreach (var height in new[] { 60, 32, 43, 32, 43, 37, 45, 50, 43, 67, 90 })
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
 
         static Label Label(string title) => new()
@@ -113,17 +118,41 @@ public sealed class LiveStreamCaptureForm : Form
         settingsRow.Controls.Add(_minutes, 1, 0);
         root.Controls.Add(settingsRow, 0, 5);
 
+        var monitorOptions = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1,
+            BackColor = Color.FromArgb(19, 47, 65),
+            Padding = new Padding(6, 0, 5, 0)
+        };
+        monitorOptions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 78));
+        monitorOptions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22));
+        monitorOptions.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        _autoWait.Dock = DockStyle.Fill;
+        _autoWait.ForeColor = Color.FromArgb(213, 236, 249);
+        _autoWait.Text = "เฝ้ารอไลฟ์อัตโนมัติ · ไม่เปิดหน้าเว็บหรือเล่นภาพ/เสียง";
+        _autoWait.Checked = true;
+        _autoWait.CheckedChanged += (_, _) =>
+            _start.Text = _autoWait.Checked ? "เริ่มเฝ้ารอไลฟ์" : "เริ่มบันทึกทันที";
+        monitorOptions.Controls.Add(_autoWait, 0, 0);
+        _pollSeconds.Dock = DockStyle.Fill;
+        _pollSeconds.DropDownStyle = ComboBoxStyle.DropDownList;
+        foreach (var seconds in LiveBackgroundMonitor.AllowedPollSeconds)
+            _pollSeconds.Items.Add(seconds + " วินาที");
+        _pollSeconds.SelectedItem = "30 วินาที";
+        monitorOptions.Controls.Add(_pollSeconds, 1, 0);
+        root.Controls.Add(monitorOptions, 0, 6);
+
         _permission.Dock = DockStyle.Fill;
         _permission.Text = "ฉันมีสิทธิ์บันทึกและจัดเก็บสตรีมนี้";
         _permission.ForeColor = Color.FromArgb(205, 226, 240);
         _permission.Padding = new Padding(6, 0, 0, 0);
-        root.Controls.Add(_permission, 0, 6);
+        root.Controls.Add(_permission, 0, 7);
 
         var buttonRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1 };
         foreach (var percent in new[] { 37, 28, 35 })
             buttonRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, percent));
         buttonRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        _start.Text = "●  เริ่มบันทึกสด";
+        _start.Text = "เริ่มเฝ้ารอไลฟ์";
         _stop.Text = "■  หยุดและสร้างคลิป";
         _open.Text = "เปิดโฟลเดอร์คลิป";
         StyleButton(_start, true);
@@ -134,7 +163,7 @@ public sealed class LiveStreamCaptureForm : Form
         buttonRow.Controls.Add(_start, 0, 0);
         buttonRow.Controls.Add(_stop, 1, 0);
         buttonRow.Controls.Add(_open, 2, 0);
-        root.Controls.Add(buttonRow, 0, 7);
+        root.Controls.Add(buttonRow, 0, 8);
 
         var status = new TableLayoutPanel
         {
@@ -156,7 +185,7 @@ public sealed class LiveStreamCaptureForm : Form
         _bytes.Padding = new Padding(12, 0, 0, 0);
         status.Controls.Add(_state, 0, 0);
         status.Controls.Add(_bytes, 0, 1);
-        root.Controls.Add(status, 0, 8);
+        root.Controls.Add(status, 0, 9);
 
         root.Controls.Add(new Label
         {
@@ -166,9 +195,10 @@ public sealed class LiveStreamCaptureForm : Form
             Dock = DockStyle.Fill, AutoEllipsis = false,
             ForeColor = Color.FromArgb(172, 199, 218),
             Font = new Font("Segoe UI", 9)
-        }, 0, 9);
+        }, 0, 10);
 
         Controls.Add(root);
+        ConfigureTrayIcon();
         _start.Click += async (_, _) => await StartCaptureAsync();
         _stop.Click += (_, _) => StopOrCancel();
 
@@ -182,7 +212,55 @@ public sealed class LiveStreamCaptureForm : Form
             e.Cancel = true;
             StopOrCancel();
         };
-        FormClosed += (_, _) => _refresh.Dispose();
+        FormClosed += (_, _) =>
+        {
+            _trayIcon.Visible = false;
+            _trayIcon.Dispose();
+            _refresh.Dispose();
+        };
+    }
+
+    private void ConfigureTrayIcon()
+    {
+        _trayIcon.Icon = Icon ?? SystemIcons.Application;
+        _trayIcon.Text = "X-Stage · Live Background Recorder";
+        _trayIcon.Visible = false;
+        var menu = new ContextMenuStrip();
+        menu.Items.Add("แสดงหน้าต่างบันทึกไลฟ์", null, (_, _) => RestoreFromTray());
+        menu.Items.Add("หยุด / ยกเลิก", null, (_, _) => StopOrCancel());
+        _trayIcon.ContextMenuStrip = menu;
+        _trayIcon.DoubleClick += (_, _) => RestoreFromTray();
+        Resize += (_, _) =>
+        {
+            if (_working && WindowState == FormWindowState.Minimized)
+            {
+                Hide();
+                _trayIcon.Visible = true;
+                _trayIcon.ShowBalloonTip(1200, "X-Stage Live Recorder",
+                    "กำลังเฝ้ารอหรือบันทึกไลฟ์อยู่เบื้องหลัง", ToolTipIcon.Info);
+            }
+        };
+    }
+
+    private void RestoreFromTray()
+    {
+        _trayIcon.Visible = false;
+        Show();
+        WindowState = FormWindowState.Normal;
+        Activate();
+    }
+
+    private void NotifyCaptureEnd(string message, bool error = false)
+    {
+        if (!Visible)
+        {
+            _trayIcon.BalloonTipTitle = error ? "X-Stage · บันทึกไม่สำเร็จ" : "X-Stage · เสร็จแล้ว";
+            _trayIcon.BalloonTipText = message.Length > 180 ? message[..180] : message;
+            _trayIcon.ShowBalloonTip(4500);
+            return;
+        }
+        MessageBox.Show(this, message, "X-Stage Live Capture",
+            MessageBoxButtons.OK, error ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
     }
 
     private static void ConfigureInput(TextBox box)
@@ -211,6 +289,14 @@ public sealed class LiveStreamCaptureForm : Form
     public void StopOrCancel()
     {
         if (!_working) return;
+        if (_waitingForLive)
+        {
+            _stop.Enabled = false;
+            _stopInitiated = true;
+            _processingCancellation?.Cancel();
+            _state.Text = "หยุดเฝ้ารอไลฟ์แล้ว · ไม่ได้สร้างไฟล์หรือเริ่มเล่นวิดีโอ";
+            return;
+        }
         if (_postProcessing)
         {
             _stop.Enabled = false;
@@ -255,6 +341,7 @@ public sealed class LiveStreamCaptureForm : Form
         _working = true;
         _stopInitiated = false;
         _postProcessing = false;
+        _waitingForLive = false;
         _processingCancellation = new CancellationTokenSource();
         _start.Enabled = false;
         _stop.Enabled = true;
@@ -263,9 +350,24 @@ public sealed class LiveStreamCaptureForm : Form
         _source.ReadOnly = true;
         _destination.ReadOnly = true;
         _minutes.Enabled = false;
+        _autoWait.Enabled = false;
+        _pollSeconds.Enabled = false;
         _refresh.Start();
         try
         {
+            if (_autoWait.Checked)
+            {
+                if (_pollSeconds.SelectedIndex < 0)
+                    throw new ArgumentException("กรุณาเลือกรอบเวลาตรวจไลฟ์");
+                _waitingForLive = true;
+                _stop.Text = "ยกเลิกการเฝ้ารอ";
+                var seconds = LiveBackgroundMonitor.AllowedPollSeconds[_pollSeconds.SelectedIndex];
+                await _monitor.WaitForLiveAsync(url, seconds, ShowPhase,
+                    _processingCancellation.Token);
+                _waitingForLive = false;
+                _stop.Text = "หยุดและสร้างคลิป";
+            }
+            _processingCancellation.Token.ThrowIfCancellationRequested();
             var result = await _capture.RecordAsync(
                 url, _destination.Text.Trim(), minutes, ShowPhase,
                 _processingCancellation.Token);
@@ -273,21 +375,16 @@ public sealed class LiveStreamCaptureForm : Form
             _bytes.Text = "ไฟล์ต้นฉบับ: " + result.RecordingPath +
                 " · คลิปสำเร็จ " + result.Clips.Count + " ไฟล์";
             _open.Enabled = Directory.Exists(result.SessionDirectory);
-            MessageBox.Show(this,
-                result.Message + Environment.NewLine +
+            NotifyCaptureEnd(result.Message + Environment.NewLine +
                 "โฟลเดอร์: " + result.SessionDirectory +
-                Environment.NewLine + "ต้นฉบับ MKV ถูกเก็บไว้เสมอ",
-                "บันทึกสตรีมเสร็จแล้ว", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Environment.NewLine + "ต้นฉบับ MKV ถูกเก็บไว้เสมอ");
         }
         catch (OperationCanceledException)
         {
-            _state.Text = "ยกเลิกการแปลงตามคำสั่ง · ไฟล์ต้นฉบับยังอยู่";
+            _state.Text = "หยุดตามคำสั่ง · หากมีต้นฉบับหรือคลิปที่สำเร็จจะยังคงอยู่";
             _open.Enabled = Directory.Exists(_capture.SessionDirectory);
-            MessageBox.Show(this,
-                "ยกเลิกแล้ว เก็บไฟล์ต้นฉบับและคลิปที่สร้างเสร็จไว้ใน:" +
-                Environment.NewLine + _capture.SessionDirectory,
-                "X-Stage Live Capture", MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            NotifyCaptureEnd("ยกเลิกแล้ว · ไฟล์ที่บันทึกไว้ยังอยู่ใน:" +
+                Environment.NewLine + _capture.SessionDirectory);
         }
         catch (Exception error)
         {
@@ -295,10 +392,9 @@ public sealed class LiveStreamCaptureForm : Form
             // storage or FFmpeg problem. The process never overwrites files.
             _state.Text = "ไม่สำเร็จ: " + error.Message;
             _open.Enabled = Directory.Exists(_capture.SessionDirectory);
-            MessageBox.Show(this,
-                error.Message + Environment.NewLine +
-                "หากมีข้อมูลบันทึกไว้แล้ว จะยังอยู่ใน: " + _capture.SessionDirectory,
-                "X-Stage Live Capture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            NotifyCaptureEnd(error.Message + Environment.NewLine +
+                "หากมีข้อมูลบันทึกไว้แล้ว จะยังอยู่ใน: " +
+                _capture.SessionDirectory, error: true);
         }
         finally
         {
@@ -306,12 +402,16 @@ public sealed class LiveStreamCaptureForm : Form
             _processingCancellation?.Dispose();
             _processingCancellation = null;
             _postProcessing = false;
+            _waitingForLive = false;
             _working = false;
             _start.Enabled = true;
             _stop.Enabled = false;
             _source.ReadOnly = false;
             _destination.ReadOnly = false;
             _minutes.Enabled = true;
+            _autoWait.Enabled = true;
+            _pollSeconds.Enabled = true;
+            _start.Text = _autoWait.Checked ? "เริ่มเฝ้ารอไลฟ์" : "เริ่มบันทึกทันที";
             RefreshSize();
         }
     }
