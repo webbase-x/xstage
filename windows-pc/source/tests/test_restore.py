@@ -32,6 +32,21 @@ class RestoreTests(unittest.TestCase):
         q=json.loads((self.data/'queue.json').read_text(encoding='utf-8'));self.assertEqual(q[0]['key'],3);self.assertEqual(q[0]['request_id'],'')
         self.assertTrue((Path(result['safety'])/'songs.sqlite3').exists())
         self.assertIsNone(restore.apply_pending(self.data))
+    def test_rollback_rejects_unsafe_safety_sqlite_journal_before_live_mutation(self):
+        safety = self.root/'restore-safety-test'
+        safety.mkdir()
+        restore.copy_database(self.data/'songs.sqlite3', safety/'songs.sqlite3')
+        (safety/'settings.json').write_bytes((self.data/'settings.json').read_bytes())
+        sidecar = safety/'songs.sqlite3-wal'
+        sidecar.mkdir()
+        with self.assertRaisesRegex(ValueError, 'SQLite journal'):
+            restore.rollback(self.data, safety, ['songs.sqlite3', 'settings.json'],
+                             ('songs.sqlite3', 'settings.json'))
+        self.assertEqual(self.title(), 'ปัจจุบัน')
+        self.assertEqual(json.loads((self.data/'settings.json').read_text(encoding='utf-8'))['title'],
+                         'ปัจจุบัน')
+        self.assertTrue(sidecar.is_dir())
+
     def test_invalid_backup_does_not_change_current_data(self):
         write_json(self.source/'queue.json',[{'song_id':999}])
         with self.assertRaises(ValueError):restore.stage_restore(self.source,self.data)
