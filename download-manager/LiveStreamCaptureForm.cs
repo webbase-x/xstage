@@ -23,6 +23,10 @@ public sealed class LiveStreamCaptureForm : Form
     private readonly System.Windows.Forms.Timer _refresh = new() { Interval = 1000 };
     private bool _working;
     private bool _stopInitiated;
+    private bool _postProcessing;
+    private CancellationTokenSource? _processingCancellation;
+
+    public bool IsBusy => _working;
 
     public LiveStreamCaptureForm(string defaultFolder)
     {
@@ -166,28 +170,17 @@ public sealed class LiveStreamCaptureForm : Form
 
         Controls.Add(root);
         _start.Click += async (_, _) => await StartCaptureAsync();
-        _stop.Click += (_, _) =>
-        {
-            _stopInitiated = true;
-            _stop.Enabled = false;
-            _stop.Text = "กำลังหยุด...";
-            _capture.RequestStop();
-            _state.Text = "กำลังปิดไฟล์ต้นฉบับก่อนเลือกจุดตัด...";
-        };
+        _stop.Click += (_, _) => StopOrCancel();
+
         _open.Click += (_, _) => OpenSessionFolder();
         _refresh.Tick += (_, _) => RefreshSize();
         FormClosing += (_, e) =>
         {
             if (!_working) return;
-            // Do not abandon a recording task or stop during MP4 finalization.
+            // Closing requests a safe stop, or cancels transcoding while
+            // retaining the MKV source and any already finalized MP4 clips.
             e.Cancel = true;
-            if (!_stopInitiated)
-            {
-                _stopInitiated = true;
-                _stop.Enabled = false;
-                _capture.RequestStop();
-            }
-            _state.Text = "กำลังเก็บไฟล์ให้สมบูรณ์ กรุณาปิดหน้าต่างหลังเสร็จ";
+            StopOrCancel();
         };
         FormClosed += (_, _) => _refresh.Dispose();
     }
@@ -215,6 +208,25 @@ public sealed class LiveStreamCaptureForm : Form
         button.Cursor = Cursors.Hand;
     }
 
+    public void StopOrCancel()
+    {
+        if (!_working) return;
+        if (_postProcessing)
+        {
+            _stop.Enabled = false;
+            _stop.Text = "กำลังยกเลิกการแปลง...";
+            _state.Text = "กำลังยกเลิกการแปลง · ต้นฉบับจะยังอยู่";
+            _processingCancellation?.Cancel();
+            return;
+        }
+        if (_stopInitiated) return;
+        _stopInitiated = true;
+        _stop.Enabled = false;
+        _stop.Text = "กำลังหยุด...";
+        _capture.RequestStop();
+        _state.Text = "กำลังปิดไฟล์ต้นฉบับอย่างปลอดภัย...";
+    }
+
     private async Task StartCaptureAsync()
     {
         if (_working) return;
@@ -236,6 +248,8 @@ public sealed class LiveStreamCaptureForm : Form
         var minutes = LiveStreamCapture.AllowedClipMinutes[_minutes.SelectedIndex];
         _working = true;
         _stopInitiated = false;
+        _postProcessing = false;
+        _processingCancellation = new CancellationTokenSource();
         _start.Enabled = false;
         _stop.Enabled = true;
         _stop.Text = "■  หยุดและสร้างคลิป";
@@ -247,7 +261,8 @@ public sealed class LiveStreamCaptureForm : Form
         try
         {
             var result = await _capture.RecordAsync(
-                url, _destination.Text.Trim(), minutes, ShowPhase);
+                url, _destination.Text.Trim(), minutes, ShowPhase,
+                _processingCancellation.Token);
             _state.Text = result.Message;
             _bytes.Text = "ไฟล์ต้นฉบับ: " + result.RecordingPath +
                 " · คลิปสำเร็จ " + result.Clips.Count + " ไฟล์";
@@ -272,6 +287,9 @@ public sealed class LiveStreamCaptureForm : Form
         finally
         {
             _refresh.Stop();
+            _processingCancellation?.Dispose();
+            _processingCancellation = null;
+            _postProcessing = false;
             _working = false;
             _start.Enabled = true;
             _stop.Enabled = false;
@@ -286,9 +304,23 @@ public sealed class LiveStreamCaptureForm : Form
     {
         if (IsDisposed || !IsHandleCreated) return;
         if (InvokeRequired)
-            BeginInvoke(new Action(() => { if (!IsDisposed) _state.Text = phase; }));
-        else
-            _state.Text = phase;
+        {
+            BeginInvoke(new Action(() => ShowPhase(phase)));
+            return;
+        }
+        _state.Text = phase;
+        if (phase.Contains("วิเคราะห์ช่วงหยุดพูด", StringComparison.Ordinal) ||
+            phase.Contains("จุดตัดตามจังหวะเงียบ", StringComparison.Ordinal) ||
+            phase.Contains("กำลังสร้างคลิป", StringComparison.Ordinal) ||
+            phase.Contains("ไม่พบจังหวะเงียบ", StringComparison.Ordinal))
+        {
+            _postProcessing = true;
+            if (!_processingCancellation?.IsCancellationRequested ?? false)
+            {
+                _stop.Enabled = true;
+                _stop.Text = "ยกเลิกแปลง (เก็บต้นฉบับ)";
+            }
+        }
     }
 
     private void RefreshSize()
