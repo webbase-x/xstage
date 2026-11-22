@@ -32,6 +32,68 @@ if (args.Length >= 3 && args[0] == "--media-smoke")
     return;
 }
 
+// Background recorder only recognizes genuinely active public media manifests.
+// A master playlist, finished VOD or upcoming platform video is NOT "live".
+var hlsActive = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:10\n#EXTINF:4.0,\npart10.ts\n";
+var hlsFinished = hlsActive + "#EXT-X-ENDLIST\n";
+var hlsMaster = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=350000\nvariant.m3u8\n";
+if (!LiveBackgroundMonitor.IsActiveHlsManifest(hlsActive) ||
+    LiveBackgroundMonitor.IsActiveHlsManifest(hlsFinished) ||
+    LiveBackgroundMonitor.IsActiveHlsManifest(hlsMaster) ||
+    LiveBackgroundMonitor.IsActiveHlsManifest("#EXTM3U\n#EXTINF:4,\nvideo.mp4") ||
+    !LiveBackgroundMonitor.IsActiveDashManifest(
+        "<?xml version=\"1.0\"?><MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" type=\"dynamic\"></MPD>") ||
+    LiveBackgroundMonitor.IsActiveDashManifest("<MPD type=\"static\"></MPD>") ||
+    LiveBackgroundMonitor.IsActiveDashManifest("this is not an MPD") ||
+    !LiveBackgroundMonitor.IsActivePlatformStatus("is_live") ||
+    LiveBackgroundMonitor.IsActivePlatformStatus("is_upcoming") ||
+    LiveBackgroundMonitor.IsActivePlatformStatus("was_live") ||
+    LiveBackgroundMonitor.IsActivePlatformStatus(null))
+    throw new Exception("Live monitor classified VOD/upcoming/master as actively broadcasting.");
+
+var monitorArgs = LiveBackgroundMonitor.BuildPlatformStatusArguments(
+    "https://www.youtube.com/live/demo123", @"C:\tools");
+if (!monitorArgs.Contains("--no-plugin-dirs") ||
+    !monitorArgs.Contains("--ignore-config") ||
+    !monitorArgs.Contains("--skip-download") ||
+    !monitorArgs.Contains("xstage-live-status:%(live_status)s") ||
+    monitorArgs.Last() != "https://www.youtube.com/live/demo123")
+    throw new Exception("Public live-status polling must be metadata-only with safe extractor options.");
+var rejectPrivateMonitor = false;
+try
+{
+    LiveBackgroundMonitor.BuildPlatformStatusArguments(
+        "https://example.net/file.m3u8", @"C:\tools");
+}
+catch (ArgumentException) { rejectPrivateMonitor = true; }
+if (!rejectPrivateMonitor)
+    throw new Exception("Platform-specific monitor must reject arbitrary non-platform endpoints.");
+
+using (var alreadyCancelled = new CancellationTokenSource())
+{
+    alreadyCancelled.Cancel();
+    var cancelled = false;
+    try
+    {
+        await new LiveBackgroundMonitor().WaitForLiveAsync(
+            "https://example.net/stream.m3u8", 30, null, alreadyCancelled.Token);
+    }
+    catch (OperationCanceledException) { cancelled = true; }
+    if (!cancelled)
+        throw new Exception("Background monitoring must stop before any network traffic on cancel.");
+}
+var invalidPoll = false;
+try
+{
+    await new LiveBackgroundMonitor().WaitForLiveAsync(
+        "https://example.net/stream.m3u8", 1, null);
+}
+catch (ArgumentOutOfRangeException) { invalidPoll = true; }
+if (!invalidPoll)
+    throw new Exception("Live monitor polling must prevent excessive network requests.");
+
+Console.WriteLine("PASS: live background metadata, manifest classification, cancellation and bounded polling.");
+
 // Live capture: route only supported public sources into the opt-in recorder.
 // A querystring does not change the HLS/DASH pathname classification.
 if (!LiveStreamCapture.IsSupportedSource("https://video.example/live/master.m3u8?token=abc") ||
