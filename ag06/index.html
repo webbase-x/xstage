@@ -105,11 +105,14 @@
   <div class="section-header"><div><div class="eyebrow">07 / MIDI COMPOSER</div><h2>MIDI Note Editor · Synth</h2></div><span class="chip">INDEPENDENT TRIANGLE OSCILLATOR</span></div>
   <p class="subtle-text">สร้างโน้ตด้วยตัวเองในรูปแบบ Step Sequencer เครื่องดนตรีใช้ Oscillator ที่พัฒนาขึ้นเอง ไม่มีคลังเสียงของ Steinberg</p>
   <div class="studio-toolbar">
+   <label>เครื่องดนตรี <select id="midi-instrument"><option value="triangle">Soft Synth</option><option value="sine">Sine</option><option value="square">Pulse</option><option value="sawtooth">Saw</option></select></label>
    <label>Tempo (BPM) <input id="midi-bpm" type="number" min="40" max="240" value="120"></label>
    <label>Pitch (MIDI) <input id="midi-pitch" type="number" min="36" max="96" value="60"></label>
    <label>Start (beat) <input id="midi-beat" type="number" min="0" max="128" step=".25" value="0"></label>
    <label>Length (beat) <input id="midi-length" type="number" min=".125" max="16" step=".125" value="1"></label>
    <button type="button" class="button subtle" id="midi-add">＋ เพิ่มโน้ต</button>
+   <label class="button subtle" for="midi-import">นำเข้า MIDI</label><input type="file" id="midi-import" accept=".mid,.midi,audio/midi" hidden>
+   <button type="button" class="button subtle" id="midi-export">ส่งออก MIDI</button>
    <button type="button" class="button subtle" id="midi-clear">ล้างโน้ต</button>
    <button type="button" class="button" id="midi-play">▶ ฟังทำนอง</button>
    <button type="button" class="button primary" id="midi-to-track">สร้างแทร็กเครื่องดนตรี</button>
