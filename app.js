@@ -4718,9 +4718,16 @@ async function recoverPendingGoogleAuth(reason='กำลังกู้คื�
     return !!state.token;
   }catch(error){
     if(id===state.authId){
-      resetPrivate({keepAuth:true});
-      if(!/เชื่อมต่อไม่สำเร็จ|ใช้เวลานาน|อินเทอร์เน็ต/.test(String(error.message||'')))clearPendingAuth();
-      setStatus('กู้คืนการเข้าสู่ระบบไม่สำเร็จ: '+error.message,'error');
+      if([403,404].includes(error?.driveStatus)&&error?.driveSubject==='ไฟล์เพลงส่วนตัว'&&state.accountSub){
+        hideCatalogLoading();setSearchAvailability(false);
+        clearPendingAuth();
+        ui.libraryState.textContent='Google Login สำเร็จ · ตรวจสิทธิ์ไฟล์เพลง';
+        setStatus('บัญชี Google ยังใช้งานได้ แต่ต้องอนุญาตไฟล์เพลงให้แอป: '+error.message,'error');
+      }else{
+        resetPrivate({keepAuth:true});
+        if(!/เชื่อมต่อไม่สำเร็จ|ใช้เวลานาน|อินเทอร์เน็ต/.test(String(error.message||'')))clearPendingAuth();
+        setStatus('กู้คืนการเข้าสู่ระบบไม่สำเร็จ: '+error.message,'error');
+      }
     }
     return false;
   }finally{
