@@ -30,6 +30,10 @@ def validate_backup(folder):
         # that could silently read or restore files outside the selected set.
         if source.is_symlink() or getattr(source, 'is_junction', lambda: False)():
             raise ValueError('ชุดสำรองมีไฟล์ลิงก์ที่ไม่ปลอดภัย: '+name)
+    for name in OPTIONAL_FILES:
+        optional = folder/name
+        if optional.exists() and not optional.is_file():
+            raise ValueError('ไฟล์เสริมชุดสำรองไม่ถูกต้อง: '+name)
     for name in FILES:
         if not (folder/name).is_file():raise ValueError('ชุดสำรองไม่ครบ: '+name)
     with closing(readonly(folder/FILES[0])) as db:
