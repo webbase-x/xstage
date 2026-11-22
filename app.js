@@ -4463,11 +4463,92 @@ document.addEventListener('keydown',e=>{
 window.addEventListener('pagehide',savePlaybackResumeState);
 window.addEventListener('beforeunload',()=>{savePlaybackResumeState();stopSoundFontFill();state.liveMidiPlayback?.dispose();state.controller?.abort();resetSongVideo();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
 renderSongs();renderQueue();updateTransport();scheduleLyricsDraw();setupNativeAndroidTvUi();setupAppUpdateWatcher();
+
+let importerGoogleRenewal=null;
+let importerGoogleRenewalRetryAfter=0;
+// Browser-only Google access tokens expire. An ongoing import must reauthorize
+// the SAME verified account without resetting catalog/queue or prompting users
+// once per chunk. GIS prompt:'' reuses an existing consent when Google allows it;
+// it can still require a real user gesture after revocation/blocked cookies.
+async function ensureImporterGoogleAuth(force=false){
+  const margin=3*60*1000;
+  if(!force&&state.token&&state.accountSub&&
+     state.tokenExpiresAt>Date.now()+margin)return true;
+  if(importerGoogleRenewal)return importerGoogleRenewal;
+  if(!state.accountSub||!state.token)
+    throw Error('ยังไม่มีบัญชี Google ที่ยืนยันแล้ว · กรุณาเชื่อมต่อบัญชีเพื่อทำต่อ');
+  if(Date.now()<importerGoogleRenewalRetryAfter)
+    throw Error('Google ไม่อนุญาตให้ต่ออายุอัตโนมัติในขณะนี้ · กดเชื่อม Google หนึ่งครั้งแล้วทำต่อ');
+  if(typeof google==='undefined'||!google.accounts?.oauth2?.initTokenClient||
+     !cfg.googleClientId)
+    throw Error('Google Sign-In ยังไม่พร้อม · ตรวจการเชื่อมต่อ แล้วกดเชื่อม Google');
+  const expectedSub=state.accountSub,authId=state.authId;
+  importerGoogleRenewal=(async()=>{
+    let watchdog=0;
+    try{
+      const newToken=await new Promise((resolve,reject)=>{
+        let done=false;
+        const settle=(error,value)=>{
+          if(done)return;
+          done=true;clearTimeout(watchdog);
+          if(error)reject(error);else resolve(value);
+        };
+        watchdog=setTimeout(()=>settle(Error('Google ไม่ตอบรับการต่ออายุโทเค็น')),25000);
+        try{
+          const client=google.accounts.oauth2.initTokenClient({
+            client_id:cfg.googleClientId,
+            scope:'openid email https://www.googleapis.com/auth/drive.file',
+            hint:state.accountSub,
+            callback:result=>{
+              if(result?.error||!result?.access_token)
+                settle(Error('Google ต้องการการยืนยันสิทธิ์อีกครั้ง'));
+              else settle(null,result);
+            },
+            error_callback:()=>settle(Error('Google ต้องการให้ผู้ใช้ยืนยันสิทธิ์อีกครั้ง'))
+          });
+          client.requestAccessToken({prompt:''});
+        }catch(error){settle(error);}
+      });
+      if(state.authId!==authId||state.accountSub!==expectedSub)
+        throw Error('บัญชี Google เปลี่ยนระหว่างต่ออายุ · หยุดเพื่อป้องกันอัปโหลดผิดคลัง');
+      const accountResult=await googleFetch(
+        'https://openidconnect.googleapis.com/v1/userinfo',
+        {headers:requestHeaders(newToken.access_token),cache:'no-store'},
+        'Google Account',0);
+      if(!accountResult.ok)throw driveError(accountResult.status,'ข้อมูลบัญชี Google');
+      const account=await accountResult.json();
+      if(!account.email_verified||account.sub!==expectedSub)
+        throw Error('Google ส่งบัญชีที่ไม่ตรงกับงานเดิม · ไม่สลับบัญชีโดยอัตโนมัติ');
+      const expiresIn=Number(newToken.expires_in);
+      if(!Number.isFinite(expiresIn)||expiresIn<120)
+        throw Error('Google ส่งอายุโทเค็นที่ใช้ต่ออายุไม่ได้');
+      const expiresAt=Date.now()+Math.min(expiresIn,3600)*1000;
+      if(state.authId!==authId||state.accountSub!==expectedSub)
+        throw Error('บัญชี Google เปลี่ยนระหว่างตรวจสอบ');
+      state.token=newToken.access_token;
+      state.tokenExpiresAt=expiresAt;
+      saveActiveAuth(state.token,expiresAt,expectedSub);
+      clearPendingAuth();
+      importerGoogleRenewalRetryAfter=0;
+      window.dispatchEvent(new CustomEvent('xstage:auth-refreshed',
+        {detail:{sub:expectedSub,source:'importer-auto-renew'}}));
+      return true;
+    }catch(error){
+      importerGoogleRenewalRetryAfter=Date.now()+60000;
+      throw error;
+    }finally{clearTimeout(watchdog);}
+  })();
+  try{return await importerGoogleRenewal;}
+  finally{importerGoogleRenewal=null;}
+}
+window.XStageEnsureImporterGoogleAuth=ensureImporterGoogleAuth;
 const xstageCloudImporter=window.XStageCloudImport?.init({
   // The browser importer obtains only an in-memory short-lived token and the
   // current verified account. No token, password or refresh token is stored.
   session:()=>({token:state.token,sub:state.accountSub,
-    rootId:state.libraryRootId,owned:state.libraryRootOwnedByMe}),
+    rootId:state.libraryRootId,owned:state.libraryRootOwnedByMe,
+    expiresAt:state.tokenExpiresAt}),
+  ensureAuth:ensureImporterGoogleAuth,
   refresh:async()=>{
     if(!state.token||!state.accountSub)return;
     // Reload the canonical XStageKaraoke current.json/catalog after publishing.
