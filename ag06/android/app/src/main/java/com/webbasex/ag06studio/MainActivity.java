@@ -225,7 +225,43 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void saveMidiFile(String encoded){
+        final String prefix="data:audio/midi;base64,";
+        if(encoded==null||encoded.length()>2_000_000||!encoded.startsWith(prefix)){
+            notifyWeb(false,"ไฟล์ MIDI ไม่ถูกต้องหรือใหญ่เกิน 1 MB");return;
+        }
+        Uri created=null;
+        try{
+            byte[] bytes=Base64.decode(encoded.substring(prefix.length()),Base64.DEFAULT);
+            if(bytes.length<22||bytes.length>1024*1024||bytes[0]!=77||bytes[1]!=84||bytes[2]!=104||bytes[3]!=100)
+                throw new IllegalArgumentException("โครงสร้าง MIDI ไม่ถูกต้อง");
+            ContentValues values=new ContentValues();
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME,"X-Stage-Audio-Notes-"+System.currentTimeMillis()+".mid");
+            values.put(MediaStore.MediaColumns.MIME_TYPE,"audio/midi");
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH,Environment.DIRECTORY_DOWNLOADS+"/XStageAudio");
+            values.put(MediaStore.MediaColumns.IS_PENDING,1);
+            created=getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI,values);
+            if(created==null)throw new IllegalStateException("สร้างไฟล์ MIDI ไม่ได้");
+            try(OutputStream out=getContentResolver().openOutputStream(created)){
+                if(out==null)throw new IllegalStateException("เปิดไฟล์ MIDI ไม่ได้");
+                out.write(bytes);
+            }
+            ContentValues ready=new ContentValues();ready.put(MediaStore.MediaColumns.IS_PENDING,0);
+            getContentResolver().update(created,ready,null,null);
+            notifyWeb(true,"บันทึก MIDI ใน Downloads/XStageAudio แล้ว");
+        }catch(Exception e){
+            if(created!=null)getContentResolver().delete(created,null,null);
+            notifyWeb(false,"บันทึก MIDI ไม่สำเร็จ: "+e.getMessage());
+        }
+    }
+
     public final class RecordingBridge {
+        @JavascriptInterface public void saveMidi(String encoded){
+            runOnUiThread(()->{
+                if(!trustedPage())return;
+                new Thread(()->saveMidiFile(encoded),"studio-midi-export").start();
+            });
+        }
         @JavascriptInterface public void saveProject(String encoded){
             runOnUiThread(()->{
                 if(!trustedPage())return;
