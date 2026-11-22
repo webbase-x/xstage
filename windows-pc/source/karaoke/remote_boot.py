@@ -124,9 +124,11 @@ def refresh_local_remote(app):
     if label is None:
         return
     remote = getattr(app, 'remote', None)
+    compact = getattr(app, '_remote_compact', False)
     if not remote:
-        label.set('รีโมท LAN: ปิด')
+        label.set('📱 รีโมท QR' if compact else 'รีโมท LAN: ปิด')
     elif getattr(app, 'remote_invite', None):
-        label.set('รีโมท LAN พร้อม · ' + app.remote_invite['url'].removeprefix('http://'))
+        label.set('📱 รีโมทพร้อม' if compact else
+                  'รีโมท LAN พร้อม · ' + app.remote_invite['url'].removeprefix('http://'))
     else:
-        label.set('รีโมท LAN เปิดแล้ว · รอ IP วงใน')
+        label.set('📱 รอ LAN' if compact else 'รีโมท LAN เปิดแล้ว · รอ IP วงใน')
