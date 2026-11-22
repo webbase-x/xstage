@@ -1790,6 +1790,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   ui.nowPlaying.textContent = 'ยังไม่ได้เลือกเพลง';ui.nowArtist.textContent='X-Stage Karaoke Online';ui.stageCode.textContent='—';
   setSongKeyDisplay();
   ui.stage.classList.remove('playing');ui.stageIdle.hidden = false;
+  window.XStageStageLighting?.clearMidiNotes?.();
   setPlayStatus(''); updateTransport();renderSongs();renderQueue();
   if (revoke && oldToken && typeof google !== 'undefined') {
     try { google.accounts.oauth2.revoke(oldToken,()=>{}); } catch { /* session is already cleared */ }
@@ -2926,6 +2927,7 @@ function clearIdleStage(message){
   ui.stageCode.textContent='—';
   setSongKeyDisplay();
   ui.stage.classList.remove('playing');
+  window.XStageStageLighting?.clearMidiNotes?.();
   ui.stageIdle.hidden=false;
   if(typeof pen!=='undefined')pen.clearRect(0,0,ui.lyrics.width,ui.lyrics.height);
   setPlayStatus(message);
@@ -3208,6 +3210,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       }
       state.liveMidiSource=liveMidiBytes;
       const parsedLiveMidi=window.XStageBrowserMidi.parseMidi(liveMidiBytes);
+      window.XStageStageLighting?.setMidiNotes?.(parsedLiveMidi.notes,parsedLiveMidi.duration);
       midiTransport.begin(parsedLiveMidi.duration,midiTailHandoffCue(parsedLiveMidi,lyrics));
       try{
         state.liveMidiPlayback=professional
@@ -3234,6 +3237,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
           note,on,$('midi-instrument')?.value||'')
       });
     }else{
+      window.XStageStageLighting?.clearMidiNotes?.();
       window.XStageMIDIPiano?.setSong({bytes:null});
       setMidiEngineStatus(null);
       window.XStageIOSMidiAudio?.release?.();
