@@ -339,6 +339,87 @@ def _sidecar_folders(root):
     except OSError:
         return {}
 
+def _cloud_layout_companions(media):
+    """Resolve current XStageKaraoke sidecars by code, not file-content hashes.
+
+    Every uploaded source/lyric may carry a different -<hash16> suffix.
+    Only the matching role and one letter bucket are consulted. Ambiguous
+    same-code files cannot silently be paired with the wrong lyric.
+    """
+    source=Path(media)
+    bucket=source.parent
+    song_folder=bucket.parent
+    format_folder=song_folder.parent
+    category= format_folder.parent
+    songs=category.parent
+    if (song_folder.name.upper()!="SONG" or
+            category.name.upper() not in ("MIDI","AUDIO","VIDEO") or
+            songs.name.upper()!="SONGS"):
+        return {}
+    match=re.fullmatch(r"(.+)-[0-9a-fA-F]{16}",source.stem)
+    code=match.group(1) if match else source.stem
+    if not code or len(code)>160:
+        return {}
+    def one(folder,ext):
+        if not folder.is_dir() or folder.is_symlink():
+            return None
+        matched=[]
+        try:
+            for file in folder.iterdir():
+                if (file.is_symlink() or not file.is_file() or
+                        file.suffix.casefold()!=ext):
+                    continue
+                if (file.stem==code or re.fullmatch(
+                        re.escape(code)+r"-[0-9a-fA-F]{16}",file.stem)):
+                    matched.append(file)
+                    if len(matched)>1:
+                        return None
+        except OSError:
+            return None
+        return matched[0] if matched else None
+    result={".json":one(format_folder/"LYRICS"/bucket.name,".json")}
+    if category.name.upper()=="MIDI" and format_folder.name.upper()=="NCN":
+        for ext,role in ((".lyr","LYR"),(".cur","CUR")):
+            result[ext]=one(format_folder/role/bucket.name,ext)
+    return result
+
+
+def _cloud_json_document(source):
+    """Read complete Lyrics JSON v1 without manufacturing any timestamps."""
+    source=Path(source)
+    if source.stat().st_size>8*1024*1024:
+        raise ValueError("Lyrics JSON ใหญ่เกิน 8 MB")
+    try:
+        raw=json.loads(source.read_text(encoding="utf-8-sig"))
+    except (ValueError,UnicodeError) as exc:
+        raise ValueError("Lyrics JSON ไม่สมบูรณ์") from exc
+    if (not isinstance(raw,dict) or raw.get("schemaVersion")!=1 or
+            not isinstance(raw.get("lines"),list) or not raw["lines"]):
+        raise ValueError("Lyrics JSON ต้องเป็น schemaVersion 1 และมีเนื้อร้อง")
+    lines=[]
+    previous=-1
+    for item in raw["lines"]:
+        if not isinstance(item,dict):
+            raise ValueError("Lyrics JSON มีข้อมูลบรรทัดผิดรูปแบบ")
+        start,end=item.get("startTime"),item.get("endTime")
+        if (not isinstance(start,(int,float)) or isinstance(start,bool) or
+                not math.isfinite(start) or start<0 or start<previous or
+                not isinstance(end,(int,float)) or isinstance(end,bool) or
+                not math.isfinite(end) or end<=start or
+                not isinstance(item.get("text"),str) or
+                not item["text"].strip() or
+                not isinstance(item.get("syllables",[]),list)):
+            raise ValueError("Lyrics JSON ต้องมีข้อความและเวลาเริ่ม-จบครบจริง")
+        lines.append({"text":item["text"],"startTime":start,
+                      "endTime":end,"syllables":item.get("syllables",[])})
+        previous=start
+    doc={"lines":lines,"sourceFormat":"DRIVE-JSON",
+         "metadata":{"timingComplete":True,"title":raw.get("title"),
+                     "artist":raw.get("artist")}}
+    valid_lines(doc)
+    return doc
+
+
 def companion_candidates(media):
     """Exact-code sidecar matching: no backup, hashing or recursive per-song scan.
 
@@ -347,7 +428,7 @@ def companion_candidates(media):
     Supports flat, bucketed and sibling NCN trees and sidecar LRC for media.
     """
     p=Path(media)
-    result={".lyr":None,".cur":None,".lrc":None}
+    result={".lyr":None,".cur":None,".lrc":None,".json":None}
     def probe(folder,ext):
         for suffix in (ext,ext.upper()):
             candidate=folder/(p.stem+suffix)
@@ -393,6 +474,9 @@ def companion_candidates(media):
                     break
         if all(result[e] for e in eligible):
             break
+    for ext,sidecar in _cloud_layout_companions(p).items():
+        if not result.get(ext) and sidecar:
+            result[ext]=sidecar
     return result
 
 def is_ncn_media(path,companions=None):
@@ -473,6 +557,12 @@ def document_for(path, companions):
             partial=document
         except (ValueError,OSError) as exc:
             original_error=exc
+    if companions.get(".json"):
+        try:
+            return _cloud_json_document(companions[".json"])
+        except (OSError,ValueError) as exc:
+            if original_error is None:
+                original_error=exc
     if companions.get(".lrc"):
         try:
             return parse_lrc(companions[".lrc"])
@@ -575,7 +665,7 @@ def companion_stamp(companions):
     size updates cause re-validation.
     """
     parts=[]
-    for ext in (".lyr",".cur",".lrc"):
+    for ext in (".lyr",".cur",".lrc",".json"):
         item=companions.get(ext)
         if item:
             stat=Path(item).stat()
@@ -776,7 +866,7 @@ def import_folder(workspace,source,progress=None,cancel=None,selected_file=None)
                 # and preserve any existing SQLite entries untouched.
                 if is_ncn_media(path,comps):
                     missing=ncn_missing_companions(comps)
-                    if missing:
+                    if missing and not comps.get(".json"):
                         totals["skipped_ncn"]+=1
                         outcome="skipped-ncn-incomplete"
                         message="ข้าม NCN: "+", ".join(missing)+" ไม่มีหรือว่าง"
@@ -1081,7 +1171,7 @@ def recover_existing_lyrics(workspace,progress=None,cancel=None):
                         event_path=source
                         if is_ncn_media(source,comps):
                             missing=ncn_missing_companions(comps)
-                            if missing:
+                            if missing and not comps.get(".json"):
                                 outcome="skipped-ncn-incomplete"
                                 note="ข้าม NCN: "+", ".join(missing)+" ไม่มีหรือว่าง"
                                 continue
