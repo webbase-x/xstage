@@ -55,6 +55,8 @@ function createSchema(db,kind,generation){
     code TEXT NOT NULL, title TEXT NOT NULL, artist TEXT NOT NULL,
     source_format TEXT NOT NULL,
     original_filename TEXT NOT NULL DEFAULT '',
+    original_relative_path TEXT NOT NULL DEFAULT '',
+    original_file_size INTEGER,
     source_code TEXT NOT NULL DEFAULT '',
     midi_size INTEGER,
     midi_md5 TEXT,
@@ -84,7 +86,7 @@ async function create(kind,songs,removes=[],generation=''){
     createSchema(db,kind,generation);
     db.run('BEGIN TRANSACTION');
     const upsert=db.prepare(
-      'INSERT INTO songs(web_song_id,code,title,artist,source_format,original_filename,source_code,midi_size,midi_md5,payload) VALUES (?,?,?,?,?,?,?,?,?,?)');
+      'INSERT INTO songs(web_song_id,code,title,artist,source_format,original_filename,original_relative_path,original_file_size,source_code,midi_size,midi_md5,payload) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
     const seen=new Set(),midiHashes=new Map();
     try{
       for(const row of songs){
@@ -108,11 +110,15 @@ async function create(kind,songs,removes=[],generation=''){
           row.xmid?.path?.split('/').pop()||
           row.xsk?.path?.split('/').pop()||
           row.midi?.path?.split('/').pop()||'').slice(0,255);
+        const originalPath=String(row.originalRelativePath||'').slice(0,1024);
+        const originalFileSize=Number(row.originalFileSize||0);
+        if(originalFileSize&&(!Number.isSafeInteger(originalFileSize)||originalFileSize<0))
+          fail('ขนาดไฟล์ต้นฉบับไม่ถูกต้อง');
         const sourceCode=String(row.sourceCode||row.code||'').slice(0,140);
         upsert.run([row.webSongId,String(row.code||''),String(row.title||''),
           String(row.artist||''),String(row.sourceFormat||''),
-          originalFilename,sourceCode,midiSize>0?midiSize:null,
-          validHash,JSON.stringify(row)]);
+          originalFilename,originalPath,originalFileSize||null,
+          sourceCode,midiSize>0?midiSize:null,validHash,JSON.stringify(row)]);
         upsert.reset();
       }
     }finally{upsert.free();}
