@@ -12,4 +12,4 @@ window.XSTAGE_DRIVE_LAYOUT=Object.freeze({
   root:'XStageKaraoke',songs:'SONGS',db:'DB',
   soundfont:'SOUNDFONT',backup:'BACKUP',cache:'CACHE',logs:'LOGS'
 });
-window.XSTAGE_RELEASE = { version: '1.0.136', build: 1136 };
+window.XSTAGE_RELEASE = { version: '1.0.137', build: 1137 };
