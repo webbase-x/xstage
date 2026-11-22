@@ -243,9 +243,16 @@ $("studio-export").addEventListener("click",async()=>{
   studioStatus("กำลังเรนเดอร์ WAV ในเครื่อง…");
   const wav=await studio.bounce(),url=URL.createObjectURL(wav),link=document.createElement("a");
   link.href=url;link.download="X-Stage-Audio-Mix-"+new Date().toISOString().slice(0,19).replace(/:/g,"-")+".wav";
-  document.body.append(link);link.click();link.remove();
+  if(window.AG06Android){
+   if(wav.size>24*1024*1024)throw new Error("Android รองรับ WAV ขนาดไม่เกิน 24 MB · ลดความยาวมิกซ์หรือใช้เว็บ/Windows");
+   const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(wav);});
+   window.AG06Android.saveAudio(dataUrl);
+   studioStatus("ส่งไฟล์ WAV ให้ Android แล้ว · ตรวจสถานะการบันทึกด้านล่าง");
+  }else{
+   document.body.append(link);link.click();link.remove();
+   studioStatus("ส่งออก WAV แล้ว · "+(wav.size/1048576).toFixed(1)+" MB");
+  }
   setTimeout(()=>URL.revokeObjectURL(url),60000);
-  studioStatus("ส่งออก WAV สำเร็จ · "+(wav.size/1048576).toFixed(1)+" MB");
  }catch(e){studioStatus("ส่งออกไม่สำเร็จ: "+e.message,true);}
  finally{button.disabled=false;}
 });
