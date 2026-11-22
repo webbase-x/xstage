@@ -254,6 +254,13 @@ def apply_pending(data):
         shutil.rmtree(pending);return None
     if state['status']!='prepared':raise ValueError('สถานะกู้คืนไม่ถูกต้อง')
     info=validate_backup(pending)
+    # Optional files may be swapped after validation. Never silently follow a
+    # link or omit a newly malformed entry when computing the restore set.
+    for name in OPTIONAL_FILES:
+        source=pending/name
+        if (source.is_symlink() or getattr(source, 'is_junction', lambda: False)()
+                or (source.exists() and not source.is_file())):
+            raise ValueError('ไฟล์เสริมชุดกู้คืนไม่ปลอดภัย: '+name)
     replaced=FILES+tuple(name for name in OPTIONAL_FILES if (pending/name).is_file())
     # Validate all live inputs before allocating a safety directory. A failed
     # snapshot must not leave an orphan directory or a half-written journal.
