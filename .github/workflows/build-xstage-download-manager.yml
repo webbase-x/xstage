@@ -58,6 +58,11 @@ jobs:
         run: |
           dotnet run --project download-manager/tests/DownloadEngine.Tests.csproj -c Release
           if ($LASTEXITCODE -ne 0) { throw 'DownloadEngine integration tests failed' }
+      - name: Render WinForms desktop layout and vector icons across six viewports
+        shell: pwsh
+        run: |
+          dotnet run --project download-manager/tests/DownloadEngine.Tests.csproj -c Release -- --ui-smoke
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop WinForms/GDI+ rendering smoke failed' }
       - name: Validate X-Stage portal contract
         shell: pwsh
         run: |
