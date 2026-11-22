@@ -34,8 +34,20 @@ public sealed class LiveStreamCapture
 
     public static IReadOnlyList<string> BuildCaptureArguments(string url, string recordingPath)
     {
-        if (!DownloadEngine.TryParseUrl(url, out _) || !IsSupportedSource(url))
+        if (!IsSupportedSource(url))
             throw new ArgumentException("รองรับลิงก์ HLS (.m3u8), DASH (.mpd) หรือวิดีโอบนแพลตฟอร์มสาธารณะที่รองรับ");
+        return BuildResolvedCaptureArguments(url, recordingPath);
+    }
+
+    // Extractor URLs sometimes omit .m3u8 and carry expiring CDN signatures.
+    // This is private and only reached after validating a supported public
+    // platform URL through yt-dlp; never expose it as an arbitrary URL input.
+    private static IReadOnlyList<string> BuildResolvedCaptureArguments(
+        string url, string recordingPath)
+    {
+        if (!DownloadEngine.TryParseUrl(url, out _) ||
+            string.IsNullOrWhiteSpace(recordingPath))
+            throw new ArgumentException("ลิงก์หรือปลายทางบันทึกไม่ถูกต้อง");
         return new[]
         {
             "-hide_banner", "-nostats", "-loglevel", "warning",
@@ -90,7 +102,7 @@ public sealed class LiveStreamCapture
                 CreateNoWindow = true,
                 StandardErrorEncoding = Encoding.UTF8
             };
-            foreach (var arg in BuildCaptureArguments(
+            foreach (var arg in BuildResolvedCaptureArguments(
                 resolved, RecordingPath)) info.ArgumentList.Add(arg);
             var exit = await RunCaptureProcessAsync(info, cancellationToken);
             if (exit != 0 || !File.Exists(RecordingPath) ||
@@ -237,7 +249,7 @@ public sealed class LiveStreamCapture
             "--ignore-config", "--no-plugin-dirs", "--no-playlist",
             "--no-warnings", "--socket-timeout", "20",
             "--js-runtimes", "deno:" + Path.Combine(tools, "deno.exe"),
-            "--get-url", "-f", "b", url
+            "--get-url", "-f", "b[protocol*=m3u8]/b", url
         }) info.ArgumentList.Add(arg);
         using var process = Process.Start(info) ??
             throw new IOException("เปิดเครื่องมือค้นหาลิงก์ไลฟ์ไม่สำเร็จ");
