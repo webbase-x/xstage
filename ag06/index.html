@@ -90,8 +90,32 @@
     <button type="button" class="button primary" id="studio-export">ส่งออก WAV</button>
   </div>
   <div class="studio-toolbar"><label class="studio-check"><input type="checkbox" id="studio-ducking"> Auto Ducking · ลดเสียงดนตรีเมื่อมีเสียงพูด</label><label class="studio-check"><input type="checkbox" id="studio-normalize"> Normalize Peak · ปรับพีกก่อนส่งออก</label></div>
+  <div class="studio-toolbar">
+   <label class="studio-check"><input id="studio-noise-gate" type="checkbox"> Voice Cleanup · HPF / Noise Gate</label>
+   <button type="button" class="button subtle" id="studio-save-project">บันทึกโปรเจกต์</button>
+   <label for="studio-open-project" class="button subtle">เปิดโปรเจกต์</label>
+   <input type="file" id="studio-open-project" accept=".xstageaudio,.json,application/json" hidden>
+   <label class="studio-check">Timeline Zoom <input id="studio-zoom" type="range" min="15" max="160" value="50"></label>
+  </div>
+  <div class="studio-timeline" id="studio-timeline" aria-label="Audio waveform timeline"></div>
   <div id="studio-tracks" class="studio-tracks" aria-live="polite"><p class="subtle-text">ยังไม่มีแทร็ก · เริ่มจากนำเข้าไฟล์เสียง</p></div>
   <p id="studio-state" class="subtle-text" role="status">การทำงานขึ้นกับหน่วยความจำอุปกรณ์ · รองรับไฟล์ละไม่เกิน 80 MB และแทร็กละไม่เกิน 10 นาที</p>
+ </section>
+ <section class="panel studio-workspace" id="midi-workspace">
+  <div class="section-header"><div><div class="eyebrow">07 / MIDI COMPOSER</div><h2>MIDI Note Editor · Synth</h2></div><span class="chip">INDEPENDENT TRIANGLE OSCILLATOR</span></div>
+  <p class="subtle-text">สร้างโน้ตด้วยตัวเองในรูปแบบ Step Sequencer เครื่องดนตรีใช้ Oscillator ที่พัฒนาขึ้นเอง ไม่มีคลังเสียงของ Steinberg</p>
+  <div class="studio-toolbar">
+   <label>Tempo (BPM) <input id="midi-bpm" type="number" min="40" max="240" value="120"></label>
+   <label>Pitch (MIDI) <input id="midi-pitch" type="number" min="36" max="96" value="60"></label>
+   <label>Start (beat) <input id="midi-beat" type="number" min="0" max="128" step=".25" value="0"></label>
+   <label>Length (beat) <input id="midi-length" type="number" min=".125" max="16" step=".125" value="1"></label>
+   <button type="button" class="button subtle" id="midi-add">＋ เพิ่มโน้ต</button>
+   <button type="button" class="button subtle" id="midi-clear">ล้างโน้ต</button>
+   <button type="button" class="button" id="midi-play">▶ ฟังทำนอง</button>
+   <button type="button" class="button primary" id="midi-to-track">สร้างแทร็กเครื่องดนตรี</button>
+  </div>
+  <div id="midi-notes" class="midi-note-list">ยังไม่มีโน้ต</div>
+  <p id="midi-status" class="subtle-text" role="status">โน้ตถูกเก็บในโปรเจกต์และสามารถเรนเดอร์เป็นเสียงลงแทร็กได้</p>
  </section>
  <section class="help-panel">
   <div><div class="eyebrow">SETUP / USB AUDIO</div><h2>ก่อนเริ่มใช้งาน</h2><p>Windows ให้ติดตั้ง Yamaha Steinberg USB Driver จาก Yamaha และเลือก AG06/03 เป็นอุปกรณ์รับเสียง มือถือ Android ต้องรองรับ USB audio/OTG และอาจต้องจ่ายไฟแยกตามอุปกรณ์ เว็บต้องได้รับอนุญาตใช้ไมโครโฟน</p></div>
