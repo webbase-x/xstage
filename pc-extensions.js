@@ -240,7 +240,7 @@ $pc('pc-lyrics-settings').onclick=()=>{
    select.value=current;select.onchange=()=>setValue(select.value);
    const row=document.createElement('label');row.textContent=label;row.append(select);d.append(row);
  }
- d.append(para('Visualizer ใช้ข้อมูลเสียงจริงจาก Audio Analyser เดียวกับ EQ และไม่สร้างระบบเสียงซ้ำ'));
+ d.append(para('Visualizer อ่านสัญญาณเสียงจริงโดยแยกจากทางเดินเสียงไปลำโพง ไม่ใช้ฟิลเตอร์ EQ ปรับเสียงเพลง'));
  d.append(para('การตั้งค่านี้ไม่แก้ไขเพลงหรือฐานข้อมูลใน Google Drive'));
 };
 let screen=null;
@@ -271,7 +271,8 @@ function eqFreqLabel(f){
 }
 function eqBandColor(f){return f<80?'#ff3b30':f<250?'#ff8a00':f<630?'#ffd400':f<1600?'#62e33c':f<4000?'#22d3a7':f<10000?'#18b7ff':'#755bff';}
 
-/* Live stage branding reuses the existing post-EQ analyser. No duplicate AudioContext/source. */
+/* The speaker output is unfiltered. This analyser is a SILENT display-only tap
+ * for live stage EQ bars and spectrum; no EQ filters reach the speakers. */
 let stageVizFrame=0,stageVizLastSingerPost=0;
 const stageVizSmooth=Array(28).fill(0);
 let stageLiveSpectrum={bands:[0,0,0],active:false,updatedAt:0};
@@ -365,25 +366,44 @@ function startStageBrandVisualizer(){
   if(!stageVizFrame&&eqAnalyser)stageVizFrame=requestAnimationFrame(drawStageBrandVisualizer);
 }
 function ensureEqAudio(){
- // Android APK playback must never be re-routed through createMediaElementSource.
- // Its standalone native-audio-meter.js is visual only and has a zero-gain sink.
+ // Android APK stays on the native HTMLMediaElement path with its separate
+ // zero-gain capture meter. On Web, reuse ONE MediaElementSource per player.
  if(nativeAndroidTvAudioMode())return false;
  if(eqContext){startStageBrandVisualizer();return true;}
- const C=window.AudioContext||window.webkitAudioContext;if(!C){setPlayStatus('Web Audio API ไม่รองรับ EQ 31 Band');return false;}
- eqContext=new C();eqSource=eqContext.createMediaElementSource(audio);
- eqContext.addEventListener?.('statechange',()=>{
-   const interrupted=eqContext&&(eqContext.state==='interrupted'||eqContext.state==='suspended');
-   if(interrupted&&state.current&&!state.userPaused&&!state.userStopped){
-     state.resumeAfterInterruption=true;
-     window.dispatchEvent(new CustomEvent('xstage-audio-interrupted'));
-   }
- });
- eqNodes=EQ_FREQS.map(freq=>{const n=eqContext.createBiquadFilter();n.type='peaking';n.frequency.value=freq;n.Q.value=4.318;return n;});
- eqAnalyser=eqContext.createAnalyser();eqAnalyser.fftSize=4096;eqAnalyser.smoothingTimeConstant=.72;
- eqLeft=eqContext.createAnalyser();eqRight=eqContext.createAnalyser();eqLeft.fftSize=512;eqRight.fftSize=512;
- const splitter=eqContext.createChannelSplitter(2);eqMeterSink=eqContext.createGain();eqMeterSink.gain.value=0;
- let node=eqSource;for(const filter of eqNodes){node.connect(filter);node=filter;}node.connect(eqAnalyser);eqAnalyser.connect(eqContext.destination);eqAnalyser.connect(splitter);splitter.connect(eqLeft,0);splitter.connect(eqRight,1);eqLeft.connect(eqMeterSink);eqRight.connect(eqMeterSink);eqMeterSink.connect(eqContext.destination);
- applyEqGains(false);startStageBrandVisualizer();return true;
+ const C=window.AudioContext||window.webkitAudioContext;
+ if(!C)return false; // Unsupported metering must never prevent song playback.
+ try{
+   eqContext=new C();
+   eqSource=eqContext.createMediaElementSource(audio);
+   // AUDIBLE PATH: source -> destination only. Do not insert BiquadFilter,
+   // analyser, preset, or any additional gain/EQ node into speaker output.
+   eqSource.connect(eqContext.destination);
+   eqContext.addEventListener?.('statechange',()=>{
+     const interrupted=eqContext&&(eqContext.state==='interrupted'||eqContext.state==='suspended');
+     if(interrupted&&state.current&&!state.userPaused&&!state.userStopped){
+       state.resumeAfterInterruption=true;
+       window.dispatchEvent(new CustomEvent('xstage-audio-interrupted'));
+     }
+   });
+   eqNodes=[]; // No EQ filter is constructed or connected to the audible path.
+   eqAnalyser=eqContext.createAnalyser();eqAnalyser.fftSize=4096;eqAnalyser.smoothingTimeConstant=.72;
+   eqLeft=eqContext.createAnalyser();eqRight=eqContext.createAnalyser();eqLeft.fftSize=512;eqRight.fftSize=512;
+   const splitter=eqContext.createChannelSplitter(2);
+   eqMeterSink=eqContext.createGain();eqMeterSink.gain.value=0;
+   // DISPLAY-ONLY PATH: an independent analyser tap ending at zero gain.
+   eqSource.connect(eqAnalyser);
+   eqAnalyser.connect(splitter);
+   splitter.connect(eqLeft,0);splitter.connect(eqRight,1);
+   eqLeft.connect(eqMeterSink);eqRight.connect(eqMeterSink);
+   eqMeterSink.connect(eqContext.destination);
+   startStageBrandVisualizer();
+   return true;
+ }catch(error){
+   // Preserve the unfiltered speaker connection if a visual-only node fails.
+   console.warn('Visual-only stage spectrum unavailable:',error);
+   if(eqSource&&eqContext){try{eqSource.connect(eqContext.destination);}catch{}}
+   return !!eqSource;
+ }
 }
 
 function nativeAndroidTvAudioMode(){
@@ -395,35 +415,18 @@ function nativeAndroidTvAudioMode(){
 }
 window.XStageNativeAudioBypass=()=>nativeAndroidTvAudioMode();
 window.XStageResumeAudioGraph=async function(){
-  // PC Web keeps the existing EQ/WebAudio behavior unchanged.
-  // Every Android APK (TV/tablet) stays on direct HTMLMediaElement playback.
-  // The Owner cannot enable EQ; only the silent visual meter is permitted.
-  if(!eqContext){
-    if(nativeAndroidTvAudioMode())return true;
-    if(!ensureEqAudio())return false;
-  }
+  if(nativeAndroidTvAudioMode())return true;
+  if(!eqContext&&!ensureEqAudio())return true; // No Web Audio: native playback may still work.
+  if(!eqContext)return true;
   if(eqContext.state==='running')return true;
   try{await eqContext.resume();return eqContext.state==='running';}
   catch{return false;}
 };
-window.XStageEnableEqPreset=async function(name='flat'){
-  if(nativeAndroidTvAudioMode())return false;
-  buildEqBands();
-  if(!ensureEqAudio())return false;
-  try{await eqContext.resume();}catch{}
-  setEqPreset(String(name||'flat'));
-  return true;
-};
-window.XStageResetEq=async function(){return window.XStageEnableEqPreset('flat');};
-window.XStageToggleEqBypass=async function(){
-  if(nativeAndroidTvAudioMode())return true;
-  buildEqBands();
-  if(!ensureEqAudio())return false;
-  try{await eqContext.resume();}catch{}
-  eqBypassed=!eqBypassed;applyEqGains();
-  return eqBypassed;
-};
-window.XStageEqIsActive=()=>!nativeAndroidTvAudioMode()&&!!eqContext;
+// The 31-band panel now monitors audio; it NEVER changes the speaker signal.
+window.XStageEnableEqPreset=async function(){return false;};
+window.XStageResetEq=async function(){return false;};
+window.XStageToggleEqBypass=async function(){return true;};
+window.XStageEqIsActive=()=>false;
 
 function savedEqGains(){
  const v=(window.XStageUiPrefs?.read?.()||{}).eqGains;
@@ -480,7 +483,7 @@ function buildEqBands(){
   const band=document.createElement('label');band.className='xstage-eq-band';band.style.setProperty('--band-color',eqBandColor(freq));
   const gain=document.createElement('span');gain.className='xstage-eq-gain';gain.textContent=(saved[i]>0?'+':'')+String(saved[i]);
   const light=document.createElement('i');light.className='xstage-eq-band-light';light.style.setProperty('--level-pct','0%');light.style.setProperty('--peak-pct','0%');light.style.setProperty('--glow','0');
-  const input=document.createElement('input');input.type='range';input.min='-12';input.max='12';input.step='1';input.value=String(saved[i]);input.setAttribute('aria-label',eqFreqLabel(freq)+'Hz');
+  const input=document.createElement('input');input.type='range';input.min='-12';input.max='12';input.step='1';input.value='0';input.disabled=true;input.setAttribute('aria-label',eqFreqLabel(freq)+'Hz · แสดงผลเท่านั้น ไม่ปรับเสียง');
   input.addEventListener('input',()=>{eqPreset='custom';if(eqPresetSelect)eqPresetSelect.value='custom';gain.textContent=(+input.value>0?'+':'')+String(Math.round(+input.value));if(eqNodes[i])eqNodes[i].gain.value=eqBypassed?0:+input.value;window.XStageUiPrefs?.save?.({eqPreset:'custom',eqGains:currentEqGains(),eqBypassed});sendEqState();});
   input.addEventListener('dblclick',()=>{input.value='0';input.dispatchEvent(new Event('input',{bubbles:true}));});
   input.addEventListener('wheel',event=>{
@@ -544,13 +547,21 @@ function sendEqState(){
 }
 function openEq(target){
  if(nativeAndroidTvAudioMode()){setPlayStatus('Android APK: เสียงออกตรง · แถบระดับเสียงไม่ผ่าน EQ');return;}
- buildEqBands();if(!ensureEqAudio())return;eqContext.resume().catch(()=>{});
- if(!eqFrame)eqFrame=requestAnimationFrame(drawEqRta);
+ buildEqBands();
+ if(!eqContext)ensureEqAudio();
+ eqContext?.resume?.().catch(()=>{});
+ if(!eqFrame&&eqAnalyser)eqFrame=requestAnimationFrame(drawEqRta);
  if(target&&['main','singer','both'].includes(target)&&singerScreenAvailable())eqDisplayTarget=target;
  syncEqDisplaySelector();
  eqPanel.classList.remove('is-minimized');
- if(eqPresetSelect)eqPresetSelect.value=(eqPreset==='auto'||eqPreset==='custom'||EQ_PRESETS[eqPreset])?eqPreset:'flat';
- if(eqPreset==='auto')setEqPreset('auto',{save:false});else applyEqGains(false);
+ eqPanel.dataset.monitorOnly='true';
+ eqBypassed=true;
+ if(eqPresetSelect){eqPresetSelect.value='flat';eqPresetSelect.disabled=true;eqPresetSelect.title='แสดงระดับเสียงเท่านั้น ไม่ปรับแต่งเสียงที่ออกลำโพง';}
+ for(const id of ['xstage-eq-bypass','xstage-eq-reset']){
+   const button=$pc(id);if(button){button.disabled=true;button.title='เสียงออกลำโพงโดยไม่ผ่าน EQ';}
+ }
+ const mode=$pc('xstage-eq-mode');if(mode)mode.textContent='LIVE SPECTRUM · MONITOR ONLY';
+ const style=$pc('xstage-eq-song-style');if(style)style.textContent='เสียงต้นฉบับ · ไม่ผ่าน EQ';
  applyEqVisibility();requestAnimationFrame(fitEqPanelToViewport);sendEqState();
 }
 $pc('pc-eq').onclick=()=>openEq(eqPanel.hidden?'main':undefined);
