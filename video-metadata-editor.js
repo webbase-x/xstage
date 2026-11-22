@@ -104,10 +104,11 @@ class Editor{
       const approved=core.validateVideoDetails(item,metadata);
       this.edits.set(item.key,{fingerprint:this.fingerprint(item),metadata:approved});
       this.renderOptions();
-      this.importer.updateVideoStats();
+      // Approving a video must also make its upload action available.
+      this.importer.onVideoApproved(item);
       await this.importer.save({status:'selected'});
       this.dom.hint.textContent='✓ บันทึกข้อมูล '+approved.title+' / '+approved.artist+
-        ' แล้ว · คลิกเริ่มตรวจและอัปโหลดเมื่อพร้อม';
+        ' แล้ว · กด “เริ่มตรวจ MD5 และนำเข้า” ด้านล่าง';
     }catch(error){this.dom.hint.textContent=error.message;}
   }
   releasePreview(){
