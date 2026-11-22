@@ -33,6 +33,20 @@ assert.ok(html.includes('X-Stage Song Studio Pro'),'Pro card must use the new br
 assert.ok(source.includes('X-Stage Song Studio Pro'),'Desktop web shell brand must match');
 assert.ok(js.includes('manual-cue-token')&&js.includes('manual-advanced-times')&&
  js.includes('manualCueUndo'),'New cue editor must be connected');
+const exportBackend=read('songstudio-plus/app.py');
+const exportStyle=read('songstudio-plus/web/style.css');
+for(const id of ['build-operation-progress','build-progress-percent','build-progress-count',
+                 'build-progress-results','build-progress-fill','build-progress-track']){
+  assert.ok(source.includes('id="'+id+'"'),'missing visible export progress element: '+id);
+  assert.ok(js.includes('"'+id+'"'),'missing live update for '+id);
+}
+assert.ok(js.includes('100*done/total'),'export percent must use actual processed songs');
+assert.ok(js.includes('job.kind==="build"')&&js.includes('||job.kind==="build")&&p.total>0'),
+  'shared progress bar must use real build counters');
+assert.ok(exportBackend.includes('progress(dict(total),f"เริ่มตรวจและสร้างไฟล์'),
+  'build job must publish an initial 0/N progress sample');
+assert.ok(exportStyle.includes('.build-operation-progress'),
+  'export progress must have responsive styles');
 const installer=read('songstudio-plus/installer/XStageSongStudioPro.iss');
 assert.ok(workflow.includes('--name "XStageSongStudioPro"'),
  'PyInstaller must build the same stable application payload for every release');
