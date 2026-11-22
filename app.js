@@ -4327,12 +4327,12 @@ function startManualGoogleLogin(){
   }
   // Explicit tap: reuse the last verified Google account and existing Drive
   // consent. Sign out first to deliberately choose a different account.
-  login({remembered:hasRememberedLogin()});
+  login({remembered:!!rememberedGoogleAccount()});
 }
 ui.login.addEventListener('click',startManualGoogleLogin);ui.gateLogin.addEventListener('click',startManualGoogleLogin);
 const googleSwitchButton=$('gate-switch-google');
 function syncRememberedAccountChooser(){
-  if(googleSwitchButton)googleSwitchButton.hidden=!hasRememberedLogin()||!!state.token;
+  if(googleSwitchButton)googleSwitchButton.hidden=!rememberedGoogleAccount()||!!state.token;
 }
 googleSwitchButton?.addEventListener('click',()=>{
   // Explicitly forget the saved identity before opening Google's account picker.
@@ -4818,7 +4818,7 @@ async function recoverPendingGoogleAuth(reason='กำลังกู้คื�
   const saved=readActiveAuth();
   if(!saved){
     if(readPendingAuth()){void recoverPendingGoogleAuth();}
-    else if(hasRememberedLogin())setStatus('จำบัญชี Google เดิมไว้แล้ว · แตะเชื่อม Google อีกครั้งเพื่อรับสิทธิ์ใหม่ (ไม่ต้องเลือกบัญชีซ้ำ)');
+    else if(rememberedGoogleAccount())setStatus('จำบัญชี Google เดิมไว้แล้ว · แตะเชื่อม Google อีกครั้งเพื่อรับสิทธิ์ใหม่ (ไม่ต้องเลือกบัญชีซ้ำ)');
     return;
   }
   ui.gate.hidden=true;
@@ -4847,7 +4847,7 @@ window.addEventListener('online',()=>{
   if(state.token)return;
   if(readPendingAuth()){void recoverPendingGoogleAuth('กลับมาออนไลน์แล้ว · กำลังกู้คืนการเข้าสู่ระบบ Google…');return;}
   const saved=readActiveAuth();
-  if(!saved){if(hasRememberedLogin())setStatus('กลับมาออนไลน์แล้ว · แตะเชื่อมต่อ Google เดิมเพื่อรับสิทธิ์ใหม่');return;}
+  if(!saved){if(rememberedGoogleAccount())setStatus('กลับมาออนไลน์แล้ว · แตะเชื่อมต่อ Google เดิมเพื่อรับสิทธิ์ใหม่');return;}
   ui.gate.hidden=true;ui.login.disabled=ui.gateLogin.disabled=true;
   setStatus('กลับมาออนไลน์แล้ว · กำลังกู้คืนเซสชัน Google…');
   const id=++state.authId;
