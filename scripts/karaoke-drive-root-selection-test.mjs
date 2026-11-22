@@ -8,7 +8,7 @@ assert.equal(version.build,1137);
 assert.equal(version.version,'1.0.137');
 assert.ok(html.includes('app.js?v=1172-direct-sqlite-no-json'));
 assert.ok(html.includes('cloud-import.js?v=1172-direct-sqlite-no-json'));
-assert.ok(app.includes('createdTime,sharedWithMeTime'));
+assert.ok(app.includes('createdTime,modifiedTime,md5Checksum,size,sharedWithMeTime'));
 assert.ok(html.includes('id="library-drive-link"'));
 assert.ok(app.includes("ui.libraryDriveLink.href='https://drive.google.com/drive/folders/'"));
 assert.ok(app.includes('ui.libraryDriveLink.hidden=true'));
