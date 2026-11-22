@@ -484,9 +484,10 @@ function buildEqBands(){
   const gain=document.createElement('span');gain.className='xstage-eq-gain';gain.textContent=(saved[i]>0?'+':'')+String(saved[i]);
   const light=document.createElement('i');light.className='xstage-eq-band-light';light.style.setProperty('--level-pct','0%');light.style.setProperty('--peak-pct','0%');light.style.setProperty('--glow','0');
   const input=document.createElement('input');input.type='range';input.min='-12';input.max='12';input.step='1';input.value='0';input.disabled=true;input.setAttribute('aria-label',eqFreqLabel(freq)+'Hz · แสดงผลเท่านั้น ไม่ปรับเสียง');
-  input.addEventListener('input',()=>{eqPreset='custom';if(eqPresetSelect)eqPresetSelect.value='custom';gain.textContent=(+input.value>0?'+':'')+String(Math.round(+input.value));if(eqNodes[i])eqNodes[i].gain.value=eqBypassed?0:+input.value;window.XStageUiPrefs?.save?.({eqPreset:'custom',eqGains:currentEqGains(),eqBypassed});sendEqState();});
+  input.addEventListener('input',()=>{if(input.disabled)return;eqPreset='custom';if(eqPresetSelect)eqPresetSelect.value='custom';gain.textContent=(+input.value>0?'+':'')+String(Math.round(+input.value));if(eqNodes[i])eqNodes[i].gain.value=eqBypassed?0:+input.value;window.XStageUiPrefs?.save?.({eqPreset:'custom',eqGains:currentEqGains(),eqBypassed});sendEqState();});
   input.addEventListener('dblclick',()=>{input.value='0';input.dispatchEvent(new Event('input',{bubbles:true}));});
   input.addEventListener('wheel',event=>{
+    if(input.disabled)return;
     event.preventDefault();
     const step=1;
     const min=Number(input.min),max=Number(input.max);
@@ -569,9 +570,9 @@ eqDisplay?.addEventListener('change',()=>{eqDisplayTarget=eqDisplay.value;window
 $pc('xstage-eq-close')?.addEventListener('click',()=>{eqPanel.hidden=true;if(singerScreenAvailable())try{screen.postMessage({type:'xstage-eq-visibility',open:false},location.origin);}catch{}});
 $pc('xstage-eq-minimize')?.addEventListener('click',()=>{eqPanel.classList.toggle('is-minimized');sendEqState();});
 $pc('xstage-eq-expand')?.addEventListener('click',()=>{eqPanel.classList.toggle('is-expanded');sendEqState();});
-$pc('xstage-eq-bypass')?.addEventListener('click',()=>{eqBypassed=!eqBypassed;applyEqGains();});
-$pc('xstage-eq-reset')?.addEventListener('click',()=>setEqPreset('flat'));
-eqPresetSelect?.addEventListener('change',()=>setEqPreset(eqPresetSelect.value));
+$pc('xstage-eq-bypass')?.addEventListener('click',()=>{}); // Monitor only.
+$pc('xstage-eq-reset')?.addEventListener('click',()=>{}); // No sound processing.
+eqPresetSelect?.addEventListener('change',()=>{}); // Presets cannot reach speakers.
 function fitEqPanelToViewport(){
  if(!eqPanel||eqPanel.hidden||eqPanel.classList.contains('is-expanded'))return;
  const pad=4,r=eqPanel.getBoundingClientRect(),maxW=Math.max(220,innerWidth-pad*2),maxH=Math.max(240,innerHeight-pad*2);
