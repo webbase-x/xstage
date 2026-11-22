@@ -653,7 +653,7 @@ class Handler(BaseHTTPRequestHandler):
                 def run_build(progress,cancel):
                     expected=total_songs if all_catalog else len(ids)
                     total={"done":0,"total":expected,"built":0,"skipped":0,
-                           "blocked":0,"failed":0,"errors":[]}
+                           "duplicate_mid":0,"blocked":0,"failed":0,"errors":[]}
                     catalog=(core.catalog_song_ids(self.state.workspace)
                              if all_catalog else iter(ids))
                     for song_id in catalog:
@@ -661,6 +661,8 @@ class Handler(BaseHTTPRequestHandler):
                         try:
                             info=core.build_song(self.state.workspace,song_id)
                             total["skipped" if info["skipped"] else "built"]+=1
+                            if info.get("duplicate_mid"):
+                                total["duplicate_mid"]+=1
                         except ValueError as e:
                             reason=str(e)
                             if ("ยังไม่มีเนื้อร้องพร้อมเวลา" in reason or
@@ -677,7 +679,8 @@ class Handler(BaseHTTPRequestHandler):
                         total["done"]+=1
                         progress(dict(total),
                             f"ตรวจทั้งฐาน {total['done']:,}/{expected:,} · "
-                            f"สร้าง {total['built']:,} · ซ้ำ {total['skipped']:,} · "
+                            f"สร้าง {total['built']:,} · ข้ามซ้ำ {total['skipped']:,} "
+                            f"(MID ซ้ำ {total['duplicate_mid']:,}) · "
                             f"ข้อมูลไม่ครบ {total['blocked']:,} · ผิดพลาด {total['failed']:,}")
                     return total
                 result=self.state.start_job("build",run_build)
