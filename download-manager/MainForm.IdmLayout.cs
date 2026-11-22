@@ -19,6 +19,8 @@ public sealed partial class MainForm
     private string? _sortColumn;
     private bool _sortDescending;
     private ToolStrip? _toolbar;
+    private readonly TextBox _jobSearch = new();
+    private readonly Dictionary<string, Label> _overviewCounts = new();
 
     private static readonly Color DarkTop = Color.FromArgb(13, 29, 43);
     private static readonly Color DarkPanel = Color.FromArgb(17, 45, 59);
@@ -37,14 +39,14 @@ public sealed partial class MainForm
             BackColor = DarkTop
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 31)); // Traditional application menu
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64)); // X-Stage command deck
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72)); // X-Stage branded masthead
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60)); // Compact command deck
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));  // URL input, expandable
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Sidebar + main list
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 84)); // Status and details
         _workspaceRoot = root;
 
-        root.Controls.Add(CreateMenuBar(), 0, 0);
+        root.Controls.Add(CreateBrandHeader(), 0, 0);
         root.Controls.Add(CreateIconToolbar(), 0, 1);
         root.Controls.Add(CreateQuickEntry(), 0, 2);
         root.Controls.Add(CreateDownloadWorkspace(), 0, 3);
@@ -53,14 +55,56 @@ public sealed partial class MainForm
         ResumeLayout(true);
     }
 
+    // A branded masthead, with compact command menus to the right.
+    // Unlike a classic download-manager menu/toolbar stack, the identity
+    // and navigation are integrated into one workspace header.
+    private Control CreateBrandHeader()
+    {
+        var header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1,
+            BackColor = DarkTop, Margin = Padding.Empty, Padding = Padding.Empty
+        };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 265));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var identity = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2,
+            Padding = new Padding(17, 6, 2, 5), BackColor = DarkTop
+        };
+        identity.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        identity.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        identity.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        identity.Controls.Add(new Label
+        {
+            Text = "X-STAGE",
+            Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Segoe UI", 20, FontStyle.Bold),
+            ForeColor = Accent, AutoEllipsis = true
+        }, 0, 0);
+        identity.Controls.Add(new Label
+        {
+            Text = "DOWNLOAD  /  COMMAND CENTER",
+            Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Segoe UI", 8, FontStyle.Bold),
+            ForeColor = MutedText, AutoEllipsis = true
+        }, 0, 1);
+        header.Controls.Add(identity, 0, 0);
+        header.Controls.Add(CreateMenuBar(), 1, 0);
+        return header;
+    }
+
     private MenuStrip CreateMenuBar()
     {
         var menu = new MenuStrip
         {
-            Dock = DockStyle.Fill, AutoSize = false, Height = 31,
-            Padding = new Padding(12, 2, 8, 0),
+            Dock = DockStyle.Fill, AutoSize = false, Height = 72,
+            Padding = new Padding(2, 20, 5, 10),
             BackColor = DarkTop, ForeColor = Color.White,
-            Font = new Font("Segoe UI", 10)
+            Font = new Font("Segoe UI", 9, FontStyle.Regular),
+            GripStyle = ToolStripGripStyle.Hidden,
+            LayoutStyle = ToolStripLayoutStyle.HorizontalStackWithOverflow
         };
         ToolStripMenuItem Action(string name, EventHandler handler)
         {
@@ -74,98 +118,146 @@ public sealed partial class MainForm
             item.DropDownItems.AddRange(children);
             return item;
         }
-        var newUrl = Action("＋ เพิ่ม URL (Ctrl+N)", (_, _) => ShowAddUrlFromClipboard());
-        newUrl.ShortcutKeys = Keys.Control | Keys.N;
+
+        var addUrl = Action("เพิ่มลิงก์ (Ctrl+N)", (_, _) => ShowAddUrlFromClipboard());
+        addUrl.ShortcutKeys = Keys.Control | Keys.N;
+        var renameFile = Action("เปลี่ยนชื่อไฟล์ที่เสร็จแล้ว (F2)",
+            (_, _) => WithSelectedJob(RenameCompletedJob));
         menu.Items.Add(Menu("งาน",
-            newUrl,
-            Action("▶ เริ่ม / ต่อ", (_, _) => SelectedAction(_engine.Start)),
-            Action("Ⅱ หยุดชั่วคราว", (_, _) => SelectedAction(_engine.Pause)),
-            Action("↻ เริ่มงานที่ยังไม่เสร็จทั้งหมด", (_, _) => StartIncomplete()),
-            Action("Ⅱ หยุดทั้งหมด", (_, _) => _engine.PauseAll())));
-        menu.Items.Add(Menu("ไฟล์",
-            Action("เปิดไฟล์ / โฟลเดอร์ของรายการ", (_, _) => OpenSelected()),
-            Action("ดาวน์โหลดวิดีโอใหม่ / เปลี่ยนคุณภาพ", (_, _) =>
+            addUrl,
+            Action("เริ่ม / ต่อรายการที่เลือก", (_, _) => SelectedAction(_engine.Start)),
+            Action("พักรายการที่เลือก", (_, _) => SelectedAction(_engine.Pause)),
+            Action("ทำต่อทุกงานที่ยังไม่เสร็จ", (_, _) => StartIncomplete()),
+            Action("พักทั้งหมด", (_, _) => _engine.PauseAll())));
+
+        var priority = Menu("ลำดับความสำคัญ",
+            Action("สูง", (_, _) => WithSelectedJob(j => SetPriority(j, 0))),
+            Action("ปกติ", (_, _) => WithSelectedJob(j => SetPriority(j, 1))),
+            Action("ต่ำ", (_, _) => WithSelectedJob(j => SetPriority(j, 2))));
+        var selectQueue = new ToolStripMenuItem("ย้ายไปคิว...");
+        selectQueue.DropDownOpening += (_, _) =>
+        {
+            selectQueue.DropDownItems.Clear();
+            foreach (var name in _engine.GetQueueNames())
             {
-                var job = Selected();
-                if (job?.Kind == "Video") RedownloadVideo(job);
-            }),
-            Action("ลบรายการที่เลือก", (_, _) => RemoveSelectedJob()),
-            Action("ลบประวัติที่ดาวน์โหลดสำเร็จ", (_, _) => ClearCompletedHistory())));
-        menu.Items.Add(Menu("การดาวน์โหลด",
-            Action("ดาวน์โหลดอัตโนมัติ (Chrome / Edge)", (_, _) => SetupBrowserIntegration()),
-            Action("กำหนดจำนวนครั้งลองใหม่...", (_, _) => ConfigureNetworkRetry()),
-            Action("ประสิทธิภาพและจำนวนงานพร้อมกัน...", (_, _) => ConfigurePerformance()),
+                var queueName = name;
+                selectQueue.DropDownItems.Add(Action(queueName,
+                    (_, _) => WithSelectedJob(j => AssignJobQueue(j, queueName))));
+            }
+        };
+        menu.Items.Add(Menu("คิว",
+            priority,
+            selectQueue,
+            Action("สร้างคิวสำหรับรายการที่เลือก...",
+                (_, _) => WithSelectedJob(CreateJobQueue)),
+            Action("เปลี่ยนชื่อคิวปัจจุบัน...",
+                (_, _) => WithSelectedJob(RenameJobQueue)),
+            Action("จำกัดความเร็ว HTTP รายไฟล์...",
+                (_, _) => WithSelectedJob(ConfigureFileSpeed)),
+            Action("ตั้งค่าความเร็วรวมและจำนวนงาน...",
+                (_, _) => ConfigurePerformance())));
+
+        menu.Items.Add(Menu("สื่อ",
+            Action("เพิ่มลิงก์วิดีโอ...", (_, _) => ShowAddUrlFromClipboard()),
+            Action("ดาวน์โหลดวิดีโอใหม่ / เปลี่ยนคุณภาพ...",
+                (_, _) => WithSelectedJob(job =>
+                {
+                    if (job.Kind == "Video" && job.Status is not ("Running" or "Queued"))
+                        RedownloadVideo(job);
+                    else
+                        MessageBox.Show(this,
+                            "เลือกรายการวิดีโอที่ไม่ได้กำลังทำงานหรือรอคิว",
+                            "X-Stage", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                })),
+            Action("ดูข้อผิดพลาดของรายการ...",
+                (_, _) => WithSelectedJob(ShowJobError)),
+            Action("เปิดบันทึกข้อผิดพลาดวิดีโอ...",
+                (_, _) => WithSelectedJob(job =>
+                {
+                    if (job.Kind == "Video") OpenVideoLog(job);
+                })),
+            Action("แสดงเฉพาะวิดีโอ", (_, _) => SelectCategory("video"))));
+
+        menu.Items.Add(Menu("ไฟล์",
+            Action("เปิดไฟล์ / โฟลเดอร์", (_, _) => OpenSelected()),
+            renameFile,
+            Action("ลบรายการจากประวัติ", (_, _) => RemoveSelectedJob()),
+            Action("ลบเฉพาะประวัติที่เสร็จแล้ว", (_, _) => ClearCompletedHistory())));
+        menu.Items.Add(Menu("ตั้งค่า",
+            Action("ประสิทธิภาพ / การเชื่อมต่อ...", (_, _) => ConfigurePerformance()),
+            Action("จำนวนครั้งลองใหม่...", (_, _) => ConfigureNetworkRetry()),
+            Action("รับดาวน์โหลดจาก Chrome / Edge...", (_, _) => SetupBrowserIntegration()),
             Action("ตรวจสอบอัปเดต", async (_, _) => await CheckForUpdatesAsync(true))));
         menu.Items.Add(Menu("มุมมอง",
-            Action("แสดงทั้งหมด", (_, _) => SelectCategory("all")),
-            Action("แสดงที่กำลังดาวน์โหลด", (_, _) => SelectCategory("active")),
-            Action("แสดงที่เสร็จแล้ว", (_, _) => SelectCategory("completed")),
-            Action("แสดงที่ยังไม่เสร็จ", (_, _) => SelectCategory("incomplete")),
-            Action("แสดงวิดีโอ", (_, _) => SelectCategory("video")),
+            Action("งานทั้งหมด", (_, _) => SelectCategory("all")),
+            Action("กำลังดาวน์โหลด", (_, _) => SelectCategory("active")),
+            Action("รอคิว", (_, _) => SelectCategory("queued")),
+            Action("ข้อผิดพลาด", (_, _) => SelectCategory("failed")),
+            Action("ดาวน์โหลดเสร็จแล้ว", (_, _) => SelectCategory("completed")),
             Action("แสดง/ซ่อนช่องเพิ่ม URL", (_, _) => ShowInputPanel(!_inputVisible))));
         menu.Items.Add(Menu("ช่วยเหลือ",
             Action("เกี่ยวกับ X-Stage Download Manager", (_, _) =>
                 MessageBox.Show(this,
                     "X-Stage Download Manager v" + UpdateChecker.CurrentVersion +
                     " Build " + UpdateChecker.CurrentBuild +
-                    "\nดาวน์โหลดไฟล์และสื่อวิดีโอ พร้อมระบบอัปเดตในแอป",
+                    "\nเครื่องมือดาวน์โหลด พร้อมระบบจัดคิว สื่อ และอัปเดต",
                     "เกี่ยวกับโปรแกรม", MessageBoxButtons.OK, MessageBoxIcon.Information))));
         return menu;
+    }
+
+    private void WithSelectedJob(Action<DownloadJob> action)
+    {
+        var job = Selected();
+        if (job is null)
+        {
+            MessageBox.Show(this, "กรุณาเลือกรายการดาวน์โหลดจากตารางก่อน",
+                "X-Stage", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        action(job);
     }
 
     private ToolStrip CreateIconToolbar()
     {
         var bar = new ToolStrip
         {
-            Dock = DockStyle.Fill, AutoSize = false, Height = 64,
-            GripStyle = ToolStripGripStyle.Hidden, LayoutStyle = ToolStripLayoutStyle.HorizontalStackWithOverflow,
-            BackColor = DarkTop, ForeColor = Color.White,
+            Dock = DockStyle.Fill, AutoSize = false, Height = 60,
+            GripStyle = ToolStripGripStyle.Hidden,
+            LayoutStyle = ToolStripLayoutStyle.HorizontalStackWithOverflow,
+            BackColor = DarkPanel, ForeColor = Color.White,
             RenderMode = ToolStripRenderMode.System,
             ImageScalingSize = new Size(22, 22),
-            Padding = new Padding(14, 6, 8, 6),
-            Font = new Font("Segoe UI", 9)
+            Padding = new Padding(15, 6, 10, 6),
+            Font = new Font("Segoe UI", 9, FontStyle.Bold)
         };
-        void Button(string label, string symbol, Color iconColor, EventHandler callback, string tooltip)
+        void Button(string label, string symbol, Color color, EventHandler callback, string tooltip)
         {
             var item = new ToolStripButton
             {
-                Text = label, Image = DrawToolbarGlyph(symbol, iconColor),
+                Text = label, Image = DrawToolbarGlyph(symbol, color),
                 DisplayStyle = ToolStripItemDisplayStyle.ImageAndText,
                 TextImageRelation = TextImageRelation.ImageBeforeText,
-                ImageAlign = ContentAlignment.MiddleCenter,
-                TextAlign = ContentAlignment.BottomCenter,
-                AutoSize = false, Size = new Size(label.Length > 14 ? 150 : 104, 46),
-                Margin = new Padding(0, 0, 3, 0), Padding = new Padding(3),
-                ToolTipText = tooltip, ForeColor = Color.White, BackColor = DarkPanel
+                ImageAlign = ContentAlignment.MiddleLeft,
+                TextAlign = ContentAlignment.MiddleLeft,
+                AutoSize = false, Size = new Size(label.Length > 12 ? 150 : 118, 44),
+                Margin = new Padding(0, 0, 5, 0), Padding = new Padding(8, 3, 7, 3),
+                ToolTipText = tooltip, ForeColor = Color.White, BackColor = DarkTop
             };
             item.Click += callback;
             bar.Items.Add(item);
         }
-        bar.Items.Add(new ToolStripLabel("X-STAGE  /  TRANSFERS")
-        {
-            ForeColor = Accent, Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            Margin = new Padding(4, 0, 18, 0)
-        });
-        Button("เพิ่ม URL", "＋", Color.FromArgb(89, 204, 176),
-            (_, _) => ShowAddUrlFromClipboard(), "เปิดช่องเพิ่ม URL และเติมลิงก์จากคลิปบอร์ดอัตโนมัติ");
-        Button("เริ่ม / ต่อ", "▶", Color.FromArgb(140, 193, 255),
-            (_, _) => SelectedAction(_engine.Start), "เริ่มรายการที่เลือกหรือดาวน์โหลดต่อ");
-        Button("หยุด", "■", Color.FromArgb(255, 149, 151),
-            (_, _) => SelectedAction(_engine.Pause), "หยุดรายการที่เลือกชั่วคราว");
-        Button("หยุดทั้งหมด", "Ⅱ", Color.FromArgb(255, 183, 130),
-            (_, _) => _engine.PauseAll(), "หยุดการดาวน์โหลดที่กำลังทำงานทั้งหมด");
-        Button("ลบ", "✕", Color.FromArgb(255, 150, 163),
-            (_, _) => RemoveSelectedJob(), "ลบเฉพาะประวัติรายการ ไม่ลบไฟล์ที่ดาวน์โหลดสำเร็จ");
-        Button("ลบที่เสร็จแล้ว", "✓", Color.FromArgb(180, 155, 235),
-            (_, _) => ClearCompletedHistory(), "ลบประวัติรายการที่เสร็จแล้วโดยไม่ลบไฟล์");
-        Button("ตั้งค่า", "⚙", Color.FromArgb(165, 186, 244),
-            (_, _) => ShowInputPanel(true, true), "เลือกโฟลเดอร์ จำนวนส่วน และชนิดไฟล์");
-        Button("รอคิว", "◷", Color.FromArgb(241, 202, 123),
-            (_, _) => SelectCategory("queued"), "ดูงานที่รอเริ่มดาวน์โหลด");
-        Button("ดาวน์โหลดอัตโนมัติ", "↧", Color.FromArgb(137, 216, 255),
+        Button("＋ เพิ่มงาน", "＋", Accent,
+            (_, _) => ShowAddUrlFromClipboard(), "เพิ่ม URL หรือวิดีโอ โดยไม่เริ่มอัตโนมัติจากคลิปบอร์ด");
+        Button("▶ เริ่ม / ต่อ", "▶", Color.FromArgb(140, 193, 255),
+            (_, _) => SelectedAction(_engine.Start), "เริ่มงานที่เลือก");
+        Button("Ⅱ พัก", "Ⅱ", Color.FromArgb(245, 185, 125),
+            (_, _) => SelectedAction(_engine.Pause), "พักงานที่เลือก");
+        Button("◷ คิว", "◷", Color.FromArgb(228, 204, 153),
+            (_, _) => SelectCategory("queued"), "ดูรายการที่กำลังรอคิว");
+        Button("⚙ ความเร็ว", "⚙", Color.FromArgb(165, 186, 244),
+            (_, _) => ConfigurePerformance(), "ตั้งค่าความเร็วและจำนวนงานพร้อมกัน");
+        Button("↧ เบราว์เซอร์", "↧", Color.FromArgb(137, 216, 255),
             (_, _) => SetupBrowserIntegration(), "ตั้งค่าการรับดาวน์โหลดจาก Chrome / Edge");
-        Button("อัปเดต", "⟳", Color.FromArgb(110, 225, 178),
-            async (_, _) => await CheckForUpdatesAsync(true), "ตรวจสอบและติดตั้งอัปเดต");
         _toolbar = bar;
         return bar;
     }
@@ -331,6 +423,7 @@ public sealed partial class MainForm
         AddCategory(all, "active", "◉  กำลังดาวน์โหลด");
         AddCategory(all, "queued", "◷  รอคิว");
         AddCategory(all, "incomplete", "Ⅱ  ยังไม่เสร็จ");
+        AddCategory(all, "failed", "！  ข้อผิดพลาด");
         AddCategory(null, "completed", "✓  เสร็จแล้ว");
         var type = new TreeNode("▦  ประเภทไฟล์")
         {
@@ -347,9 +440,132 @@ public sealed partial class MainForm
         type.Expand();
 
         CreateDownloadGrid();
-        split.Panel2.Controls.Add(_grid);
+        split.Panel2.Controls.Add(CreateTransferDesk());
         _categories.SelectedNode = all;
         return split;
+    }
+
+    private Control CreateTransferDesk()
+    {
+        var desk = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3,
+            BackColor = DarkGrid, Padding = Padding.Empty, Margin = Padding.Empty
+        };
+        desk.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        desk.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
+        desk.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        desk.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        desk.Controls.Add(CreateOverviewTiles(), 0, 0);
+
+        var filterBar = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1,
+            BackColor = DarkGrid, Padding = Padding.Empty
+        };
+        filterBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        filterBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 250));
+        filterBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        filterBar.Controls.Add(new Label
+        {
+            Text = "  TRANSFER ACTIVITY  /  รายการดาวน์โหลด",
+            Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = Color.FromArgb(227, 238, 246),
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            AutoEllipsis = true
+        }, 0, 0);
+        _jobSearch.Dock = DockStyle.Fill;
+        _jobSearch.Margin = new Padding(0, 9, 13, 9);
+        _jobSearch.BorderStyle = BorderStyle.FixedSingle;
+        _jobSearch.BackColor = Color.FromArgb(235, 244, 249);
+        _jobSearch.ForeColor = Color.FromArgb(23, 43, 56);
+        _jobSearch.PlaceholderText = "ค้นหาชื่อไฟล์ ลิงก์ หรือคิว";
+        _jobSearch.AccessibleName = "ค้นหารายการดาวน์โหลด";
+        _jobSearch.TextChanged += (_, _) => RefreshRows();
+        filterBar.Controls.Add(_jobSearch, 1, 0);
+        desk.Controls.Add(filterBar, 0, 1);
+        desk.Controls.Add(_grid, 0, 2);
+        return desk;
+    }
+
+    private Control CreateOverviewTiles()
+    {
+        var overview = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1,
+            BackColor = DarkGrid, Padding = new Padding(9, 7, 9, 6)
+        };
+        for (var i = 0; i < 4; i++)
+            overview.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        overview.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var items = new (string Key, string Caption, Color Color)[]
+        {
+            ("active", "กำลังถ่ายโอน", Accent),
+            ("queued", "รอคิว", Color.FromArgb(243, 202, 139)),
+            ("completed", "เสร็จสมบูรณ์", Color.FromArgb(141, 224, 168)),
+            ("failed", "ต้องตรวจสอบ", Color.FromArgb(255, 158, 158))
+        };
+        for (var i = 0; i < items.Length; i++)
+        {
+            var (key, caption, color) = items[i];
+            var card = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2,
+                Margin = new Padding(4, 0, 4, 0), Padding = new Padding(12, 3, 8, 3),
+                BackColor = DarkPanel, Cursor = Cursors.Hand,
+                AccessibleName = caption + " — แสดงรายการ"
+            };
+            card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            card.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
+            card.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
+            var count = new Label
+            {
+                Dock = DockStyle.Fill, Text = "0",
+                ForeColor = color, Font = new Font("Segoe UI", 17, FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleLeft, Cursor = Cursors.Hand
+            };
+            var name = new Label
+            {
+                Dock = DockStyle.Fill, Text = caption,
+                ForeColor = MutedText, Font = new Font("Segoe UI", 9),
+                TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true,
+                Cursor = Cursors.Hand
+            };
+            card.Click += (_, _) => SelectCategory(key);
+            count.Click += (_, _) => SelectCategory(key);
+            name.Click += (_, _) => SelectCategory(key);
+            card.Controls.Add(count, 0, 0);
+            card.Controls.Add(name, 0, 1);
+            overview.Controls.Add(card, i, 0);
+            _overviewCounts[key] = count;
+        }
+        return overview;
+    }
+
+    private void UpdateOverviewCounts(DownloadJob[] jobs)
+    {
+        foreach (var (key, count) in _overviewCounts)
+        {
+            var value = jobs.Count(job => key switch
+            {
+                "active" => job.Status == "Running",
+                "queued" => job.Status == "Queued",
+                "completed" => job.Status == "Completed",
+                "failed" => job.Status == "Failed",
+                _ => false
+            });
+            var next = value.ToString("N0");
+            if (count.Text != next) count.Text = next;
+        }
+    }
+
+    private bool MatchesSearch(DownloadJob job)
+    {
+        var term = _jobSearch.Text.Trim();
+        return term.Length == 0 ||
+            job.Name.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+            job.Url.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+            (job.QueueName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false);
     }
 
     private TreeNode AddCategory(TreeNode? parent, string key, string title)
@@ -645,6 +861,7 @@ public sealed partial class MainForm
         "all" => true,
         "active" => job.Status == "Running",
         "queued" => job.Status == "Queued",
+        "failed" => job.Status == "Failed",
         "incomplete" => job.Status is "Paused" or "Failed" or "Queued" or "Running",
         "completed" => job.Status == "Completed",
         _ => CategoryOf(job) == _categoryFilter
@@ -659,6 +876,7 @@ public sealed partial class MainForm
                 "all" => true,
                 "active" => job.Status == "Running",
                 "queued" => job.Status == "Queued",
+                "failed" => job.Status == "Failed",
                 "incomplete" => job.Status is "Paused" or "Failed" or "Queued" or "Running",
                 "completed" => job.Status == "Completed",
                 _ => CategoryOf(job) == key
