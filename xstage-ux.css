@@ -2559,6 +2559,30 @@ body.xstage-ui-v2 .app-update-notice button:disabled{
   }
 }
 
+/* Live web update: two compact options while a song keeps playing. */
+body.xstage-ui-v2 .app-update-notice .app-update-actions{
+  display:flex;align-items:center;justify-content:flex-end;
+  flex:0 0 auto;gap:6px;flex-wrap:wrap;
+}
+body.xstage-ui-v2 .app-update-notice .app-update-actions button[hidden]{
+  display:none!important;
+}
+body.xstage-ui-v2 .app-update-notice .app-update-actions #app-update-after-song{
+  background:#152a3d;border-color:#7da6bc;
+}
+body.xstage-ui-v2 .app-update-notice.during-playback{
+  pointer-events:auto;max-width:min(620px,calc(100% - 14px));
+}
+@media(max-width:620px){
+  body.xstage-ui-v2 .app-update-notice{
+    flex-direction:column;gap:5px;align-items:stretch;
+    max-width:calc(100% - 16px);text-align:center;
+  }
+  body.xstage-ui-v2 .app-update-notice .app-update-actions{
+    justify-content:center;
+  }
+}
+
 /* 1.0.34: compact multi-library selector. */
 body.xstage-ui-v2 .stage .library-switcher{
   display:inline-flex;
