@@ -394,13 +394,20 @@ $("midi-import").addEventListener("change",async event=>{
   midiStatus("นำเข้า MIDI แล้ว · "+midiNotes.length+" โน้ต");
  }catch(e){midiStatus("นำเข้า MIDI ไม่สำเร็จ: "+e.message,true);}
 });
-$("midi-export").addEventListener("click",()=>{
+$("midi-export").addEventListener("click",async()=>{
  try{
   if(!midiNotes.length)throw new Error("ยังไม่มีโน้ต MIDI");
-  const bytes=encodeMidi(midiNotes,$("midi-bpm").value),url=URL.createObjectURL(new Blob([bytes],{type:"audio/midi"}));
-  const link=document.createElement("a");link.href=url;link.download="X-Stage-Audio-Notes.mid";
-  document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
-  midiStatus("ส่งออก Standard MIDI File แล้ว");
+  const bytes=encodeMidi(midiNotes,$("midi-bpm").value),blob=new Blob([bytes],{type:"audio/midi"});
+  if(window.AG06Android){
+   const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});
+   window.AG06Android.saveMidi(data);
+   midiStatus("ส่ง MIDI ให้ Android แล้ว · กำลังบันทึกใน Downloads");
+  }else{
+   const url=URL.createObjectURL(blob),link=document.createElement("a");
+   link.href=url;link.download="X-Stage-Audio-Notes.mid";
+   document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+   midiStatus("ส่งออก Standard MIDI File แล้ว");
+  }
  }catch(e){midiStatus("ส่งออก MIDI ไม่สำเร็จ: "+e.message,true);}
 });
 renderNotes();renderTimeline();
