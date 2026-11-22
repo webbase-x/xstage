@@ -276,6 +276,11 @@ def apply_pending(data):
     try:
         for name in replaced:
             source=data/name
+            # Recheck immediately before snapshotting: an external process may
+            # replace a regular file with a link after the initial preflight.
+            if (source.is_symlink() or getattr(source, 'is_junction', lambda: False)()
+                    or (source.exists() and not source.is_file())):
+                raise ValueError('ไฟล์ข้อมูลปัจจุบันเปลี่ยนเป็นลิงก์หรือโฟลเดอร์: '+name)
             if source.exists():
                 if name.endswith('.sqlite3'):copy_database(source,safety/name)
                 else:shutil.copyfile(source,safety/name)
