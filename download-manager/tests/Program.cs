@@ -37,6 +37,16 @@ if (args.Length >= 3 && args[0] == "--media-smoke")
 var hlsActive = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:10\n#EXTINF:4.0,\npart10.ts\n";
 var hlsFinished = hlsActive + "#EXT-X-ENDLIST\n";
 var hlsMaster = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=350000\nvariant.m3u8\n";
+var selectedVariant = LiveBackgroundMonitor.SelectHlsVariant(
+    new Uri("https://example.net/streams/master.m3u8"), hlsMaster);
+if (selectedVariant?.AbsoluteUri != "https://example.net/streams/variant.m3u8" ||
+    LiveBackgroundMonitor.SelectHlsVariant(
+        new Uri("https://example.net/master.m3u8"), hlsActive) is not null ||
+    LiveBackgroundMonitor.SelectHlsVariant(
+        new Uri("https://example.net/master.m3u8"),
+        "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000\nfile:///C:/secret.m3u8") is not null)
+    throw new Exception("HLS master variant resolution must be safe and preserve relative paths.");
+
 if (!LiveBackgroundMonitor.IsActiveHlsManifest(hlsActive) ||
     LiveBackgroundMonitor.IsActiveHlsManifest(hlsFinished) ||
     LiveBackgroundMonitor.IsActiveHlsManifest(hlsMaster) ||
