@@ -220,6 +220,22 @@ assert.ok(lights.status().energy>.1,'Recovered stage animation must draw active 
 virtualMidi.playing=false;
 media.emit('pause');
 
+// Ordinary audio with a video backdrop must show measured, NOT synthetic,
+ // spectrum-driven concert beams just like MIDI playback.
+lights.clearMidiNotes();
+context.window.XStageStagePlaybackClock=()=>({
+  midi:false,playing:true,currentTime:2.5,muted:false,volume:1
+});
+context.window.XStageStageLiveSpectrum=()=>({
+  bands:[.8,.65,.4],active:true,updatedAt:Date.now()
+});
+video.hidden=false;
+media.emit('playing');paint(900);
+assert.ok(lights.status().energy>.5,
+  'Measured audio must illuminate concert lighting behind a video song');
+video.hidden=true;
+media.emit('pause');
+
 const meterGuardStart=webEq.indexOf('function drawStageBrandVisualizer(');
 const meterGuardEnd=webEq.indexOf('\nfunction startStageBrandVisualizer(',meterGuardStart);
 assert.ok(meterGuardStart>=0&&meterGuardEnd>meterGuardStart,
