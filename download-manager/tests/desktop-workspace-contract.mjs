@@ -26,7 +26,7 @@ const contracts = [
   ['no forced cut', /if \(nearby\.Length == 0\) break;/, live],
   ['speech-aware segmentation', /LiveSpeechSegmentPlanner\.Plan\(/, live],
   ['live permission checkbox', /if \(!_permission\.Checked\)/, liveUi],
-  ['live dialog retains files on errors', /เก็บไฟล์ต้นฉบับ/, liveUi],
+  ['live dialog retains files on errors', /ต้นฉบับ MKV ถูกเก็บไว้เสมอ/, liveUi],
   ['live UI linked in integration test', /LiveStreamCaptureForm\.cs/, testProject],
   ['live capture linked in integration test', /LiveStreamCapture\.cs/, testProject],
   ['compact command deck', /CreateIconToolbar\(\)/, workspace],
