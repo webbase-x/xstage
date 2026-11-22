@@ -1092,8 +1092,12 @@ class Importer {
       const pendingVideos=this.videoEditor?.pendingCount()||0;
       if(pendingVideos)this.dom.detail.textContent='ข้ามวิดีโอรอตรวจ '+pendingVideos+
         ' รายการ · กรอกข้อมูล/เนื้อร้องและบันทึกก่อนนำเข้ารอบถัดไป';
-      let revisions=[],finished=0;
-      const show=(text,part=0)=>{this.status(text);this.progress(finished,work.length,part);};
+      let revisions=[],finished=0,lastProgressItem=-1,peakPart=0;
+      const show=(text,part=0)=>{
+        if(finished!==lastProgressItem){lastProgressItem=finished;peakPart=0;}
+        peakPart=Math.max(peakPart,Math.min(1,Math.max(0,part)));
+        this.status(text);this.progress(finished,work.length,peakPart);
+      };
       const uploadMedia=async(file,code,parts,name,mime,hash,from=0,span=1)=>{
         this.check();
         const parent=await drive.ensurePath(rootId,parts);
@@ -1102,6 +1106,15 @@ class Importer {
             (bytesPerSecond>0?' · '+(bytesPerSecond/MiB).toFixed(1)+' MB/s':''),
             Math.min(.99,from+(done/Math.max(1,total))*span)));
         return {fileId:item.id,path:[...parts,name].join('/'),md5Checksum:hash,size:file.size};
+      };
+      // Independent immutable song+lyrics files may upload simultaneously.
+      // Await BOTH completions before updating catalog rows or publishing DB.
+      // If either fails, the verified successful file is safely reused on retry.
+      const uploadPair=async(first,second)=>{
+        const tasks=await Promise.allSettled([first(),second()]);
+        const failure=tasks.find(task=>task.status==='rejected');
+        if(failure)throw failure.reason;
+        return tasks.map(task=>task.value);
       };
       const publish=async()=>{
         if(!revisions.length)return;
@@ -1233,24 +1246,20 @@ class Importer {
               item.kind==='KAR'?'KAR':'SMF';
             const base=safeName(code);
             let media=same?.midi;
-            if(!media){
-              const name=base+'-'+midiHash.slice(0,16)+'.'+core.ext(midiFile.name);
-              const midiFolder=item.kind==='NCN'
-                ? [driveLayout.songs,'MIDI','NCN','SONG',pathFor(code,'midi','',name)[4]]
-                : pathFor(code,'midi','',name).slice(0,-1);
-              media=await uploadMedia(midiFile,code,midiFolder,name,
-                'audio/midi',midiHash,0,.75);
-            }
-            // KAR embeds timed lyrics in the MIDI container: no companion
-            // SONG or LYRICS directory is needed. XSK already uses its own
-            // self-contained upload branch above.
-            let lyrics=null;
-            if(item.kind!=='KAR'){
-              const jname=base+'-'+jsonHash.slice(0,16)+'.json';
-              lyrics=await uploadMedia(json,code,
+            const name=base+'-'+midiHash.slice(0,16)+'.'+core.ext(midiFile.name);
+            const midiFolder=item.kind==='NCN'
+              ? [driveLayout.songs,'MIDI','NCN','SONG',pathFor(code,'midi','',name)[4]]
+              : pathFor(code,'midi','',name).slice(0,-1);
+            // KAR embeds its lyrics and needs no second artifact.
+            const jname=base+'-'+jsonHash.slice(0,16)+'.json';
+            const [verifiedMidi,lyrics]=await uploadPair(
+              ()=>media||uploadMedia(midiFile,code,midiFolder,name,
+                'audio/midi',midiHash,0,.75),
+              ()=>item.kind==='KAR'?null:uploadMedia(json,code,
                 pathFor(code,'json',item.kind==='NCN'?'NCN':'MID',jname).slice(0,-1),
-                jname,'application/json',jsonHash,.75,.25);
-            }
+                jname,'application/json',jsonHash,.75,.25)
+            );
+            media=verifiedMidi;
             // Keep lossless NCN sources in their native folders alongside the
             // separately verified timed JSON used for all player platforms.
             let ncnSource=same?.ncnSource||null;
@@ -1385,14 +1394,14 @@ class Importer {
             if(candidates.length&&!same){this.stats.conflicts++;finished++;show('รหัสเพลงชนแต่ข้อมูลต่างกัน: '+code+' · ไม่เขียนทับ');continue;}
             const base=safeName(code);
             const prefix=pathFor(code,uploadKind,'',base+'.'+uploadKind.toLowerCase()).slice(0,-1);
-            let media=same?.audio;
-            if(!media){
-              const name=base+'-'+audioHash.slice(0,16)+'.'+uploadKind.toLowerCase();
-              media=await uploadMedia(audioFile,code,prefix,name,
-                MEDIA_MIME[uploadKind]||'application/octet-stream',audioHash,0,.83);
-            }
+            const name=base+'-'+audioHash.slice(0,16)+'.'+uploadKind.toLowerCase();
             const jname=base+'-'+jsonHash.slice(0,16)+'.json';
-            const lyric=await uploadMedia(json,code,pathFor(code,'json',uploadKind,jname).slice(0,-1),jname,'application/json',jsonHash,.83,.09);
+            const [media,lyric]=await uploadPair(
+              ()=>same?.audio||uploadMedia(audioFile,code,prefix,name,
+                MEDIA_MIME[uploadKind]||'application/octet-stream',audioHash,0,.83),
+              ()=>uploadMedia(json,code,pathFor(code,'json',uploadKind,jname).slice(0,-1),
+                jname,'application/json',jsonHash,.83,.09)
+            );
             // LRC is a local input/editing format; JSON is the only
             // lyric artifact stored on Drive in layout v3.
             let videoMedia=same?.video;
