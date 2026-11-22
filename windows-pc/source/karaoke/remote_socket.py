@@ -9,6 +9,7 @@ import base64
 import hashlib
 import json
 import logging
+import select
 import socket
 import struct
 import time
@@ -110,7 +111,10 @@ def serve_live(handler, owner):
             if token not in owner.sessions:
                 return
             owner.sessions[token]['seen'] = time.monotonic()
-        handler.connection.settimeout(.5)
+        # Avoid read timeouts on socket.makefile(): a timed-out BufferedReader
+        # may become permanently unusable. Read only when select says data
+        # exists, and terminate on an incomplete or deliberately stalled frame.
+        handler.connection.settimeout(3)
         while True:
             with owner.lock:
                 owner.expire_sessions()
@@ -120,10 +124,10 @@ def serve_live(handler, owner):
                 session = dict(current)
             payload = {'type': 'state', 'data': handler.state_for(session)}
             handler.connection.sendall(frame_text(payload))
-            try:
-                frame = read_frame(handler.rfile)
-            except socket.timeout:
+            readable, _, _ = select.select([handler.connection], [], [], .5)
+            if not readable:
                 continue
+            frame = read_frame(handler.rfile)
             if frame is None or frame[0] == 8:
                 return
             if frame[0] == 9:
