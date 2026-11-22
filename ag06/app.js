@@ -121,7 +121,7 @@ async function finishRecording(){
     latestUrl=URL.createObjectURL(file.blob);
     const link=$("download-recording");
     link.href=latestUrl;
-    link.download="X-Stage-AG06-"+new Date().toISOString().replace(/[:.]/g,"-")+"."+file.extension;
+    link.download="X-Stage-Audio-"+new Date().toISOString().replace(/[:.]/g,"-")+"."+file.extension;
     link.textContent=window.AG06Android?"บันทึกไฟล์ลง Android":"ดาวน์โหลดไฟล์ "+file.extension.toUpperCase();
     link.hidden=false;
     $("record-info").textContent="บันทึกแล้ว "+(file.blob.size/1024/1024).toFixed(1)+" MB · "+file.type+" · ไฟล์ยังอยู่ในหน่วยความจำจนกดบันทึก";
