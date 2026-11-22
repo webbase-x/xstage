@@ -910,7 +910,8 @@ class ClassicApp(KaraokeApp):
             start_local_remote(self)
         except Exception:
             logging.exception('LOCAL_REMOTE initialization failed')
-            self.remote_quick_var.set('รีโมท LAN: เริ่มไม่สำเร็จ · เปิดเมนูรีโมทเพื่อตรวจ')
+            label=getattr(self,'remote_quick_var',None)
+            if label:label.set('รีโมท LAN: เริ่มไม่สำเร็จ · เปิดเมนูรีโมทเพื่อตรวจ')
         self._refresh_local_remote()
 
     def _refresh_local_remote(self):
