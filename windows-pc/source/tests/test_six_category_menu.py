@@ -12,9 +12,9 @@ class SixCategoryMenuTests(unittest.TestCase):
         self.assertNotIn("menu.add_separator()\n\n    options = submenu", source,
                          "Do not add an extra root separator after categories")
         for label in (
-            "เมนูหลัก · 6 หมวด", "เพลงและคิว", "เสียงและ SoundFont",
-            "เนื้อร้องและภาพ", "การควบคุม", "เครื่องมือแสดงสด",
-            "ระบบและสถานะ",
+            "เมนูหลัก · 6 หมวด", "1. เพลงและคิว", "2. เสียงและ SoundFont",
+            "3. เนื้อร้องและภาพ", "4. การควบคุม", "5. เครื่องมือแสดงสด",
+            "6. ระบบและสถานะ",
         ):
             with self.subTest(label=label):
                 self.assertIn(label, source)
