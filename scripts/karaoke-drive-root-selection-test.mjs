@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const app=read('app.js'),imp=read('cloud-import.js'),html=read('karaoke.html');
 const version=JSON.parse(read('version.json'));
-assert.equal(version.build,1134);
-assert.equal(version.version,'1.0.134');
-assert.ok(html.includes('app.js?v=1134-sqlite3'));
-assert.ok(html.includes('cloud-import.js?v=1134-sqlite3'));
+assert.equal(version.build,1136);
+assert.equal(version.version,'1.0.136');
+assert.ok(html.includes('app.js?v=1136-stage-lighting'));
+assert.ok(html.includes('cloud-import.js?v=1135-retired-root'));
 assert.ok(app.includes('createdTime,sharedWithMeTime'));
 assert.ok(html.includes('id="library-drive-link"'));
 assert.ok(app.includes("ui.libraryDriveLink.href='https://drive.google.com/drive/folders/'"));
@@ -19,7 +19,8 @@ assert.ok(!imp.includes("name='XStageSong'"));
 
 const match=imp.match(/^function chooseImportRoot\(roots,activeRootId\)\{[\s\S]*?^\}/m);
 assert.ok(match,'Importer must expose root selection logic for test');
-const choose=new Function('fail',match[0]+';return chooseImportRoot;')(message=>{throw Error(message);});
+const choose=new Function('fail','isRetiredDriveRoot',match[0]+';return chooseImportRoot;')(
+  message=>{throw Error(message);},id=>id==='1RYekUHCC3qs661cUrbxkNauUz_SuqZvy');
 const older={id:'existing-empty-root',name:'XStageKaraoke',ownedByMe:true,
  createdTime:'2026-11-21T14:02:52Z'};
 const newer={id:'newer-imported-root',name:'XStageKaraoke',ownedByMe:true,
