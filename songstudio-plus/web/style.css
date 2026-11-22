@@ -1206,3 +1206,14 @@ dialog[open]{opacity:1!important;filter:none!important}
   outline:2px solid #81e6de;outline-offset:2px
 }
 .panel button,.panel a{touch-action:manipulation}
+
+/* X-Stage export: observed per-song progress rather than simulated completion. */
+.build-operation-progress{margin:14px 0 17px;padding:15px;border:1px solid #345372;border-radius:13px;background:#101f35;min-width:0}
+.build-operation-head{display:flex;justify-content:space-between;align-items:center;gap:10px;color:#d8f4f6;font-size:12px}
+#build-progress-percent{font-size:22px;font-variant-numeric:tabular-nums;color:#83e6d8}
+.build-progress-track{width:100%;height:11px;margin-top:12px;border-radius:20px;overflow:hidden;background:#273852}
+.build-progress-fill{width:0;height:100%;background:linear-gradient(90deg,#4edbc2,#62aff6);transition:width .3s ease}
+.build-progress-count,.build-progress-results{font-size:12px;color:#bfd0e7;margin:10px 0 0;line-height:1.6;overflow-wrap:anywhere}
+.build-progress-results{color:#a5bfd8}
+.build-operation-progress .field-hint{margin:8px 0 0;overflow-wrap:anywhere}
+@media (max-width:600px){.build-operation-progress{padding:12px}.build-operation-head{flex-wrap:wrap}#build-progress-percent{font-size:20px}}
