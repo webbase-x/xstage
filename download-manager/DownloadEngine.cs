@@ -398,6 +398,10 @@ public sealed class DownloadEngine
 
     public void Start(DownloadJob job)
     {
+        // Never transfer an arbitrary/untracked job: it has no durable recovery
+        // record and could overwrite a file without appearing in history.
+        if (!Jobs.Contains(job))
+            throw new ArgumentException("Unknown download job.", nameof(job));
         if (job.Status == "Completed" || !_active.TryAdd(job.Id, 0)) return;
         // Keep the damaged file as a backup, but remove its original name
         // so yt-dlp cannot mistake it for a valid completed download.
