@@ -187,6 +187,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw 'Bundled FFmpeg/FFprobe failed real MKV-to-MP4 validation test'
           }
+      - name: Smoke-test live audio silence detection and verified clip output
+        shell: pwsh
+        run: |
+          node download-manager/tests/live-capture-media-smoke.mjs download-manager/out/tools
+          if ($LASTEXITCODE -ne 0) { throw 'Live capture FFmpeg silence-splitting smoke test failed' }
       - name: Validate and bundle optional Chrome/Edge extension
         shell: pwsh
         run: |
