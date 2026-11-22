@@ -159,6 +159,55 @@ for(const breakMeter of [false,true]){
   }
 }
 
+// Reproduction: the native <audio> remains paused at time zero while the
+// virtual MIDI proxy transport is audibly playing at 1.05 seconds. Stage LEDs
+// must read the virtual transport, not the paused native element.
+lights.setMidiNotes([{start:1,end:1.25,key:40,velocity:127,channel:9,
+  channelVolume:127,channelExpression:127}],3);
+media.paused=true;
+media.currentTime=0;
+context.window.XStageStageLiveSpectrum=()=>({
+  bands:[0,0,0],active:false,updatedAt:Date.now()
+});
+const virtualMidi={midi:true,playing:true,currentTime:1.05,muted:false,volume:1};
+context.window.XStageStagePlaybackClock=()=>virtualMidi;
+meterBars.length=0;
+media.emit('playing');
+paint(500);
+assert.ok(lights.status().energy>.1,
+  'A playing virtual MIDI transport must light the stage even while HTML audio is paused');
+assert.ok(meterBars.some(height=>height>2),
+  'Banner EQ meters must reflect actual MIDI notes at the virtual clock, not HTML audio time zero');
+virtualMidi.currentTime=0;
+paint(600);
+assert.equal(lights.status().energy,0,
+  'Before the first actual MIDI note, no artificial energy may be displayed');
+virtualMidi.playing=false;
+media.emit('pause');
+assert.equal(lights.status().energy,0,'Stopped virtual MIDI must clear the lights');
+
+const meterGuardStart=webEq.indexOf('function drawStageBrandVisualizer(');
+const meterGuardEnd=webEq.indexOf('\\nfunction startStageBrandVisualizer(',meterGuardStart);
+assert.ok(meterGuardStart>=0&&meterGuardEnd>meterGuardStart,
+  'Web audio visualizer must expose a separate guarded drawing loop');
+let conflictingFFTWrites=0,followupFrames=0;
+const meterScope={
+  eqContext:{state:'running'},
+  eqAnalyser:{getByteFrequencyData(){conflictingFFTWrites++}},
+  window:{XStageStagePlaybackClock:()=>({midi:true})},
+  stageLiveSpectrum:{bands:[.9,.9,.9],active:true,updatedAt:0},
+  requestAnimationFrame(){followupFrames++;return followupFrames;},
+  Date
+};
+const drawAudioMeter=vm.runInNewContext(webEq.slice(meterGuardStart,meterGuardEnd)+
+  '\\ndrawStageBrandVisualizer;',meterScope);
+drawAudioMeter(100);
+assert.equal(conflictingFFTWrites,0,
+  'The silent HTML analyser must never paint over MIDI's side EQ meters');
+assert.equal(meterScope.stageLiveSpectrum.active,false,
+  'Synthetic MIDI must not report stale HTML audio energy as real spectrum');
+assert.ok(followupFrames>0,'Audio analyser resumes polling for the next ordinary audio track');
+
 // Execute the actual stage-meter painting function against realistic narrow
 // canvases. Even 20px must not clip bars outside the drawing surface.
 const from=webEq.indexOf('function paintStageBars(');
