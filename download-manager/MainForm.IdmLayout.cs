@@ -782,7 +782,7 @@ public sealed partial class MainForm
         _jobSearch.TextChanged += (_, _) => RefreshRows();
         heading.Controls.Add(_jobSearch, 1, 0);
 
-        Button SmallAction(string name, string help, EventHandler action)
+        Button SmallAction(string name, string help, EventHandler? action)
         {
             var button = new Button
             {
@@ -794,10 +794,10 @@ public sealed partial class MainForm
                 AccessibleName = help
             };
             button.FlatAppearance.BorderColor = Accent;
-            button.Click += action;
+            if (action is not null) button.Click += action;
             return button;
         }
-        var filter = SmallAction("▼", "กรองรายการดาวน์โหลด", (_, _) => { });
+        var filter = SmallAction("▼", "กรองรายการดาวน์โหลด", null);
         filter.Click += (_, _) =>
         {
             var choices = new ContextMenuStrip();
