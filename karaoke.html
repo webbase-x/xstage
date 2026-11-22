@@ -66,7 +66,10 @@
           </div>
           <div id="app-update-notice" class="app-update-notice" hidden role="status" aria-live="polite">
             <span id="app-update-text">มี X-Stage เวอร์ชันใหม่</span>
-            <button id="app-update-action" type="button">อัปเดต</button>
+            <div class="app-update-actions">
+              <button id="app-update-action" type="button">อัปเดตตอนนี้</button>
+              <button id="app-update-after-song" type="button" hidden>อัปเดตหลังจบเพลง</button>
+            </div>
           </div>
           <div class="stage-ambience" aria-hidden="true"></div>
           <div class="stage-hero" aria-hidden="true">
@@ -495,7 +498,7 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="video-transcode.js?v=1136" defer></script>
   <script src="cloud-import.js?v=1140-google-session-renew" defer></script>
   <script src="tv-refresh.js?v=1136" defer></script>
-  <script src="app.js?v=1164-mobile-lyrics-thai-grapheme-1168-screen-wake-r2" defer></script><script src="pc-extensions.js?v=1136-unfiltered-output-visual-only-1166-midi-eq-canvas" defer></script>
+  <script src="app.js?v=1164-mobile-lyrics-thai-grapheme-1169-live-staged-update" defer></script><script src="pc-extensions.js?v=1136-unfiltered-output-visual-only-1166-midi-eq-canvas" defer></script>
   <script src="midi-keyboard-ui.js?v=1136-clean-title-1157-top-song-key-single-menu" defer></script>
   <script src="native-audio-meter.js?v=1136-live-stage-eq" defer></script>
   <script src="stage-controls.js?v=1136-monitor-only-eq" defer></script>
