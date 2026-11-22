@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.37
+# X-Stage Song Studio Pro — Technical Preview v0.1.38
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -8,6 +8,21 @@ modify the older X-Stage Song Studio application.
 the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
+
+## v0.1.38 — Verified Windows popup stability release
+
+- Carry forward the native Windows file/LRC picker window-ownership fix,
+  concurrent-picker guard, native Qt dialog deduplication and non-blurred
+  WebEngine overlays.
+- Run the actual Qt WebEngine modal lifecycle smoke using software ANGLE on
+  headless Windows CI; wait for app JS initialization and report actionable
+  failure phases instead of an empty diagnostic result.
+- Ensure the sidebar, update controls and settings report the running EXE
+  version from the local app session. Keep the batch lyric editor's removed
+  metadata results removed.
+- Publish the new Setup only after Python/JS tests, native Windows popup
+  smoke, packaged EXE smoke and installer SHA-256 verification succeed.
+- Preserve the existing SQLite workspace and source files on upgrade.
 
 ## v0.1.37 — Popup stability and group lyric editor
 
