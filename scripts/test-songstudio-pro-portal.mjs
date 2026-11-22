@@ -64,7 +64,7 @@ assert.ok(installer.includes('DefaultDirName={autopf}\\X-Stage\\Song Studio Pro'
 assert.ok(installer.includes('PrivilegesRequired=admin')&&
           installer.includes('ArchitecturesInstallIn64BitMode=x64'),
  'The installer must request Windows administrator permission');
-assert.ok(installer.includes('Source: "dist\\\\XStageSongStudioPro\\\\*"') && installer.includes('recursesubdirs'),
+assert.ok(installer.includes(String.raw`Source: "dist\XStageSongStudioPro\*"`) && installer.includes('recursesubdirs'),
  'The installer must bundle the complete onedir runtime');
 assert.ok(workflow.includes('--onedir --windowed'), 'Windows executable must use onedir');
 assert.ok(!fs.existsSync(new URL('../songstudio-pc',import.meta.url)),
