@@ -42,11 +42,16 @@ const fakeFetch=async(url,options={})=>{
   if(url.includes('/drive/v3/files?')){
     assert.equal(options.headers.Authorization,'Bearer '+auth.token);
     const q=new URL(url).searchParams.get('q');
-    const root=q.includes("'root'");
-    return {ok:true,json:async()=>({files:root
-      ?[{id:'audio',name:'AUDIO',mimeType:'application/vnd.google-apps.folder'}]
-      :[{id:large,name:'Nong SoundFont SF2 (243 MB).sf2',size:String(243*1048576)},
-        {id:'compact-37',name:'CT58MGM_V45.sf2',size:String(37*1048576)}]})};
+    const parent=q.match(/'([^']+)' in parents/)?.[1]||'';
+    const folders=parent==='root'
+      ?[{id:'font-root',name:'SOUNDFONT',mimeType:'application/vnd.google-apps.folder'}]
+      :parent==='font-root'
+        ?[{id:'sf2-folder',name:'SF2',mimeType:'application/vnd.google-apps.folder'}]
+        :parent==='sf2-folder'
+          ?[{id:large,name:'Nong SoundFont SF2 (243 MB).sf2',size:String(243*1048576)},
+            {id:'compact-37',name:'CT58MGM_V45.sf2',size:String(37*1048576)}]
+          :[];
+    return {ok:true,json:async()=>({files:folders})};
   }
   if(url.includes('alt=media')){
     largeDownloads++;
