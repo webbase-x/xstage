@@ -2,6 +2,8 @@
 
 Independent X-Stage .NET 8 Windows download manager with original UI, icons and branding. It implements standard transfer features without copying another application's design, code or artwork.
 
+**Gated preview candidate requested for publication:** v0.2.22 Build 25 is submitted to the Windows-only release workflow. The workflow must compile and pass tests, publish and re-download the Setup EXE, and commit its matching SHA-256 feed before the candidate is considered public. Do not substitute a CI artifact for a verified Release asset.
+
 **Public download:** consult `downloads/download-manager-preview-latest.json` for the only verified released Setup EXE, version, SHA-256 and size. **Source candidate:** v0.2.22 · Build 25 (Windows 10/11 x64), including the original X-Stage workspace and opt-in Live Background Recorder. Do not call this candidate released until Windows CI, GitHub Release asset and the public manifest all agree.
 
 ## Build 23 recovery preview
