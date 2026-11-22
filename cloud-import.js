@@ -81,12 +81,26 @@ async function checkpoint(account,value){
 class Drive {
   constructor(getToken,assertLive){this.getToken=getToken;this.assertLive=assertLive;this.children=new Map();this.childNames=new Map();}
   headers(extra={}){const token=this.getToken();if(!token)fail('Google Login หมดอายุ กรุณาเข้าสู่ระบบใหม่');return {Authorization:'Bearer '+token,...extra};}
+  async signedFetch(url,options={}){
+    this.assertLive();
+    // Google tokens last about an hour. Refresh once before a request and
+    // retry a rejected 401 with the new token; do not repeat any other error.
+    if(this.ensureAuth)await this.ensureAuth(false);
+    this.assertLive();
+    let response=await fetch(url,{...options,headers:this.headers(options.headers),cache:'no-store'});
+    this.assertLive();
+    if(response.status===401&&this.ensureAuth){
+      await this.ensureAuth(true);
+      this.assertLive();
+      response=await fetch(url,{...options,headers:this.headers(options.headers),cache:'no-store'});
+      this.assertLive();
+    }
+    return response;
+  }
   async fetch(url,options={}){
-    this.assertLive();
-    const response=await fetch(url,{...options,headers:this.headers(options.headers),cache:'no-store'});
-    this.assertLive();
+    const response=await this.signedFetch(url,options);
     if(!response.ok){
-      if(response.status===401)fail('Google Login หมดอายุ กรุณาล็อกอินใหม่แล้วกดทำต่อ');
+      if(response.status===401)fail('Google ไม่ยืนยันสิทธิ์ Drive หลังต่ออายุ · กดเชื่อม Google แล้วทำต่อ');
       if(response.status===403)fail('ไม่มีสิทธิ์เขียน/อ่าน XStageKaraoke ใน Google Drive นี้ · ตรวจบัญชีและ drive.file');
       if(response.status===429||response.status>=500)fail('Google Drive ให้ลองใหม่ภายหลัง (HTTP '+response.status+')');
       fail('Google Drive ไม่สำเร็จ (HTTP '+response.status+')');
@@ -257,8 +271,8 @@ class Drive {
       for(let attempt=0;attempt<4;attempt++){
         this.assertLive();
         try{
-          const response=await fetch(location.href,{method:'PUT',cache:'no-store',
-            headers:this.headers({'Content-Range':'bytes */'+file.size}),
+          const response=await this.signedFetch(location.href,{method:'PUT',
+            headers:{'Content-Range':'bytes */'+file.size},
             signal:this.signal?.()});
           if(response.status===308){
             const match=String(response.headers.get('Range')||'').match(/^bytes=0-(\d+)$/);
@@ -281,9 +295,9 @@ class Drive {
       const end=Math.min(start+CHUNK,file.size);
       let response=null;
       try{
-        response=await fetch(location.href,{method:'PUT',cache:'no-store',
-          headers:this.headers({'Content-Type':mime,
-            'Content-Range':'bytes '+start+'-'+(end-1)+'/'+file.size}),
+        response=await this.signedFetch(location.href,{method:'PUT',
+          headers:{'Content-Type':mime,
+            'Content-Range':'bytes '+start+'-'+(end-1)+'/'+file.size},
           body:file.slice(start,end),signal:this.signal?.()});
       }catch(error){
         if(error?.name==='AbortError'||this.signal?.()?.aborted)throw error;
@@ -922,6 +936,7 @@ class Importer {
     this.progress(0,1);this.refreshButtons();
     this.controller=new AbortController();
     const drive=new Drive(()=>this.session()?.token,()=>this.check());
+    drive.ensureAuth=force=>this.options.ensureAuth?.(force);
     drive.signal=()=>this.controller.signal;
     try{
       if(this.plan.xsks.some(x=>x.kind==='XSK')&&!scope.XStageXsk)
