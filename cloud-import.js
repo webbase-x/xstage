@@ -656,6 +656,8 @@ async function buildMidiIndex(rows,drive,check){
   for(const [id,row] of rows){
     check();
     let hash=String(row.midiHash||row.midi?.md5Checksum||'').toLowerCase();
+    // Prefer the bytes of the actual MIDI, not the XSK/XMID container length.
+    if(!row.midiSize&&row.midi?.size)row.midiSize=row.midi.size;
     if(!/^[0-9a-f]{32}$/.test(hash)){
       const kind=row.xmid?'xmid':row.xsk?'xsk':'';
       if(!kind)continue;
@@ -666,10 +668,13 @@ async function buildMidiIndex(rows,drive,check){
       const packed=new Blob([await drive.getSqlite(media.fileId)]);
       const opened=await reader.openPackage(packed);
       hash=await core.hashBlob(opened.midi,check);
-      row.midiHash=hash;backfilled++;
+      row.midiHash=hash;row.midiSize=opened.midi.size;backfilled++;
     }
     if(!/^[0-9a-f]{32}$/.test(hash))continue;
     const prev=hashes.get(hash);
+    if(prev&&Number(prev.midiSize)>0&&Number(row.midiSize)>0&&
+      Number(prev.midiSize)!==Number(row.midiSize))
+      fail('พบแฮช MIDI ตรงกันแต่ขนาดไบต์ต่างกัน · ต้องตรวจสอบก่อนรวมฐาน');
     if(prev&&prev.webSongId!==id){
       // Old catalog is preserved in BACKUP; new canonical DB keeps one entry.
       rows.delete(id);duplicates++;continue;
@@ -678,15 +683,27 @@ async function buildMidiIndex(rows,drive,check){
   }
   return {hashes,duplicates,backfilled};
 }
-// The song code is read from XMID metadata, never guessed from the filename.
- // Song Studio may embed 00000001: normalize the numeric value to 00001.
-function fiveDigitXmidCode(embeddedCode){
-  const raw=String(embeddedCode||'').trim();
-  if(!/^\d{1,8}$/.test(raw))fail('XMID: รหัสเพลงภายในต้องเป็นตัวเลขไม่เกิน 8 หลัก');
-  const numeric=Number(raw);
-  if(!Number.isSafeInteger(numeric)||numeric<1||numeric>99999)
-    fail('XMID: รหัสเพลงภายในอยู่นอกช่วง 00001–99999');
-  return String(numeric).padStart(5,'0');
+// Song Studio can restart filename numbering at 00001.XMID on EVERY export.
+// Use the source filename only as a display/Drive basename, never as identity.
+// Store files in a content-hash subfolder to avoid cross-batch name collisions.
+function sourceXmidName(filename){
+  const source=String(filename||'').split(/[\\/]/).pop();
+  const match=/^(\d{1,8})\.xmid$/i.exec(source);
+  if(match){
+    const number=Number(match[1]);
+    if(Number.isSafeInteger(number)&&number>0&&number<=99999)
+      return String(number).padStart(5,'0')+'.XMID';
+  }
+  if(!/\.xmid$/i.test(source))fail('XMID: ไม่ใช่ไฟล์ .xmid');
+  return safeName(source.replace(/\.xmid$/i,''))+'.XMID';
+}
+function sameMidiBytes(hashIndex,hash,actualSize){
+  const old=hashIndex.get(hash);
+  if(!old)return false;
+  const size=Number(old.midiSize||old.midi?.size||0);
+  if(size>0&&actualSize>0&&size!==actualSize)
+    fail('พบแฮช MIDI ตรงกันแต่ขนาดไบต์ต่างกัน · ต้องตรวจสอบไฟล์ต้นฉบับ');
+  return true;
 }
 function distinctImportCode(requested,rawMidiHash,byCode){
   const code=String(requested||'').trim();
@@ -1520,13 +1537,15 @@ class Importer {
             const reader=isXmid?scope.XStageXmid:scope.XStageXsk;
             const opened=await reader.openPackage(item.file);
             const sourceCode=opened.code;
+            const rawMidiSize=opened.midi.size;
             const rawMidiHash=await core.hashBlob(opened.midi,()=>this.check());
-            if(byMidi.has(rawMidiHash)){
+            if(sameMidiBytes(byMidi,rawMidiHash,rawMidiSize)){
               this.stats.duplicates++;finished++;
               show('ข้าม MIDI ซ้ำในแพ็กเกจต่างแหล่ง: '+sourceCode);continue;
             }
-            const embeddedCode=isXmid?fiveDigitXmidCode(sourceCode):sourceCode;
-            const code=distinctImportCode(embeddedCode,rawMidiHash,byCode);
+            // Embedded codes such as 00001 recur in independently exported
+            // batches; resolve catalog-code collisions without discarding songs.
+            const code=distinctImportCode(sourceCode,rawMidiHash,byCode);
             const identity=core.songIdentity(opened.document,sourceCode);
             if(!identity.identityComplete)
               throw Error('XSK: ชื่อเพลงหรือศิลปินจริงไม่ครบ');
@@ -1538,16 +1557,16 @@ class Importer {
               this.stats.duplicates++;finished++;
               show('ข้าม XSK ซ้ำ MD5: '+code);continue;
             }
-            // XMID filename follows its EMBEDDED numeric code (00001.XMID).
-            // A distinct MIDI that reused the same embedded code receives a
-            // separate content-hash folder, while retaining that basename.
-            const name=isXmid?embeddedCode+'.XMID':
+            // All export batches may contain 00001.XMID. Keep the original
+            // five-digit basename but isolate distinct recordings by MIDI hash.
+            const name=isXmid?sourceXmidName(item.file.name):
               safeName(code)+'-'+xskHash.slice(0,16)+'.xsk';
-            const path=pathFor(embeddedCode,isXmid?'xmid':'xsk','',name).slice(0,-1);
-            if(isXmid&&code!==embeddedCode)path.push(rawMidiHash.slice(0,16));
+            const path=pathFor(sourceCode,isXmid?'xmid':'xsk','',name).slice(0,-1);
+            if(isXmid)path.push(rawMidiHash);
             const packed=await uploadMedia(item.file,code,path,name,
               'application/octet-stream',xskHash,0,1);
             const record={webSongId:ident,code,sourceCode,midiHash:rawMidiHash,
+              midiSize:rawMidiSize,originalFilename:item.file.name,
               title:identity.title,artist:identity.artist,
               sourceFormat:isXmid?'XMID':'XSK',lyricsMode:'timed',
               ...(isXmid?{xmid:packed}:{xsk:packed})};
@@ -1558,8 +1577,9 @@ class Importer {
             const runtime=scope.XStageBrowserMidi;
             if(!runtime)fail('ไม่พบระบบ MIDI ที่ติดมากับหน้าเว็บ · อัปเดตเว็บก่อนนำเข้า');
             const midiFile=item.midi.file,sourceCode=item.code;
+            const midiSize=midiFile.size;
             const midiHash=await core.hashBlob(midiFile,()=>this.check());
-            if(byMidi.has(midiHash)){
+            if(sameMidiBytes(byMidi,midiHash,midiSize)){
               this.stats.duplicates++;finished++;
               show('ข้าม MIDI ซ้ำแม้ต่างชื่อ/รหัส/โฟลเดอร์: '+sourceCode);continue;
             }
@@ -1630,7 +1650,7 @@ class Importer {
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิง MIDI ชนเพลงอื่น');
             const identity=core.songIdentity(doc,code,same);
             const record={...(same||{}),webSongId:ident,code,sourceCode,midiHash,
-              title:identity.title,artist:identity.artist,
+              midiSize,title:identity.title,artist:identity.artist,
               sourceFormat:type,midi:media,lyrics,
               ...(ncnSource?{ncnSource}: {})};
             delete record.lyr;delete record.cur;delete record.lrc;
@@ -1847,5 +1867,5 @@ class Importer {
   }
 }
 scope.XStageCloudImport={init:(options)=>new Importer(options),Drive,loadCatalog,
-  buildMidiIndex,distinctImportCode,fiveDigitXmidCode,acquireCatalogLease};
+  buildMidiIndex,distinctImportCode,sourceXmidName,sameMidiBytes,acquireCatalogLease};
 })(window);
