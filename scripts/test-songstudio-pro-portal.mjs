@@ -54,7 +54,7 @@ assert.ok(exportStyle.includes('.build-operation-progress'),
 const installer=read('songstudio-plus/installer/XStageSongStudioPro.iss');
 assert.ok(workflow.includes('--name "XStageSongStudioPro"'),
  'PyInstaller must build the same stable application payload for every release');
-assert.ok(workflow.includes('dist/XStageSongStudioPro.exe'),
+assert.ok(workflow.includes('dist/XStageSongStudioPro/XStageSongStudioPro.exe'),
  'Windows build must verify the native desktop payload');
 const setupExe='X-Stage-Song-Studio-Pro-v0.1.40-win-x64-Setup.exe';
 assert.ok(workflow.includes('path: songstudio-plus/installer/output/'+setupExe),
@@ -64,8 +64,9 @@ assert.ok(installer.includes('DefaultDirName={autopf}\\X-Stage\\Song Studio Pro'
 assert.ok(installer.includes('PrivilegesRequired=admin')&&
           installer.includes('ArchitecturesInstallIn64BitMode=x64'),
  'The installer must request Windows administrator permission');
-assert.ok(installer.includes('Source: "dist\\{#MyAppExe}"'),
- 'The installer must bundle the stable application executable');
+assert.ok(installer.includes('Source: "dist\\\\XStageSongStudioPro\\\\*"') && installer.includes('recursesubdirs'),
+ 'The installer must bundle the complete onedir runtime');
+assert.ok(workflow.includes('--onedir --windowed'), 'Windows executable must use onedir');
 assert.ok(!fs.existsSync(new URL('../songstudio-pc',import.meta.url)),
  'Retired native PC source must not be present on current branch');
 assert.ok(!fs.existsSync(new URL('../studio',import.meta.url)),
