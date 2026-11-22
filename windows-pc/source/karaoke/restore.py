@@ -24,6 +24,9 @@ def validate_backup(folder):
         raise ValueError('โฟลเดอร์ชุดสำรองเป็นลิงก์ที่ไม่ปลอดภัย')
     if not folder.is_dir():
         raise ValueError('ไม่พบโฟลเดอร์ชุดสำรอง')
+    # SQLite may open WAL/SHM companions implicitly during validation.
+    # Reject links or directories before SQLite has a chance to follow them.
+    validate_sqlite_sidecars(folder, ('songs.sqlite3', 'play_stats.sqlite3'))
     for name in FILES + OPTIONAL_FILES:
         source = folder/name
         # A backup must be self-contained. Do not follow symlinks/junctions
