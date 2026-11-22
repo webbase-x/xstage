@@ -15,14 +15,14 @@ assert.ok(!importer.includes("catalog-delta-'+generation+'.sqlite3"));
 assert.ok(importer.includes("'songs.sqlite3'"));
 assert.ok(importer.includes("publishSingleCatalog"));
 assert.ok(importer.includes("const canonical=dbChildren.filter(x=>x.name==='songs.sqlite3'"));
-assert.ok(importer.includes("x.name==='current.json'||x.name==='.xstage-songstudio-staging.json'"));
+assert.ok(!importer.includes('async consolidate()'));
+assert.ok(!importer.includes('pointerFile'));
+assert.ok(!importer.includes("const pointers=dbChildren.filter(x=>x.name==='current.json'"));
 assert.ok(!importer.includes("drive.upload(dbRoot,marker,'current.json'"));
+assert.ok(!app.includes("name='current.json' and trashed=false"));
+assert.ok(!app.includes('xstageCloudImporter.consolidate()'));
 assert.ok(app.includes("name='songs.sqlite3' and trashed=false"));
 assert.ok(app.includes("function directCatalogPointer(file)"));
-assert.ok(app.includes('xstageCloudImporter.consolidate()'),
-  'Legacy user libraries must automatically migrate with the verified web OAuth session');
-assert.ok(app.includes('onConsolidationStatus:message=>setStatus(message'),
-  'One-time migration must expose progress/error status on the main player');
 assert.ok(importer.includes('acquireCatalogLease(drive,cacheRoot,check,status)'),
   'Multi-computer imports must coordinate a Drive writer lease');
 assert.ok(importer.includes("const {hashes:byMidi,duplicates:olderDuplicates,backfilled:olderHashes}"),
