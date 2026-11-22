@@ -19,7 +19,9 @@
   deck.append(floor);
   // In DOM order, lights sit over the background but behind the stage logo
   // and all selectable text, including the search dropdown.
-  stage.querySelector('.stage-hero')?.before(deck) || stage.append(deck);
+  const hero=stage.querySelector('.stage-hero');
+  if(hero)hero.before(deck);
+  else stage.append(deck);
   const clamp=value=>Math.max(0,Math.min(1,Number(value)||0));
   const RATE=20;
   let midiBands=null,activeSource='audio',frame=0,lastFrame=0,playing=false;
