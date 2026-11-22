@@ -87,6 +87,9 @@ def copy_database(source,target):
             or target.parent.is_symlink()
             or getattr(target.parent, 'is_junction', lambda: False)()):
         raise ValueError('ไฟล์ปลายทางสำเนา SQLite ไม่ปลอดภัย: ' + target.name)
+    # Opening the destination may also open its WAL, SHM or rollback journal.
+    # Reject redirected sidecars before sqlite3.connect can follow them.
+    validate_sqlite_sidecars(target.parent, (target.name,))
     with closing(readonly(source)) as src, closing(sqlite3.connect(target)) as dst:
         src.backup(dst)
 
