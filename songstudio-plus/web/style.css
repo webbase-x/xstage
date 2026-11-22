@@ -1217,3 +1217,44 @@ dialog[open]{opacity:1!important;filter:none!important}
 .build-progress-results{color:#a5bfd8}
 .build-operation-progress .field-hint{margin:8px 0 0;overflow-wrap:anywhere}
 @media (max-width:600px){.build-operation-progress{padding:12px}.build-operation-head{flex-wrap:wrap}#build-progress-percent{font-size:20px}}
+
+
+/* XStageKaraoke Google Drive workspace and streamlined build screen. */
+#view-drive .drive-workspace{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(290px,.75fr);gap:16px;align-items:start}
+#view-drive .drive-source,#view-drive .drive-layout{min-width:0}
+#view-drive .drive-source .panel-head,#view-drive .drive-layout .panel-head{margin-bottom:14px}
+#view-drive .drive-source .field-label{margin-top:13px}
+#view-drive .drive-commands{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:20px}
+#view-drive .drive-commands .primary-btn{flex:1 1 240px;min-width:0}
+#view-drive .drive-operation-status{margin:17px 0 11px;padding:13px 15px;border:1px solid #356070;border-radius:12px;background:#12293d;color:#b6e0e3;line-height:1.65;overflow-wrap:anywhere}
+#view-drive .drive-open-link{display:inline-flex;padding:10px 2px;color:#9ee0f1;text-decoration:underline;text-underline-offset:4px;font-size:12px}
+#view-drive .drive-tree{display:grid;gap:8px;padding:15px;border-radius:14px;background:#0d1729;border:1px solid #293d5a;color:#bdcde7}
+#view-drive .drive-tree-root{font-weight:800;color:#d9f4ff;padding-bottom:6px}
+#view-drive .drive-tree-row{display:flex;justify-content:space-between;align-items:start;gap:9px;padding:9px 11px;border-radius:9px;background:#192940;min-width:0}
+#view-drive .drive-tree-row strong{font-size:13px;color:#91dddc;white-space:nowrap}
+#view-drive .drive-tree-row span{font-size:11px;text-align:right;line-height:1.45;overflow-wrap:anywhere}
+#view-drive .drive-tree-branch{padding:0 8px 0 24px;color:#859cbb;font-size:11px;line-height:1.6;overflow-wrap:anywhere}
+#view-drive .drive-tree-muted{font-size:11px;color:#8a9db8;padding:9px}
+#view-drive .drive-safe-note{margin-top:16px;padding:14px;border:1px solid #315f58;border-radius:11px;background:#13312f}
+#view-drive .drive-safe-note strong{color:#9ef3d0}
+#view-drive .drive-safe-note p{margin:6px 0 0;color:#adc3bf;font-size:11px;line-height:1.7}
+#view-build .build-action-layout{grid-template-columns:minmax(0,1fr);max-width:880px}
+#view-build .build-action-layout>.panel{width:100%;min-width:0}
+#view-build .build-art{display:none}
+#view-build .build-action-layout .primary-btn,#view-build .build-action-layout .quiet-btn.full{min-height:46px}
+#view-build .build-selection-internal[hidden],#view-build #build-start[hidden]{display:none!important}
+@media(max-width:1050px){
+  #view-drive .drive-workspace{grid-template-columns:minmax(0,1fr)}
+  #view-drive .drive-source,#view-drive .drive-layout{padding:18px}
+}
+@media(max-width:680px){
+  #view-drive .page-intro h1{font-size:clamp(24px,7vw,34px)}
+  #view-drive .drive-source .panel-head{flex-wrap:wrap}
+  #view-drive .input-wrap{flex-wrap:wrap;padding:8px 12px}
+  #view-drive .input-wrap input{flex:1 1 100%;min-width:0}
+  #view-drive .input-wrap .browse-btn{width:100%}
+  #view-drive .drive-commands>*{width:100%;flex:1 1 100%}
+  #view-drive .drive-tree-row{flex-wrap:wrap}
+  #view-drive .drive-tree-row span{text-align:left}
+  #view-build .build-action-layout{grid-template-columns:minmax(0,1fr);gap:12px}
+}
