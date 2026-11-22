@@ -51,5 +51,28 @@ class RollbackCorruptSnapshotTests(unittest.TestCase):
                 (data / 'play_stats.sqlite3').read_bytes(), b'live stats sentinel'
             )
 
+
+    def test_invalid_utf8_later_json_preserves_earlier_live_database(self):
+        with tempfile.TemporaryDirectory() as root:
+            data = Path(root) / 'data'
+            safety = Path(root) / 'safety'
+            data.mkdir()
+            safety.mkdir()
+            for folder, value in ((data, 'live'), (safety, 'old')):
+                with sqlite3.connect(folder / 'songs.sqlite3') as db:
+                    db.execute('CREATE TABLE marker (value TEXT)')
+                    db.execute('INSERT INTO marker VALUES (?)', (value,))
+            (data / 'queue.json').write_text('[]', encoding='utf-8')
+            (safety / 'queue.json').write_bytes(b'\\xff\\xfeinvalid')
+            with self.assertRaises(ValueError):
+                restore.rollback(
+                    data, safety,
+                    ['songs.sqlite3', 'queue.json'],
+                    ('songs.sqlite3', 'queue.json'),
+                )
+            with sqlite3.connect(data / 'songs.sqlite3') as db:
+                self.assertEqual(db.execute('SELECT value FROM marker').fetchone()[0], 'live')
+            self.assertEqual((data / 'queue.json').read_text(encoding='utf-8'), '[]')
+
 if __name__ == '__main__':
     unittest.main()
