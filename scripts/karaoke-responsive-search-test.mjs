@@ -6,13 +6,15 @@ const css=get('xstage-ux.css');
 const html=get('karaoke.html');
 const patch=css.split('/* 1.16.2 — Phone search lives at the screen')[1];
 assert.ok(patch,'Mobile bottom search rules must override previous top-toolbar positioning');
-assert.match(patch,/@media\s*\(max-width:760px\)/);
+assert.match(patch,/@media\s*\(max-width:820px\)/);
 assert.match(patch,/@media\s*\(max-width:350px\)/);
 assert.match(patch,/\(max-height:540px\)/);
 assert.match(patch,/env\(safe-area-inset-left,0px\)/);
 assert.match(patch,/env\(safe-area-inset-right,0px\)/);
 assert.match(patch,/env\(safe-area-inset-bottom,0px\)/);
 assert.match(patch,/--xs-search-keyboard-inset/);
+assert.match(patch,/bottom:max\(env\(safe-area-inset-bottom,0px\),var\(--xs-search-keyboard-inset,0px\)\)/);
+assert.match(patch,/--xs-search-visual-height/);
 assert.match(patch,/\.stage-search-slot\{[\s\S]*?position:fixed!important/);
 assert.match(patch,/\.search-dock\.pc-expanded\{[\s\S]*?flex-direction:column-reverse!important/);
 assert.match(patch,/\.transport-panel\{[\s\S]*?bottom:calc\(55px/);
@@ -20,7 +22,7 @@ assert.match(patch,/#search\{[\s\S]*?font-size:16px!important/);
 assert.match(html,/meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/);
 assert.match(html,/id="search" type="search"/);
 assert.doesNotMatch(html,/id="voice-search"/,'Voice microphone must be removed completely');
-assert.match(html,/xstage-ux\.css\?v=1162-mobile-bottom-search/);
+assert.match(html,/xstage-ux\.css\?v=1163-mobile-edge-search/);
 for(const [viewport,leftSafe,rightSafe] of [
   [320,0,0],[375,0,0],[390,0,0],[402,0,0],[430,0,0],[440,0,0],
   [667,44,44],[844,59,59],[932,59,59],[1024,0,0]
@@ -38,9 +40,11 @@ assert.ok(mobile.includes('function syncBottomSearch()')&&
   mobile.includes('stage.insertBefore(searchSlot')&&
   mobile.includes('searchToolbar.insertBefore(searchSlot,searchAnchor)'),
   'One search dock must move to bottom and return to the desktop header at breakpoints');
-assert.ok(mobile.includes('visualViewport.height+visualViewport.offsetTop'),
-  'Mobile keyboard must not cover bottom search');
-assert.match(html,/mobile-layout\.js\?v=1162-mobile-bottom-search/);
+assert.ok(mobile.includes('layoutHeight-visualHeight-visualTop')&&
+  mobile.includes('--xs-search-visual-height')&&
+  mobile.includes('(max-width:820px)'),
+  'Mobile keyboard and tablet-size phones must keep the bottom search visible');
+assert.match(html,/mobile-layout\.js\?v=1163-mobile-edge-search/);
 const topHeader=html.split('<header class="mobile-stage-header stage-toolbar"')[1]?.split('</header>')[0]||'';
 const songStatus=html.split('<div class="transport-song-info">')[1]?.split('<div class="timeline">')[0]||'';
 assert.doesNotMatch(topHeader,/id="toolbar-song-key"/,
