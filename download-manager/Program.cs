@@ -94,7 +94,7 @@ internal static class Program
             if (File.Exists(file) && new FileInfo(file).Length > 256 * 1024)
                 File.Move(file, backup, overwrite: true);
             var trace = System.Text.RegularExpressions.Regex.Replace(
-                exception.ToString(), @"https?://[^\\s]+", "[redacted-url]",
+                exception.ToString(), @"https?://[^\s]+", "[redacted-url]",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (trace.Length > 12000) trace = trace[..12000];
             File.AppendAllText(file,
