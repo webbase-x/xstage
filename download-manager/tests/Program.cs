@@ -817,6 +817,26 @@ try
     if (partialQueue.ActiveCount != 0 || partialQueue.WaitingCount != 0)
         throw new Exception("Partial cancellation leaked scheduler capacity.");
 
+    // Reconfiguring capacity while leases are active must not over-allocate,
+    // and raising the cap must dispatch queued jobs without requiring a release.
+    var resizedQueue = new TransferSlotQueue(2, 2);
+    using (var firstLease = await resizedQueue.EnterAsync("resize-1", "resize.test", 1, CancellationToken.None))
+    using (var secondLease = await resizedQueue.EnterAsync("resize-2", "resize.test", 1, CancellationToken.None))
+    {
+        resizedQueue.Configure(1, 1);
+        var pendingResize = resizedQueue.EnterAsync("resize-wait", "resize.test", 1, CancellationToken.None);
+        if (resizedQueue.ActiveCount != 2 || resizedQueue.WaitingCount != 1 || pendingResize.IsCompleted)
+            throw new Exception("Lowering concurrency admitted a waiting transfer.");
+        resizedQueue.Configure(3, 3);
+        using (var thirdLease = await pendingResize.WaitAsync(TimeSpan.FromSeconds(3)))
+        {
+            if (resizedQueue.ActiveCount != 3 || resizedQueue.WaitingCount != 0)
+                throw new Exception("Raising concurrency did not dispatch the waiting transfer.");
+        }
+    }
+    if (resizedQueue.ActiveCount != 0 || resizedQueue.WaitingCount != 0)
+        throw new Exception("Reconfigured scheduler leaked a lease.");
+
     // Canceling the last reservation must preserve the earlier reader's debt.
     var sharedGate = new TransferRateGate(64);
     using (var earlierStop = new CancellationTokenSource())
