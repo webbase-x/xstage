@@ -986,7 +986,17 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   signal?.addEventListener('abort',dispose,{once:true});
   if(!player.paused)play();
   onStatus?.(font?'SoundFont พร้อมสังเคราะห์ MIDI แบบเรียลไทม์':'MIDI พร้อมเล่นโดยไม่แปลงเป็น WAV');
-  return {dispose,duration:song.duration};
+  return {
+    dispose,duration:song.duration,
+    async resumeAudio(){
+      if(disposed||player.paused)return false;
+      scope.XStageIOSMidiAudio?.activate?.();
+      let ready=ctx.state==='running';
+      if(!ready){try{await ctx.resume();ready=ctx.state==='running';}catch{ready=false;}}
+      const relayReady=await iosOutput?.resume?.();
+      return ready&&relayReady!==false;
+    }
+  };
 }
 scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,playRealtime,warmRealtimeSamples,unlockAudio,
   prefersCompactGm,fastGmFont,isFastGmBytes:bytes=>!!bytes&&bytes===quickGmBytes,
