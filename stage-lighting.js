@@ -94,16 +94,26 @@
   }
   function clearMidiNotes(){
     midiBands=null;activeSource='audio';
-    // The regular audio analyser reclaims these canvases on the next frame.
+    // Remove any stale MIDI bars before the real audio analyser takes over.
+    paintMidiSideMeters([0,0,0],false);
   }
   function readMidiBands(position){
     if(!midiBands)return [0,0,0];
     const index=Math.max(0,Math.min(midiBands[0].length-1,Math.floor((Number(position)||0)*RATE)));
     return [clamp(midiBands[0][index]*.66),clamp(midiBands[1][index]*.52),clamp(midiBands[2][index]*.63)];
   }
+  function readLiveSpectrum(){
+    // Both the Web post-EQ analyser and Android silent-capture analyser
+    // expose actual bass/mid/high energy. No new audio path or microphone.
+    const sample=window.XStageStageLiveSpectrum?.();
+    if(!sample||!Array.isArray(sample.bands)||
+       Date.now()-(Number(sample.updatedAt)||0)>350)return null;
+    return sample.active?sample.bands.slice(0,3).map(clamp):[0,0,0];
+  }
   function readAudioBands(){
-    // Reuse the real post-EQ analyser on the Web and the visual-only
-    // native meter on Android. Neither changes the actual audio route.
+    const live=readLiveSpectrum();
+    if(live)return live;
+    // Compatibility for older cached audio meters until they are refreshed.
     const styles=getComputedStyle(stage);
     const energy=clamp(parseFloat(styles.getPropertyValue('--xstage-viz-energy')));
     const bass=clamp(parseFloat(styles.getPropertyValue('--xstage-viz-bass')));
@@ -118,21 +128,27 @@
     frame=requestAnimationFrame(render);
     if(timestamp-lastFrame<45)return;
     lastFrame=timestamp;
-    if(!playing||!stage.classList.contains('playing')||
-       !document.getElementById('karaoke-video')?.hidden){dark();return;}
-    const bands=activeSource==='midi'
-      ?readMidiBands(typeof player!=='undefined'?player.currentTime:media.currentTime)
-      :readAudioBands();
+    const video=document.getElementById('karaoke-video');
+    if(!playing||media.paused||media.ended||media.muted||media.volume===0||
+       !stage.classList.contains('playing')||video?.hidden===false){dark();return;}
+    const live=readLiveSpectrum();
+    // MIDI can reach the browser output through a separate synthesizer.
+    // Prefer its measurable spectrum; otherwise use the actual scheduled
+    // note-on events. Never invent a beat or route a second audio output.
+    const midiFallback=activeSource==='midi'&&(!live||!live.some(value=>value>.012));
+    const bands=midiFallback
+      ?readMidiBands(media.currentTime)
+      :(live||readAudioBands());
     const master=clamp(bands.reduce((a,b)=>a+b,0)/3);
-    if(activeSource==='midi')paintMidiSideMeters(bands,true);
+    if(activeSource==='midi'&&midiFallback)paintMidiSideMeters(bands,master>.005);
+    if(master<=.005){dark();return;}
     deck.classList.add('is-active');
     for(let i=0;i<beams.length;i++){
       const channel=bands[colorBands[i]];
-      // Low ambient floor is intentional; highlights follow audible energy
-      // or the actual MIDI note events, not a random lighting sequence.
-      beams[i].style.opacity=(.11+.83*clamp(channel*.8+master*.32)).toFixed(3);
+      // Every beam reacts to measured audible energy or MIDI note events.
+      beams[i].style.opacity=(.08+.92*clamp(channel*.8+master*.32)).toFixed(3);
     }
-    floor.style.opacity=(.15+.7*master).toFixed(3);
+    floor.style.opacity=(.08+.8*master).toFixed(3);
     deck.style.setProperty('--xstage-light-power',master.toFixed(3));
     if(reducedMotion?.matches)deck.classList.add('still');
     else deck.classList.remove('still');
