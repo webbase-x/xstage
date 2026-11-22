@@ -1,12 +1,12 @@
-# X-Stage AG06 Studio (first-generation Yamaha AG06 only)
+# X-Stage Audio Studio
 
-A separate audio-capture, software-FX, level-meter and recording app for Windows, Android and secure browsers. It is not affiliated with Yamaha.
+Independent audio-capture, software-FX, metering and recording for Windows, Android and secure browsers. Supports OS-recognized USB audio devices including first-generation Yamaha AG06. Not affiliated with Yamaha or Steinberg. Brand names appear only to describe device compatibility.
 
 ## Supported behavior
 
 - Browser/Web: open /ag06/ over HTTPS, grant microphone access, choose the OS-recognized AG06 input, view live stereo USB digital input levels, and record software-processed audio.
 - Windows: Electron wrapper for the same local offline HTML/JS (no network required for core audio). Portable EXE builds via GitHub Actions.
-- Android: separate Android WebView APK with the same frontend bundled offline via WebViewAssetLoader and a trusted local HTTPS-style origin. Android USB audio/OTG support varies. The APK does not add a Yamaha driver or direct USB DSP protocol. Native recording export uses Android MediaStore (Music/XStageAG06) and is limited to 24 MiB per recording.
+- Android: separate Android WebView APK with the same frontend bundled offline via WebViewAssetLoader and a trusted local HTTPS-style origin. Android USB audio/OTG support varies. The APK does not add a Yamaha driver or direct USB DSP protocol. Native recording export uses Android MediaStore (Music/XStageAudio) and is limited to 24 MiB per recording.
 - All platforms: HPF, low/mid/high EQ, compression threshold, reverb, guitar saturation and output gain affect **captured stereo USB mix** via Web Audio. Monitor playback is disabled by default to reduce feedback risk. Browser recording uses a supported MediaRecorder format (WebM/Opus, Ogg/Opus or MP4/AAC depending on platform).
 
 ## Does not control the physical mixer
