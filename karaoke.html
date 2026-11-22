@@ -382,7 +382,7 @@
         <button type="button" id="cloud-import-close" aria-label="ปิดหน้าต่างนำเข้า">✕</button>
       </header>
       <div class="cloud-import-body" id="cloud-import-body">
-      <p class="cloud-import-lead">ใช้รหัสเพลงภายใน XMID เป็นชื่อไฟล์ เช่น รหัส 00001 → 00001.XMID · ตรวจ MIDI ซ้ำทุกแหล่ง · นำเข้าได้หลายรอบหลายเครื่อง · เก็บฐานใน DB/songs.sqlite3 ไฟล์เดียว</p>
+      <p class="cloud-import-lead">ชื่อไฟล์ XMID เช่น 00001.XMID อาจซ้ำได้ทุกครั้งที่สร้าง · ตรวจขนาดไบต์และ MD5 ของ MIDI ภายในเพื่อข้ามเฉพาะเนื้อ MIDI ที่ซ้ำจริง · นำเข้าได้หลายรอบหลายเครื่อง · ใช้ฐาน DB/songs.sqlite3 ไฟล์เดียว</p>
       <p class="cloud-import-note" id="cloud-import-ios-help">iPhone/iPad: Safari 18.4 ขึ้นไปสามารถเลือกโฟลเดอร์ในแอป Files ได้โดยแตะ “เลือกโฟลเดอร์เพลง” หากเบราว์เซอร์รุ่นเก่าแสดงเฉพาะไฟล์รายตัว อาจไม่ส่งโครงสร้างโฟลเดอร์ครบ ระบบจะตรวจรายการก่อนนำเข้า และจะไม่อัปโหลดชุดเพลงที่องค์ประกอบไม่ครบ</p>
       <div class="cloud-import-actions">
         <button id="cloud-import-pick" type="button">📁 เลือกโฟลเดอร์เพลง</button>
@@ -492,7 +492,7 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="midi-pro-engine.js?v=1137-playback-restore-1168-screen-wake" defer></script>
   <script src="video-metadata-editor.js?v=1138-verified-video-selection" defer></script>
   <script src="video-transcode.js?v=1137" defer></script>
-  <script src="cloud-import.js?v=1174-auto-migrate-mid" defer></script>
+  <script src="cloud-import.js?v=1175-mid-bytes-and-md5" defer></script>
   <script src="tv-refresh.js?v=1137" defer></script>
   <script src="app.js?v=1174-auto-migrate-mid" defer></script><script src="pc-extensions.js?v=1137-unfiltered-output-visual-only-1166-midi-eq-canvas" defer></script>
   <script src="midi-keyboard-ui.js?v=1137-clean-title-1157-top-song-key-single-menu" defer></script>
