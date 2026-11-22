@@ -64,7 +64,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onReceivedError(WebView view,WebResourceRequest request,WebResourceError error){
                 if(request.isForMainFrame()){
-                    Toast.makeText(MainActivity.this,"ไม่สามารถโหลดหน้า AG06 Studio - ตรวจสอบการติดตั้ง APK",Toast.LENGTH_LONG).show();
+                    Toast.makeText(MainActivity.this,"ไม่สามารถโหลดหน้า X-Stage Audio Studio - ตรวจสอบการติดตั้ง APK",Toast.LENGTH_LONG).show();
                 }
             }
         });
@@ -139,9 +139,9 @@ public class MainActivity extends Activity {
             byte[] bytes=Base64.decode(dataUrl.substring(comma+1),Base64.DEFAULT);
             if(bytes.length==0||bytes.length>24*1024*1024)throw new IllegalArgumentException("ไฟล์ใหญ่เกิน 24 MB");
             ContentValues values=new ContentValues();
-            values.put(MediaStore.MediaColumns.DISPLAY_NAME,"X-Stage-AG06-"+System.currentTimeMillis()+"."+extension);
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME,"X-Stage-Audio-"+System.currentTimeMillis()+"."+extension);
             values.put(MediaStore.MediaColumns.MIME_TYPE,mime);
-            values.put(MediaStore.MediaColumns.RELATIVE_PATH,Environment.DIRECTORY_MUSIC+"/XStageAG06");
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH,Environment.DIRECTORY_MUSIC+"/XStageAudio");
             values.put(MediaStore.MediaColumns.IS_PENDING,1);
             created=getContentResolver().insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,values);
             if(created==null)throw new IllegalStateException("ไม่สามารถสร้างไฟล์เสียง");
@@ -153,7 +153,7 @@ public class MainActivity extends Activity {
             ContentValues ready=new ContentValues();
             ready.put(MediaStore.MediaColumns.IS_PENDING,0);
             getContentResolver().update(created,ready,null,null);
-            notifyWeb(true,"บันทึกแล้วใน Music/XStageAG06");
+            notifyWeb(true,"บันทึกแล้วใน Music/XStageAudio");
         }catch(Exception error){
             if(created!=null)getContentResolver().delete(created,null,null);
             notifyWeb(false,"บันทึกเสียงไม่สำเร็จ: "+error.getMessage());
