@@ -22,6 +22,7 @@ public sealed partial class MainForm
     private ToolStrip? _toolbar;
     private readonly TextBox _jobSearch = new();
     private readonly Dictionary<string, Label> _overviewCounts = new();
+    private readonly Dictionary<string, Image> _rowIcons = new();
 
     private static readonly Color DarkTop = Color.FromArgb(13, 29, 43);
     private static readonly Color DarkPanel = Color.FromArgb(17, 45, 59);
@@ -777,8 +778,9 @@ public sealed partial class MainForm
         heading.Controls.Add(filter, 2, 0);
         heading.Controls.Add(SmallAction("☷", "แสดงหรือซ่อนคอลัมน์ขั้นสูง", (_, _) =>
         {
+            var show = !_grid.Columns["FileType"].Visible;
             foreach (var key in new[] { "FileType", "Added", "Parts", "Description" })
-                _grid.Columns[key].Visible = !_grid.Columns["FileType"].Visible;
+                _grid.Columns[key].Visible = show;
         }), 3, 0);
         desk.Controls.Add(heading, 0, 0);
 
@@ -903,6 +905,20 @@ public sealed partial class MainForm
         return node;
     }
 
+    private Image GetRowIcon(DownloadJob job)
+    {
+        var kind = CategoryOf(job);
+        if (_rowIcons.TryGetValue(kind, out var image)) return image;
+        var glyph = kind switch
+        {
+            "video" => "video", "music" => "file", "document" => "file",
+            "program" => "settings", "archive" => "folder", _ => "file"
+        };
+        image = DrawToolbarGlyph(glyph, GlyphColor(glyph));
+        _rowIcons.Add(kind, image);
+        return image;
+    }
+
     private void CreateDownloadGrid()
     {
         _grid.Dock = DockStyle.Fill;
@@ -910,7 +926,7 @@ public sealed partial class MainForm
         _grid.BackgroundColor = DarkGrid;
         _grid.BorderStyle = BorderStyle.None;
         _grid.GridColor = Color.FromArgb(68, 75, 89);
-        _grid.ColumnHeadersHeight = 40;
+        _grid.ColumnHeadersHeight = 42;
         _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         _grid.EnableHeadersVisualStyles = false;
         _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(43, 48, 62);
@@ -922,7 +938,7 @@ public sealed partial class MainForm
         _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(48, 91, 141);
         _grid.DefaultCellStyle.SelectionForeColor = Color.White;
         _grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(35, 40, 51);
-        _grid.RowTemplate.Height = 38;
+        _grid.RowTemplate.Height = 39;
         _grid.RowHeadersVisible = false;
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _grid.MultiSelect = false;
@@ -943,7 +959,14 @@ public sealed partial class MainForm
                 DefaultCellStyle = new DataGridViewCellStyle { Padding = new Padding(5, 0, 4, 0) }
             });
         }
-        Column("File", "ชื่อไฟล์", 345, 210);
+        Column("No", "#", 44, 40);
+        _grid.Columns.Add(new DataGridViewImageColumn
+        {
+            Name = "KindIcon", HeaderText = "", Width = 34, MinimumWidth = 31,
+            ImageLayout = DataGridViewImageCellLayout.Zoom,
+            SortMode = DataGridViewColumnSortMode.NotSortable
+        });
+        Column("File", "ชื่อไฟล์", 300, 210);
         Column("FileType", "ชนิดไฟล์", 104, 85);
         Column("Queue", "คิว", 57, 47);
         Column("Size", "ขนาด", 112);
@@ -954,6 +977,17 @@ public sealed partial class MainForm
         Column("Added", "วันที่ดาวน์โหลด", 137, 112);
         Column("Parts", "จำนวนส่วน", 115, 90);
         Column("Description", "คำอธิบาย", 157, 115);
+        Column("QueueName", "คิว", 130, 90);
+        var order = new[]
+        {
+            "No", "KindIcon", "File", "Size", "Progress", "Speed",
+            "ETA", "Status", "QueueName", "FileType", "Queue",
+            "Added", "Parts", "Description"
+        };
+        for (var index = 0; index < order.Length; index++)
+            _grid.Columns[order[index]].DisplayIndex = index;
+        foreach (var key in new[] { "FileType", "Queue", "Added", "Parts", "Description" })
+            _grid.Columns[key].Visible = false;
         _grid.ColumnHeaderMouseClick += (_, e) =>
         {
             if (e.ColumnIndex < 0) return;
@@ -1010,29 +1044,34 @@ public sealed partial class MainForm
         var footer = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            BackColor = Color.FromArgb(39, 47, 61),
-            Padding = new Padding(16, 6, 16, 6),
-            ColumnCount = 1, RowCount = 3
+            ColumnCount = 3, RowCount = 1,
+            BackColor = Color.FromArgb(9, 28, 48),
+            Padding = new Padding(14, 4, 12, 4)
         };
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 25));
-        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 17));
         footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         _summary.Dock = DockStyle.Fill;
+        _summary.ForeColor = Color.FromArgb(222, 238, 248);
         _summary.Font = new Font("Segoe UI", 9, FontStyle.Bold);
-        _summary.ForeColor = Color.FromArgb(223, 236, 250);
+        _summary.TextAlign = ContentAlignment.MiddleLeft;
+        _summary.AutoEllipsis = true;
         _details.Dock = DockStyle.Fill;
-        _details.ForeColor = MutedText;
+        _details.ForeColor = Color.FromArgb(132, 220, 235);
         _details.Font = new Font("Segoe UI", 9);
+        _details.TextAlign = ContentAlignment.MiddleRight;
         _details.AutoEllipsis = true;
         _updateStatus.Dock = DockStyle.Fill;
-        _updateStatus.ForeColor = Color.FromArgb(126, 194, 248);
+        _updateStatus.ForeColor = Accent;
         _updateStatus.Font = new Font("Segoe UI", 8, FontStyle.Bold);
-        _updateStatus.Text = "รุ่นที่ติดตั้ง v" + UpdateChecker.CurrentVersion +
+        _updateStatus.TextAlign = ContentAlignment.MiddleRight;
+        _updateStatus.AutoEllipsis = true;
+        _updateStatus.Text = "v" + UpdateChecker.CurrentVersion +
                              " · Build " + UpdateChecker.CurrentBuild;
         footer.Controls.Add(_summary, 0, 0);
-        footer.Controls.Add(_details, 0, 1);
-        footer.Controls.Add(_updateStatus, 0, 2);
+        footer.Controls.Add(_details, 1, 0);
+        footer.Controls.Add(_updateStatus, 2, 0);
         return footer;
     }
 
