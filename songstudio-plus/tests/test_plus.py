@@ -333,7 +333,7 @@ class PlusTests(unittest.TestCase):
         plain=self.put("encoded.mp3",b"ENCODED-MEDIA"*500)
         token=("bw3woQ5X2H2lgLFMsIMNVxkmG9iXBN4p"
                "P10eyckXWBD4IWU7f4535O15oW5s")
-        self.lrc(plain,f"[00:01.00]{token}\\n[00:05.00]GMM Grammy\\n")
+        self.lrc(plain,f"[00:01.00]{token}\n[00:05.00]GMM Grammy\n")
         plus.import_folder(self.workspace,self.src)
         self.assertTrue(plus.suspicious_lyric_text(token))
         self.assertFalse(plus.suspicious_lyric_text("รักเธอเสมอ"))
