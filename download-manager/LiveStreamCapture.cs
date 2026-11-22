@@ -199,13 +199,19 @@ public sealed class LiveStreamCapture
             if (!process.Start()) throw new IOException("เปิด FFmpeg ไม่สำเร็จ");
             _running = process;
         }
-        // Drain both pipes to avoid a deadlock if FFmpeg emits warnings.
-        var stderr = process.StandardError.ReadToEndAsync();
-        var stdout = process.StandardOutput.ReadToEndAsync();
+        // Live sessions may run for hours: consume streams without
+        // retaining an unbounded amount of FFmpeg log text or signed URLs.
+        static async Task DrainAsync(StreamReader reader)
+        {
+            while (await reader.ReadLineAsync() is not null) { }
+        }
+        var stderr = DrainAsync(process.StandardError);
+        var stdout = DrainAsync(process.StandardOutput);
         using var cancel = ct.Register(() =>
         {
             try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
             catch (InvalidOperationException) { }
+            catch (System.ComponentModel.Win32Exception) { }
         });
         if (_stopRequested) RequestStop();
         try
