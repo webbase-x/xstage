@@ -425,11 +425,18 @@ try {{
   if (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) {{
     throw 'Song Studio Pro is still running. Close the application before updating.'
   }}
-  # Other open instances can keep the installation files in use even when
-  # the process which requested this update has exited.
-  $other = @(Get-Process -Name 'XStageSongStudioPro' -ErrorAction SilentlyContinue)
+  # The Qt tray host can take a few seconds to finish shutting down
+  # after its original PID exits. Allow every remaining instance time to exit
+  # naturally instead of failing on a single race-prone process snapshot.
+  $other = @()
+  for($n = 0; $n -lt 60; $n++) {{
+    $other = @(Get-Process -Name 'XStageSongStudioPro' -ErrorAction SilentlyContinue)
+    if ($other.Count -eq 0) {{ break }}
+    Start-Sleep -Milliseconds 500
+  }}
   if ($other.Count -gt 0) {{
-    throw 'Another Song Studio Pro window is open. Close all instances and retry.'
+    $remainingPids = ($other | ForEach-Object {{ $_.Id }}) -join ', '
+    throw ('Song Studio Pro is still running (PID: ' + $remainingPids + '). Close it from the system tray or Task Manager, then retry.')
   }}
   $found = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
   if ($found -ne $expected) {{ throw 'Downloaded Setup SHA-256 mismatch' }}
