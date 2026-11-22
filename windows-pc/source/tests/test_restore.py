@@ -253,7 +253,7 @@ class RestoreTests(unittest.TestCase):
         with patch.object(restore, 'copy_database', side_effect=swap_after_first_snapshot):
             with self.assertRaisesRegex(ValueError, 'ไฟล์ข้อมูลปัจจุบันเปลี่ยน'):
                 restore.apply_pending(self.data)
-        self.assertEqual(outside.read_text(encoding='utf-8'), '{"title":"external"}')
+        self.assertEqual(json.loads(outside.read_text(encoding='utf-8')), {'title':'external'})
         self.assertFalse(list(self.data.glob('restore-safety-*')))
         self.assertTrue((self.data/'restore-pending').exists())
 
