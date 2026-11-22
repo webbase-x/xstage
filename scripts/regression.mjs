@@ -70,7 +70,7 @@ for(const intlImplementation of [Intl,{}]){
   }
 }
 assert.ok(css.includes('Thai search-result glyph shaping'),'Thai results must reserve space for combining marks');
-assert.ok(index.includes('app.js?v=1172-direct-sqlite-no-json'),'Thai search fix must invalidate cached JS');
+assert.ok(index.includes('app.js?v=1173-multidevice-midi-dedup'),'Thai search fix must invalidate cached JS');
 assert.ok(index.includes('xstage-ux.css?v=1164-mobile-controls-lights-thai-accents'),'Thai font fix must invalidate cached CSS');
 
 assert.doesNotThrow(()=>new Function(storefrontScript),'storefront JavaScript must parse');
