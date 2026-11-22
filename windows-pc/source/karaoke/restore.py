@@ -79,6 +79,14 @@ def copy_database(source,target):
             or not source.is_file()):
         raise ValueError('ไฟล์ฐานข้อมูลสำรองไม่ปลอดภัย: ' + source.name)
     validate_sqlite_sidecars(source.parent, (source.name,))
+    target = Path(target)
+    # sqlite3.connect() follows existing links and creates missing files.
+    # A hostile staging destination must never redirect writes outside Data.
+    if (target.is_symlink() or getattr(target, 'is_junction', lambda: False)()
+            or (target.exists() and not target.is_file())
+            or target.parent.is_symlink()
+            or getattr(target.parent, 'is_junction', lambda: False)()):
+        raise ValueError('ไฟล์ปลายทางสำเนา SQLite ไม่ปลอดภัย: ' + target.name)
     with closing(readonly(source)) as src, closing(sqlite3.connect(target)) as dst:
         src.backup(dst)
 
