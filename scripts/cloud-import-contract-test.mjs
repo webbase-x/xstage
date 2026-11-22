@@ -42,6 +42,30 @@ await assert.rejects(loadCatalog({
     :[{name:'current.json',mimeType:'application/json',id:'fake1234'},
       {name:'current.json',mimeType:'application/json',id:'fake5678'}]
 },'root'),/current.json ซ้ำ/);
+const canonicalSong={webSongId:'browser/one',code:'001',title:'เพลงหนึ่ง',artist:'ทดสอบ'};
+ctx.XStageDriveSQLite={read:async()=>({
+  schemaVersion:1,kind:'snapshot',generation:'direct-generation',songs:[canonicalSong]
+})};
+const directDrive={
+  listChildren:async id=>id==='root'
+    ?[{name:'DB',mimeType:'application/vnd.google-apps.folder',id:'db123456'}]
+    :[{name:'songs.sqlite3',mimeType:'application/vnd.sqlite3',
+       id:'sqlite98765',md5Checksum:'direct-md5'}],
+  getSqlite:async id=>{assert.equal(id,'sqlite98765');return new Uint8Array(100);}
+};
+const canonical=await loadCatalog(directDrive,'root');
+assert.equal(canonical.rows.size,1);
+assert.equal(canonical.pointer.directFile,true);
+assert.equal(canonical.pointer.catalogFileId,'sqlite98765');
+assert.equal(canonical.pointer.catalogMd5,'direct-md5');
+assert.equal(canonical.pointerFile,null,'A direct SQLite DB requires no current.json');
+await assert.rejects(loadCatalog({
+  listChildren:async id=>id==='root'
+    ?[{name:'DB',mimeType:'application/vnd.google-apps.folder',id:'db123456'}]
+    :[{name:'songs.sqlite3',id:'sqlite98765'},
+      {name:'songs.sqlite3',id:'sqlite22222'}]
+},'root'),/songs.sqlite3 ซ้ำ/);
+delete ctx.XStageDriveSQLite;
 const uploaded=new Map(),children=new Map(),sessions=new Map();
 let serial=0,sessionNumber=0,putRequests=0;
 const id=()=>('item'+String(++serial).padStart(7,'0'));
