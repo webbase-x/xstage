@@ -88,6 +88,30 @@ class RestoreTests(unittest.TestCase):
         self.assertEqual(self.title(), 'ปัจจุบัน')
         self.assertFalse((self.data/'restore-pending').exists())
 
+
+    def test_optional_backup_file_changed_to_link_after_validation_is_rejected(self):
+        outside = self.root/'external-history.json'
+        outside.write_text('[]', encoding='utf-8')
+        optional = self.source/'history.json'
+        original_validate = restore.validate_backup
+
+        def swap_after_validation(folder):
+            info = original_validate(folder)
+            if Path(folder) == self.source:
+                try:
+                    optional.symlink_to(outside)
+                except (OSError, NotImplementedError):
+                    self.skipTest('filesystem cannot create symlinks')
+            return info
+
+        with patch.object(restore, 'validate_backup', side_effect=swap_after_validation):
+            with self.assertRaisesRegex(ValueError, 'ไฟล์เสริมชุดสำรองไม่ปลอดภัย'):
+                restore.stage_restore(self.source, self.data)
+        self.assertEqual(self.title(), 'ปัจจุบัน')
+        self.assertEqual(outside.read_text(encoding='utf-8'), '[]')
+        self.assertFalse((self.data/'restore-pending').exists())
+        self.assertFalse(list(self.data.glob('restore-stage-*')))
+
     def test_linked_backup_file_is_rejected_without_staging(self):
         outside = self.root/'outside.json'
         write_json(outside, {'title':'external'})
