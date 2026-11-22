@@ -206,4 +206,12 @@
 
 ## New Google Drive destination (November 2026)
 
+## MIDI dedup and multi-device imports (Web 1.0.138)
+
+- Song database: exactly one active `XStageKaraoke/DB/songs.sqlite3`. Neither `current.json` nor `catalog-delta-*.sqlite3` is a playback source. Only the one-time browser migration action reads the old pointer; old snapshots and pointers are preserved in `BACKUP` until the new SQLite is verified.
+- Duplicate detection is based on MD5 of the **raw MIDI bytes**, across MID/MIDI/KAR/NCN and MIDI extracted and validated from XSK2/XMID packages. Identical MIDI imported with a different filename, directory, code or lyric file is skipped. Other audio/video formats retain independent fingerprint handling.
+- If a distinct MIDI comes from a different library with the same code, the importer creates a deterministic code suffix from the MIDI content hash and retains its original code in `sourceCode`, rather than overwriting or silently discarding the second recording.
+- Each new import reloads the current SQLite; the browser uses an advisory Drive `CACHE` writer lease, checks Drive metadata before publication and rebases pending imported songs if another computer published first. Interrupted work retains uploaded media and can resume without destructive overwrite. Google Drive alone does not supply an atomic multi-file transaction: never treat advisory locking as an absolute guarantee for racing writers.
+- New catalog files must be created or explicitly authorized through the same X-Stage Google OAuth application (`drive.file` scope). Uploading a SQLite externally can cause a 404 in the player even with the same Google account.
+
 Only `XStageKaraoke` is used for new private Drive imports. `SONGS/MIDI`, `SONGS/AUDIO`, `SONGS/VIDEO` and `SONGS/LYRICS` hold songs and timed text. `DB/songs.sqlite3` is the single authoritative song catalog, discovered directly through the selected Drive `DB` folder; no `DB/current.json` or delta index is created. Existing v5 `current.json` and delta SQLite files are read for one-time migration only and then archived in `BACKUP` after a verified in-browser publication. SoundFonts go under `SOUNDFONT/SF2` or `SOUNDFONT/SF3`. `BACKUP` retains previous catalog generations, `CACHE` holds validated temporary uploads, and `LOGS` stores diagnostics. Existing `XStageSong` and Song Studio Pro's local `XStageSongPlus` workspace are not read, moved, deleted or migrated by the online player; the user imports songs fresh. The catalog stores verified Google Drive file IDs, not guessed paths.
