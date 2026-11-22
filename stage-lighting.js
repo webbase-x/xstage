@@ -159,5 +159,8 @@
     status:()=>({active:playing,source:activeSource,hasMidiNotes:!!midiBands,
       beamCount:beams.length,energy:Number(deck.style.getPropertyValue('--xstage-light-power'))||0})
   };
+  // Keep a faint resting LED outline even before the first track. During
+  // playback these bars show measured Web Audio or real MIDI note energy.
+  paintMidiSideMeters([0,0,0],false);
   dark();
 })();
