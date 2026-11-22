@@ -414,6 +414,7 @@ class Importer {
     this.dom.selection=$('cloud-import-selection');
     this.dom.selectionList=$('cloud-import-selection-list');
     this.dom.selectionCount=$('cloud-import-selection-count');
+    this.dom.actionHint=$('cloud-import-action-hint');
     this.dom.done=$('cloud-import-done');
     this.dom.done?.addEventListener('click',()=>this.close());
     $('cloud-import-select-all')?.addEventListener('click',()=>this.selectEveryItem(true));
@@ -667,28 +668,49 @@ class Importer {
     this.renderSelectionCount();
   }
   refreshButtons(){
-    const approvedVideos=this.videoEditor?.eligibleCount()||0;
-    const otherSongs=this.plan?.songs.filter(item=>!item.video).length||0;
-    const selected=this.selectableItems().some(entry=>
-      this.chosenItems.has(entry.key)&&(!entry.item.video||this.videoEditor?.get(entry.item)));
+    const candidates=this.selectableItems();
+    const approved=candidates.filter(entry=>this.chosenItems.has(entry.key)&&
+      (!entry.item.video||this.videoEditor?.get(entry.item)));
+    const resumable=!!this.saved&&['uploading','publishing','paused','running'].includes(this.saved.status);
     for(const input of this.dom.selectionList?.querySelectorAll('input[type="checkbox"]')||[])
       input.disabled=this.running;
-    this.dom.start.textContent=this.completed?'นำเข้าเพิ่ม':'นำเข้ารายการที่เลือก';
+    this.dom.start.textContent=this.completed?
+      'เริ่มตรวจ MD5 และนำเข้าเพิ่ม ('+approved.length.toLocaleString('th-TH')+')':
+      'เริ่มตรวจ MD5 และนำเข้า ('+approved.length.toLocaleString('th-TH')+')';
     if(this.dom.done)this.dom.done.textContent=this.completed?'เสร็จแล้ว · ปิด':'ปิดหน้าต่าง';
-    this.dom.start.disabled=this.running||this.lockPending||!selected;
+    this.dom.start.disabled=this.running||this.lockPending||!approved.length;
     if(this.dom.done)this.dom.done.disabled=false;
     this.dom.start.hidden=!!this.running;
     this.dom.pause.disabled=!this.running;
     this.dom.pause.hidden=!this.running;
     this.dom.cancel.disabled=!this.running;
     this.dom.cancel.hidden=true;
-    this.dom.resume.disabled=this.running||this.lockPending||!this.saved;
-    this.dom.resume.hidden=this.running||!this.saved;
+    this.dom.resume.disabled=this.running||this.lockPending||!resumable;
+    this.dom.resume.hidden=this.running||!resumable;
     this.dom.pick.disabled=this.running;
     if(this.dom.pickFallback)this.dom.pickFallback.disabled=this.running;
     this.dom.scan.disabled=this.running||!this.selected;
-    this.dom.scan.hidden=true;
+    this.dom.scan.hidden=!this.selected||this.running;
+    if(this.dom.actionHint){
+      const pending=this.videoEditor?.pendingCount()||0;
+      this.dom.actionHint.textContent=this.running?
+        'กำลังตรวจสอบและนำเข้า · หยุดชั่วคราวได้โดยไม่ลบไฟล์ที่อัปโหลดสำเร็จ':
+        this.lockPending?'กำลังเตรียมงานนำเข้า…':
+        approved.length?'พร้อมตรวจเนื้อหา/MD5 และนำเข้า '+approved.length.toLocaleString('th-TH')+
+          ' รายการ · จะข้ามไฟล์ซ้ำและชุดที่ตรวจไม่ผ่าน':
+        pending?'มีวิดีโอ '+pending.toLocaleString('th-TH')+
+          ' รายการรอยืนยันข้อมูล · บันทึกข้อมูลวิดีโอหรือเลือกไฟล์เพลงอื่นก่อนเริ่ม':
+        candidates.length?'ยังไม่ได้เลือกรายการ · เลือกในรายการด้านบนหรือกด “เลือกทั้งหมด”':
+        'เลือกโฟลเดอร์เพลงก่อนเริ่ม · ระบบยังไม่มีรายการพร้อมนำเข้า';
+    }
     this.updateOpen();
+  }
+  onVideoApproved(item){
+    const entry=this.selectableItems().find(entry=>entry.item===item);
+    if(entry)this.chosenItems.add(entry.key);
+    this.renderSelection();
+    this.updateVideoStats();
+    this.status('บันทึกข้อมูลวิดีโอแล้ว · พร้อมตรวจ MD5 และนำเข้ารายการที่เลือก');
   }
   async open(){
     if(!this.session()?.token){this.status('กรุณาเชื่อมต่อ Google Drive ก่อน');return;}
@@ -697,7 +719,7 @@ class Importer {
       else this.dom.dialog.setAttribute('open','');
     }
     this.saved=await checkpoint(this.session().sub,undefined);
-    if(this.saved?.status!=='completed'&&this.saved&&!this.selected){
+    if(this.saved&&['uploading','publishing','paused','running'].includes(this.saved.status)&&!this.selected){
       this.status('พบงานค้างของบัญชีนี้ · กดทำต่อ (อาจต้องอนุญาตโฟลเดอร์เดิม)');
       this.dom.source.textContent='งานเดิม: '+String(this.saved.label||'โฟลเดอร์เพลง');
       if(this.saved.handle)this.folderHandle=this.saved.handle;
@@ -767,8 +789,15 @@ class Importer {
     this.expandedGroups.clear();
     this.groupPageSizes.clear();
     this.chosenItems=new Set();
-    this.renderSelection();
     this.videoEditor?.setPlan(this.plan,this.saved?.videoEdits);
+    // A newly scanned, complete song is selected by default. The previous
+    // empty selection disabled the only import action despite telling users
+    // to press Start. Unreviewed videos remain excluded until confirmed.
+    for(const entry of this.selectableItems()){
+      if(!entry.item.video||this.videoEditor?.get(entry.item))
+        this.chosenItems.add(entry.key);
+    }
+    this.renderSelection();
     const hasRelativePaths=files.some(entry=>String(entry.relative||'').includes('/'));
     const totalBytes=files.reduce((sum,entry)=>sum+(entry.file||entry).size,0);
     this.dom.source.textContent='เลือกแล้ว '+files.length.toLocaleString('th-TH')+' ไฟล์ · '+this.importSize(totalBytes)+
@@ -799,7 +828,12 @@ class Importer {
     }
     this.updateVideoStats();
     this.progress(0,1);
-    this.status(recognized?'ตรวจชื่อไฟล์แล้ว · กดเริ่มเพื่อตรวจข้อมูลจริง/MD5 และอัปโหลดเฉพาะรายการที่สมบูรณ์':'ไม่พบเพลงพร้อมนำเข้า · โปรดตรวจชนิดไฟล์หรือรีโหลดหน้าเว็บเพื่อรับตัวอ่าน XMID ล่าสุด');
+    const selectedReady=this.selectableItems().filter(entry=>this.chosenItems.has(entry.key)&&
+      (!entry.item.video||this.videoEditor?.get(entry.item))).length;
+    this.status(selectedReady?'ตรวจชื่อไฟล์แล้ว · เลือกไว้ '+selectedReady.toLocaleString('th-TH')+
+      ' รายการ · กด “เริ่มตรวจ MD5 และนำเข้า” ด้านล่าง':
+      recognized?'ตรวจชื่อไฟล์แล้ว แต่ยังไม่มีรายการที่ผ่านเงื่อนไข · ตรวจ/บันทึกข้อมูลวิดีโอหรือเลือกไฟล์ที่พร้อม':
+      'ไม่พบเพลงพร้อมนำเข้า · ตรวจชนิดไฟล์และโครงสร้างโฟลเดอร์ แล้วเลือกใหม่');
     await this.save({status:'selected',done:0,total:this.plan.songs.length+this.plan.midis.length+this.plan.xsks.length+this.plan.fonts.length});
     this.refreshButtons();
   }
@@ -864,8 +898,9 @@ class Importer {
   }
   async performStart(){
     if(this.running||!this.plan)return;
-    if(!this.selectableItems().some(entry=>this.chosenItems.has(entry.key))){
-      this.status('กรุณาเลือกรายการที่ต้องการนำเข้า');return;
+    if(!this.selectableItems().some(entry=>this.chosenItems.has(entry.key)&&
+      (!entry.item.video||this.videoEditor?.get(entry.item)))){
+      this.status('ยังไม่มีรายการที่พร้อมนำเข้า · เลือกรายการเพลงหรือยืนยันข้อมูลวิดีโอก่อน');return;
     }
     if(!this.plan.songs.length&&!this.plan.midis.length&&!this.plan.xsks.length&&!this.plan.fonts.length){
       this.status('ไม่มีไฟล์ที่พร้อมนำเข้า · กรุณาเลือกโฟลเดอร์ใหม่หรืออัปเดตหน้าเว็บ');
