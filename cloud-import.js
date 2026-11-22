@@ -1237,7 +1237,10 @@ class Importer {
   async consolidate(){
     if(this.running||this.lockPending)return;
     const auth=this.session();
-    if(!auth?.token||!auth.sub){this.status('กรุณาเชื่อม Google ก่อนรวมฐานเพลง');return;}
+    const notify=message=>{
+      this.status(message);this.options.onConsolidationStatus?.(message);
+    };
+    if(!auth?.token||!auth.sub){notify('กรุณาเชื่อม Google ก่อนรวมฐานเพลง');return;}
     const work=async()=>{
       this.running=true;this.stopRequested=false;this.account=auth.sub;
       this.controller=new AbortController();this.refreshButtons();
@@ -1250,7 +1253,7 @@ class Importer {
         const rootId=chooseImportRoot(roots,String(auth.rootId||''));
         if(!rootId)fail('ไม่พบโฟลเดอร์ XStageKaraoke · ไม่สร้างคลังใหม่ขณะรวมฐาน');
         const {pointerFile,pointer,rows}=await loadCatalog(drive,rootId);
-        if(!pointer){this.status('ยังไม่มีฐานเพลงบน Drive ให้รวม');return;}
+        if(!pointer){notify('ยังไม่มีฐานเพลงบน Drive ให้รวม');return;}
         const currentFiles=(await drive.listChildren(await drive.ensurePath(rootId,['DB'])))
           .filter(x=>/\.sqlite3$/i.test(x.name));
         if(pointer.directFile&&currentFiles.length===1&&
@@ -1258,18 +1261,37 @@ class Importer {
            currentFiles[0].id===pointer.catalogFileId&&
            !(await drive.listChildren(await drive.ensurePath(rootId,['DB']))).some(
              x=>x.name==='current.json'||x.name==='.xstage-songstudio-staging.json')){
-          this.status('ฐานเพลงเป็นมาตรฐานเดียวแล้ว · DB/songs.sqlite3 1 ไฟล์ · '+
+          notify('ฐานเพลงเป็นมาตรฐานเดียวแล้ว · DB/songs.sqlite3 1 ไฟล์ · '+
             rows.size.toLocaleString('th-TH')+' เพลง');
           return;
         }
+        const indexed=await buildMidiIndex(rows,drive,()=>this.check());
+        if(indexed.duplicates||indexed.backfilled)
+          notify('ตรวจ MIDI เดิมครบ · ซ้ำ '+indexed.duplicates+
+            ' · ปรับลายนิ้วมือ MIDI '+indexed.backfilled);
         const result=await publishSingleCatalog({drive,rootId,pointerFile,pointer,rows,
-          check:()=>this.check(),status:message=>this.status(message)});
-        this.status('รวมฐาน SQLite3 สำเร็จ · '+
+          check:()=>this.check(),status:notify});
+        notify('รวมฐาน SQLite3 สำเร็จ · '+
           result.pointer.songCount.toLocaleString('th-TH')+
           ' เพลง · ไฟล์เก่าทั้งหมดอยู่ BACKUP');
-        this.options.refresh?.();
+        await this.options.refresh?.();
       }catch(error){
-        this.status('รวมฐานไม่สำเร็จ · '+error.message+
+        // A second machine may have completed the migration first.
+        if(/จากอีกอุปกรณ์|มีฐาน songs.sqlite3 ใหม่แล้ว/.test(String(error.message||''))){
+          drive.children.clear();drive.childNames.clear();
+          try{
+            const current=await loadCatalog(drive,
+              chooseImportRoot((await drive.list("name='"+driveLayout.root+
+                "' and mimeType='"+MIME_FOLDER+"' and trashed=false")).filter(
+                  x=>!isRetiredDriveRoot(x.id)),String(auth.rootId||'')));
+            if(current.pointer?.directFile){
+              notify('อีกเครื่องรวมฐานเพลงสำเร็จแล้ว · โหลด songs.sqlite3 ล่าสุด');
+              await this.options.refresh?.();
+              return;
+            }
+          }catch(recheckError){console.warn('Retry migration status:',recheckError);}
+        }
+        notify('รวมฐานไม่สำเร็จ · '+error.message+
           ' · เก็บไฟล์เดิมไว้ทั้งหมดเพื่อให้ตรวจสอบได้');
       }finally{
         this.running=false;this.controller=null;this.refreshButtons();
@@ -1280,7 +1302,7 @@ class Importer {
       if(scope.navigator?.locks?.request){
         await scope.navigator.locks.request('xstage-drive-import-'+auth.sub,
           {mode:'exclusive',ifAvailable:true},async lock=>{
-            if(!lock){this.status('มีงานนำเข้าในอีกแท็บ · รวมฐานหลังงานนั้นเสร็จ');return;}
+            if(!lock){notify('มีงานนำเข้าในอีกแท็บ · รวมฐานหลังงานนั้นเสร็จ');return;}
             await work();
           });
       }else await work();
