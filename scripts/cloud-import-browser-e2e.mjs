@@ -336,12 +336,10 @@ try{
   assert.ok(status.includes('เพลงใหม่ 4'),status);
   assert.ok(status.includes('SoundFont 1'),status);
   assert.equal(rootCreated,1,'Only one private XStageKaraoke root should be created');
-  assert.ok([...records.values()].some(x=>x.name==='current.json'),'Playable DB pointer must be created');
-  const pointer=[...records.values()].find(x=>x.name==='current.json');
-  const firstManifest=JSON.parse(pointer.data.toString('utf8'));
-  assert.equal(firstManifest.songCount,4);
-  assert.equal(firstManifest.layoutVersion,6);
-  assert.equal(firstManifest.deltaFileIds.length,0);
+  assert.ok(![...records.values()].some(x=>x.name==='current.json'),
+    'Single SQLite database must not create current.json');
+  assert.ok(![...records.values()].some(x=>x.name.startsWith('catalog-delta-')),
+    'Single SQLite database must not create a delta index');
   assert.ok([...records.values()].some(x=>x.name.endsWith('.mp4')));
   // Only one SQLite catalog may be active in DB; previous snapshots belong
   // to BACKUP and are still available by immutable Google Drive File ID.
@@ -349,6 +347,7 @@ try{
   const dbId=group(rootId).find(x=>x.name==='DB').id;
   const activeDbFiles=()=>group(dbId).filter(x=>x.name.endsWith('.sqlite3'));
   assert.deepEqual(activeDbFiles().map(x=>x.name),['songs.sqlite3']);
+  assert.equal(group(dbId).some(x=>x.name==='current.json'),false);
   const published=[...records.values()].filter(x=>x.name==='songs.sqlite3');
   assert.equal(published.length,1,'First upload publishes exactly one SQLite3 DB');
   assert.ok(published.every(x=>x.data.subarray(0,16).toString('latin1')==='SQLite format 3\0'),
@@ -429,14 +428,20 @@ try{
     }));
     throw new Error('Cloud import resume stalled: '+JSON.stringify(diagnostic),{cause:error});
   }
-  const finalPointer=[...records.values()].find(x=>x.name==='current.json');
-  assert.equal(JSON.parse(finalPointer.data.toString('utf8')).songCount,5,
-    'Reopening and resuming must publish the missing track without losing previous entries');
   assert.deepEqual(activeDbFiles().map(x=>x.name),['songs.sqlite3'],
-    'Repeated browser imports must never accumulate SQLite delta files in DB');
-  assert.equal(JSON.parse(finalPointer.data.toString('utf8')).deltaFileIds.length,0);
+    'Repeated browser imports must leave exactly one SQLite file in DB');
+  assert.equal(group(dbId).some(x=>x.name.endsWith('.json')),false,
+    'No index or staging JSON may remain in the final DB directory');
+  const finalBytes=records.get(activeDbFiles()[0].id)?.data;
+  assert.ok(finalBytes,'Canonical song DB must still be directly readable');
+  const finalDb=new SQL.Database(new Uint8Array(finalBytes));
+  try{
+    assert.deepEqual(finalDb.exec('PRAGMA integrity_check')[0].values,[['ok']]);
+    assert.equal(finalDb.exec('SELECT count(*) FROM songs')[0].values[0][0],5,
+      'Resuming must preserve four existing songs and publish the missing fifth');
+  }finally{finalDb.close();}
   assert.deepEqual(scriptErrors,[], 'No browser JavaScript errors are allowed');
-  console.log('PASS: Chromium folder selection, Google session, private Drive uploads, pointer/catalog and replay-safe MD5 dedup');
+  console.log('PASS: Chromium folder selection, Google session, private Drive uploads, single SQLite catalog and replay-safe MD5 dedup');
   await context.close();
 }finally{
   await browser.close();server.close();fs.rmSync(dir,{recursive:true,force:true});
