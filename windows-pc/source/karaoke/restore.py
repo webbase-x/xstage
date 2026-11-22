@@ -155,6 +155,13 @@ def validate_sqlite_sidecars(data, names):
 
 
 def rollback(data,safety,existed,replaced=FILES):
+    data, safety = Path(data), Path(safety)
+    # This function is also called directly by recovery tests and tools.
+    # Refuse redirected directories before reading snapshots or changing live data.
+    for folder, label in ((data, 'data'), (safety, 'safety')):
+        if (folder.is_symlink() or getattr(folder, 'is_junction', lambda: False)()
+                or not folder.is_dir()):
+            raise ValueError('โฟลเดอร์ย้อนคืนไม่ปลอดภัย: ' + label)
     # A safety snapshot may be tampered with while an interrupted restore is
     # pending. Never open its SQLite database with linked journal sidecars.
     validate_sqlite_sidecars(safety, replaced)
