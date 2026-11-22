@@ -896,6 +896,12 @@ if(karaokeVideo){
   });
 }
 
+function karaokeOutputGain(){
+  // A paired Windows companion owns master volume; keep web/MIDI gain at
+  // unity when linked, rather than attenuating the same signal twice.
+  return window.XStageWindowsVolumeBridge?.connected?1:
+    Math.max(0,Math.min(100,Number(ui.volume.value)||0))/100;
+}
 const initialVolume=Math.max(0,Math.min(100,Number(initialUiPrefs.volume)));
 if(Number.isFinite(initialVolume)){
   ui.volume.value=String(initialVolume);
@@ -2218,7 +2224,7 @@ function setMedleyMode(enabled){
     state.medleyPrefetch?.controller?.abort();
     state.medleyCache=null;state.medleyPrefetch=null;state.medleyUpcoming=null;
     state.medleyPreloadFailedSong=null;state.medleyPreloadRetryAt=0;
-    player.volume=Number(ui.volume.value)/100;
+    player.volume=karaokeOutputGain();
   }
   setPlayStatus(state.medley
     ?'เปิดเมดเลย์สุ่มเพลงต่อเนื่อง · เพลงที่ขอในคิวจะเล่นก่อน'
@@ -3250,7 +3256,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       if('webkitPreservesPitch' in player)player.webkitPreservesPitch=true;
     }catch{}
     player.playbackRate=Number(ui.speed.value);player.loop=ui.repeat.checked;
-    player.volume=Number(ui.volume.value)/100;
+    player.volume=karaokeOutputGain();
     const resumeTarget=Math.max(0,Number(resumeAt)||0);
     if(resumeTarget>0){
       const applyResumePosition=()=>{
@@ -4326,9 +4332,18 @@ $('midi-instrument')?.addEventListener('change',()=>{
   if(state.liveMidiPlayback)nativePlayer.dispatchEvent(new Event('xstage-midi-transpose'));
 });
 ui.speed.addEventListener('change',()=>{player.playbackRate=Number(ui.speed.value);saveUiPrefs({speed:Number(ui.speed.value)});});
-ui.volume.addEventListener('input',()=>{player.volume=Number(ui.volume.value)/100;saveUiPrefs({volume:Number(ui.volume.value)});});
+ui.volume.addEventListener('input',()=>{
+  const bridge=window.XStageWindowsVolumeBridge;
+  const percent=Math.max(0,Math.min(100,Number(ui.volume.value)||0));
+  player.volume=karaokeOutputGain();
+  if(bridge?.connected&&!bridge.syncing)bridge.setVolume(percent);
+  saveUiPrefs({volume:percent});
+});
 ui.repeat.addEventListener('change',()=>{player.loop=ui.repeat.checked;saveUiPrefs({repeat:ui.repeat.checked});});
-player.addEventListener('volumechange',()=>saveUiPrefs({volume:Math.round(player.volume*100),muted:player.muted}));
+player.addEventListener('volumechange',()=>saveUiPrefs(
+  window.XStageWindowsVolumeBridge?.connected
+    ?{volume:Number(ui.volume.value)||0,muted:false}
+    :{volume:Math.round(player.volume*100),muted:player.muted}));
 ui.seek.addEventListener('input',()=>{const d=Number.isFinite(player.duration)?player.duration:Number(state.current?.duration)||0;if(d>0)player.currentTime=d*Number(ui.seek.value)/1000;updateTransport();});
 ui.fullscreen.addEventListener('click',async()=>{
   try{
