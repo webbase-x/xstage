@@ -5,6 +5,10 @@ on:
       - "app.js"
       - "browser-midi.js"
       - "midi-pro-engine.js"
+      - "ios-midi-audio.js"
+      - "package.json"
+      - "scripts/ios-midi-audio-test.mjs"
+      - "scripts/safari-screen-wake-audio-test.mjs"
       - "karaoke.html"
       - "config.js"
       - "scripts/karaoke-fast-soundfont-test.mjs"
@@ -25,6 +29,7 @@ jobs:
           node --check app.js
           node --check browser-midi.js
           node --check midi-pro-engine.js
+          node --check ios-midi-audio.js
       - name: Test playback engines and 243MB SoundFont fallback
         run: |
           node scripts/karaoke-fast-soundfont-test.mjs
@@ -32,5 +37,7 @@ jobs:
           node scripts/midi-pro-engine-test.mjs
           node scripts/midi-startup-budget-test.mjs
           node scripts/midi-background-playback-test.mjs
+          node scripts/ios-midi-audio-test.mjs
+          node scripts/safari-screen-wake-audio-test.mjs
           node scripts/midi-medley-handoff-test.mjs
           node scripts/web-midi-transport-test.mjs
