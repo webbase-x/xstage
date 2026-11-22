@@ -63,7 +63,7 @@ class RollbackCorruptSnapshotTests(unittest.TestCase):
                     db.execute('CREATE TABLE marker (value TEXT)')
                     db.execute('INSERT INTO marker VALUES (?)', (value,))
             (data / 'queue.json').write_text('[]', encoding='utf-8')
-            (safety / 'queue.json').write_bytes(b'\\xff\\xfeinvalid')
+            (safety / 'queue.json').write_bytes(bytes((0xff, 0xfe)) + b'invalid')
             with self.assertRaises(ValueError):
                 restore.rollback(
                     data, safety,
