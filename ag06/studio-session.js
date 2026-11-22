@@ -20,7 +20,7 @@ export function encodeWav(buffer){
   return new Blob([wav],{type:"audio/wav"});
 }
 export class StudioSession {
-  constructor(){this.tracks=[];this.ctx=null;this.players=[];}
+  constructor(){this.tracks=[];this.ctx=null;this.players=[];this.ducking=false;this.normalize=false;}
   async addFile(file,name=file.name){
     if(this.tracks.length>=MAX_TRACKS)throw new Error("รองรับสูงสุด "+MAX_TRACKS+" แทร็ก");
     if(!file.size||file.size>MAX_FILE_BYTES)throw new Error("ไฟล์ต้องมีขนาด 1–80 MB");
@@ -32,17 +32,41 @@ export class StudioSession {
     finally{await context.close();}
     if(!decoded.length||decoded.duration>MAX_RENDER_SECONDS)throw new Error("ไฟล์เสียงต้องมีความยาวไม่เกิน 10 นาที");
     const track={id:crypto.randomUUID?.()||String(Date.now()+Math.random()),name:safeName(name),buffer:decoded,
-      volume:1,mute:false,solo:false,start:0,end:decoded.duration,offset:0};
+      volume:1,mute:false,solo:false,role:"music",start:0,end:decoded.duration,offset:0};
     this.tracks.push(track);return track;
   }
   remove(id){this.tracks=this.tracks.filter(t=>t.id!==id);}
   active(){const hasSolo=this.tracks.some(t=>t.solo);return this.tracks.filter(t=>!t.mute&&(!hasSolo||t.solo));}
   duration(){return Math.max(0,...this.tracks.map(t=>t.offset+t.end-t.start));}
+  // Speech-controlled ducking operates only on local decoded audio.
+  voiceLevelAt(second){
+    let level=0;
+    for(const t of this.active().filter(t=>t.role==="voice"&&t.buffer?.getChannelData)){
+      const local=second-t.offset+t.start;
+      if(second<t.offset||local>=t.end||local<t.start)continue;
+      const pcm=t.buffer.getChannelData(0),rate=t.buffer.sampleRate;
+      const first=Math.floor(local*rate),last=Math.min(pcm.length,first+Math.floor(rate*.03));
+      let sum=0,count=0;
+      for(let i=first;i<last;i+=4){sum+=pcm[i]*pcm[i];count++;}
+      level=Math.max(level,Math.sqrt(sum/Math.max(1,count)));
+    }
+    return level;
+  }
   async createGraph(ctx,dest){
     const nodes=[];
     for(const track of this.active()){
       const source=ctx.createBufferSource(),gain=ctx.createGain();
       source.buffer=track.buffer;gain.gain.value=clamp(track.volume,0,2);
+      if(this.ducking&&track.role==="music"&&this.active().some(t=>t.role==="voice")){
+        const start=track.offset,end=Math.min(this.duration(),track.offset+track.end-track.start);
+        let smoothed=1;
+        gain.gain.setValueAtTime(gain.gain.value,ctx.currentTime+start);
+        for(let at=start;at<end;at+=.05){
+          const target=this.voiceLevelAt(at)>.018?.28:1;
+          smoothed+=(target-smoothed)*(target<smoothed?.5:.10);
+          gain.gain.linearRampToValueAtTime(clamp(track.volume,0,2)*smoothed,ctx.currentTime+at+.05);
+        }
+      }
       source.connect(gain);gain.connect(dest);
       const duration=track.end-track.start;
       if(duration>0){source.start(ctx.currentTime+track.offset,track.start,duration);nodes.push(source);}
@@ -70,6 +94,20 @@ export class StudioSession {
     const sampleRate=44100,ctx=new OfflineAudioContext(2,Math.ceil(seconds*sampleRate),sampleRate);
     await this.createGraph(ctx,ctx.destination);
     const buffer=await ctx.startRendering();
+    if(this.normalize){
+      let peak=0;
+      for(let c=0;c<buffer.numberOfChannels;c++){
+        const channel=buffer.getChannelData(c);
+        for(let i=0;i<channel.length;i++)peak=Math.max(peak,Math.abs(channel[i]));
+      }
+      if(peak>.00001){
+        const multiplier=Math.min(8,.95/peak);
+        for(let c=0;c<buffer.numberOfChannels;c++){
+          const channel=buffer.getChannelData(c);
+          for(let i=0;i<channel.length;i++)channel[i]*=multiplier;
+        }
+      }
+    }
     return encodeWav(buffer);
   }
 }
