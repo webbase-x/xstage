@@ -45,6 +45,11 @@ public static class DownloadTableSort
         {
             "File" => ByText(jobs, j => j.Name, descending),
             "FileType" => ByText(jobs, j => FileType(j), descending, "ไม่ทราบ"),
+            "No" => ByNumber(jobs, j =>
+                index.TryGetValue(j.Id, out var number) ? number : null, descending),
+            "QueueName" => ByText(jobs,
+                j => string.IsNullOrWhiteSpace(j.QueueName) ? "ทั่วไป" : j.QueueName,
+                descending),
             "Queue" => ByNumber(jobs, j =>
                 index.TryGetValue(j.Id, out var rank) ? rank : null, descending),
             "Size" => ByNumber(jobs, j => j.TotalBytes >= 0 ? j.TotalBytes : null, descending),
