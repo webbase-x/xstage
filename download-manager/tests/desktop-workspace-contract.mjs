@@ -63,7 +63,7 @@ const contracts = [
   ['toolbar avoids duplicate symbol-font icons', /Button\("เพิ่มงาน", "add", Color\.FromArgb/, workspace],
   ['live overview tiles', /CreateOverviewTiles\(\)/, workspace],
   ['new detailed dock', /split\.Panel2\.Controls\.Add\(CreateLivePreview\(\)\)/, workspace],
-  ['adaptive collapse on short windows', /split\.Height < 335/, workspace],
+  ['adaptive collapse on short windows', /height < Math\.Max\(335, minimum \+ 10\)/, workspace],
   ['data grid file icon column', /new DataGridViewImageColumn/, workspace],
   ['data grid displays actual queue', /Column\("QueueName", "คิว"/, workspace],
   ['live priority queue categories', /AddCategory\(priorityGroups, "priority-high"/, workspace],
