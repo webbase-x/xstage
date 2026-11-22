@@ -15,10 +15,10 @@ export function drawWaveform(canvas,track,scale=50){
  c.fillStyle="#5de2c1";peaks.forEach((v,i)=>{const height=Math.max(1,Math.round(v*72));c.fillRect(i*bar,(80-height)/2,Math.max(1,bar*.8),height);});
  c.strokeStyle="#d6ecff";c.beginPath();c.moveTo(0,40);c.lineTo(width,40);c.stroke();
 }
-export function encodeProject(session,notes=[]){
+export function encodeProject(session,notes=[],midiSettings={}){
  const tracks=session.tracks.map(t=>({name:t.name,volume:t.volume,mute:!!t.mute,solo:!!t.solo,role:t.role||"music",start:t.start,end:t.end,offset:t.offset,
   audio:{sampleRate:t.buffer.sampleRate,channels:Array.from({length:Math.min(2,t.buffer.numberOfChannels)},(_,c)=>Array.from(t.buffer.getChannelData(c)))}}));
- return JSON.stringify({format:"xstage-audio-project",version:1,settings:{ducking:!!session.ducking,normalize:!!session.normalize,noiseGate:!!session.noiseGate,spectralReduction:!!session.spectralReduction},tracks,notes});
+ return JSON.stringify({format:"xstage-audio-project",version:1,settings:{ducking:!!session.ducking,normalize:!!session.normalize,noiseGate:!!session.noiseGate,spectralReduction:!!session.spectralReduction,midiBpm:limit(midiSettings.bpm||120,40,240),midiInstrument:["triangle","sine","square","sawtooth"].includes(midiSettings.instrument)?midiSettings.instrument:"triangle"},tracks,notes});
 }
 export function decodeProject(json){
  const project=JSON.parse(json);
