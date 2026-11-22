@@ -93,8 +93,13 @@ public static class SocialVideoDownloader
         // Keep the YouTube ID immediately before the extension for reliable
         // Unicode-path recovery. A separate-copy job inserts an 8-digit marker
         // before [id], so yt-dlp cannot skip a previously downloaded video.
+        // Imported/legacy records can carry IDs shorter than eight characters.
+        // Never crash the video worker while constructing a safe output name.
+        var copyMarker = job.Id.Length > 8 ? job.Id[..8] : job.Id;
+        if (string.IsNullOrWhiteSpace(copyMarker))
+            throw new ArgumentException("Video job must have a stable ID.", nameof(job));
         var outputPattern = job.IsRedownload
-            ? "%(title).135B (again-" + job.Id[..8] + ") [%(id)s].%(ext)s"
+            ? "%(title).135B (again-" + copyMarker + ") [%(id)s].%(ext)s"
             : "%(title).150B [%(id)s].%(ext)s";
         var args = new List<string>
         {
