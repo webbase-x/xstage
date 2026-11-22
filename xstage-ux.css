@@ -5029,9 +5029,30 @@ html body.xstage-ui-v2 .stage .xstage-light-floor{
 }
 @keyframes xstage-live-beam-left{from{transform:rotate(-26deg)}to{transform:rotate(29deg)}}
 @keyframes xstage-live-beam-right{from{transform:rotate(28deg)}to{transform:rotate(-27deg)}}
-html body.xstage-ui-v2 .stage:has(#karaoke-video:not([hidden])) .xstage-stage-lights{
-  display:none!important;
+/* Video is a backdrop, NOT a reason to hide concert lighting or EQ.
+ * Legacy style.css used to hide the entire brand/EQ when video was visible.
+ * Keep the 2D bars around the banner above the video, below the lyrics. */
+html body.xstage-ui-v2 .stage:has(#karaoke-video:not([hidden])) .stage-hero{
+  display:flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+  z-index:3!important;
 }
+html body.xstage-ui-v2 .stage .xstage-stage-lights,
+html body.xstage-ui-v2 .stage:has(#karaoke-video:not([hidden])) .xstage-stage-lights{
+  display:block!important;
+  z-index:2!important;
+  pointer-events:none!important;
+}
+html body.xstage-ui-v2 .stage:has(#karaoke-video:not([hidden])) .xstage-stage-lights.is-active{
+  opacity:1!important;
+  visibility:visible!important;
+}
+html body.xstage-ui-v2 .stage:has(#karaoke-video:not([hidden])) .stage-brand-side-viz{
+  display:block!important;
+  visibility:visible!important;
+}
+
 @media(prefers-reduced-motion:reduce){
   html body.xstage-ui-v2 .stage .xstage-light-beam{animation:none!important;transform:none!important}
 }
