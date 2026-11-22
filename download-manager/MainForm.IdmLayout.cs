@@ -650,6 +650,8 @@ public sealed partial class MainForm
         {
             ("all", "folder"), ("active", "play"), ("queued", "queue"),
             ("incomplete", "pause"), ("failed", "alert"),
+            ("priority-high", "queue"), ("priority-normal", "queue"),
+            ("priority-low", "queue"),
             ("completed", "check"), ("type", "folder"), ("video", "video"),
             ("music", "file"), ("document", "file"), ("program", "settings"),
             ("archive", "folder"), ("other", "file")
@@ -681,6 +683,15 @@ public sealed partial class MainForm
         AddCategory(all, "incomplete", "ยังไม่เสร็จ");
         AddCategory(all, "failed", "ข้อผิดพลาด");
         AddCategory(null, "completed", "เสร็จแล้ว");
+        var priorityGroups = new TreeNode("คิวดาวน์โหลด")
+        {
+            ForeColor = MutedText, NodeFont = new Font("Segoe UI", 10, FontStyle.Bold),
+            ImageKey = "queue", SelectedImageKey = "queue"
+        };
+        _categories.Nodes.Add(priorityGroups);
+        AddCategory(priorityGroups, "priority-normal", "คิวปกติ");
+        AddCategory(priorityGroups, "priority-high", "ความสำคัญสูง");
+        AddCategory(priorityGroups, "priority-low", "ความสำคัญต่ำ");
         var type = new TreeNode("ประเภทไฟล์")
         {
             ForeColor = MutedText, NodeFont = new Font("Segoe UI", 10, FontStyle.Bold),
@@ -694,6 +705,7 @@ public sealed partial class MainForm
         AddCategory(type, "archive", "ไฟล์บีบอัด");
         AddCategory(type, "other", "อื่น ๆ");
         all.Expand();
+        priorityGroups.Expand();
         type.Expand();
 
         CreateDownloadGrid();
@@ -1227,6 +1239,9 @@ public sealed partial class MainForm
         "active" => job.Status == "Running",
         "queued" => job.Status == "Queued",
         "failed" => job.Status == "Failed",
+        "priority-high" => job.Priority == 0,
+        "priority-normal" => job.Priority == 1,
+        "priority-low" => job.Priority == 2,
         "incomplete" => job.Status is "Paused" or "Failed" or "Queued" or "Running",
         "completed" => job.Status == "Completed",
         _ => CategoryOf(job) == _categoryFilter
@@ -1242,6 +1257,9 @@ public sealed partial class MainForm
                 "active" => job.Status == "Running",
                 "queued" => job.Status == "Queued",
                 "failed" => job.Status == "Failed",
+                "priority-high" => job.Priority == 0,
+                "priority-normal" => job.Priority == 1,
+                "priority-low" => job.Priority == 2,
                 "incomplete" => job.Status is "Paused" or "Failed" or "Queued" or "Running",
                 "completed" => job.Status == "Completed",
                 _ => CategoryOf(job) == key
