@@ -21,15 +21,21 @@
   const searchToolbar=searchSlot?.parentNode||null;
   const searchAnchor=searchSlot&&searchToolbar?document.createComment('original search toolbar slot'):null;
   if(searchAnchor)searchToolbar.insertBefore(searchAnchor,searchSlot);
-  const bottomSearchQuery=window.matchMedia('(max-width:760px), (max-height:540px) and (pointer:coarse)');
+  const bottomSearchQuery=window.matchMedia('(max-width:820px), (max-height:540px) and (pointer:coarse)');
   const visualViewport=window.visualViewport;
   function syncSearchKeyboardInset(){
     if(!document.body.classList.contains('xstage-mobile-search-bottom'))return;
-    // On iOS the visual viewport rises above the on-screen keyboard while
-    // window.innerHeight still measures the old layout viewport.
-    const inset=visualViewport?
-      Math.max(0,Math.round(window.innerHeight-(visualViewport.height+visualViewport.offsetTop))):0;
+    // The bottom search must stay just above the software keyboard.
+    // Safari often retains the layout height while shrinking/panning its
+    // visual viewport; Chromium can instead resize both viewports.
+    const layoutHeight=document.documentElement.clientHeight||window.innerHeight;
+    const visualHeight=visualViewport?.height||layoutHeight;
+    const visualTop=visualViewport?.offsetTop||0;
+    const editing=document.activeElement===$('search');
+    const obscured=Math.max(0,Math.round(layoutHeight-visualHeight-visualTop));
+    const inset=editing&&layoutHeight-visualHeight>80?obscured:0;
     document.documentElement.style.setProperty('--xs-search-keyboard-inset',inset+'px');
+    document.documentElement.style.setProperty('--xs-search-visual-height',Math.round(visualHeight)+'px');
   }
   function syncBottomSearch(){
     if(!searchSlot||!searchToolbar)return;
