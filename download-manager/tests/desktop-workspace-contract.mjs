@@ -10,9 +10,25 @@ const workspace = readFileSync(join(root, 'MainForm.IdmLayout.cs'), 'utf8');
 const main = readFileSync(join(root, 'MainForm.cs'), 'utf8');
 const performance = readFileSync(join(root, 'MainForm.Performance.cs'), 'utf8');
 const preview = readFileSync(join(root, 'MainForm.XStagePreview.cs'), 'utf8');
+const live = readFileSync(join(root, 'LiveStreamCapture.cs'), 'utf8');
+const liveUi = readFileSync(join(root, 'LiveStreamCaptureForm.cs'), 'utf8');
+const testProject = readFileSync(join(root, 'tests/DownloadEngine.Tests.csproj'), 'utf8');
 
 const contracts = [
   ['branded header', /CreateBrandHeader\(\)/, workspace],
+  ['live command bar', /Button\("บันทึกไลฟ์สด", "video"/, workspace],
+  ['live media command', /Action\("บันทึกไลฟ์สด · ตัดคลิปตามช่วงหยุดพูด/, workspace],
+  ['live dialog is nonmodal', /window\.Show\(this\)/, workspace],
+  ['live minute choices', /AllowedClipMinutes = \{ 1, 3, 5, 10, 15, 20, 30, 60 \}/, live],
+  ['master preservation', /"master\.recording\.mkv"/, live],
+  ['stopped FFmpeg gracefully', /process\.StandardInput\.WriteLine\("q"\)/, live],
+  ['silence detector connected', /silencedetect=noise=-35dB:d=0\.6/, live],
+  ['no forced cut', /if \(nearby\.Length == 0\) break;/, live],
+  ['speech-aware segmentation', /LiveSpeechSegmentPlanner\.Plan\(/, live],
+  ['live permission checkbox', /if \(!_permission\.Checked\)/, liveUi],
+  ['live dialog retains files on errors', /เก็บไฟล์ต้นฉบับ/, liveUi],
+  ['live UI linked in integration test', /LiveStreamCaptureForm\.cs/, testProject],
+  ['live capture linked in integration test', /LiveStreamCapture\.cs/, testProject],
   ['compact command deck', /CreateIconToolbar\(\)/, workspace],
   ['unified vector glyph renderer', /private static Image DrawToolbarGlyph\(string glyph, Color color\)/, workspace],
   ['vector rather than font characters', /graphics\.FillPolygon\(brush/, workspace],
@@ -74,4 +90,6 @@ for (const [title, pattern, source] of contracts)
   assert.match(source, pattern, title);
 assert.doesNotMatch(workspace, /CreateIdmLayout\(|IDM-inspired/, 'new workspace must not use legacy IDM layout');
 assert.ok(!workspace.includes('DownloadJob {'), 'workspace must not create or replace user download records');
+assert.doesNotMatch(live, /_state\.Save|Jobs\.Add|File\.Delete\(RecordingPath\)/,
+  'live capture must not touch SQLite or delete source recordings');
 console.log(`PASS: ${contracts.length} X-Stage desktop workspace, menu and state-preservation contracts`);
