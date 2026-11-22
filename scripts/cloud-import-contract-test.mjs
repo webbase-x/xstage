@@ -338,7 +338,7 @@ try{
 }finally{ctx.fetch=beforeRenewFetch;}
 assert.ok(app.includes('async function ensureImporterGoogleAuth(force=false,interactive=false)')&&
   app.includes('state.accountSub!==expectedSub')&&
-  app.includes("requestAccessToken({prompt:interactive?'select_account':''})"),
+  app.includes("client.requestAccessToken({")&&app.includes("login_hint:hint.email"),
   'Importer renewal must verify and preserve the same Google account');
 const footerHtml=page.split('class="cloud-import-footer-buttons"')[1]?.split('</div>')[0]||'';
 assert.equal((footerHtml.match(/<button /g)||[]).length,2,
@@ -459,7 +459,7 @@ try{
 // accounts and token expiry: single-flight refresh, unchanged account identity,
 // and explicit pairing only when silent authorization is refused.
 const renewalStart=app.indexOf('let importerGoogleRenewal=null;');
-const renewalEnd=app.indexOf('window.XStageEnsureImporterGoogleAuth=ensureImporterGoogleAuth;',renewalStart);
+const renewalEnd=app.indexOf('// A Google access token',renewalStart);
 assert.ok(renewalStart>0&&renewalEnd>renewalStart);
 const renewalSource=app.slice(renewalStart,renewalEnd);
 const simulatedState={
@@ -470,6 +470,7 @@ const activeAuth=[];
 const googleScope={
   state:simulatedState,
   cfg:{googleClientId:'test.apps.googleusercontent.com'},
+  rememberedGoogleAccount:()=>({sub:'SUB_A',email:'owner@example.com'}),
   google:{accounts:{oauth2:{initTokenClient:config=>({
     requestAccessToken:({prompt})=>{
       googleRequests++;googlePrompt.push(prompt);
@@ -496,7 +497,7 @@ assert.equal(activeAuth.length,1);
 assert.equal(activeAuth[0][2],'SUB_A');
 activeRenewedToken='interactive-token';
 await googleScope.window.renew(true,true);
-assert.equal(googlePrompt.at(-1),'select_account','Manual reconnection must require explicit account selection');
+assert.equal(googlePrompt.at(-1),'','One-tap reconnection should reuse Google consent for the verified account');
 assert.equal(simulatedState.token,'interactive-token');
 userInfoSub='SUB_OTHER';activeRenewedToken='wrong-account-token';
 const accepted=simulatedState.token;
