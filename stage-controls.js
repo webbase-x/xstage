@@ -237,8 +237,16 @@
 
   function redrawActivity(){
     if(!requestCount||!requestList)return;
-    requestCount.textContent=String(activity.length);requestList.replaceChildren();
-    if(!activity.length){const p=document.createElement('p');p.textContent='ยังไม่มีรายการขอเพลง';requestList.append(p);return;}
+    requestCount.textContent=String(activity.length);
+    requestPanel?.classList.toggle('is-empty',activity.length===0);
+    requestToggle?.setAttribute('aria-label','เพลงที่ขอจากมือถือ '+activity.length+' รายการ');
+    requestList.replaceChildren();
+    if(!activity.length){
+      const p=document.createElement('p');
+      p.textContent='ยังไม่มีคำขอเพลงจากมือถือ';
+      requestList.append(p);
+      return;
+    }
     for(const item of activity.slice().reverse()){
       const row=document.createElement('div');row.className='request-item';
       const info=document.createElement('div');info.className='request-info';
@@ -247,8 +255,26 @@
       info.append(title,by);row.append(info);requestList.append(row);
     }
   }
-  requestToggle?.addEventListener('click',()=>{requestPanel.hidden=!requestPanel.hidden;requestToggle.setAttribute('aria-expanded',String(!requestPanel.hidden));});
-  requestClose?.addEventListener('click',()=>{requestPanel.hidden=true;requestToggle.setAttribute('aria-expanded','false');});
+  function setRequestPanelOpen(open){
+    if(!requestPanel)return;
+    requestPanel.hidden=!open;
+    requestToggle?.setAttribute('aria-expanded',String(open));
+  }
+  requestToggle?.addEventListener('click',()=>setRequestPanelOpen(requestPanel?.hidden));
+  requestClose?.addEventListener('click',()=>setRequestPanelOpen(false));
+  // Do not leave an empty or populated request card floating over the stage
+  // after the owner returns to search, transport, or another mobile menu.
+  document.addEventListener('pointerdown',event=>{
+    if(requestPanel?.hidden||requestPanel?.contains(event.target)||
+       requestToggle?.contains(event.target))return;
+    setRequestPanelOpen(false);
+  });
+  document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&requestPanel&&!requestPanel.hidden){
+      setRequestPanelOpen(false);
+      event.preventDefault();
+    }
+  });
   redrawActivity();
 
   function acceptRequest(conn,msg,limits){
