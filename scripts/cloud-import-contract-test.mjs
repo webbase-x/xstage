@@ -310,4 +310,53 @@ try{
   ctx.XStageImportCore.scan=oldScan;delete ctx.XStageVideoEditor;
 }
 
+// Exercise the *actual* Google GIS renewal helper with simulated Google
+// accounts and token expiry: single-flight refresh, unchanged account identity,
+// and explicit pairing only when silent authorization is refused.
+const renewalStart=app.indexOf('let importerGoogleRenewal=null;');
+const renewalEnd=app.indexOf('window.XStageEnsureImporterGoogleAuth=ensureImporterGoogleAuth;',renewalStart);
+assert.ok(renewalStart>0&&renewalEnd>renewalStart);
+const renewalSource=app.slice(renewalStart,renewalEnd);
+const simulatedState={
+  token:'initial-token',accountSub:'SUB_A',tokenExpiresAt:Date.now()+3000,authId:4
+};
+let googleRequests=0,googlePrompt=[],userInfoSub='SUB_A',activeRenewedToken='fresh-token';
+const activeAuth=[];
+const googleScope={
+  state:simulatedState,
+  cfg:{googleClientId:'test.apps.googleusercontent.com'},
+  google:{accounts:{oauth2:{initTokenClient:config=>({
+    requestAccessToken:({prompt})=>{
+      googleRequests++;googlePrompt.push(prompt);
+      config.callback({access_token:activeRenewedToken,expires_in:3599});
+    }
+  })}}},
+  googleFetch:async(_url,options)=>{
+    assert.equal(options.headers.Authorization,'Bearer '+activeRenewedToken);
+    return {ok:true,json:async()=>({sub:userInfoSub,email_verified:true})};
+  },
+  requestHeaders:token=>({Authorization:'Bearer '+token}),
+  saveActiveAuth:(token,expiry,sub)=>activeAuth.push([token,expiry,sub]),
+  clearPendingAuth(){},driveError:()=>Error('invalid user info'),
+  window:{dispatchEvent(){}},CustomEvent:class{constructor(type,init){this.type=type;this.detail=init.detail;}},
+  setTimeout,clearTimeout,Date,Error,console
+};
+vm.runInNewContext(renewalSource+
+  '\nwindow.renew=ensureImporterGoogleAuth;',googleScope,{filename:'app.js importer renewal'});
+await Promise.all([googleScope.window.renew(),googleScope.window.renew()]);
+assert.equal(googleRequests,1,'Concurrent Drive chunks must share one Google OAuth refresh');
+assert.equal(simulatedState.token,'fresh-token');
+assert.equal(googlePrompt[0],'','Existing Google consent should be reused without account selection');
+assert.equal(activeAuth.length,1);
+assert.equal(activeAuth[0][2],'SUB_A');
+activeRenewedToken='interactive-token';
+await googleScope.window.renew(true,true);
+assert.equal(googlePrompt.at(-1),'select_account','Manual reconnection must require explicit account selection');
+assert.equal(simulatedState.token,'interactive-token');
+userInfoSub='SUB_OTHER';activeRenewedToken='wrong-account-token';
+const accepted=simulatedState.token;
+await assert.rejects(googleScope.window.renew(true,true),/บัญชี.*ไม่ตรง/);
+assert.equal(simulatedState.token,accepted,
+  'Google refresh must never switch an active upload to a different account');
+
 console.log('PASS: WEB upload DOM, visible Start, selection/review/resume, Drive chunks, MD5 and catalog safety');
