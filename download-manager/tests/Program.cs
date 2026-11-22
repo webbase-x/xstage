@@ -921,6 +921,48 @@ try
         new DownloadStateStore(stateDir)
         .ReadPerformanceSetting("global_limit_kib", 0, 0, 1_048_576) != 256)
         throw new Exception("Performance limits must persist in SQLite.");
+    // A failed second statement must roll back the first setting too.
+    // This simulates a SQLite write failure without touching user data.
+    store.SavePerformanceSettings(3, 2, 256);
+    using (var db = new Microsoft.Data.Sqlite.SqliteConnection(
+        "Data Source=" + store.DatabasePath))
+    {
+        db.Open();
+        using var trigger = db.CreateCommand();
+        trigger.CommandText = """
+            CREATE TRIGGER xstage_test_reject_host_setting
+            BEFORE UPDATE ON xstage_download_settings
+            WHEN NEW.key='host_jobs'
+            BEGIN SELECT RAISE(ABORT, 'simulated settings write failure'); END;
+            """;
+        trigger.ExecuteNonQuery();
+        try
+        {
+            store.SavePerformanceSettings(4, 3, 512);
+            throw new Exception("Expected atomic performance update to fail.");
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException) { }
+        finally
+        {
+            using var cleanup = db.CreateCommand();
+            cleanup.CommandText = "DROP TRIGGER IF EXISTS xstage_test_reject_host_setting;";
+            cleanup.ExecuteNonQuery();
+        }
+    }
+    if (store.ReadPerformanceSetting("global_jobs", 2, 1, 8) != 3 ||
+        store.ReadPerformanceSetting("host_jobs", 2, 1, 8) != 2 ||
+        store.ReadPerformanceSetting("global_limit_kib", 0, 0, 1_048_576) != 256)
+        throw new Exception("Failed performance transaction must retain every old limit.");
+    store.SavePerformanceSettings(4, 3, 512);
+    if (new DownloadStateStore(stateDir)
+        .ReadPerformanceSetting("global_jobs", 2, 1, 8) != 4 ||
+        new DownloadStateStore(stateDir)
+        .ReadPerformanceSetting("host_jobs", 2, 1, 8) != 3 ||
+        new DownloadStateStore(stateDir)
+        .ReadPerformanceSetting("global_limit_kib", 0, 0, 1_048_576) != 512)
+        throw new Exception("Atomic performance settings must survive SQLite reopen.");
+    store.SavePerformanceSettings(3, 2, 256);
+
 
     // Regression: a verified completed download must fill every pixel of its
     // progress bar even if its old per-segment data is stale or incomplete.
