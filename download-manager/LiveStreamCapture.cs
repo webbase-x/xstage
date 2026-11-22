@@ -192,9 +192,10 @@ public sealed class LiveStreamCapture
                     process.StandardInput.Flush();
                 }
             }
+            // ObjectDisposedException derives from InvalidOperationException,
+            // so a separate catch below it would fail compilation (CS0160).
             catch (InvalidOperationException) { }
             catch (IOException) { }
-            catch (ObjectDisposedException) { }
         }
     }
 
