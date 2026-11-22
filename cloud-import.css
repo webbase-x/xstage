@@ -164,6 +164,9 @@
 .cloud-import-footer-buttons #cloud-import-start{
   flex:1 1 255px;min-width:175px;min-height:48px
 }
+.cloud-import-footer-buttons #cloud-import-consolidate{
+  flex:1 1 165px;min-height:44px
+}
 .cloud-import-footer-buttons #cloud-import-resume,
 .cloud-import-footer-buttons #cloud-import-pause{flex:1 1 130px}
 .cloud-import-footer-buttons #cloud-import-done{flex:0 1 auto}
@@ -173,6 +176,7 @@
 @media(max-width:700px){
   .cloud-import-dialog,.cloud-import-panel{max-height:94dvh}
   .cloud-import-footer-buttons #cloud-import-start{flex:1 1 100%}
+  .cloud-import-footer-buttons #cloud-import-consolidate{flex:1 1 100%}
   .cloud-import-footer-buttons #cloud-import-done{flex:1 1 120px}
 }
 @media(max-height:560px){
