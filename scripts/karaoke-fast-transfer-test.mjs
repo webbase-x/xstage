@@ -37,10 +37,10 @@ assert.equal(failureSettled,true,'Do not publish a failed pair or abandon pendin
 const from=app.indexOf('const FAST_DOWNLOAD_MIB=1024*1024;');
 const to=app.indexOf('\nasync function privateJson(',from);
 assert.ok(from>=0&&to>from,'Fast Drive blob downloader must exist');
-// Use smaller threshold in behavioral tests, preserving the exact range logic.
-const source=app.slice(from,to).replace('const FAST_DOWNLOAD_MIB=1024*1024;',
-  'const FAST_DOWNLOAD_MIB=1024;');
-let data=Uint8Array.from({length:700000},(_,i)=>i%251);
+// Exercise the production 24-MiB download threshold and exact byte partitions.
+const source=app.slice(from,to);
+let data=new Uint8Array(24*1024*1024);
+for(let i=0;i<data.length;i+=65536)data[i]=(i/65536)%251;
 let requests=[],fallbacks=0,mode='ranges';
 const ctx={
   Blob,Uint8Array,AbortController,DOMException,Number,Math,Promise,
@@ -62,7 +62,7 @@ const ctx={
 };
 const {fastDownloadParts,fastPrivateBlob}=vm.runInNewContext(source+
   '\n({fastDownloadParts,fastPrivateBlob});',ctx);
-assert.equal(fastDownloadParts(10*M),2,'24-MiB+ media must split when memory allows');
+assert.equal(fastDownloadParts(24*M),2,'24-MiB+ media must split when memory allows');
 assert.equal(fastDownloadParts(192*M+1),1,'Oversized media must not be multiplied in RAM');
 assert.equal(fastDownloadParts(64*M),2,'Phone memory protection limits parallelism');
 requests=[];fallbacks=0;mode='ranges';
