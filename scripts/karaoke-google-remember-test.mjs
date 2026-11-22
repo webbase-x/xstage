@@ -38,7 +38,7 @@ assert.equal(api.hasRememberedLogin(),false);
 assert.equal(prefs.has('xstage-google-account-hint-v1'),false);
 assert.equal(prefs.has('xstage-remembered-google-login'),false);
 
-assert.ok(app.includes('login({remembered:hasRememberedLogin()})'),
+assert.ok(app.includes('login({remembered:!!rememberedGoogleAccount()})'),
   'One-tap explicit reconnect must reuse the remembered account');
 assert.ok(app.includes("...(hint?.email?{login_hint:hint.email}:{})"),
   'Remembered reconnect must supply the original verified Google login hint');
