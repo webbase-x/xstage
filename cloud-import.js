@@ -379,6 +379,19 @@ class Drive {
     if(String(meta.md5Checksum||'').toLowerCase()!==hash||Number(meta.size)!==blob.size)
       fail('อัปเดต current.json แล้ว Google Drive ยืนยัน MD5 ไม่ตรง');
   }
+  async moveToFolder(id,from,to,name){
+    const url=API+'/'+driveId(id)+'?addParents='+encodeURIComponent(driveId(to))+
+      '&removeParents='+encodeURIComponent(driveId(from))+
+      '&fields=id,name,parents';
+    const response=await this.fetch(url,{method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(name?{name}:{})});
+    const updated=await response.json();
+    if(updated.id!==id||!Array.isArray(updated.parents)||!updated.parents.includes(to))
+      fail('ย้ายไฟล์ SQLite3 ไปโฟลเดอร์ใหม่ไม่สำเร็จ');
+    this.children.delete(from);this.children.delete(to);
+    this.childNames.delete(from);this.childNames.delete(to);
+  }
 }
 function chooseImportRoot(roots,activeRootId){
   if(!Array.isArray(roots))fail('รายการคลังเพลงไม่ถูกต้อง');
@@ -421,15 +434,18 @@ async function loadCatalog(drive,root){
     return {pointerFile:null,pointer:null,rows:new Map()};
   }
   const pointer=await drive.getJson(pointers[0].id);
-  if(pointer.schemaVersion!==1||pointer.layoutVersion!==5||
+  if(pointer.schemaVersion!==1||![5,6].includes(pointer.layoutVersion)||
      pointer.format!=='xstage-sqlite3-v1'||typeof pointer.catalogFileId!=='string'||
      !Array.isArray(pointer.deltaFileIds)||pointer.deltaFileIds.length>32||
-     new Set(pointer.deltaFileIds).size!==pointer.deltaFileIds.length)
-    fail('DB/current.json ต้องอ้างอิงฐานเพลง .sqlite3 เท่านั้น');
+     new Set(pointer.deltaFileIds).size!==pointer.deltaFileIds.length||
+     (pointer.layoutVersion===6&&pointer.deltaFileIds.length!==0))
+    fail('DB/current.json ต้องอ้างอิงฐานเพลง .sqlite3 รูปแบบที่รองรับเท่านั้น');
   if(!scope.XStageDriveSQLite)fail('ไม่พบตัวอ่าน SQLite3');
   const base=await scope.XStageDriveSQLite.read(await drive.getSqlite(pointer.catalogFileId));
   if(base.schemaVersion!==1||base.kind!=='snapshot'||!Array.isArray(base.songs))
     fail('ฐานเพลง SQLite3 หลักของ XStageKaraoke ไม่ถูกต้อง');
+  if(pointer.layoutVersion===6&&base.generation!==pointer.generation)
+    fail('ฐานเพลงกำลังเปลี่ยนรุ่นจากอีกอุปกรณ์ · กรุณาโหลดใหม่');
   const rows=new Map();
   for(const x of base.songs){if(!x||typeof x.webSongId!=='string')fail('เพลงใน Catalog หลักไม่ถูกต้อง');rows.set(x.webSongId,x);}
   for(const fileId of pointer.deltaFileIds){
@@ -442,6 +458,80 @@ async function loadCatalog(drive,root){
   }
   if(pointer.songCount!==rows.size)fail('จำนวนเพลงบน Drive ไม่ตรงกับ Catalog');
   return {pointerFile:pointers[0],pointer,rows};
+}
+// One catalog for Karaoke Online, the browser importer and Song Studio Pro.
+// Publish a verified, immutable SQLite snapshot in CACHE first; preserve
+// prior snapshots and every legacy v5 delta in BACKUP (by moving Drive IDs,
+// never deleting their bytes). current.json is switched last.
+async function publishSingleCatalog({drive,rootId,pointerFile,pointer,rows,check,status}){
+  check();
+  const dbRoot=await drive.ensurePath(rootId,['DB']);
+  const cacheRoot=await drive.ensurePath(rootId,['CACHE']);
+  const backupRoot=await drive.ensurePath(rootId,['BACKUP']);
+  const codec=scope.XStageDriveSQLite;
+  if(!codec)fail('ไม่พบตัวอ่าน SQLite3 บนเว็บ');
+  const generation=Array.from(scope.crypto.getRandomValues(new Uint8Array(12)))
+    .map(x=>x.toString(16).padStart(2,'0')).join('');
+  const verifyPointer=async()=>{
+    check();
+    const latest=await drive.list("'"+driveId(dbRoot)+"' in parents and name='current.json' and trashed=false");
+    if(pointerFile){
+      if(latest.length!==1||latest[0].id!==pointerFile.id)
+        fail('พบ current.json เปลี่ยนหรือซ้ำระหว่างนำเข้า · หยุดเพื่อรักษาข้อมูล');
+      const current=await drive.getJson(pointerFile.id);
+      if(current.generation!==pointer.generation||
+         current.catalogFileId!==pointer.catalogFileId)
+        fail('มีการอัปเดตฐานเพลงจากอีกอุปกรณ์ · หยุดเพื่อไม่เขียนทับ');
+    }else if(latest.length)fail('มีฐานเพลงใหม่จากอีกอุปกรณ์ · หยุดเพื่อไม่สร้างซ้ำ');
+  };
+  await verifyPointer();
+  status?.('กำลังรวมฐานเพลง '+rows.size.toLocaleString('th-TH')+' รายการเป็น SQLite3 ไฟล์เดียว');
+  const bytes=await codec.create('snapshot',[...rows.values()],[],generation);
+  const local=await codec.read(bytes);
+  if(local.kind!=='snapshot'||local.songs.length!==rows.size||
+     local.generation!==generation)
+    fail('ตรวจ SQLite3 ก่อนอัปโหลดไม่ผ่าน');
+  const blob=new Blob([bytes],{type:'application/vnd.sqlite3'});
+  const digest=await core.hashBlob(blob,check);
+  const staged=await drive.upload(cacheRoot,blob,'songs-stage-'+generation+'.sqlite3',
+    'application/vnd.sqlite3',digest);
+  const stagedDb=await codec.read(await drive.getSqlite(staged.id));
+  if(stagedDb.kind!=='snapshot'||stagedDb.generation!==generation||
+     stagedDb.songs.length!==rows.size)
+    fail('ตรวจ SQLite3 หลังอัปโหลดไม่ผ่าน · ยังไม่เปลี่ยนฐานเดิม');
+  await verifyPointer();
+  // Existing readers use File IDs, not the folder path, so moving historical
+  // files to BACKUP cannot break an in-flight player with a v5 pointer.
+  const older=(await drive.listChildren(dbRoot)).filter(x=>
+    /\.sqlite3$/i.test(x.name)&&x.mimeType!==MIME_FOLDER);
+  for(let i=0;i<older.length;i++){
+    check();
+    status?.('เก็บฐานรุ่นเดิมใน BACKUP '+(i+1)+'/'+older.length);
+    await drive.moveToFolder(older[i].id,dbRoot,backupRoot);
+  }
+  await verifyPointer();
+  await drive.moveToFolder(staged.id,cacheRoot,dbRoot,'songs.sqlite3');
+  const active=(await drive.listChildren(dbRoot)).filter(x=>
+    /\.sqlite3$/i.test(x.name)&&x.mimeType!==MIME_FOLDER);
+  if(active.length!==1||active[0].id!==staged.id||active[0].name!=='songs.sqlite3')
+    fail('DB ต้องมี songs.sqlite3 เพียงไฟล์เดียว · ยังไม่ได้สลับ current.json');
+  await verifyPointer();
+  const next={schemaVersion:1,layoutVersion:6,format:'xstage-sqlite3-v1',
+    generation,catalogFileId:staged.id,deltaFileIds:[],songCount:rows.size};
+  const marker=encode(next),hash=await core.hashBlob(marker,check);
+  if(pointerFile)await drive.updatePointer(pointerFile.id,marker,hash);
+  else{
+    const item=await drive.upload(dbRoot,marker,'current.json','application/json',hash);
+    pointerFile={id:item.id,name:'current.json'};
+  }
+  const verifiedPointer=await drive.getJson(pointerFile.id);
+  if(verifiedPointer.generation!==generation||
+     verifiedPointer.catalogFileId!==staged.id||
+     verifiedPointer.songCount!==rows.size)
+    fail('ตรวจ current.json หลังสลับฐานไม่ผ่าน');
+  status?.('เผยแพร่ DB/songs.sqlite3 ไฟล์เดียวแล้ว · '+
+    rows.size.toLocaleString('th-TH')+' เพลง');
+  return {pointerFile,pointer:next};
 }
 class Importer {
   constructor(options){
@@ -459,6 +549,8 @@ class Importer {
     this.dom.actionHint=$('cloud-import-action-hint');
     this.dom.done=$('cloud-import-done');
     this.dom.reauthorize=$('cloud-import-reauthorize');
+    this.dom.consolidate=$('cloud-import-consolidate');
+    this.dom.consolidate?.addEventListener('click',()=>{void this.consolidate();});
     this.dom.reauthorize?.addEventListener('click',()=>{void this.reauthorize();});
     this.dom.done?.addEventListener('click',()=>this.close());
     $('cloud-import-select-all')?.addEventListener('click',()=>this.selectEveryItem(true));
@@ -743,6 +835,8 @@ class Importer {
     if(this.dom.done)this.dom.done.textContent=this.completed?'เสร็จแล้ว · ปิด':'ปิดหน้าต่าง';
     const verified=!!this.session()?.token&&!!this.session()?.sub;
     this.dom.start.disabled=this.running||this.lockPending||!approved.length||!verified||needsGoogle;
+    if(this.dom.consolidate)this.dom.consolidate.disabled=
+      this.running||this.lockPending||!verified||needsGoogle;
     if(this.dom.done)this.dom.done.disabled=false;
     this.dom.start.hidden=!!this.running;
     this.dom.pause.disabled=!this.running;
@@ -985,6 +1079,56 @@ class Importer {
     }
     await this.start();
   }
+  async consolidate(){
+    if(this.running||this.lockPending)return;
+    const auth=this.session();
+    if(!auth?.token||!auth.sub){this.status('กรุณาเชื่อม Google ก่อนรวมฐานเพลง');return;}
+    const work=async()=>{
+      this.running=true;this.stopRequested=false;this.account=auth.sub;
+      this.controller=new AbortController();this.refreshButtons();
+      const drive=new Drive(()=>this.session()?.token,()=>this.check());
+      drive.ensureAuth=force=>this.options.ensureAuth?.(force);
+      drive.signal=()=>this.controller.signal;
+      try{
+        const rootQuery="name='"+driveLayout.root+"' and mimeType='"+MIME_FOLDER+"' and trashed=false";
+        const roots=(await drive.list(rootQuery)).filter(x=>!isRetiredDriveRoot(x.id));
+        const rootId=chooseImportRoot(roots,String(auth.rootId||''));
+        if(!rootId)fail('ไม่พบโฟลเดอร์ XStageKaraoke · ไม่สร้างคลังใหม่ขณะรวมฐาน');
+        const {pointerFile,pointer,rows}=await loadCatalog(drive,rootId);
+        if(!pointer||!pointerFile){this.status('ยังไม่มีฐานเพลงบน Drive ให้รวม');return;}
+        const currentFiles=(await drive.listChildren(await drive.ensurePath(rootId,['DB'])))
+          .filter(x=>/\.sqlite3$/i.test(x.name));
+        if(pointer.layoutVersion===6&&currentFiles.length===1&&
+           currentFiles[0].name==='songs.sqlite3'&&
+           currentFiles[0].id===pointer.catalogFileId){
+          this.status('ฐานเพลงเป็นมาตรฐานเดียวแล้ว · DB/songs.sqlite3 1 ไฟล์ · '+
+            rows.size.toLocaleString('th-TH')+' เพลง');
+          return;
+        }
+        const result=await publishSingleCatalog({drive,rootId,pointerFile,pointer,rows,
+          check:()=>this.check(),status:message=>this.status(message)});
+        this.status('รวมฐาน SQLite3 สำเร็จ · '+
+          result.pointer.songCount.toLocaleString('th-TH')+
+          ' เพลง · ไฟล์เก่าทั้งหมดอยู่ BACKUP');
+        this.options.refresh?.();
+      }catch(error){
+        this.status('รวมฐานไม่สำเร็จ · '+error.message+
+          ' · เก็บไฟล์เดิมไว้ทั้งหมดเพื่อให้ตรวจสอบได้');
+      }finally{
+        this.running=false;this.controller=null;this.refreshButtons();
+      }
+    };
+    this.lockPending=true;this.refreshButtons();
+    try{
+      if(scope.navigator?.locks?.request){
+        await scope.navigator.locks.request('xstage-drive-import-'+auth.sub,
+          {mode:'exclusive',ifAvailable:true},async lock=>{
+            if(!lock){this.status('มีงานนำเข้าในอีกแท็บ · รวมฐานหลังงานนั้นเสร็จ');return;}
+            await work();
+          });
+      }else await work();
+    }finally{this.lockPending=false;this.refreshButtons();}
+  }
   async start(){
     if(this.running||this.lockPending||!this.plan)return;
     const auth=this.session();
@@ -1053,7 +1197,7 @@ class Importer {
       // Create only missing directories in the NEW root, never migrate old files.
       for(const folder of ['SONGS','DB','SOUNDFONT','BACKUP','CACHE','LOGS'])
         await drive.folder(rootId,folder);
-      if(pointer && pointer.layoutVersion!==5)
+      if(pointer && ![5,6].includes(pointer.layoutVersion))
         fail('ฐานเพลงใน XStageKaraoke มีรูปแบบที่ไม่รองรับ · หยุดเพื่อไม่เขียนทับ');
       if(!pointerFile){
         const textRoot=await drive.ensurePath(rootId,['DB']);
@@ -1117,56 +1261,14 @@ class Importer {
         return tasks.map(task=>task.value);
       };
       const publish=async()=>{
-        if(!revisions.length)return;
-        this.check();
-        const generation=Array.from(scope.crypto.getRandomValues(new Uint8Array(12)))
-          .map(x=>x.toString(16).padStart(2,'0')).join('');
-        let catalogId,deltaIds;
-        const dbRoot=await drive.ensurePath(rootId,['DB']);
-        if(!scope.XStageDriveSQLite)fail('ยังโหลดเครื่องมือ SQLite3 ไม่สำเร็จ');
-        const pushSqlite=async(name,kind,songs)=>{
-          const bytes=await scope.XStageDriveSQLite.create(kind,songs,[],generation);
-          const blob=new Blob([bytes],{type:'application/vnd.sqlite3'});
-          const digest=await core.hashBlob(blob,()=>this.check());
-          const item=await drive.upload(dbRoot,blob,name,'application/vnd.sqlite3',digest);
-          return item.id;
-        };
-        if(pointer&&pointer.deltaFileIds.length<32){
-          const deltaId=await pushSqlite('catalog-delta-'+generation+'.sqlite3','delta',revisions);
-          catalogId=pointer.catalogFileId;
-          deltaIds=[...pointer.deltaFileIds,deltaId];
-        }else{
-          catalogId=await pushSqlite('songs-'+generation+'.sqlite3','snapshot',[...rows.values()]);
-          deltaIds=[];
-        }
-        const next={schemaVersion:1,layoutVersion:5,format:'xstage-sqlite3-v1',
-          generation,catalogFileId:catalogId,deltaFileIds:deltaIds,songCount:rows.size};
-        // Verify the pointer generation again. Never blindly overwrite a PC
-        // publish performed while the browser was uploading a long batch.
-        const currentRoot=pointer?.layoutVersion===5
-           ? await drive.ensurePath(rootId,['DB']) : rootId;
-         const pointers=(await drive.listChildren(currentRoot)).filter(x=>x.name==='current.json');
-        if(pointerFile){
-          const current=await drive.getJson(pointerFile.id);
-          if(current.generation!==pointer.generation)
-            fail('มีการอัปเดตฐานเพลงจากอีกอุปกรณ์ระหว่างงาน · หยุดเพื่อไม่เขียนทับ');
-        }else{
-          const textRoot=await drive.ensurePath(rootId,['DB']);
-           const again=await drive.list("'"+driveId(textRoot)+"' in parents and name='current.json' and trashed=false");
-          if(again.length)fail('พบ current.json ใหม่จากอีกอุปกรณ์ · ยกเลิกเพื่อป้องกันฐานซ้ำ');
-        }
-        const blob=encode(next),hash=await core.hashBlob(blob,()=>this.check());
-        if(pointerFile){
-          await drive.updatePointer(pointerFile.id,blob,hash);
-        }else{
-          const textRoot=await drive.ensurePath(rootId,['DB']);
-           const item=await drive.upload(textRoot,blob,'current.json','application/json',hash);
-          pointerFile={id:item.id,name:'current.json'};
-        }
-        pointer=next;revisions=[];this.check();
+        if(!revisions.length&&(!pointer||pointer.layoutVersion===6))return;
+        ({pointerFile,pointer}=await publishSingleCatalog({
+          drive,rootId,pointerFile,pointer,rows,check:()=>this.check(),
+          status:message=>this.status(message)
+        }));
+        revisions=[];
         await this.save({status:'publishing',done:finished,total:work.length,
-          generation,songCount:rows.size});
-        this.status('เผยแพร่ฐาน SQLite3 แล้ว · '+rows.size.toLocaleString('th-TH')+' เพลง');
+          generation:pointer.generation,songCount:rows.size});
       };
       for(const originalItem of work){
         this.check();
