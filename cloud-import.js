@@ -678,6 +678,16 @@ async function buildMidiIndex(rows,drive,check){
   }
   return {hashes,duplicates,backfilled};
 }
+// The song code is read from XMID metadata, never guessed from the filename.
+ // Song Studio may embed 00000001: normalize the numeric value to 00001.
+function fiveDigitXmidCode(embeddedCode){
+  const raw=String(embeddedCode||'').trim();
+  if(!/^\d{1,8}$/.test(raw))fail('XMID: รหัสเพลงภายในต้องเป็นตัวเลขไม่เกิน 8 หลัก');
+  const numeric=Number(raw);
+  if(!Number.isSafeInteger(numeric)||numeric<1||numeric>99999)
+    fail('XMID: รหัสเพลงภายในอยู่นอกช่วง 00001–99999');
+  return String(numeric).padStart(5,'0');
+}
 function distinctImportCode(requested,rawMidiHash,byCode){
   const code=String(requested||'').trim();
   if(!byCode.get(code.toLowerCase())?.length)return code;
@@ -1515,7 +1525,8 @@ class Importer {
               this.stats.duplicates++;finished++;
               show('ข้าม MIDI ซ้ำในแพ็กเกจต่างแหล่ง: '+sourceCode);continue;
             }
-            const code=distinctImportCode(sourceCode,rawMidiHash,byCode);
+            const embeddedCode=isXmid?fiveDigitXmidCode(sourceCode):sourceCode;
+            const code=distinctImportCode(embeddedCode,rawMidiHash,byCode);
             const identity=core.songIdentity(opened.document,sourceCode);
             if(!identity.identityComplete)
               throw Error('XSK: ชื่อเพลงหรือศิลปินจริงไม่ครบ');
@@ -1527,8 +1538,14 @@ class Importer {
               this.stats.duplicates++;finished++;
               show('ข้าม XSK ซ้ำ MD5: '+code);continue;
             }
-            const name=safeName(code)+'-'+xskHash.slice(0,16)+(isXmid?'.xmid':'.xsk');
-            const packed=await uploadMedia(item.file,code,pathFor(code,isXmid?'xmid':'xsk','',name).slice(0,-1),name,
+            // XMID filename follows its EMBEDDED numeric code (00001.XMID).
+            // A distinct MIDI that reused the same embedded code receives a
+            // separate content-hash folder, while retaining that basename.
+            const name=isXmid?embeddedCode+'.XMID':
+              safeName(code)+'-'+xskHash.slice(0,16)+'.xsk';
+            const path=pathFor(embeddedCode,isXmid?'xmid':'xsk','',name).slice(0,-1);
+            if(isXmid&&code!==embeddedCode)path.push(rawMidiHash.slice(0,16));
+            const packed=await uploadMedia(item.file,code,path,name,
               'application/octet-stream',xskHash,0,1);
             const record={webSongId:ident,code,sourceCode,midiHash:rawMidiHash,
               title:identity.title,artist:identity.artist,
@@ -1829,5 +1846,6 @@ class Importer {
     }
   }
 }
-scope.XStageCloudImport={init:(options)=>new Importer(options),Drive,loadCatalog,buildMidiIndex,distinctImportCode,acquireCatalogLease};
+scope.XStageCloudImport={init:(options)=>new Importer(options),Drive,loadCatalog,
+  buildMidiIndex,distinctImportCode,fiveDigitXmidCode,acquireCatalogLease};
 })(window);
