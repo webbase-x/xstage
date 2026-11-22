@@ -293,6 +293,10 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
         ttk.Scale(row, from_=0, to=100, variable=self.volume_var, command=self.apply_volume, length=95).pack(side='left')
         self.transport_queue_var = tk.StringVar(value='คิว 0')
         attach(ttk.Button(row, textvariable=self.transport_queue_var, command=lambda: self.browse_queue(1)), 'เปิดคิวเพลง • F10').pack(side='right', padx=(6, 0))
+        self._remote_compact = True
+        self.remote_quick_var = tk.StringVar(value='📱 รีโมท QR')
+        attach(ttk.Button(row,textvariable=self.remote_quick_var,command=self.remote_window),
+               'รีโมทมือถือใน LAN · เปิด QR ให้มือถือสแกน').pack(side='right',padx=4)
         attach(ttk.Button(row, text='EQ', command=self.equalizer_window), 'เปิดอีควอไลเซอร์').pack(side='right', padx=4)
         medley_button = ttk.Menubutton(row, text='สุ่มเมดเล่ย์')
         medley_menu = tk.Menu(medley_button, tearoff=False)
