@@ -75,7 +75,27 @@
             <label class="field-label" for="source-folder">โฟลเดอร์เพลง</label>
             <div class="input-wrap"><span class="folder-glyph">▤</span><input id="source-folder" type="text" spellcheck="false" autocomplete="off" placeholder="เลือกโฟลเดอร์บน PC / USB / HDD"><button id="source-browse" class="browse-btn" type="button">เลือกโฟลเดอร์</button></div>
             <div class="toolbar folder-actions"><button id="source-open" class="quiet-btn" type="button">เปิดโฟลเดอร์</button><span class="field-hint" id="folder-picker-status" aria-live="polite"></span></div>
-            <button class="primary-btn full" id="import-start" type="button">นำเข้าเพลง <span>↗</span></button>
+            <button class="primary-btn full" id="import-start" type="button">นำเข้าเพลงทั้งโฟลเดอร์ <span>↗</span></button>
+            <div class="import-extras" aria-label="นำเข้าไฟล์เดี่ยวและดาวน์โหลด">
+              <section class="import-mini" aria-labelledby="single-import-title">
+                <h3 id="single-import-title">นำเข้าไฟล์เพลงรายตัว</h3>
+                <div class="input-wrap"><input id="single-media-file" type="text" spellcheck="false" autocomplete="off" aria-label="พาธไฟล์เพลงในเครื่อง" placeholder="เลือกไฟล์ .mid, .kar, .mp3, .mp4..."><button id="media-source-browse" class="browse-btn" type="button">เลือกไฟล์</button></div>
+                <button id="import-file-start" class="quiet-btn import-action" type="button">นำเข้าไฟล์นี้</button>
+                <p id="single-import-status" class="field-hint" role="status" aria-live="polite">รองรับไฟล์เพลงและวิดีโอที่จัดเก็บบนเครื่อง · ตรวจ SHA-256 และไฟล์ LRC/LYR/CUR ที่เกี่ยวข้อง</p>
+              </section>
+              <section class="import-mini" aria-labelledby="direct-download-title">
+                <h3 id="direct-download-title">ดาวน์โหลดและนำเข้าเพลง</h3>
+                <label class="field-label" for="song-download-url">ลิงก์ HTTPS ตรงไปยังไฟล์เพลงที่มีสิทธิ์ใช้งาน</label>
+                <div class="input-wrap"><input id="song-download-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://example.com/song.mid"></div>
+                <button id="song-download-start" class="quiet-btn import-action" type="button">ดาวน์โหลดไฟล์และนำเข้า</button>
+                <p id="song-download-status" class="field-hint" role="status" aria-live="polite">เก็บไฟล์ใน Downloads/XStageSongStudioPro ไม่ลบต้นฉบับ · ลิงก์ Google Drive ส่วนตัวหรือหน้าเว็บวิดีโอไม่ใช่ลิงก์ไฟล์ตรง</p>
+              </section>
+            </div>
+            <div class="import-compat-note">
+              ไฟล์ XMID ที่สร้างเสร็จสามารถนำไปใช้กับ X-Stage Karaoke Online ที่รองรับ XMID ได้
+              <a href="https://webbase-x.github.io/xstage/karaoke.html" rel="noopener noreferrer">เปิด Karaoke Online</a>
+              <span>การสร้างไฟล์ไม่ได้อัปโหลดไปยังบัญชี Drive หรือเครื่อง Karaoke PC โดยอัตโนมัติ</span>
+            </div>
             <div class="recover-action"><button class="quiet-btn recover-btn" id="recover-lyrics" type="button">↺ ตรวจซ่อมเนื้อร้อง</button></div>
           </article>
           <article class="panel progress-panel">

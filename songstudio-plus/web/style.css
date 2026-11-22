@@ -1122,7 +1122,7 @@ body{font-size:var(--studio-ui-text);line-height:1.45}
 .scroll-load-footer{display:flex;align-items:center;flex-wrap:wrap;gap:8px;
   padding-top:9px;color:#a6c2d6;font-size:12px;line-height:1.4}
 .scroll-load-footer button{margin-left:auto}
-.build-status-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+.build-status-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;
   margin:0 0 10px}
 .build-status-tabs button{min-width:0;white-space:normal;min-height:40px;
   font-size:13px!important;font-weight:650}
@@ -1162,3 +1162,47 @@ body{font-size:var(--studio-ui-text);line-height:1.45}
 .topbar{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 dialog[open]{opacity:1!important;filter:none!important}
 
+
+/* Song Studio Pro: direct download/import and viewport containment, aligned
+   with Karaoke Online's clear source → action → progress workflow. */
+.import-extras{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:17px 0 10px}
+.import-mini{min-width:0;padding:13px;border:1px solid #314963;border-radius:12px;background:#0c182c}
+.import-mini h3{font-size:14px;line-height:1.35;margin:0 0 8px}
+.import-mini .field-label{font-size:12px;margin:0 0 8px;line-height:1.4}
+.import-mini .input-wrap{width:100%;min-width:0;gap:5px;padding:0 8px}
+.import-mini .input-wrap input{min-width:0;flex:1}
+.import-mini .browse-btn{padding:8px 9px}
+.import-action{display:flex;justify-content:center;align-items:center;width:100%;margin-top:9px;min-height:42px;white-space:normal}
+.import-mini .field-hint{margin:8px 0 0;overflow-wrap:anywhere}
+.import-compat-note{display:flex;flex-wrap:wrap;gap:5px 12px;font-size:11px;line-height:1.5;color:#b5cbde;margin:14px 0}
+.import-compat-note a{color:#91e8ee;text-decoration:underline;text-underline-offset:3px}
+.import-compat-note span{width:100%;color:#8ba4c5}
+#view-import .feature-panel{min-width:0}
+#view-import .input-wrap input[type=url]{overflow:hidden;text-overflow:ellipsis}
+@media(max-width:1650px){.import-extras{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:660px){
+  .import-mini{padding:10px}
+  .build-status-tabs{grid-template-columns:minmax(0,1fr)}
+  .build-status-tabs button{min-height:42px}
+  #view-build>.two-col,#view-import>.two-col{grid-template-columns:minmax(0,1fr)!important}
+}
+@media(min-width:661px) and (max-width:900px){
+  .build-status-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:900px){
+  #view-import.is-visible,#view-build.is-visible,#view-library.is-visible,
+  #view-lyrics.is-visible,#view-media.is-visible,#view-preview.is-visible,
+  #view-manual.is-visible,#view-risks.is-visible{
+    overflow-y:auto!important;overflow-x:hidden!important;
+    min-height:0;overscroll-behavior:contain;padding-bottom:14px;
+  }
+  .content{min-width:0}
+}
+@media(max-height:660px){
+  .settings-dialog,.confirm-dialog,.lyrics-dialog,.issues-dialog,.risk-dialog{max-height:calc(100dvh - 24px)!important}
+  #view-import .panel{min-height:0}
+}
+:is(button,input,select,textarea,a):focus-visible{
+  outline:2px solid #81e6de;outline-offset:2px
+}
+.panel button,.panel a{touch-action:manipulation}

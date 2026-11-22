@@ -25,6 +25,9 @@ for(const page of ['import','lyrics','media','preview','manual','build','library
 }
 for(const [name,call] of [
   ['source-browse','openPicker("folder","source-folder")'],
+  ['media-source-browse','openPicker("media","single-media-file")'],
+  ['import-file-start','startJob("import-file"'],
+  ['song-download-start','startJob("song-download"'],
   ['lrc-browse','openPicker("lrc","media-lrc")'],
   ['source-open','openLocalFolder("source")'],
   ['diagnostic-open-log','/api/open-log'],
@@ -52,7 +55,7 @@ for(const [name,call] of [
   assert.ok(js.includes(call),'button action is missing: '+name+' '+call);
 }
 for(const route of [
-  '/api/pick','/api/open-folder','/api/open-log','/api/diagnostic','/api/import','/api/jobs',
+  '/api/pick','/api/open-folder','/api/open-log','/api/diagnostic','/api/import','/api/import/file','/api/import/download','/api/jobs',
   '/api/status','/api/recover-lyrics','/api/edit/apply',
   '/api/edit/undo','/api/preview','/api/attach-lrc',
   '/api/manual/save','/api/manual/approve','/api/manual/skip',
@@ -226,4 +229,12 @@ assert.ok(core.includes('CREATE TABLE IF NOT EXISTS xstage_midi_export_registry'
           server.includes('if info.get("duplicate_mid")')&&
           html.includes('เพลง MIDI ตรวจซ้ำจาก SHA-256 ของ MID ใน SQLite'),
   'One XMID per exact MID content, persisted in SQLite across separate runs');
+assert.ok(html.includes('id="import-file-start"')&&
+  html.includes('id="song-download-start"')&&
+  js.includes('kind==="song-download"?"/api/import/download"')&&
+  js.includes('kind==="import-file"?"/api/import/file"')&&
+  server.includes('songdl.validate_remote_url(url)')&&
+  stylesheet.includes('.import-extras')&&
+  stylesheet.includes('repeat(3,minmax(0,1fr))'),
+  'Single-song import/direct HTTPS download must use existing SQLite workflow and three correctly laid-out build tabs');
 console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs, Windows picker, Desktop Standalone and diagnostic log');

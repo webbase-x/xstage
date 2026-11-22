@@ -158,7 +158,8 @@
     text("engine-subtitle",enabled?"SQLite · 127.0.0.1":"เปิดผ่าน Song Studio Pro บน PC");
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
-    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","build-ready-all","build-everything","source-browse","source-open","workspace-open","lrc-browse","manual-find","db-health-check","db-detail-audit"]){
+    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","build-ready-all","build-everything",
+      "media-source-browse","import-file-start","song-download-start","source-browse","source-open","workspace-open","lrc-browse","manual-find","db-health-check","db-detail-audit"]){
       const control=$(id);
       if(control)control.disabled=!enabled;
     }
@@ -939,7 +940,9 @@
   }
   async function startJob(kind,payload){
     try{
-      const endpoint=kind==="import"?"/api/import":kind==="recover"?"/api/recover-lyrics":
+      const endpoint=kind==="import"?"/api/import":
+        kind==="import-file"?"/api/import/file":
+        kind==="song-download"?"/api/import/download":kind==="recover"?"/api/recover-lyrics":
         kind==="swipe-audit"?"/api/swipe/scan":kind==="db-audit"?"/api/db/audit":
         kind==="db-clean"?"/api/db/cleanup":
         kind==="db-compact"?"/api/db/compact":"/api/build";
@@ -974,6 +977,8 @@
       $("cancel-job").hidden=!state.activeJob;
       updateBuildSelection();
       $("import-start").disabled=!state.ready||Boolean(state.activeJob);
+      $("import-file-start").disabled=!state.ready||Boolean(state.activeJob);
+      $("song-download-start").disabled=!state.ready||Boolean(state.activeJob);
       $("recover-lyrics").disabled=!state.ready||Boolean(state.activeJob);
       $("risk-scan").disabled=!state.ready||Boolean(state.activeJob);
       $("db-health-check").disabled=!state.ready||Boolean(state.activeJob);
@@ -997,6 +1002,7 @@
       text("activity-status",job.status==="running"?"กำลังทำงาน":
           job.status==="completed"?"เสร็จเรียบร้อย":job.status==="failed"?"ข้อผิดพลาด":"หยุดแล้ว");
       text("activity-title",job.kind==="lyrics-edit"?"แทนที่เนื้อร้องเป็นชุด":
+          job.kind==="song-download"?"ดาวน์โหลดและนำเข้าเพลง HTTPS":
           job.kind==="update"?"ดาวน์โหลดและตรวจ SHA-256 โปรแกรมใหม่":
           job.kind==="import"?"นำเข้าและตรวจ SHA-256":
           job.kind==="db-audit"?"ตรวจพื้นที่และความสมบูรณ์ของ SQLite":
@@ -1062,6 +1068,10 @@
           "ดาวน์โหลด "+number((p.downloaded_bytes||0)/1048576>>0)+" MB"+
           (p.total?" / "+number((p.total/1048576)>>0)+" MB":"")+
           " · ตรวจ SHA-256 ก่อนติดตั้ง":
+          job.kind==="song-download"?
+          (p.phase==="import"?"ดาวน์โหลดสำเร็จ · กำลังตรวจ SHA-256 และลงทะเบียน SQLite":
+          "ดาวน์โหลดเพลง "+number((p.downloaded_bytes||0)/1048576>>0)+" MB"+
+          (p.total?" / "+number((p.total/1048576)>>0)+" MB":"")):
           job.kind==="import"?
           "ไฟล์ใหม่ "+number(p.files_new)+" · ไฟล์ซ้ำ "+number(p.media_duplicates)+
           " · เนื้อร้องพร้อมเวลา "+number(p.lyrics_new)+
@@ -1093,10 +1103,20 @@
           "สร้าง "+number(p.built)+" · ข้าม "+number(p.skipped)+" · ไม่สำเร็จ "+number(p.failed));
       text("progress-count",job.kind==="lyrics-edit"?
         number(p.done)+" / "+number(p.total)+" เพลง":
-        job.kind==="update"?
+        job.kind==="update"||job.kind==="song-download"?
         number(p.downloaded_bytes||0)+" ไบต์":
         number(p.processed||p.files_seen||p.done||0)+
         (job.kind==="recover"||job.kind==="swipe-audit"?" / "+number(p.total):"")+" รายการ");
+      if(job.kind==="song-download"){
+        const result=job.result||{};
+        const message=job.status==="completed"?
+          "ดาวน์โหลดและนำเข้าสำเร็จ · "+String(result.download_path||"")+
+          " · SHA-256 "+String(result.sha256||"").slice(0,16)+"…":
+          job.status==="failed"?"ดาวน์โหลดไม่สำเร็จ: "+(job.error||job.message):
+          job.status==="cancelled"?"ยกเลิกการดาวน์โหลดแล้ว":
+          "กำลังดาวน์โหลดและตรวจไฟล์ · "+number(p.downloaded_bytes||0)+" ไบต์";
+        text("song-download-status",message);
+      }
       if(job.kind==="import"){
         text("import-resume-status",(p.resume?"ทำต่อจาก Checkpoint เดิม":
           "นำเข้าใหม่")+
@@ -1104,7 +1124,8 @@
           number(p.resumed_files)+" เพลง");
       }
       const progressBar=$("progress-fill");
-      const downloaded=(job.kind==="update"||job.kind==="lyrics-edit")&&p.total>0;
+      const downloaded=(job.kind==="update"||job.kind==="song-download"||
+        job.kind==="lyrics-edit")&&p.total>0;
       progressBar.classList.toggle("indeterminate",job.status==="running"&&!downloaded);
       progressBar.style.width=job.status==="completed"?"100%":
         downloaded?Math.min(100,100*(p.done||p.downloaded_bytes||0)/p.total).toFixed(1)+"%":
@@ -1188,7 +1209,8 @@
     }
   }
   async function openPicker(kind,target){
-    const button=$(kind==="folder"?"source-browse":"lrc-browse");
+    const button=$(kind==="folder"?"source-browse":
+      kind==="media"?"media-source-browse":"lrc-browse");
     void diagnostic("ui.picker.click",{kind,current:$(target).value.trim()});
     button.disabled=true;
     if(kind==="folder")text("folder-picker-status","กำลังเปิดหน้าต่างเลือกโฟลเดอร์ของ Windows...");
@@ -1201,6 +1223,8 @@
           text("folder-picker-status","เลือกโฟลเดอร์แล้ว: "+result.path);
           void diagnostic("ui.picker.selected",{kind,path:result.path});
           toast("เลือกโฟลเดอร์สำเร็จ");
+        }else if(kind==="media"){
+          text("single-import-status","เลือกไฟล์เพลงแล้ว: "+result.path);
         }else{
           text("media-feedback","เลือกไฟล์ LRC แล้ว: "+result.path);
         }
@@ -1209,10 +1233,12 @@
         text("folder-picker-status","ยกเลิกการเลือก · โฟลเดอร์เดิมยังอยู่");
       }
     }catch(error){
-      const label=kind==="folder"?"โฟลเดอร์":"ไฟล์ LRC";
+      const label=kind==="folder"?"โฟลเดอร์":
+        kind==="media"?"ไฟล์เพลง":"ไฟล์ LRC";
       const msg="เลือก"+label+"ไม่สำเร็จ: "+error.message;
       void diagnostic("ui.picker.error",{kind,error:error.message});
       if(kind==="folder")text("folder-picker-status",msg);
+      else if(kind==="media")text("single-import-status",msg);
       else text("media-feedback",msg);
       toast(msg,true);
     }finally{
@@ -2396,6 +2422,25 @@
       $("confirm-dialog").returnValue="cancel";
     });
     $("source-browse").addEventListener("click",()=>void openPicker("folder","source-folder"));
+    $("media-source-browse").addEventListener("click",()=>void openPicker("media","single-media-file"));
+    $("import-file-start").addEventListener("click",()=>{
+      if(!state.ready||state.activeJob)return;
+      const file=$("single-media-file").value.trim().replace(/^["']+|["']+$/g,"");
+      if(!file)return toast("กรุณาเลือกไฟล์เพลงจากเครื่อง",true);
+      text("single-import-status","เริ่มตรวจไฟล์เพลงรายตัว: "+file);
+      void startJob("import-file",{file});
+    });
+    $("song-download-start").addEventListener("click",()=>{
+      if(!state.ready||state.activeJob)return;
+      const url=$("song-download-url").value.trim();
+      if(!/^https:\/\/[^\s]+$/i.test(url))
+        return toast("ระบุลิงก์ HTTPS ของไฟล์เพลงโดยตรง",true);
+      text("song-download-status","กำลังตรวจลิงก์และเตรียมดาวน์โหลด");
+      void startJob("song-download",{url});
+    });
+    $("song-download-url").addEventListener("keydown",event=>{
+      if(event.key==="Enter"){event.preventDefault();$("song-download-start").click();}
+    });
     // Windows Explorer's "Copy as path" wraps paths in quotes; accept those too.
     const sourceField=$("source-folder");
     const normalizeSource=()=>{
