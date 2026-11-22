@@ -36,6 +36,30 @@ class VirtualBusMixerTests(unittest.TestCase):
         mixer.configure(0, mute=True)
         self.assertEqual(samples(mixer.process(0, pcm(.8, .8))), [0., 0.])
 
+    def test_partial_strip_updates_preserve_gain_pan_and_solo(self):
+        mixer = VirtualBusMixer(4)
+        mixer.configure(1, gain=.5, pan=-1., solo=True)
+        mixer.configure(1, mute=True)
+        self.assertEqual((mixer.strips[1].gain, mixer.strips[1].pan,
+                          mixer.strips[1].solo, mixer.strips[1].mute),
+                         (.5, -1., True, True))
+        mixer.configure(1, mute=False)
+        self.assertEqual(samples(mixer.process(1, pcm(.8, .8))),
+                         [.4000000059604645, 0.])
+        self.assertEqual(samples(mixer.process(0, pcm(.5, .5))), [0., 0.])
+        mixer.configure(1, solo=False)
+        self.assertEqual(mixer.strips[1].gain, .5)
+        self.assertEqual(mixer.strips[1].pan, -1.)
+        self.assertEqual(samples(mixer.process(0, pcm(.5, .5))), [.5, .5])
+
+    def test_invalid_partial_update_does_not_change_existing_strip(self):
+        mixer = VirtualBusMixer(2)
+        mixer.configure(0, gain=.7, pan=.25, mute=True)
+        before = mixer.strips[0]
+        with self.assertRaises(ValueError):
+            mixer.configure(0, solo=True, gain=float("nan"))
+        self.assertEqual(mixer.strips[0], before)
+
     def test_solo_silences_other_buses(self):
         mixer = VirtualBusMixer(4)
         mixer.configure(2, solo=True)
