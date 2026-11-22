@@ -321,7 +321,7 @@ public sealed class LiveStreamCaptureForm : Form
             phase.Contains("ไม่พบจังหวะเงียบ", StringComparison.Ordinal))
         {
             _postProcessing = true;
-            if (!_processingCancellation?.IsCancellationRequested ?? false)
+            if (_processingCancellation is { IsCancellationRequested: false })
             {
                 _stop.Enabled = true;
                 _stop.Text = "ยกเลิกแปลง (เก็บต้นฉบับ)";
@@ -347,6 +347,7 @@ public sealed class LiveStreamCaptureForm : Form
             _bytes.Text = $"บันทึกไฟล์จริงแล้ว {size:0.##} {units[level]}";
         }
         catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     private void OpenSessionFolder()
