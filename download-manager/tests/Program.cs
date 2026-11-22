@@ -611,6 +611,23 @@ try
     if (independentHosts.ActiveCount != 0 || independentHosts.WaitingCount != 0)
         throw new Exception("Cross-host backpressure leaked a transfer slot.");
 
+    // Very large resumable files must retain contiguous, overflow-safe byte
+    // boundaries, including when the file is smaller than the range count.
+    foreach (var size in new long[] { 0, 1, 7, 31, 32, 33, 1025, long.MaxValue })
+    foreach (var parts in DownloadEngine.AllowedParts)
+    {
+        long previous = 0;
+        for (var index = 0; index <= parts; index++)
+        {
+            var boundary = TransferSegmentGeometry.Boundary(size, index, parts);
+            if (boundary < previous || boundary > size ||
+                (index == 0 && boundary != 0) ||
+                (index == parts && boundary != size))
+                throw new Exception("Segment geometry overflowed or lost contiguous bytes.");
+            previous = boundary;
+        }
+    }
+
     // Adaptive recommendations are bounded by requested parts, file size and
     // measured throughput; existing checkpoint geometry is immutable.
     foreach (var parts in DownloadEngine.AllowedParts)
