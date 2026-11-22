@@ -48,7 +48,7 @@ async function routeDrive(route){
     // Match Google Drive's server-side name predicate, including DB lookups
     // during player auth restore. Returning all sibling folders made a valid
     // XStageKaraoke appear to contain duplicate DBs and logged the user out.
-    const requestedName=q.match(/(?:^|\\s)name='([^']+)'/)?.[1];
+    const requestedName=q.match(/(?:^|\s)name='([^']+)'/)?.[1];
     if(requestedName)items=items.filter(item=>item.name===requestedName);
     return send(200,{files:items});
   }
