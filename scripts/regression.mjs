@@ -31,6 +31,48 @@ const androidUpdate=read('android-tv/app/src/main/java/com/webbasex/xstage/XStag
 const androidDebugManifest=read('android-tv/app/src/debug/AndroidManifest.xml');
 const androidWorkflow=read('.github/workflows/build-android-tv.yml');
 
+// Search highlighting must preserve Thai grapheme clusters, including stacked
+// vowel/tone marks, on iPhone Safari and on browsers without Intl.Segmenter.
+const thaiSearchStart=app.indexOf('function expandMatchToGrapheme(');
+const thaiSearchEnd=app.indexOf('\\nfunction normalizeSearchText(',thaiSearchStart);
+assert.ok(thaiSearchStart>=0&&thaiSearchEnd>thaiSearchStart,'Thai-safe song highlighting must be present');
+const thaiHighlightDocument={
+  createTextNode:text=>({kind:'text',textContent:String(text)}),
+  createElement:kind=>({kind,textContent:'',className:''})
+};
+for(const intlImplementation of [Intl,{}]){
+  const renderThaiSearch=new Function('document','Intl',
+    app.slice(thaiSearchStart,thaiSearchEnd)+'\\nreturn renderMatchedText;')(
+      thaiHighlightDocument,intlImplementation);
+  for(const [title,query,expected] of [
+    ['รู้จักทุกอย่าง','ร','รู้'],
+    ['รักในจินตนาการ','ร','รั'],
+    ['รุ่งเรือง','ร','รุ่'],
+    ['ชีวิตที่ดี','ว','วิ'],
+    ['การศึกษา','ศ','ศึ'],
+    ['นรินทร์','ร','ริ'],
+    ['รู้จัก','ู้','รู้'],
+    ['💖รู้จัก','ร','รู้'],
+    ['สวัสดี','ว','วั'],
+    ['ทูล ทองใจ','ทูล','ทูล'],
+    ['เพลงทดสอบ','unmatched',null]
+  ]){
+    const node={
+      fragments:[],
+      append(...parts){this.fragments.push(...parts);},
+      set textContent(value){this.fragments=[{textContent:String(value)}];},
+      get textContent(){return this.fragments.map(part=>part.textContent).join('');}
+    };
+    renderThaiSearch(node,title,query);
+    const mark=node.fragments.find(part=>part.kind==='mark');
+    assert.equal(mark?.textContent??null,expected,'Thai search highlight for '+title+' / '+query);
+    assert.equal(node.textContent,title,'Song title must be unchanged by highlighting');
+  }
+}
+assert.ok(css.includes('Thai search-result glyph shaping'),'Thai results must reserve space for combining marks');
+assert.ok(index.includes('app.js?v=1164-mobile-lyrics-thai-grapheme'),'Thai search fix must invalidate cached JS');
+assert.ok(index.includes('xstage-ux.css?v=1164-mobile-controls-lights-thai-accents'),'Thai font fix must invalidate cached CSS');
+
 assert.doesNotThrow(()=>new Function(storefrontScript),'storefront JavaScript must parse');
 assert.match(storefront,/id="store-home"/,'root must be the X-Stage Apps storefront');
 assert.match(storefront,/id="app-detail"/,'every app must have a shareable detail view');
