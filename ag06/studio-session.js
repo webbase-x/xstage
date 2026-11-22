@@ -20,7 +20,7 @@ export function encodeWav(buffer){
   return new Blob([wav],{type:"audio/wav"});
 }
 export class StudioSession {
-  constructor(){this.tracks=[];this.ctx=null;this.players=[];this.ducking=false;this.normalize=false;this.noiseGate=false;}
+  constructor(){this.tracks=[];this.ctx=null;this.players=[];this.ducking=false;this.normalize=false;this.noiseGate=false;this.spectralReduction=false;}
   async addFile(file,name=file.name){
     if(this.tracks.length>=MAX_TRACKS)throw new Error("รองรับสูงสุด "+MAX_TRACKS+" แทร็ก");
     if(!file.size||file.size>MAX_FILE_BYTES)throw new Error("ไฟล์ต้องมีขนาด 1–80 MB");
@@ -56,7 +56,17 @@ export class StudioSession {
     const nodes=[];
     for(const track of this.active()){
       const source=ctx.createBufferSource(),gain=ctx.createGain();
-      source.buffer=track.buffer;gain.gain.value=clamp(track.volume,0,2);
+      source.buffer=track.buffer;
+      if(this.spectralReduction&&track.role==="voice"){
+        if(track.buffer.duration>60)throw new Error("Spectral Reduction ใช้กับเสียงพูดไม่เกิน 60 วินาทีต่อแทร็ก");
+        const original=track.buffer,processed=ctx.createBuffer(original.numberOfChannels,original.length,original.sampleRate);
+        for(let channel=0;channel<original.numberOfChannels;channel++){
+          const cleaned=reduceSpectralNoise(original.getChannelData(channel),original.sampleRate);
+          processed.getChannelData(channel).set(cleaned);
+        }
+        source.buffer=processed;
+      }
+      gain.gain.value=clamp(track.volume,0,2);
       if(this.ducking&&track.role==="music"&&this.active().some(t=>t.role==="voice")){
         const start=track.offset,end=Math.min(this.duration(),track.offset+track.end-track.start);
         let smoothed=1;
@@ -88,8 +98,8 @@ export class StudioSession {
     if(!this.tracks.length)throw new Error("เพิ่มแทร็กก่อนเล่น");
     const Ctx=window.AudioContext||window.webkitAudioContext;
     this.ctx=new Ctx();await this.ctx.resume();
-    this.players=await this.createGraph(this.ctx,this.ctx.destination);
-    return this.ctx;
+    try{this.players=await this.createGraph(this.ctx,this.ctx.destination);return this.ctx;}
+    catch(error){this.stop();throw error;}
   }
   stop(){
     for(const source of this.players){try{source.stop();}catch{}}
