@@ -276,6 +276,7 @@ $("dsp-simple").addEventListener("click",()=>dspMode(true));
 $("dsp-detail").addEventListener("click",()=>dspMode(false));
 dspMode(false);
 $("studio-noise-gate").addEventListener("change",event=>{studio.noiseGate=event.target.checked;studio.stop();studioStatus(studio.noiseGate?"เปิด Voice Cleanup (HPF + Noise Gate) แล้ว":"ปิด Voice Cleanup แล้ว");});
+$("studio-spectral").addEventListener("change",event=>{studio.spectralReduction=event.target.checked;studio.stop();studioStatus(studio.spectralReduction?"เปิด Spectral Reduce สำหรับแทร็กเสียงพูดไม่เกิน 60 วินาที":"ปิด Spectral Reduce แล้ว");});
 $("studio-zoom").addEventListener("input",renderTimeline);
 function renderTimeline(){
  const host=$("studio-timeline");host.replaceChildren();
@@ -343,6 +344,8 @@ $("studio-open-project").addEventListener("change",async event=>{
    }
   }finally{await ctx.close();}
   studio.stop();studio.tracks=tracks;studio.ducking=!!parsed.settings?.ducking;studio.normalize=!!parsed.settings?.normalize;
+  studio.noiseGate=!!parsed.settings?.noiseGate;studio.spectralReduction=!!parsed.settings?.spectralReduction;
+  $("studio-noise-gate").checked=studio.noiseGate;$("studio-spectral").checked=studio.spectralReduction;
   $("studio-ducking").checked=studio.ducking;$("studio-normalize").checked=studio.normalize;
   midiNotes=Array.isArray(parsed.notes)?parsed.notes.slice(0,512).map(n=>({pitch:clamp(n.pitch,36,96),beat:clamp(n.beat,0,128),length:clamp(n.length,.125,16),velocity:clamp(n.velocity,0,1)})):[];
   studioRender();renderNotes();studioStatus("เปิดโปรเจกต์แล้ว · "+tracks.length+" แทร็ก");
