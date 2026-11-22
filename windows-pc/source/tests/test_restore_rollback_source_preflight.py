@@ -2,6 +2,7 @@
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from karaoke.restore import rollback
@@ -99,8 +100,9 @@ class RollbackSourcePreflightTests(unittest.TestCase):
             (data / "settings.json").write_text('{"title":"current"}', encoding="utf-8")
             (safety / "settings.json").write_text('{"title":"old"}', encoding="utf-8")
             # SQLite integrity_check succeeds, but the required plays table is absent.
-            with sqlite3.connect(safety / "play_stats.sqlite3") as db:
+            with closing(sqlite3.connect(safety / "play_stats.sqlite3")) as db:
                 db.execute("CREATE TABLE unrelated (id INTEGER)")
+                db.commit()
             with self.assertRaisesRegex(ValueError, "สถิติ"):
                 rollback(data, safety, ["settings.json", "play_stats.sqlite3"],
                          ("settings.json", "play_stats.sqlite3"))
