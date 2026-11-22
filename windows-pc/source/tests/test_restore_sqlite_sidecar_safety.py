@@ -17,6 +17,9 @@ class SQLiteSidecarSafetyTests(unittest.TestCase):
             data = Path(root)
             sidecar = data / 'songs.sqlite3-shm'
             sidecar.mkdir()
+            # Rollback now rejects an absent safety directory before inspecting
+            # journals; create one to exercise the SQLite sidecar guard.
+            (data / 'safety').mkdir()
             with self.assertRaisesRegex(ValueError, 'SQLite journal'):
                 rollback(data, data / 'safety', [], ('songs.sqlite3',))
             self.assertTrue(sidecar.is_dir())
