@@ -316,8 +316,12 @@ public sealed class LiveStreamCaptureForm : Form
         if (!Directory.Exists(_capture.SessionDirectory)) return;
         try
         {
-            Process.Start(new ProcessStartInfo("explorer.exe",
-                new[] { _capture.SessionDirectory }) { UseShellExecute = false });
+            var info = new ProcessStartInfo("explorer.exe")
+            {
+                UseShellExecute = false
+            };
+            info.ArgumentList.Add(_capture.SessionDirectory);
+            Process.Start(info);
         }
         catch (System.ComponentModel.Win32Exception error)
         {
