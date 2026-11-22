@@ -26,6 +26,7 @@ import risk_audit as risks
 import preview_player as preview
 import manual_editor as manual
 import pro_updater as updater
+import song_download as songdl
 
 class State:
     def __init__(self,workspace):
@@ -488,6 +489,27 @@ class Handler(BaseHTTPRequestHandler):
                                       exists=Path(source).is_dir() if isinstance(source,str) else False)
                 result=self.state.start_job("import",lambda progress,cancel:
                     core.import_folder(self.state.workspace,source,progress,cancel))
+            elif path=="/api/import/file":
+                raw=body.get("file","")
+                if not isinstance(raw,str) or not raw.strip():
+                    raise ValueError("กรุณาเลือกไฟล์เพลงบนเครื่อง")
+                target=Path(raw.strip()).expanduser().resolve(strict=True)
+                self.state.diagnostic("import.single.request",
+                                      extension=target.suffix.lower())
+                result=self.state.start_job("import",lambda progress,cancel:
+                    core.import_folder(self.state.workspace,str(target.parent),
+                                       progress,cancel,selected_file=str(target)))
+            elif path=="/api/import/download":
+                url=body.get("url","")
+                if not isinstance(url,str):
+                    raise ValueError("กรุณาระบุลิงก์ไฟล์เพลง HTTPS")
+                # Reject private or non-HTTPS destinations BEFORE starting a
+                # job; redirects are validated again in the download worker.
+                songdl.validate_remote_url(url)
+                self.state.diagnostic("import.direct.download.request")
+                result=self.state.start_job("song-download",
+                    lambda progress,cancel:songdl.download_and_import(
+                        self.state.workspace,url,progress,cancel))
             elif path=="/api/update/download":
                 # Freeze the same release that /api/update/check verified;
                 # NEVER refetch a changing manifest after the user clicks.
@@ -552,7 +574,7 @@ class Handler(BaseHTTPRequestHandler):
                 result=core.undo_edit(self.state.workspace,body.get("batch",""))
             elif path=="/api/pick":
                 kind=body.get("kind")
-                if kind not in ("folder","lrc"):
+                if kind not in ("folder","lrc","media"):
                     raise ValueError("ประเภทการเลือกไม่ถูกต้อง")
                 if not self.state.native_picker:
                     self.state.diagnostic("picker.unavailable",kind=kind)

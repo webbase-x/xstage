@@ -70,6 +70,21 @@ if ($kind -eq 'folder') {
     }
     $dlg.Dispose()
 }
+elseif ($kind -eq 'media') {
+    $dlg=New-Object System.Windows.Forms.OpenFileDialog
+    $dlg.Title='เลือกไฟล์เพลงสำหรับนำเข้า'
+    $dlg.Filter='ไฟล์เพลงและวิดีโอ (*.mid;*.midi;*.kar;*.mp3;*.m4a;*.wav;*.flac;*.mp4;*.mkv;*.webm;*.mov)|*.mid;*.midi;*.kar;*.mp3;*.m4a;*.wav;*.flac;*.mp4;*.mkv;*.webm;*.mov|ไฟล์ทั้งหมด (*.*)|*.*'
+    $dlg.CheckFileExists=$true
+    if ($current -and (Test-Path -LiteralPath $current -PathType Leaf)) {
+        $dlg.InitialDirectory=[System.IO.Path]::GetDirectoryName($current)
+    }
+    $result=$dlg.ShowDialog($owner)
+    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+        [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false)
+        [Console]::Write($dlg.FileName)
+    }
+    $dlg.Dispose()
+}
 elseif ($kind -eq 'lrc') {
     $dlg=New-Object System.Windows.Forms.OpenFileDialog
     $dlg.Title='เลือกไฟล์เนื้อร้อง .LRC'
@@ -101,7 +116,7 @@ else {
 def pick(kind,current="",log=None):
     if sys.platform!="win32":
         raise RuntimeError("หน้าต่างเลือกโฟลเดอร์ Windows ใช้ได้เฉพาะ Windows")
-    if kind not in ("folder","lrc"):
+    if kind not in ("folder","lrc","media"):
         raise ValueError("ประเภทการเลือกไม่ถูกต้อง")
     current=str(current or "").strip().strip('"')
     env=os.environ.copy()

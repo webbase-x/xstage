@@ -655,7 +655,7 @@ def interrupted_import(workspace):
         return dict(row) if row else None
 
 
-def import_folder(workspace,source,progress=None,cancel=None):
+def import_folder(workspace,source,progress=None,cancel=None,selected_file=None):
     """Incremental import: hash and index original media, NEVER copy it.
 
     Reuses one SQLite connection and commits in batches, not one full
@@ -667,6 +667,14 @@ def import_folder(workspace,source,progress=None,cancel=None):
     if root==target or target in root.parents or root in target.parents:
         raise ValueError("ต้นทางและคลัง Plus ต้องไม่อยู่ภายในกัน เพื่อป้องกันสแกนไฟล์วนซ้ำ")
     init(target)
+    # A single-file import must not unexpectedly scan the entire source drive.
+    # Companion LYR/CUR/LRC files are still resolved by the existing reader.
+    one=None
+    if selected_file is not None:
+        one=Path(selected_file).expanduser().resolve(strict=True)
+        if (not one.is_file() or one.is_symlink() or
+                not one.is_relative_to(root) or one.suffix.lower() not in MEDIA_EXT):
+            raise ValueError("ไฟล์เพลงไม่อยู่ในโฟลเดอร์หรือไม่ใช่ชนิดที่รองรับ")
     totals={"files_seen":0,"files_new":0,"media_duplicates":0,
             "lyrics_new":0,"partial_lyrics":0,"draft_lyrics":0,
             "skipped_ncn":0,"failures":0,"hash_cache_hits":0,"bytes_hashed":0}
@@ -721,7 +729,7 @@ def import_folder(workspace,source,progress=None,cancel=None):
                  stamp,outcome,json.dumps(delta,separators=(",",":"))))
         last_progress=0.0
         resumed_count=0
-        for path in iter_source(root):
+        for path in ([one] if one is not None else iter_source(root)):
             if cancel and cancel.is_set():
                 break
             original_path=str(path.resolve())

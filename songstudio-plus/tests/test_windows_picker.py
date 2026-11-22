@@ -45,7 +45,7 @@ class WindowsPickerTests(unittest.TestCase):
         script=windows_picker._SCRIPT
         self.assertIn('XSTAGE_PICKER_PARENT_PID',script)
         self.assertIn('GetForegroundWindow()',script)
-        self.assertEqual(script.count('$dlg.ShowDialog($owner)'),2)
+        self.assertEqual(script.count('$dlg.ShowDialog($owner)'),3)
         self.assertNotIn('$null=$owner.Show()',script)
         self.assertNotIn('$owner.Activate()',script)
         self.assertIn('$fallback.Dispose()',script)
@@ -58,6 +58,15 @@ class WindowsPickerTests(unittest.TestCase):
                     windows_picker.pick("lrc")
         finally:
             windows_picker._PICKER_LOCK.release()
+
+    def test_single_media_picker_is_supported_without_changing_folder_dialog(self):
+        self.assertIn("elseif ($kind -eq 'media')",windows_picker._SCRIPT)
+        self.assertIn("*.mid;*.midi;*.kar;*.mp3",windows_picker._SCRIPT)
+        with patch.object(windows_picker.sys,"platform","win32"),\
+             patch.object(windows_picker.subprocess,"run",
+                          return_value=SimpleNamespace(
+                              returncode=0,stdout="C:\\\\เพลงไทย\\\\0001.mid",stderr="")):
+            self.assertIn("0001.mid",windows_picker.pick("media")["path"])
 
     def test_non_windows_is_rejected(self):
         with patch.object(windows_picker.sys,"platform","linux"):
