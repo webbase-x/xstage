@@ -111,11 +111,13 @@ jobs:
           import app
           assert app.Handler.server_version.startswith("XStageSongStudioPro")
           page=Path("songstudio-plus/web/index.html").read_text(encoding="utf-8")
-          for token in ['data-view="import"','data-view="lyrics"','data-view="media"','data-view="preview"','data-view="manual"','data-view="build"','data-view="library"','data-view="risks"']:
+          for token in ['data-view="import"','data-view="drive"','data-view="lyrics"','data-view="media"','data-view="preview"','data-view="manual"','data-view="build"','data-view="library"','data-view="risks"']:
               assert token in page,token
+          assert 'class="build-selection-internal" hidden aria-hidden="true"' in page
+          assert '<span class="label-top">CHOOSE SONGS</span>' not in page
           assert "Lyrics JSON" not in page
           assert ".xsk" not in page.lower()
-          print("PASS: eight-menu standalone app with manual lyric repair and pre-export preview")
+          print("PASS: nine-menu standalone app with Google Drive import and pre-export preview")
           PY
 
   windows-installer:
