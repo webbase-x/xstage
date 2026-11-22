@@ -1133,8 +1133,11 @@ async function fastPrivateBlob(id,token,opts={}){
         headers:{...requestHeaders(token),Range:'bytes='+from+'-'+to},
         signal:controller.signal,cache:'no-store'
       },'Google Drive',1);
-      if(response.status===401||response.status===403||response.status===404)
-        throw driveError(response.status,'ไฟล์เพลงส่วนตัว');
+      if(response.status===401||response.status===403||response.status===404){
+        const error=driveError(response.status,'ไฟล์เพลงส่วนตัว');
+        error.driveStatus=response.status;
+        throw error;
+      }
       if(response.status!==206){
         try{await response.body?.cancel?.();}catch{}
         throw Error('Google Drive ไม่รองรับการแบ่งช่วงไฟล์');
@@ -1153,7 +1156,7 @@ async function fastPrivateBlob(id,token,opts={}){
     }));
     if(opts.signal?.aborted)throw new DOMException('Aborted','AbortError');
     const fatal=results.find(item=>item.status==='rejected'&&
-      /ไม่มีสิทธิ์|หมดอายุ|ไม่พบ/.test(String(item.reason?.message||'')));
+      [401,403,404].includes(item.reason?.driveStatus));
     if(fatal)throw fatal.reason;
     if(results.some(item=>item.status==='rejected'))
       return (await privateFile(id,token,opts)).blob();
