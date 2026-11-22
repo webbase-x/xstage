@@ -13,6 +13,14 @@ const performance = readFileSync(join(root, 'MainForm.Performance.cs'), 'utf8');
 const contracts = [
   ['branded header', /CreateBrandHeader\(\)/, workspace],
   ['compact command deck', /CreateIconToolbar\(\)/, workspace],
+  ['unified vector glyph renderer', /private static Image DrawToolbarGlyph\(string glyph, Color color\)/, workspace],
+  ['vector rather than font characters', /graphics\.FillPolygon\(brush/, workspace],
+  ['custom X-Stage menu palette', /class XStageMenuColors : ProfessionalColorTable/, workspace],
+  ['menu icons', /Image = DrawToolbarGlyph\(glyph, GlyphColor\(glyph\)\)/, workspace],
+  ['category image list', /_categories\.ImageList = _categoryIcons/, workspace],
+  ['category image keys', /ImageKey = key, SelectedImageKey = key/, workspace],
+  ['live menu selected-queue indicator', /Checked = string\.Equals\(/, workspace],
+  ['grouped menu separators', /new ToolStripSeparator\(\)/, workspace],
   ['live overview tiles', /CreateOverviewTiles\(\)/, workspace],
   ['transfer desk', /CreateTransferDesk\(\)/, workspace],
   ['accessible search', /AccessibleName = "ค้นหารายการดาวน์โหลด"/, workspace],
@@ -35,6 +43,10 @@ const contracts = [
   ['download engine entrypoint preserved', /private readonly DownloadEngine _engine = new\(\)/, main],
   ['queue functionality exists', /private void RenameJobQueue\(DownloadJob job\)/, performance],
   ['speed configuration exists', /private void ConfigureFileSpeed\(DownloadJob job\)/, performance],
+  ['files menu', /menu\.Items\.Add\(Menu\("ไฟล์",/, workspace],
+  ['work menu', /menu\.Items\.Add\(Menu\("งาน",/, workspace],
+  ['view menu', /menu\.Items\.Add\(Menu\("มุมมอง",/, workspace],
+  ['help menu', /menu\.Items\.Add\(Menu\("ช่วยเหลือ",/, workspace],
 ];
 for (const [title, pattern, source] of contracts)
   assert.match(source, pattern, title);
