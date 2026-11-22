@@ -1447,7 +1447,7 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
   return base;
 }
 // The canonical XStageKaraoke/DB/songs.sqlite3 file IS the manifest.
-// File ID/MD5 from Drive listings identify revisions; no current.json needed.
+// File ID/MD5 from the songs.sqlite3 Drive listing identify revisions.
 function directCatalogPointer(file){
   if(!file?.id||file.name!=='songs.sqlite3')throw Error('DB/songs.sqlite3 ไม่ถูกต้อง');
   return {schemaVersion:1,layoutVersion:6,format:'xstage-sqlite3-v1',
