@@ -20,6 +20,8 @@ public sealed partial class MainForm
     private readonly Panel _speedChart = new();
     private readonly TextBox _diagnosticText = new();
     private readonly List<double> _speedSamples = new();
+    private readonly Dictionary<string, string> _lastObservedStatus = new();
+    private readonly Dictionary<string, List<string>> _sessionEvents = new();
     private double _previewProgressFraction;
     private double _latestTransferRate;
     private TabControl? _previewTabs;
@@ -221,6 +223,34 @@ public sealed partial class MainForm
         _fullSpeedChart?.Invalidate();
     }
 
+    // Actual status transitions observed during this application session.
+    // We neither synthesize past events nor persist new log records in
+    // the user's downloaded-media database.
+    private void TrackLiveEvents(DownloadJob[] jobs)
+    {
+        var activeIds = new HashSet<string>(jobs.Select(job => job.Id));
+        foreach (var id in _lastObservedStatus.Keys.Where(id => !activeIds.Contains(id)).ToArray())
+        {
+            _lastObservedStatus.Remove(id);
+            _sessionEvents.Remove(id);
+        }
+        foreach (var job in jobs)
+        {
+            if (_lastObservedStatus.TryGetValue(job.Id, out var before) &&
+                string.Equals(before, job.Status, StringComparison.Ordinal))
+                continue;
+            _lastObservedStatus[job.Id] = job.Status;
+            if (!_sessionEvents.TryGetValue(job.Id, out var history))
+            {
+                history = new List<string>();
+                _sessionEvents.Add(job.Id, history);
+            }
+            history.Add(DateTimeOffset.Now.ToString("HH:mm:ss") +
+                (history.Count == 0 ? "  เริ่มติดตาม: " : "  เปลี่ยนสถานะ: ") + job.Status);
+            if (history.Count > 40) history.RemoveAt(0);
+        }
+    }
+
     private void UpdateLivePreview(DownloadJob? job)
     {
         if (job is null)
@@ -252,8 +282,12 @@ public sealed partial class MainForm
                 (job.Status == "Running"
                     ? "    ·    " + FormatBytes((long)job.SmoothedSpeedBytesPerSecond) + "/s"
                     : "");
-            var info = "ข้อมูลปัจจุบันของงาน (ไม่ใช่ประวัติเหตุการณ์ย้อนหลัง)" +
-                Environment.NewLine + "ชื่อ: " + job.Name +
+            var sessionLog = _sessionEvents.TryGetValue(job.Id, out var events)
+                ? string.Join(Environment.NewLine, events) : "ยังไม่มีเหตุการณ์ที่บันทึกในรอบนี้";
+            var info = "สถานะปัจจุบัน + เหตุการณ์จริงเฉพาะการเปิดโปรแกรมครั้งนี้" +
+                Environment.NewLine + "บันทึกสถานะ:" + Environment.NewLine +
+                sessionLog + Environment.NewLine + Environment.NewLine +
+                "ชื่อ: " + job.Name +
                 Environment.NewLine + "สถานะ: " + job.Status +
                 Environment.NewLine + "วันที่เพิ่ม: " + job.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") +
                 Environment.NewLine + "คิว: " + job.QueueName +
