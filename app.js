@@ -160,7 +160,9 @@ async function stageWebUpdateFiles(remote){
   renderAppUpdateNotice();
   return task;
 }
+let preserveUpdateResumeOnUnload=false;
 async function performAppUpdateReload({preserveSnapshot=false}={}){
+  preserveUpdateResumeOnUnload=preserveSnapshot;
   if(!preserveSnapshot)try{savePlaybackResumeState();}catch{}
   const next=new URL(location.href);
   next.searchParams.set('xstage_update',String(Date.now()));
@@ -4579,8 +4581,8 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&document.fullscreenElement){document.exitFullscreen();}
 });
 window.addEventListener('pagehide',saveScreenSleepPlaybackIntent);
-window.addEventListener('pagehide',savePlaybackResumeState);
-window.addEventListener('beforeunload',()=>{savePlaybackResumeState();stopSoundFontFill();state.liveMidiPlayback?.dispose();state.controller?.abort();resetSongVideo();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
+window.addEventListener('pagehide',()=>{if(!preserveUpdateResumeOnUnload)savePlaybackResumeState();});
+window.addEventListener('beforeunload',()=>{if(!preserveUpdateResumeOnUnload)savePlaybackResumeState();stopSoundFontFill();state.liveMidiPlayback?.dispose();state.controller?.abort();resetSongVideo();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
 renderSongs();renderQueue();updateTransport();scheduleLyricsDraw();setupNativeAndroidTvUi();setupAppUpdateWatcher();
 
 let importerGoogleRenewal=null;
