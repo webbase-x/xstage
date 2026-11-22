@@ -53,8 +53,18 @@ function createSchema(db,kind,generation){
   CREATE TABLE songs (
     web_song_id TEXT PRIMARY KEY NOT NULL,
     code TEXT NOT NULL, title TEXT NOT NULL, artist TEXT NOT NULL,
-    source_format TEXT NOT NULL, payload TEXT NOT NULL
+    source_format TEXT NOT NULL,
+    original_filename TEXT NOT NULL DEFAULT '',
+    source_code TEXT NOT NULL DEFAULT '',
+    midi_size INTEGER,
+    midi_md5 TEXT,
+    payload TEXT NOT NULL
   );
+  CREATE UNIQUE INDEX songs_midi_md5_uq ON songs(midi_md5)
+    WHERE midi_md5 IS NOT NULL;
+  CREATE INDEX songs_midi_size_idx ON songs(midi_size)
+    WHERE midi_size IS NOT NULL;
+  CREATE INDEX songs_source_code_idx ON songs(source_code);
   CREATE INDEX songs_code_idx ON songs(code);
   CREATE INDEX songs_title_idx ON songs(title);
   CREATE INDEX songs_artist_idx ON songs(artist);
@@ -74,15 +84,35 @@ async function create(kind,songs,removes=[],generation=''){
     createSchema(db,kind,generation);
     db.run('BEGIN TRANSACTION');
     const upsert=db.prepare(
-      'INSERT INTO songs(web_song_id,code,title,artist,source_format,payload) VALUES (?,?,?,?,?,?)');
-    const seen=new Set();
+      'INSERT INTO songs(web_song_id,code,title,artist,source_format,original_filename,source_code,midi_size,midi_md5,payload) VALUES (?,?,?,?,?,?,?,?,?,?)');
+    const seen=new Set(),midiHashes=new Map();
     try{
       for(const row of songs){
         if(!row||!validId(row.webSongId)||seen.has(row.webSongId))
           fail('รหัสเพลงว่างหรือซ้ำ');
         seen.add(row.webSongId);
+        // Only a raw MIDI fingerprint belongs in this index. XSK/XMID MD5
+        // refers to the package and must never masquerade as MIDI identity.
+        const midiHash=String(row.midiHash||row.midi?.md5Checksum||'').toLowerCase();
+        const validHash=/^[0-9a-f]{32}$/.test(midiHash)?midiHash:null;
+        const midiSize=Number(row.midiSize||row.midi?.size||0);
+        if(validHash){
+          const previous=midiHashes.get(validHash);
+          if(previous&&previous!==row.webSongId)
+            fail('MIDI ซ้ำในฐาน SQLite: '+row.webSongId+' / '+previous);
+          midiHashes.set(validHash,row.webSongId);
+        }
+        if(midiSize&&!Number.isSafeInteger(midiSize))
+          fail('ขนาด MIDI ในฐานข้อมูลไม่ถูกต้อง');
+        const originalFilename=String(row.originalFilename||
+          row.xmid?.path?.split('/').pop()||
+          row.xsk?.path?.split('/').pop()||
+          row.midi?.path?.split('/').pop()||'').slice(0,255);
+        const sourceCode=String(row.sourceCode||row.code||'').slice(0,140);
         upsert.run([row.webSongId,String(row.code||''),String(row.title||''),
-          String(row.artist||''),String(row.sourceFormat||''),JSON.stringify(row)]);
+          String(row.artist||''),String(row.sourceFormat||''),
+          originalFilename,sourceCode,midiSize>0?midiSize:null,
+          validHash,JSON.stringify(row)]);
         upsert.reset();
       }
     }finally{upsert.free();}
