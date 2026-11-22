@@ -78,7 +78,13 @@ public sealed partial class MainForm : Form
             _engine.PauseAllForShutdown();
             _engine.Save();
         };
-        FormClosed += (_, _) => { _finishedFileFont.Dispose(); _normalFileFont.Dispose(); };
+        FormClosed += (_, _) =>
+        {
+            _finishedFileFont.Dispose();
+            _normalFileFont.Dispose();
+            foreach (var image in _rowIcons.Values) image.Dispose();
+            _categoryIcons.Dispose();
+        };
         Shown += async (_, _) =>
         {
             if (_engine.InterruptedJobCount > 0)
@@ -999,6 +1005,16 @@ public sealed partial class MainForm : Form
         {
             var row = _grid.Rows[index];
             var current = Interlocked.Read(ref job.DownloadedBytes);
+            row.Cells["No"].Value = (index + 1).ToString("00");
+            row.Cells["KindIcon"].Value = GetRowIcon(job);
+            row.Cells["QueueName"].Value =
+                string.IsNullOrWhiteSpace(job.QueueName) ? "ทั่วไป" : job.QueueName;
+            row.Cells["QueueName"].ToolTipText = job.Priority switch
+            {
+                0 => "คิว: " + job.QueueName + " · ความสำคัญสูง",
+                2 => "คิว: " + job.QueueName + " · ความสำคัญต่ำ",
+                _ => "คิว: " + job.QueueName + " · ความสำคัญปกติ"
+            };
             row.Cells["File"].Value = job.Status == "Completed" ? "✓  " + job.Name : job.Name;
             row.Cells["File"].Style.ForeColor = job.Status == "Completed"
                 ? Color.FromArgb(119, 229, 169) : Color.FromArgb(229, 236, 246);
@@ -1064,8 +1080,12 @@ public sealed partial class MainForm : Form
         }
         var active = jobs.Count(j => j.Status == "Running");
         var completed = jobs.Count(j => j.Status == "Completed");
-        _summary.Text = $"กำลังดาวน์โหลด {active}  ·  เสร็จแล้ว {completed}  ·  ทั้งหมด {jobs.Length} รายการ" +
-                        $"  ·  แสดง {visible.Count} รายการ  ·  ความเร็วรวม {FormatBytes((long)speedTotal)}/s";
+        var queued = jobs.Count(j => j.Status == "Queued");
+        var failed = jobs.Count(j => j.Status == "Failed");
+        _transferHeading.Text = "▣  รายการดาวน์โหลด (" + visible.Count.ToString("N0") + ")";
+        _summary.Text = $"พร้อมทำงาน  ·  ทั้งหมด {jobs.Length:N0} งาน  ·  กำลังดาวน์โหลด {active:N0}  ·  เสร็จแล้ว {completed:N0}";
+        _details.Text = $"ความเร็วรวม {FormatBytes((long)speedTotal)}/s  ·  รอคิว {queued:N0}  ·  ผิดพลาด {failed:N0}";
+        RecordTransferSpeed(speedTotal);
         UpdateDetails();
         _engine.SaveProgressIfDue();
         if (_engine.LastStorageError.Length > 0)
@@ -1075,16 +1095,10 @@ public sealed partial class MainForm : Form
     private void UpdateDetails()
     {
         var job = Selected();
-        if (job is null)
-        {
-            _details.Text = "วางลิงก์ YouTube / TikTok / Facebook Reels · เลือกคุณภาพและรูปแบบไฟล์ (MP4 เริ่มต้น)";
-            return;
-        }
-        _details.Text = job.Status == "Failed"
-            ? $"ข้อผิดพลาด: {job.Error}   ·   กด เริ่ม / ต่อ เพื่อลองอีกครั้ง"
-            : job.Kind == "Video"
-                ? $"{SocialVideoDownloader.Platform(job.Url)} · คุณภาพ {job.VideoQuality} · ไฟล์ {job.OutputFormat.ToUpperInvariant()} · {job.Url} · บันทึกที่ {job.Folder}"
-                : $"{job.Url}   ·   บันทึกที่ {job.Folder}";
+        UpdateLivePreview(job);
+        // The full job URL, location, progress and diagnostics now live in
+        // the lower dock. The thin footer stays reserved for live totals,
+        // rather than getting overwritten when the selected row changes.
     }
 
     private void PaintProgress(object? sender, DataGridViewCellPaintingEventArgs e)
