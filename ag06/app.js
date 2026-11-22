@@ -304,17 +304,27 @@ function renderTimeline(){
  }
 }
 const projectSave=$("studio-save-project");
-projectSave.addEventListener("click",()=>{
+projectSave.addEventListener("click",async()=>{
+ projectSave.disabled=true;
  try{
   if(!studio.tracks.length&&!midiNotes.length)throw new Error("โปรเจกต์ยังว่าง");
   studioStatus("กำลังจัดเตรียมข้อมูลโปรเจกต์…");
   const json=encodeProject(studio,midiNotes);
   if(json.length>100*1024*1024)throw new Error("โปรเจกต์ใหญ่เกิน 100 MB กรุณาลดจำนวนแทร็ก");
-  const file=new Blob([json],{type:"application/json"}),url=URL.createObjectURL(file),a=document.createElement("a");
-  a.href=url;a.download="X-Stage-Audio-Project-"+new Date().toISOString().slice(0,10)+".xstageaudio";
-  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
-  studioStatus("ส่งออกไฟล์โปรเจกต์แล้ว · เก็บรักษาไฟล์นี้เพื่อเปิดแก้ไขภายหลัง");
+  const file=new Blob([json],{type:"application/json"});
+  if(window.AG06Android){
+   if(file.size>24*1024*1024)throw new Error("Android รองรับโปรเจกต์ไม่เกิน 24 MB");
+   const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(file);});
+   window.AG06Android.saveProject(data);
+   studioStatus("ส่งโปรเจกต์ให้ Android แล้ว · กำลังบันทึกใน Downloads");
+  }else{
+   const url=URL.createObjectURL(file),a=document.createElement("a");
+   a.href=url;a.download="X-Stage-Audio-Project-"+new Date().toISOString().slice(0,10)+".xstageaudio";
+   document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+   studioStatus("ส่งออกไฟล์โปรเจกต์แล้ว · เก็บรักษาไฟล์นี้เพื่อเปิดแก้ไขภายหลัง");
+  }
  }catch(e){studioStatus("บันทึกโปรเจกต์ไม่สำเร็จ: "+e.message,true);}
+ finally{projectSave.disabled=false;}
 });
 $("studio-open-project").addEventListener("change",async event=>{
  const file=event.target.files?.[0];event.target.value="";if(!file)return;
