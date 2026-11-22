@@ -22,25 +22,33 @@ vm.runInNewContext(read('cloud-import.js'),ctx,{filename:'cloud-import.js'});
 assert.ok(ctx.XStageCloudImport?.Drive&&ctx.XStageCloudImport.loadCatalog);
 const {Drive,loadCatalog}=ctx.XStageCloudImport;
 assert.equal((await loadCatalog({listChildren:async()=>[]},'root')).rows.size,0);
-// Legacy catalog pointers at the root are unsafe in the new layout. Reject
-// them rather than mistaking them for DB/current.json duplicates.
+// Legacy JSON files are inert: never read, migrate, or delete them.
 await assert.rejects(loadCatalog({
   listChildren:async()=>[{name:'current.json',mimeType:'application/json',id:'fake1234'}]
 },'root'),/โครงสร้าง XStageKaraoke/);
-// Only duplicate pointers *inside* the unique DB directory use the more
-// specific duplicate-current.json diagnostic.
 await assert.rejects(loadCatalog({
   listChildren:async()=>[
     {name:'DB',mimeType:'application/vnd.google-apps.folder',id:'newdb123'},
     {name:'DB',mimeType:'application/vnd.google-apps.folder',id:'newdb456'}
   ]
 },'root'),/โฟลเดอร์ DB ซ้ำ/);
-await assert.rejects(loadCatalog({
+let jsonReadCount=0;
+const ignored=await loadCatalog({
   listChildren:async id=>id==='root'
     ?[{name:'DB',mimeType:'application/vnd.google-apps.folder',id:'newdb123'}]
     :[{name:'current.json',mimeType:'application/json',id:'fake1234'},
-      {name:'current.json',mimeType:'application/json',id:'fake5678'}]
-},'root'),/current.json ซ้ำ/);
+      {name:'.xstage-songstudio-staging.json',id:'old-stage'}],
+  getJson:async()=>{jsonReadCount++;throw Error('Legacy JSON must never be fetched');}
+},'root');
+assert.equal(ignored.rows.size,0);
+assert.equal(ignored.pointer,null);
+assert.equal(jsonReadCount,0);
+assert.ok(!read('cloud-import.js').includes('async consolidate()')&&
+  !read('cloud-import.js').includes("x.name==='current.json'"),
+  'Browser importer must have zero legacy migration logic');
+assert.ok(!app.includes("xstageCloudImporter.consolidate()")&&
+  !app.includes("name='current.json' and trashed=false"),
+  'Player must never search a retired JSON pointer');
 const canonicalSong={webSongId:'browser/one',code:'001',title:'เพลงหนึ่ง',artist:'ทดสอบ'};
 ctx.XStageDriveSQLite={read:async()=>({
   schemaVersion:1,kind:'snapshot',generation:'direct-generation',songs:[canonicalSong]
@@ -57,7 +65,7 @@ assert.equal(canonical.rows.size,1);
 assert.equal(canonical.pointer.directFile,true);
 assert.equal(canonical.pointer.catalogFileId,'sqlite98765');
 assert.equal(canonical.pointer.catalogMd5,'direct-md5');
-assert.equal(canonical.pointerFile,null,'A direct SQLite DB requires no current.json');
+assert.ok(!('pointerFile' in canonical),'Canonical SQLite has no legacy pointer');
 await assert.rejects(loadCatalog({
   listChildren:async id=>id==='root'
     ?[{name:'DB',mimeType:'application/vnd.google-apps.folder',id:'db123456'}]
