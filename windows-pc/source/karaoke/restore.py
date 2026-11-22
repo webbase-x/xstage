@@ -263,6 +263,9 @@ def apply_pending(data):
     try:
         for name in replaced:
             if name.endswith('.sqlite3'):
+                # Snapshotting can take time; journals may have changed since
+                # the initial preflight. Recheck before removing any sidecar.
+                validate_sqlite_sidecars(data, (name,))
                 for suffix in ('-wal','-shm'):(data/(name+suffix)).unlink(missing_ok=True)
             replace_file(pending/name,data/name)
         validate_backup(data)
