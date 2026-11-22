@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111624">
-<meta name="description" content="X-Stage Audio Studio - USB audio capture, software DSP and recording for first-generation Yamaha AG06">
-<title>X-Stage Audio Studio | Yamaha AG06 รุ่นแรก</title>
+<meta name="description" content="X-Stage Audio Studio - independent multitrack mixing, USB audio capture, software DSP and WAV export">
+<title>X-Stage Audio Studio | Audio Mixing & Recording</title>
 <link rel="icon" type="image/svg+xml" href="./icon.svg">
 <link rel="stylesheet" href="./style.css">
 <script type="module" src="./app.js"></script>
@@ -21,7 +21,7 @@
  <section class="hero">
   <div><div class="eyebrow">INDEPENDENT AUDIO MIXER · USB AUDIO</div>
   <h1>เสียงดีขึ้น<br><em>ควบคุมง่ายขึ้น</em></h1>
-  <p>มิกเซอร์เสียงซอฟต์แวร์สำหรับบันทึกเสียงและสตรีมผ่าน AG06 รุ่นแรก ใช้งานได้บน PC, Android และเว็บ โดยไม่อ้างว่าเปลี่ยน DSP ภายในเครื่อง</p>
+  <p>มิกเซอร์เสียงซอฟต์แวร์สำหรับอุปกรณ์ USB Audio รวมถึง AG06 รุ่นแรก ใช้งานได้บน PC, Android และเว็บ โดยไม่อ้างว่าเปลี่ยน DSP ภายในเครื่อง</p>
   <div class="hero-tags"><span>USB 2 IN / 2 OUT</span><span>LIVE AUDIO METER</span><span>RECORDING</span></div>
   </div>
   <div class="device-art" aria-hidden="true"><div class="art-head">X-STAGE | AUDIO</div><div class="faders"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="art-bottom">D-PRE · DSP · USB AUDIO</div></div>
@@ -77,6 +77,20 @@
   <div class="fx-note"><strong>การทำงานจริง</strong> DSP นี้ใช้ Web Audio บนคอมพิวเตอร์/โทรศัพท์ที่เปิดแอป ไม่ใช่ Yamaha hardware DSP และไม่สามารถสั่งปุ่ม PAD, +48V, TO PC, GAIN หรือ MONITOR MUTE บนตัวเครื่องได้</div>
  </section>
  </div>
+ <section class="panel studio-workspace" id="studio-workspace" aria-labelledby="studio-title">
+  <div class="section-header"><div><div class="eyebrow">06 / MULTITRACK PRODUCTION</div><h2 id="studio-title">Studio Workspace · มัลติแทร็ก</h2></div><span class="chip">LOCAL MIX · WAV EXPORT</span></div>
+  <p class="subtle-text">นำเข้าเสียงที่คุณมีสิทธิ์ใช้งาน หรือเพิ่มเทคจากระบบบันทึกด้านบนได้สูงสุด 12 แทร็ก ปรับ Volume, Mute/Solo, จุดเริ่ม–จบ และตำแหน่งเข้าเพลง ก่อนมิกซ์เป็น WAV ในเครื่อง ไม่อัปโหลดเสียงขึ้นเซิร์ฟเวอร์</p>
+  <div class="studio-toolbar">
+    <label class="button subtle" for="studio-files">＋ นำเข้าไฟล์เสียง</label>
+    <input id="studio-files" type="file" accept="audio/*" multiple hidden>
+    <button type="button" class="button subtle" id="studio-add-take" disabled>เพิ่มเสียงที่บันทึก</button>
+    <button type="button" class="button" id="studio-play">▶ ฟังมิกซ์</button>
+    <button type="button" class="button" id="studio-stop">■ หยุด</button>
+    <button type="button" class="button primary" id="studio-export">ส่งออก WAV</button>
+  </div>
+  <div id="studio-tracks" class="studio-tracks" aria-live="polite"><p class="subtle-text">ยังไม่มีแทร็ก · เริ่มจากนำเข้าไฟล์เสียง</p></div>
+  <p id="studio-state" class="subtle-text" role="status">การทำงานขึ้นกับหน่วยความจำอุปกรณ์ · รองรับไฟล์ละไม่เกิน 80 MB และแทร็กละไม่เกิน 10 นาที</p>
+ </section>
  <section class="help-panel">
   <div><div class="eyebrow">SETUP / USB AUDIO</div><h2>ก่อนเริ่มใช้งาน</h2><p>Windows ให้ติดตั้ง Yamaha Steinberg USB Driver จาก Yamaha และเลือก AG06/03 เป็นอุปกรณ์รับเสียง มือถือ Android ต้องรองรับ USB audio/OTG และอาจต้องจ่ายไฟแยกตามอุปกรณ์ เว็บต้องได้รับอนุญาตใช้ไมโครโฟน</p></div>
   <div class="links"><a href="https://usa.yamaha.com/audio/streaming-gaming/products/mixers/ag-series/support.html" target="_blank" rel="noopener noreferrer">ไดรเวอร์และคู่มือ Yamaha ↗</a><a href="https://usa.yamaha.com/audio/streaming-gaming/explore/guides/ag-controller.html" target="_blank" rel="noopener noreferrer">Yamaha AG Controller ↗</a></div>
