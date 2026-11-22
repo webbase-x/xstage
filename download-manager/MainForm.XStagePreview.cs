@@ -47,7 +47,7 @@ public sealed partial class MainForm
             if (area.Width <= 0 || area.Height <= 0) return;
             var selected = e.Index == tabs.SelectedIndex;
             using var background = new SolidBrush(selected
-                ? Color.FromArgb(21, 89, 155) : DarkPanel);
+                ? Color.FromArgb(0, 85, 175) : DarkPanel);
             e.Graphics.FillRectangle(background, area);
             var color = selected ? Color.White : MutedText;
             TextRenderer.DrawText(e.Graphics, tabs.TabPages[e.Index].Text,
@@ -153,7 +153,7 @@ public sealed partial class MainForm
         ConfigurePreviewLabel(_previewTitle, 12, FontStyle.Bold, Color.White);
         ConfigurePreviewLabel(_previewMeta, 9, FontStyle.Regular, MutedText);
         ConfigurePreviewLabel(_previewState, 9, FontStyle.Bold, Accent);
-        ConfigurePreviewLabel(_previewPercent, 9, FontStyle.Bold, Color.FromArgb(152, 230, 193));
+        ConfigurePreviewLabel(_previewPercent, 9, FontStyle.Bold, Color.FromArgb(115, 244, 141));
         ConfigurePreviewLabel(_previewPath, 9, FontStyle.Regular, Color.FromArgb(185, 205, 227));
         ConfigurePreviewLabel(_previewUrl, 9, FontStyle.Regular, Color.FromArgb(126, 192, 247));
         _previewProgressTrack.Dock = DockStyle.Fill;
@@ -164,8 +164,8 @@ public sealed partial class MainForm
         {
             var bounds = _previewProgressTrack.ClientRectangle;
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using var background = new SolidBrush(Color.FromArgb(35, 57, 70));
-            using var fill = new SolidBrush(Color.FromArgb(54, 216, 127));
+            using var background = new SolidBrush(Color.FromArgb(4, 21, 46));
+            using var fill = new SolidBrush(Color.FromArgb(51, 235, 75));
             e.Graphics.FillRectangle(background, bounds);
             var width = (int)Math.Round(bounds.Width * Math.Clamp(_previewProgressFraction, 0, 1));
             if (width > 0) e.Graphics.FillRectangle(fill, 0, 0, width, bounds.Height);
@@ -185,7 +185,7 @@ public sealed partial class MainForm
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2,
-            BackColor = Color.FromArgb(12, 33, 47),
+            BackColor = Color.FromArgb(5, 24, 49),
             Margin = new Padding(8, 0, 0, 0),
             Padding = new Padding(12, 4, 12, 7)
         };
@@ -200,7 +200,7 @@ public sealed partial class MainForm
         _chartRate.AutoEllipsis = true;
         layout.Controls.Add(_chartRate, 0, 0);
         _speedChart.Dock = DockStyle.Fill;
-        _speedChart.BackColor = Color.FromArgb(12, 33, 47);
+        _speedChart.BackColor = Color.FromArgb(5, 24, 49);
         _speedChart.Paint += (_, e) => PaintSpeedGraph(e.Graphics, _speedChart.ClientRectangle);
         layout.Controls.Add(_speedChart, 0, 1);
         return layout;
@@ -312,7 +312,7 @@ public sealed partial class MainForm
         // dimensions. Do not manufacture an off-screen chart rectangle:
         // GDI+ can report "Parameter is not valid" while layout is settling.
         if (area.Width <= 0 || area.Height <= 0) return;
-        graphics.Clear(Color.FromArgb(12, 33, 47));
+        graphics.Clear(Color.FromArgb(5, 24, 49));
         if (area.Width < 130 || area.Height < 85) return;
         var rect = new Rectangle(area.Left + 63, area.Top + 12,
             area.Width - 78, area.Height - 38);
