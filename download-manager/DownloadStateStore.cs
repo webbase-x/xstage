@@ -361,6 +361,45 @@ public sealed class DownloadStateStore
         }
     }
 
+    // Persist the three interdependent performance limits in one SQLite
+    // transaction. A disk/SQLite failure must never leave mixed old/new
+    // concurrency and bandwidth limits after restart.
+    public void SavePerformanceSettings(int globalJobs, int hostJobs, int globalLimitKib)
+    {
+        if (globalJobs is < 1 or > 8)
+            throw new ArgumentOutOfRangeException(nameof(globalJobs));
+        if (hostJobs is < 1 or > 8)
+            throw new ArgumentOutOfRangeException(nameof(hostJobs));
+        if (globalLimitKib != 0 && globalLimitKib is < 64 or > 1_048_576)
+            throw new ArgumentOutOfRangeException(nameof(globalLimitKib));
+        lock (_gate)
+        {
+            using var db = Open();
+            using var tx = db.BeginTransaction();
+            using var cmd = db.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                INSERT INTO xstage_download_settings(key,value)
+                VALUES($key,$value)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value;
+                """;
+            var key = cmd.Parameters.Add("$key", SqliteType.Text);
+            var value = cmd.Parameters.Add("$value", SqliteType.Text);
+            foreach (var setting in new[]
+            {
+                ("global_jobs", globalJobs),
+                ("host_jobs", hostJobs),
+                ("global_limit_kib", globalLimitKib)
+            })
+            {
+                key.Value = setting.Item1;
+                value.Value = setting.Item2.ToString();
+                cmd.ExecuteNonQuery();
+            }
+            tx.Commit();
+        }
+    }
+
     public (string Mode, long Jobs, long Chunks) Inspect()
     {
         lock (_gate)
