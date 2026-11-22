@@ -52,4 +52,11 @@ assert.ok(app.includes("![5,6].includes(saved?.layoutVersion)")&&
   'Legacy JSON catalog caches cannot masquerade as new SQLite snapshots');
 assert.ok(imp.includes("const activeRootId=String(auth.rootId||'')"),
   'Browser import must honor the selected root, not first search hit');
+assert.ok(app.includes('error.driveStatus=status;error.driveSubject=subject;'),
+  'Google Drive errors must retain the HTTP status and resource kind');
+assert.ok(app.includes("if([403,404].includes(error?.driveStatus)&&error?.driveSubject==='ไฟล์เพลงส่วนตัว')"),
+  'An inaccessible app-scoped SQLite file must not be misdiagnosed as expired Google login');
+assert.ok(imp.includes('publishSingleCatalog')&&imp.includes('songs.sqlite3')&&
+  !imp.includes("pushSqlite('catalog-delta-"),
+  'Browser must publish one app-authorized SQLite catalog without legacy delta files');
 console.log('PASS: distinct duplicate folders, verified import target, no legacy cache/resume, same-code playback isolation');
