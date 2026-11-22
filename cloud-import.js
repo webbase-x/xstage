@@ -410,6 +410,7 @@ class Importer {
       'allow-create',
       'source','total','ready','fonts','blocked','examples','progress','progress-label',
       'status','detail'])this.dom[key]=$('cloud-import-'+key);
+    this.dom.pickFallback=$('cloud-import-pick-fallback');
     this.dom.selection=$('cloud-import-selection');
     this.dom.selectionList=$('cloud-import-selection-list');
     this.dom.selectionCount=$('cloud-import-selection-count');
@@ -454,6 +455,7 @@ class Importer {
     this.dom.close?.addEventListener('click',()=>this.close());
     this.dom.dialog?.addEventListener('cancel',event=>{event.preventDefault();this.close();});
     this.dom.pick?.addEventListener('click',()=>this.choose());
+    this.dom.pickFallback?.addEventListener('click',()=>this.chooseLegacy());
     this.dom.scan?.addEventListener('click',()=>this.inspect());
     this.dom.start?.addEventListener('click',()=>this.start());
     this.dom.pause?.addEventListener('click',()=>this.stop('พักงาน'));
@@ -683,6 +685,7 @@ class Importer {
     this.dom.resume.disabled=this.running||this.lockPending||!this.saved;
     this.dom.resume.hidden=this.running||!this.saved;
     this.dom.pick.disabled=this.running;
+    if(this.dom.pickFallback)this.dom.pickFallback.disabled=this.running;
     this.dom.scan.disabled=this.running||!this.selected;
     this.dom.scan.hidden=true;
     this.updateOpen();
@@ -708,6 +711,14 @@ class Importer {
     if(this.dom.dialog.close)this.dom.dialog.close();
     else this.dom.dialog.removeAttribute('open');
   }
+  chooseLegacy(){
+    if(this.running)return;
+    // The upload-style directory picker is a user-initiated alternative when
+    // Chromium blocks a sensitive folder in showDirectoryPicker. It only reads
+    // the user-selected files, never modifies the workspace or system files.
+    this.dom.input.value='';
+    this.dom.input.click();
+  }
   async choose(){
     if(this.running)return;
     if(typeof scope.showDirectoryPicker==='function'){
@@ -717,12 +728,19 @@ class Importer {
         await this.acceptFiles(list,handle);
         return;
       }catch(e){
-        if(e?.name==='AbortError'){this.resumeAfterPicker=false;return;}
-        this.status('อ่านโฟลเดอร์ด้วยระบบใหม่ไม่ได้ · เลือกด้วยตัวเลือกปกติ: '+e.message);
+        if(e?.name==='AbortError'){
+          // Chromium uses AbortError both for Cancel and for a restricted
+          // folder ('contains system files'). Do not silently retry a cancelled
+          // picker; offer an explicit upload-style directory picker instead.
+          this.resumeAfterPicker=false;
+          this.status('ยกเลิกการเลือก หรือ Chrome ไม่อนุญาตโฟลเดอร์นี้ · หากขึ้นข้อความว่ามีไฟล์ระบบ ให้เลือกโฟลเดอร์เพลงย่อยหรือกด “เลือกโฟลเดอร์ (วิธีสำรอง)”');
+          return;
+        }
+        this.status('ตัวเลือกโฟลเดอร์หลักทำงานไม่ได้ · กด “เลือกโฟลเดอร์ (วิธีสำรอง)” หรือเลือกเฉพาะโฟลเดอร์เพลงย่อย: '+e.message);
+        return;
       }
     }
-    this.dom.input.value='';
-    this.dom.input.click();
+    this.chooseLegacy();
   }
   async collect(handle){
     const files=[],stack=[{handle,path:''}];
