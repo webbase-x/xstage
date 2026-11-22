@@ -1693,5 +1693,5 @@ class Importer {
     }
   }
 }
-scope.XStageCloudImport={init:(options)=>new Importer(options),Drive,loadCatalog};
+scope.XStageCloudImport={init:(options)=>new Importer(options),Drive,loadCatalog,buildMidiIndex,distinctImportCode};
 })(window);
