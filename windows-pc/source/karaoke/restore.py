@@ -201,8 +201,13 @@ def rollback(data,safety,existed,replaced=FILES):
                 snapshot = parse_json(source.read_text(encoding='utf-8-sig'))
                 if name == 'settings.json' and not isinstance(snapshot, dict):
                     raise ValueError('settings snapshot must be an object')
-                if name == 'queue.json' and not isinstance(snapshot, (list, dict)):
-                    raise ValueError('queue snapshot must be a list or object')
+                if name == 'queue.json':
+                    if isinstance(snapshot, dict):
+                        if snapshot.get('format') not in ('xstage.playlist', 'newKaraoke.playlist'):
+                            raise ValueError('queue snapshot has an unknown format')
+                        snapshot = snapshot.get('tracks')
+                    if not isinstance(snapshot, list) or any(not isinstance(row, dict) for row in snapshot):
+                        raise ValueError('queue snapshot must contain a list of tracks')
             except (OSError, UnicodeError, ValueError, TypeError) as error:
                 raise ValueError('ไฟล์ JSON สำรองเพื่อย้อนคืนเสียหาย: ' + name) from error
     for name in replaced:
