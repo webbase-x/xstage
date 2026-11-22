@@ -22,6 +22,22 @@ class RollbackSourcePreflightTests(unittest.TestCase):
             self.assertEqual((data / "settings.json").read_text(encoding="utf-8"), "current")
             self.assertEqual((data / "queue.json").read_text(encoding="utf-8"), "current-queue")
 
+    def test_corrupt_later_json_snapshot_does_not_mutate_earlier_live_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            data, safety = Path(root) / "live", Path(root) / "safety"
+            data.mkdir()
+            safety.mkdir()
+            (data / "settings.json").write_text('{"title":"current"}', encoding="utf-8")
+            (data / "queue.json").write_text('[]', encoding="utf-8")
+            (safety / "settings.json").write_text('{"title":"old"}', encoding="utf-8")
+            (safety / "queue.json").write_text('{"broken":', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "queue.json"):
+                rollback(data, safety, ["settings.json", "queue.json"],
+                         ("settings.json", "queue.json"))
+            self.assertEqual((data / "settings.json").read_text(encoding="utf-8"),
+                             '{"title":"current"}')
+            self.assertEqual((data / "queue.json").read_text(encoding="utf-8"), '[]')
+
     def test_linked_later_safety_file_does_not_mutate_live_files(self):
         with tempfile.TemporaryDirectory() as root:
             data, safety = Path(root) / "live", Path(root) / "safety"
