@@ -57,12 +57,26 @@ class RemoteServer:
                 except Exception:
                     logging.exception('REMOTE_GET failed')
                     self.response(503, {'error':'เครื่องเล่นยังไม่พร้อม'})
+            def state_for(self, session):
+                state = owner.snapshot()
+                records = state.pop('requests', [])
+                operator = session['role']=='operator' and owner.policy['operator']
+                own = [{k:v for k,v in r.items() if k not in ('owner','song_id')}
+                       for r in records if r['owner']==session['owner']]
+                pending = [{k:v for k,v in r.items() if k not in ('owner','song_id')}
+                           for r in records if r['status']=='pending'] if operator else []
+                state.update(operator=operator, policy=dict(owner.policy),
+                             mine=own, pending=pending)
+                return state
             def get(self):
                 url = urlparse(self.path)
                 if url.path == '/': return self.response(200, PAGE, 'text/html; charset=utf-8')
                 if url.path == '/assets/mobile-logo.jpg':
                     from .remote_branding import mobile_logo
                     return self.response(200,mobile_logo(),'image/jpeg')
+                if url.path == '/api/live':
+                    from .remote_socket import serve_live
+                    return serve_live(self, owner)
                 session = self.session()
                 if not session: return self.response(401, {'error':'กรุณาเชื่อมต่อด้วยรหัสใหม่'})
                 operator = session['role']=='operator' and owner.policy['operator']
@@ -80,12 +94,7 @@ class RemoteServer:
                         except PermissionError as error: return self.response(403,{'error':str(error)})
                         return self.response(200,audio)
                 if url.path == '/api/state':
-                    state = owner.snapshot()
-                    records = state.pop('requests', [])
-                    own = [{k:v for k,v in r.items() if k not in ('owner','song_id')} for r in records if r['owner']==session['owner']]
-                    pending = [{k:v for k,v in r.items() if k not in ('owner','song_id')} for r in records if r['status']=='pending'] if operator else []
-                    state.update(operator=operator, policy=dict(owner.policy), mine=own, pending=pending)
-                    return self.response(200,state)
+                    return self.response(200, self.state_for(session))
                 if url.path == '/api/songs':
                     query = parse_qs(url.query).get('q',[''])[0][:200]
                     songs = owner.library.search(query,limit=60)
