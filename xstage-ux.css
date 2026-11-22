@@ -5300,3 +5300,17 @@ html body.xstage-ui-v2 .stage .stage-search-slot .song-details small{
 html body.xstage-ui-v2 .stage .stage-search-slot .song-match{
   font-weight:inherit!important;
 }
+
+/* 1.0.137: reserve usable EQ meter widths on narrow mobile stages.
+ * The actual number of FFT bars is adapted to each canvas pixel width. */
+@media(max-width:520px){
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-scene{
+    grid-template-columns:minmax(0,.9fr) minmax(0,3.8fr) minmax(0,.9fr)!important;
+    gap:clamp(3px,.8vw,7px)!important;
+  }
+  html body.xstage-ui-v2:not(.xstage-native-tv) .stage .stage-hero .stage-brand-side-viz{
+    display:block!important;
+    min-width:0!important;
+    height:clamp(36px,8cqh,65px)!important;
+  }
+}
