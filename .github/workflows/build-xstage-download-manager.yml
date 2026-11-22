@@ -63,6 +63,11 @@ jobs:
         run: |
           node download-manager/tests/portal-contract.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Portal contract test failed' }
+      - name: Validate X-Stage desktop menu and icon contracts
+        shell: pwsh
+        run: |
+          node download-manager/tests/desktop-workspace-contract.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'X-Stage desktop workspace contract test failed' }
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
