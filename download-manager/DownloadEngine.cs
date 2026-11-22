@@ -167,9 +167,9 @@ public sealed class DownloadEngine
             throw new ArgumentOutOfRangeException(nameof(concurrentJobs));
         if (globalLimitKib != 0 && globalLimitKib is < 64 or > 1_048_576)
             throw new ArgumentOutOfRangeException(nameof(globalLimitKib));
-        _state.SavePerformanceSetting("global_jobs", concurrentJobs, 1, 8);
-        _state.SavePerformanceSetting("host_jobs", perHostJobs, 1, 8);
-        _state.SavePerformanceSetting("global_limit_kib", globalLimitKib, 0, 1_048_576);
+        // Save all three before changing live limits; no partially committed
+        // performance profile is ever restored after an interrupted write.
+        _state.SavePerformanceSettings(concurrentJobs, perHostJobs, globalLimitKib);
         _slots.Configure(concurrentJobs, perHostJobs);
         _globalSpeed.Configure(globalLimitKib);
     }
