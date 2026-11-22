@@ -683,8 +683,8 @@ assert.equal((pc.match(/createMediaElementSource\(audio\)/g)||[]).length,1,'stag
 assert.ok(pc.includes('eqMeterSink.gain.value=0'),'Spectrum monitor must end at zero gain');
 assert.ok(pc.includes('eqSource.connect(eqAnalyser);'),'Stage lights must receive an independent analyser tap');
 assert.ok(!pc.includes('node.connect(eqAnalyser);eqAnalyser.connect(eqContext.destination)'),'Never send EQ-filtered output to the speakers');
-assert.ok(index.includes('pc-extensions.js?v=1136-unfiltered-output-visual-only'),'New unfiltered audio graph must invalidate the old player script cache');
-assert.ok(index.includes('stage-controls.js?v=1136-monitor-only-eq'),'Remote control must use monitor-only service version');
+assert.ok(index.includes('pc-extensions.js?v=1137-unfiltered-output-visual-only'),'New unfiltered audio graph must invalidate the old player script cache');
+assert.ok(index.includes('stage-controls.js?v=1137-monitor-only-eq'),'Remote control must use monitor-only service version');
 assert.ok(host.includes("throw Error('เสียงลำโพงไม่ผ่าน EQ · ระบบแสดงระดับเสียงเท่านั้น')"),
   'Remote EQ mutation must be refused rather than falsely claiming a sound change');
 assert.ok(index.includes('id="stage-viz-left"'),'main stage must expose the left live visualizer canvas');
