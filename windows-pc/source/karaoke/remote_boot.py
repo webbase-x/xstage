@@ -93,9 +93,13 @@ def start_local_remote(app):
             app.remote_quick_var.set('รีโมท LAN: เปิดไม่ได้ · ตรวจ Firewall/พอร์ต')
         return None
 
-    server.configure(**initial_policy(app.settings),
-                     max_clients=max(1, min(100, int(app.settings.get('remote_max_clients', 10)))))
     try:
+        try:
+            configured_clients = int(app.settings.get('remote_max_clients', 10))
+        except (TypeError, ValueError, OverflowError):
+            configured_clients = 10
+        server.configure(**initial_policy(app.settings),
+                         max_clients=max(1, min(100, configured_clients)))
         app.remote = server
         app.update_remote_snapshot()
         server.start()
