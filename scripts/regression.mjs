@@ -829,7 +829,8 @@ const noRootBranch=app.split('if(!roots.length){')[1]?.split('    setSharedLibra
 assert.ok(noRootBranch.includes('state.songs=[]') &&
           noRootBranch.includes('state.shown=[]') &&
           noRootBranch.includes('state.catalogCache.clear()') &&
-          noRootBranch.includes('X-Stage Song Studio') &&
+          noRootBranch.includes("สร้าง '+driveLayout.root") &&
+          noRootBranch.includes('setSharedLibraryGate(true') &&
           !noRootBranch.includes('if(instant){'),
           'Empty Drive should show a clean catalog and actionable first-upload instructions');
 
