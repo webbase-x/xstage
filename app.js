@@ -1395,8 +1395,7 @@ async function openSharedLibraryPicker(){
 }
 $('gate-shared-library')?.addEventListener('click',openSharedLibraryPicker);
 
-// Player reads only XStageKaraoke/DB/songs.sqlite3. Legacy pointers are
-// exclusively migration inputs in the browser importer, never playable DBs.
+// Player reads exclusively XStageKaraoke/DB/songs.sqlite3.
 
 async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
   if(pointer?.schemaVersion!==1||pointer?.layoutVersion!==6||
@@ -1631,7 +1630,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       const rootCached=await loadLatestCachedCatalog(account.sub,root.id);
       if(rootCached){instant=rootCached;applyInstantCatalog(instant);}
     }
-    // DB/songs.sqlite3 is the only playable catalog. The old pointer may be inspected solely for migration.
+    // DB/songs.sqlite3 is the only permitted catalog; never query JSON pointers.
     const dbDirs=await driveList(`'${root.id}' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
     if(dbDirs.length>1)throw Error('พบ DB ซ้ำใน '+driveLayout.root);
     const dbId=dbDirs[0]?.id||'';
@@ -1639,9 +1638,6 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       ?await driveList(`'${dbId}' in parents and name='songs.sqlite3' and trashed=false`,token)
       :[];
     if(canonical.length>1)throw Error('พบ songs.sqlite3 ซ้ำใน DB');
-    const pointers=!canonical.length&&dbId
-      ?await driveList(`'${dbId}' in parents and name='current.json' and trashed=false`,token)
-      :[];
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านฐาน SQLite3 จาก DB โดยตรง…',34);
     if(!canonical.length){
       // A newly created XStageKaraoke may contain only empty category folders or
@@ -1667,28 +1663,10 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       ui.songTotal.textContent='0 เพลง';
       ui.resultCount.textContent='ยังไม่มีเพลงพร้อมเล่น';
       ui.libraryState.textContent='Google Drive · '+libraryLabel(root)+
-        (pointers.length?' · พบฐานเดิม รอรวมเป็น songs.sqlite3':' · ยังไม่มีฐานเพลง');
+        ' · ยังไม่มี DB/songs.sqlite3';
       hideCatalogLoading();
       setAndroidTvStageAccess(true,account.sub);
-      setStatus(pointers.length?
-        'พบฐานเดิม · กำลังย้ายไปยัง DB/songs.sqlite3 อัตโนมัติ (ไม่ลบต้นฉบับ)':
-        'เชื่อม Google Drive แล้ว · ยังไม่มี songs.sqlite3 · นำเข้าเพลงจากหน้าเว็บเพื่อสร้างฐานเดียว',
-        'success');
-      if(pointers.length===1){
-        const key=String(account.sub)+':'+String(root.id);
-        if(state.legacyMigrationKey!==key){
-          state.legacyMigrationKey=key;
-          // This one-time upgrade runs only after the signed-in account and
-          // selected root have been verified. The importer performs its own
-          // Drive lock, backup and checks before publishing the new SQLite.
-          queueMicrotask(()=>{
-            if(state.accountSub===account.sub&&state.libraryRootId===root.id){
-              if(xstageCloudImporter)void xstageCloudImporter.consolidate();
-              else setStatus('ไม่พบระบบย้ายฐาน · กรุณาอัปเดตหน้าเว็บ','error');
-            }
-          });
-        }
-      }
+      setStatus('ยังไม่มี DB/songs.sqlite3 ที่แอปเข้าถึงได้ · เลือกไฟล์เพลงแล้วกดเริ่มนำเข้าเพื่อสร้างฐานใหม่','success');
       return;
     }
     const pointer=directCatalogPointer(canonical[0]);
@@ -4692,8 +4670,6 @@ const xstageCloudImporter=window.XStageCloudImport?.init({
     expiresAt:state.tokenExpiresAt}),
   ensureAuth:ensureImporterGoogleAuth,
   reconnect:()=>ensureImporterGoogleAuth(true,true),
-  onConsolidationStatus:message=>setStatus(message,
-    /ไม่สำเร็จ|ไม่พบ|หมดอายุ|ปฏิเสธ|ไม่ตรง/.test(message)?'error':'success'),
   refresh:async()=>{
     if(!state.token||!state.accountSub)return;
     // Reload only the canonical DB/songs.sqlite3 after publishing.
