@@ -23,7 +23,7 @@
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
   <link rel="stylesheet" href="style.css?v=1153-concert-lights">
-  <link rel="stylesheet" href="xstage-ux.css?v=1136-search-and-live-lights">
+  <link rel="stylesheet" href="xstage-ux.css?v=1162-mobile-bottom-search">
   <link rel="stylesheet" href="cloud-import.css?v=1138-visible-import-cta">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
@@ -83,7 +83,7 @@
             <button id="mobile-menu-toggle" class="mobile-menu-toggle toolbar-button" type="button" aria-controls="mobile-stage-menu" aria-expanded="false" aria-label="เปิดเมนู">☰ <span>เมนู</span></button>
             <div class="stage-search-slot"><aside class="dock search-dock pc-overlay" id="pc-search" aria-labelledby="catalog-title">
         <div class="dock-head"><div><span class="overline">LIBRARY</span><h2 id="catalog-title">ค้นหาเพลง</h2></div><span id="song-total" class="count-chip">0 เพลง</span><button type="button" id="pc-hide-search" title="ย่อผลการค้นหา (F3)" class="pc-search-fold">▾</button></div>
-        <div class="search-box"><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" role="combobox" aria-autocomplete="list" aria-controls="songs" aria-expanded="false" autocomplete="off" placeholder="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง" aria-label="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง" aria-disabled="false" data-library-ready="false"><button id="voice-search" class="voice-search-button" type="button" aria-label="ค้นหาเพลงด้วยเสียง" title="ค้นหาด้วยเสียง" aria-pressed="false" hidden>🎙</button><kbd>Ctrl F</kbd></div>
+        <div class="search-box"><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" role="combobox" aria-autocomplete="list" aria-controls="songs" aria-expanded="false" autocomplete="off" placeholder="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง" aria-label="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง" aria-disabled="false" data-library-ready="false"><kbd>Ctrl F</kbd></div>
         <div class="library-hint"><label class="pc-favorite-toggle"><input id="pc-favorites-only" type="checkbox"> ★ เพลงโปรด</label><label id="library-switcher" class="library-switcher" hidden><span>คลัง</span><select id="library-select" aria-label="เลือกคลังเพลง"></select></label><span id="result-count">กรุณาเข้าสู่ระบบ</span><span id="search-refine-hint" class="search-refine-hint" hidden>พิมพ์เพิ่มเพื่อเจาะจงผลค้นหา</span><span>↑ ↓ เลือก · Enter เล่น/เข้าคิว</span></div>
         <div id="songs" class="song-results" role="listbox" aria-label="รายการเพลง" aria-live="off"><div class="empty-state"><span class="empty-graphic" aria-hidden="true">♫</span>เพลงจาก Google Drive ของคุณจะแสดงที่นี่</div></div>
         <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span><a id="library-drive-link" href="#" target="_blank" rel="noopener noreferrer" hidden title="ดูโฟลเดอร์ Google Drive ที่เว็บกำลังใช้งานจริง">เปิดโฟลเดอร์ที่ใช้งาน</a></div>
@@ -495,11 +495,11 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="video-transcode.js?v=1136" defer></script>
   <script src="cloud-import.js?v=1140-google-session-renew" defer></script>
   <script src="tv-refresh.js?v=1136" defer></script>
-  <script src="app.js?v=1140-google-session-renew" defer></script><script src="pc-extensions.js?v=1136" defer></script>
+  <script src="app.js?v=1162-no-voice-search" defer></script><script src="pc-extensions.js?v=1136" defer></script>
   <script src="midi-keyboard-ui.js?v=1136-clean-title-1157-top-song-key-single-menu" defer></script>
   <script src="native-audio-meter.js?v=1136" defer></script>
   <script src="stage-controls.js?v=1136" defer></script>
-  <script src="mobile-layout.js?v=1136" defer></script>
+  <script src="mobile-layout.js?v=1162-mobile-bottom-search" defer></script>
   <script src="android-apk-download.js?v=1136" defer></script>
 
   <script src="windows-volume-bridge.js?v=1136-system-volume-bridge" defer></script>
