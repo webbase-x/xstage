@@ -1,4 +1,4 @@
-name: X-Stage AG06 Studio - Web Windows Android preview
+name: X-Stage Audio Studio - Web Windows Android preview
 on:
   workflow_dispatch:
   push:
@@ -26,6 +26,7 @@ jobs:
         run: |
           node --check ag06/app.js
           node --check ag06/audio-engine.js
+          node --check ag06/studio-session.js
           node --check ag06/presets.js
           node --test ag06/tests/*.test.mjs
       - name: Verify no unintentional production downloads
@@ -55,14 +56,14 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $files = @(Get-ChildItem 'ag06/desktop/dist' -Filter '*.exe' -File)
-          if ($files.Count -lt 1) { throw 'No AG06 Windows executable produced' }
+          if ($files.Count -lt 1) { throw 'No Audio Studio Windows executable produced' }
           foreach ($file in $files) {
             if ($file.Length -lt 1000000) { throw 'EXE unexpectedly small' }
             Get-FileHash -Algorithm SHA256 $file.FullName | Format-List
           }
       - uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-AG06-Studio-Windows-EXE-Preview
+          name: X-Stage-Audio-Studio-Windows-EXE-Preview
           path: ag06/desktop/dist/*.exe
           if-no-files-found: error
 
@@ -94,6 +95,6 @@ jobs:
           sha256sum ag06/android/app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-AG06-Studio-Android-APK-Preview
+          name: X-Stage-Audio-Studio-Android-APK-Preview
           path: ag06/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
