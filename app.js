@@ -540,7 +540,7 @@ async function loadLatestCachedCatalog(sub,rootId=''){
   try{
     const saved=await catalogStorage('get',libraryCacheOwner(sub,rootId));
     const catalog=saved?.catalog;
-    if(saved?.layoutVersion!==5||saved?.format!=='xstage-sqlite3-v1'||
+    if(![5,6].includes(saved?.layoutVersion)||saved?.format!=='xstage-sqlite3-v1'||
        catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
     return {
       catalog,
@@ -566,10 +566,11 @@ async function loadCachedCatalog(ownerKey,pointer){
   if(!ownerKey||!pointer?.generation)return null;
   try{
     const saved=await catalogStorage('get',ownerKey);
-    if(saved?.generation!==String(pointer.generation)||saved.catalogFileId!==pointer.catalogFileId||
+    if(saved?.generation!==String(pointer.generation)||saved.layoutVersion!==pointer.layoutVersion||
+       saved.catalogFileId!==pointer.catalogFileId||
        JSON.stringify(saved.deltaFileIds||[])!==JSON.stringify(pointer.deltaFileIds||[]))return null;
     const catalog=saved.catalog;
-    if(saved?.layoutVersion!==5||saved?.format!=='xstage-sqlite3-v1'||
+    if(![5,6].includes(saved?.layoutVersion)||saved?.format!=='xstage-sqlite3-v1'||
        catalog?.schemaVersion!==1||!Array.isArray(catalog.songs))return null;
     if(Number.isSafeInteger(pointer.songCount)&&catalog.songs.length!==pointer.songCount)return null;
     return catalog;
@@ -1393,13 +1394,15 @@ $('gate-shared-library')?.addEventListener('click',openSharedLibraryPicker);
 // Older snapshots contain songs[]; newer pointers may include immutable deltas.
 // Catalog media URLs remain private and are never exposed outside this account.
 async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
-  if(pointer?.schemaVersion!==1||pointer?.layoutVersion!==5||
+  if(pointer?.schemaVersion!==1||![5,6].includes(pointer?.layoutVersion)||
      pointer?.format!=='xstage-sqlite3-v1'||typeof pointer.catalogFileId!=='string'||
      !pointer.catalogFileId)
     throw Error('ฐานเพลงต้องเป็น SQLite3 · ไม่รองรับ catalog JSON เดิม');
   const deltaIds=pointer.deltaFileIds||[];
-  if(!Array.isArray(deltaIds)||deltaIds.length>32||new Set(deltaIds).size!==deltaIds.length)
-    throw Error('รายการอัปเดตฐานเพลงบน Drive ไม่ถูกต้อง');
+  if(!Array.isArray(deltaIds)||deltaIds.length>32||
+     new Set(deltaIds).size!==deltaIds.length||
+     (pointer.layoutVersion===6&&deltaIds.length))
+    throw Error('ฐานเพลงแบบไฟล์เดียวต้องไม่มีรายการ Delta');
   const totalPieces=1+deltaIds.length;
   let completedPieces=0;
   const report=(message,fromCache=false)=>{
@@ -1436,6 +1439,8 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
   const base=await fetchImmutable(pointer.catalogFileId,'ฐานหลัก');
   if(base?.schemaVersion!==1||base.kind!=='snapshot'||!Array.isArray(base.songs))
     throw Error('ฐานข้อมูล SQLite3 หลักบน Drive ไม่รองรับ');
+  if(pointer.layoutVersion===6&&base.generation!==pointer.generation)
+    throw Error('ฐาน SQLite3 ไม่ตรงกับ current.json · กรุณาซิงก์ใหม่');
   if(!deltaIds.length){
     if(Number.isSafeInteger(pointer.songCount)&&base.songs.length!==pointer.songCount)
       throw Error('ฐานเพลงชุดนี้มีจำนวนเพลงไม่ตรงกับข้อมูลเผยแพร่');
