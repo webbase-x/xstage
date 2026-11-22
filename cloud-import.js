@@ -7,6 +7,8 @@
 'use strict';
 const core=scope.XStageImportCore;
 const driveLayout=scope.XSTAGE_DRIVE_LAYOUT||{root:'XStageKaraoke',songs:'SONGS',db:'DB',soundfont:'SOUNDFONT'};
+const retiredDriveRootIds=new Set(scope.XSTAGE_RETIRED_DRIVE_ROOT_IDS||[]);
+const isRetiredDriveRoot=id=>retiredDriveRootIds.has(String(id||''));
 if(!core)throw Error('Cloud Import: format validation module missing');
 const $=id=>document.getElementById(id);
 const MIME_FOLDER='application/vnd.google-apps.folder';
@@ -338,6 +340,9 @@ class Drive {
 }
 function chooseImportRoot(roots,activeRootId){
   if(!Array.isArray(roots))fail('รายการคลังเพลงไม่ถูกต้อง');
+  if(activeRootId&&isRetiredDriveRoot(activeRootId))
+    fail('คลัง Google Drive ที่เลือกถูกยกเลิกแล้ว · กรุณาเปิดคลังเพลงใหม่');
+  roots=roots.filter(root=>!isRetiredDriveRoot(root.id));
   const selected=activeRootId
     ?roots.find(item=>String(item.id)===String(activeRootId))
     :roots.length===1?roots[0]:null;
@@ -869,7 +874,7 @@ class Importer {
       // Restricting this search to 'root' would create another XStageKaraoke
       // when an existing library was moved or shared.
       const rootQuery="name='"+driveLayout.root+"' and mimeType='"+MIME_FOLDER+"' and trashed=false";
-      const roots=await drive.list(rootQuery);
+      const roots=(await drive.list(rootQuery)).filter(root=>!isRetiredDriveRoot(root.id));
       // Pin new uploads to the folder actually selected in Karaoke Online.
       // Do not silently use the first same-name root or create a third copy.
       const activeRootId=String(auth.rootId||'');
@@ -881,7 +886,7 @@ class Importer {
           fail('ไม่พบ XStageKaraoke · กรุณาอนุญาตสร้างคลังใหม่ก่อนนำเข้า');
         // Recheck immediately before creation: another tab/device may have
         // created the root since the initial listing.
-        const latestRoots=await drive.list(rootQuery);
+        const latestRoots=(await drive.list(rootQuery)).filter(root=>!isRetiredDriveRoot(root.id));
         if(latestRoots.length)
           fail('พบ XStageKaraoke บน Google Drive ระหว่างนำเข้า · เปิดคลังที่มีอยู่ใหม่ก่อน ไม่สร้างซ้ำ');
         rootId=await drive.folder('root',driveLayout.root);
