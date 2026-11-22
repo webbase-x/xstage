@@ -455,6 +455,7 @@
         <p id="cloud-import-action-hint" class="cloud-import-action-hint">เลือกโฟลเดอร์เพลงก่อนเริ่ม · ระบบยังไม่มีรายการพร้อมนำเข้า</p>
         <div class="cloud-import-footer-buttons">
           <button id="cloud-import-start" type="button" disabled>เริ่มตรวจ MD5 และนำเข้า (0)</button>
+          <button id="cloud-import-consolidate" type="button" disabled title="รวมฐานเพลงเดิมเป็น SQLite3 ไฟล์เดียว โดยเก็บฉบับเก่าใน BACKUP">รวมฐาน SQLite ไฟล์เดียว</button>
           <button id="cloud-import-pause" type="button" disabled hidden>หยุดชั่วคราว</button>
           <button id="cloud-import-resume" type="button" disabled hidden>ทำต่อ</button>
           <button id="cloud-import-reauthorize" type="button" hidden>เชื่อม Google ใหม่และทำต่อ</button>
@@ -486,7 +487,7 @@ document.addEventListener('DOMContentLoaded',function(){
 </script>
 <script src="config.js?v=1137"></script>
   <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="drive-sqlite.js?v=1137" defer></script>
+  <script src="drive-sqlite.js?v=1170-single-sqlite" defer></script>
   <script src="cloud-import-core.js?v=1137" defer></script>
   <script src="xsk-browser.js?v=1137" defer></script>
   <script src="xmid-browser.js?v=1137" defer></script>
@@ -496,9 +497,9 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="midi-pro-engine.js?v=1137-playback-restore-1168-screen-wake" defer></script>
   <script src="video-metadata-editor.js?v=1138-verified-video-selection" defer></script>
   <script src="video-transcode.js?v=1137" defer></script>
-  <script src="cloud-import.js?v=1140-google-session-renew" defer></script>
+  <script src="cloud-import.js?v=1170-single-sqlite" defer></script>
   <script src="tv-refresh.js?v=1137" defer></script>
-  <script src="app.js?v=1137-live-update-song-restore" defer></script><script src="pc-extensions.js?v=1137-unfiltered-output-visual-only-1166-midi-eq-canvas" defer></script>
+  <script src="app.js?v=1170-single-sqlite" defer></script><script src="pc-extensions.js?v=1137-unfiltered-output-visual-only-1166-midi-eq-canvas" defer></script>
   <script src="midi-keyboard-ui.js?v=1137-clean-title-1157-top-song-key-single-menu" defer></script>
   <script src="native-audio-meter.js?v=1137-live-stage-eq" defer></script>
   <script src="stage-controls.js?v=1137-monitor-only-eq" defer></script>
