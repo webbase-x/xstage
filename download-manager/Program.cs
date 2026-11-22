@@ -34,7 +34,7 @@ internal static class Program
         {
             var log = WriteUiError(eventArgs.Exception);
             MessageBox.Show(
-                "X-Stage พบข้อผิดพลาดในหน้าจอและจะปิดอย่างปลอดภัย\\n" +
+                "X-Stage พบข้อผิดพลาดในหน้าจอและจะปิดอย่างปลอดภัย\n" +
                 "รายละเอียดสำหรับตรวจสอบ: " + log + "\n" +
                 "โปรดแจ้งไฟล์บันทึกนี้เพื่อระบุบรรทัดที่เกิดปัญหา",
                 "X-Stage · รายงานข้อผิดพลาด", MessageBoxButtons.OK,
