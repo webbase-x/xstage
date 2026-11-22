@@ -4393,6 +4393,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='F8'){e.preventDefault();cancelCurrentSong();}
   if(e.key==='Escape'&&document.fullscreenElement){document.exitFullscreen();}
 });
+window.addEventListener('pagehide',saveScreenSleepPlaybackIntent);
 window.addEventListener('pagehide',savePlaybackResumeState);
 window.addEventListener('beforeunload',()=>{savePlaybackResumeState();stopSoundFontFill();state.liveMidiPlayback?.dispose();state.controller?.abort();resetSongVideo();if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);});
 renderSongs();renderQueue();updateTransport();scheduleLyricsDraw();setupNativeAndroidTvUi();setupAppUpdateWatcher();
