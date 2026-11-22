@@ -158,7 +158,7 @@
     text("engine-subtitle",enabled?"SQLite · 127.0.0.1":"เปิดผ่าน Song Studio Pro บน PC");
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
-    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","build-ready-all","source-browse","source-open","workspace-open","lrc-browse","manual-find","db-health-check","db-detail-audit"]){
+    for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","build-ready-all","build-everything","source-browse","source-open","workspace-open","lrc-browse","manual-find","db-health-check","db-detail-audit"]){
       const control=$(id);
       if(control)control.disabled=!enabled;
     }
@@ -495,6 +495,7 @@
       (state.allReadySelected?" (ทั้งคลัง)":""));
     $("build-start").disabled=!state.ready||state.buildTab!=="ready"||count===0||Boolean(state.activeJob);
     $("build-ready-all").disabled=!state.ready||Boolean(state.activeJob);
+    $("build-everything").disabled=!state.ready||Boolean(state.activeJob);
   }
   function renderLyricPage(){
     const entries=state.lyricShowDraft?state.lyricDraft:state.lyricTimed;
@@ -2807,6 +2808,27 @@
         else state.selectedSongs.delete(song.id);
       }
       renderBuildRows(true);
+    });
+    $("build-everything").addEventListener("click",async()=>{
+      if(!state.ready||state.activeJob)return;
+      const button=$("build-everything");
+      button.disabled=true;
+      try{
+        const total=await api("/api/build/catalog-count");
+        const count=Number(total.total||0);
+        if(!count)return toast("ไม่มีเพลงในฐานข้อมูล SQLite");
+        const approved=await confirmTask("สร้าง X-Stage ทุกเพลงในฐาน",
+          "ตรวจทุกเพลงในฐาน SQLite จำนวน "+number(count)+" เพลง\n"+
+          "MIDI สร้าง XMID · ไฟล์เสียง/วิดีโอสร้าง X ตามรูปแบบต้นฉบับ\n"+
+          "ไฟล์ที่แปลงแล้วจะข้ามซ้ำ · เพลงที่ไม่มีเนื้อร้อง/เวลา CUR ครบ"+
+          "จะบันทึกสาเหตุและข้าม ไม่สร้างข้อมูลปลอม\n\nเริ่มสร้างทั้งฐานข้อมูล?");
+        if(!approved)return;
+        await startJob("build",{all_catalog:true});
+      }catch(error){
+        toast("สร้างทั้งหมดไม่สำเร็จ: "+error.message,true);
+      }finally{
+        updateBuildSelection();
+      }
     });
     $("build-ready-all").addEventListener("click",async()=>{
       if(!state.ready||state.activeJob)return;

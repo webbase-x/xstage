@@ -103,6 +103,28 @@ class PlusTests(unittest.TestCase):
             manual.build_catalog(self.workspace,"invalid")
 
 
+    def test_catalog_build_stream_enumerates_all_registered_songs_even_unready(self):
+        import manual_editor as manual
+        ready=self.put("S1.mid",midi())
+        self.lrc(ready)
+        missing=self.put("S2.mid",midi()+b"extra")
+        # The second file has no lyric data; it must still enter the entire
+        # catalog and be reported as blocked, never silently excluded.
+        plus.import_folder(self.workspace,self.src)
+        songs=plus.songs(self.workspace)
+        self.assertEqual(len(songs),2)
+        self.assertEqual(plus.catalog_song_count(self.workspace),2)
+        ids=list(plus.catalog_song_ids(self.workspace,batch_size=1))
+        self.assertEqual(set(ids),{s["id"] for s in songs})
+        self.assertEqual(len(ids),len(set(ids)))
+        self.assertEqual(manual.ready_count(self.workspace),0)
+        self.assertEqual(manual.approved_build_ids(self.workspace),[])
+        for song in songs:
+            if song["title"]=="S2":
+                with self.assertRaisesRegex(ValueError,"ยังไม่มีเนื้อร้องพร้อมเวลา"):
+                    plus.build_song(self.workspace,song["id"])
+        self.assertEqual(plus.catalog_song_count(self.workspace),2)
+
     def test_exported_song_does_not_enter_build_queue_again(self):
         import manual_editor as manual
         path=self.put("single.mp3",b"PAYLOAD-MP3"*900)

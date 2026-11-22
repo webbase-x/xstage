@@ -209,4 +209,12 @@ assert.ok(popupPickerSource.includes("XSTAGE_PICKER_PARENT_PID")&&
           popupPickerSource.includes("_PICKER_LOCK.acquire(blocking=False)")&&
           !popupPickerSource.includes("$null=$owner.Show()"),
   'Windows file picker must use a stable owner and serialize competing requests');
+assert.ok(html.includes('id="build-everything"')&&
+          html.includes('สร้างทั้งหมด (ทุกเพลงในฐานข้อมูล)')&&
+          html.includes('สร้างเฉพาะที่พร้อม')&&
+          js.includes('await startJob("build",{all_catalog:true})')&&
+          server.includes('body.get("all_catalog") is True')&&
+          server.includes('core.catalog_song_ids(self.state.workspace)')&&
+          core.includes('def catalog_song_ids(workspace,batch_size=256):'),
+  'Build entire SQLite registry (not just reviewed songs) with bounded batches and duplicate skip');
 console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs, Windows picker, Desktop Standalone and diagnostic log');

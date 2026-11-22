@@ -1200,6 +1200,34 @@ def import_issues(workspace, limit=80):
                    (max(1,min(int(limit),250)),)).fetchall()
         return [dict(row) for row in rows]
 
+def catalog_song_count(workspace):
+    """Count ALL registered tracks, including missing lyrics and exported files."""
+    init(workspace)
+    with connect(workspace) as db:
+        return int(db.execute("SELECT COUNT(*) FROM xstage_songs").fetchone()[0])
+
+
+def catalog_song_ids(workspace,batch_size=256):
+    """Stream the whole registry in bounded keyset batches, not browser pages.
+
+    Open and close each read transaction before writing a newly-built X file,
+    avoiding a long-running SQLite reader that blocks the exporter.
+    """
+    init(workspace)
+    batch_size=max(1,min(int(batch_size),1024))
+    after_code=-1
+    while True:
+        with connect(workspace) as db:
+            batch=db.execute("""SELECT id,code FROM xstage_songs
+                WHERE code>? ORDER BY code LIMIT ?""",
+                (after_code,batch_size)).fetchall()
+        if not batch:
+            return
+        for song in batch:
+            yield song["id"]
+        after_code=batch[-1]["code"]
+
+
 def songs(workspace,query="",limit=80,offset=0):
     init(workspace)
     term="%"+str(query)[:100].strip()+"%"
@@ -1564,17 +1592,18 @@ def build_song(workspace,song_id):
             raise ValueError("เพลงนี้มีเนื้อร้องบางส่วนแต่ CUR ยังไม่ครบ · ตรวจสอบเวลาปาดสีก่อนสร้าง XMID")
         lines=get_version_lines(db,version["id"])
         meta=metadata_bytes(pair,version,lines)
-        # Do not require or make a second original-file copy. Resolve the
-        # saved source reference, including legacy preview SOURCE archives.
-        lookup=db.execute("SELECT * FROM xstage_media WHERE id=?",
-                          (pair["source_media_id"],)).fetchone()
-        media_file=source_for_build(workspace,db,lookup)
         dest=destination_for(workspace,pair,pair["extension"])
-        dest.parent.mkdir(parents=True,exist_ok=True)
         previous=db.execute("SELECT * FROM xstage_exports WHERE song_id=?",(song_id,)).fetchone()
         if previous and previous["version_id"]==version["id"] and dest.is_file():
             if digest(dest)==previous["sha256"]:
                 return {"path":str(dest),"skipped":True,"sha256":previous["sha256"]}
+        # Check completed exports before reading the source; re-running the
+        # entire catalog should skip them even if the original was moved.
+        # Unconverted tracks still require the genuine original media bytes.
+        lookup=db.execute("SELECT * FROM xstage_media WHERE id=?",
+                          (pair["source_media_id"],)).fetchone()
+        media_file=source_for_build(workspace,db,lookup)
+        dest.parent.mkdir(parents=True,exist_ok=True)
         metadata_sha=hashlib.sha256(meta).digest()
         fd,name=tempfile.mkstemp(prefix=".xstage-build-",dir=dest.parent)
         os.close(fd)

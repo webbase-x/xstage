@@ -614,10 +614,19 @@ class Handler(BaseHTTPRequestHandler):
                 result=manual.approve(self.state.workspace,
                     body.get("song_id",""),body.get("version_id"))
             elif path=="/api/build":
+                all_catalog=body.get("all_catalog") is True
                 all_ready=body.get("all_ready") is True
+                if all_catalog and all_ready:
+                    raise ValueError("เลือกได้เพียงโหมดสร้างทั้งฐานหรือเฉพาะที่พร้อม")
                 excluded=body.get("excluded",[])
                 ids=body.get("song_ids",[])
-                if all_ready:
+                if all_catalog:
+                    if "song_ids" in body or "excluded" in body:
+                        raise ValueError("โหมดสร้างทั้งหมดต้องอ่านรายการจากฐานข้อมูลโดยตรง")
+                    total_songs=core.catalog_song_count(self.state.workspace)
+                    if not total_songs:
+                        raise ValueError("ยังไม่มีเพลงในฐานข้อมูล SQLite")
+                elif all_ready:
                     if not isinstance(excluded,list) or len(excluded)>500000 or any(
                             not isinstance(x,str) for x in excluded):
                         raise ValueError("รายการยกเว้นไม่ถูกต้อง")
@@ -631,22 +640,40 @@ class Handler(BaseHTTPRequestHandler):
                     eligible=manual.approved_selected_ids(self.state.workspace,ids)
                     if any(song_id not in eligible for song_id in ids):
                         raise ValueError("มีเพลงที่ยังไม่พร้อมสร้างหรือยังรอการยืนยัน กรุณาตรวจและปาดเนื้อร้องก่อน")
-                # Explicit selections are de-duplicated. The all-ready mode
-                # is a catalog query, not a giant browser-side checkbox list.
-                ids=list(dict.fromkeys(ids))
+                # Explicit selections are de-duplicated. Whole-database mode
+                # iterates the registry in bounded SQLite batches and attempts
+                # every track, not just reviewed/timed ones.
+                if not all_catalog:
+                    ids=list(dict.fromkeys(ids))
                 def run_build(progress,cancel):
-                    total={"done":0,"total":len(ids),"built":0,"skipped":0,
-                           "failed":0,"errors":[]}
-                    for song_id in ids:
+                    expected=total_songs if all_catalog else len(ids)
+                    total={"done":0,"total":expected,"built":0,"skipped":0,
+                           "blocked":0,"failed":0,"errors":[]}
+                    catalog=(core.catalog_song_ids(self.state.workspace)
+                             if all_catalog else iter(ids))
+                    for song_id in catalog:
                         if cancel.is_set():break
                         try:
                             info=core.build_song(self.state.workspace,song_id)
                             total["skipped" if info["skipped"] else "built"]+=1
-                        except (OSError,ValueError,TypeError) as e:
+                        except ValueError as e:
+                            reason=str(e)
+                            if ("ยังไม่มีเนื้อร้องพร้อมเวลา" in reason or
+                                "CUR ยังไม่ครบ" in reason):
+                                total["blocked"]+=1
+                            else:
+                                total["failed"]+=1
+                            if len(total["errors"])<50:
+                                total["errors"].append(song_id[:20]+" · "+reason[:200])
+                        except (OSError,TypeError) as e:
                             total["failed"]+=1
-                            if len(total["errors"])<20:total["errors"].append(str(e)[:200])
+                            if len(total["errors"])<50:
+                                total["errors"].append(song_id[:20]+" · "+str(e)[:200])
                         total["done"]+=1
-                        progress(dict(total),f"สร้างไฟล์ {total['done']:,}/{len(ids):,}")
+                        progress(dict(total),
+                            f"ตรวจทั้งฐาน {total['done']:,}/{expected:,} · "
+                            f"สร้าง {total['built']:,} · ซ้ำ {total['skipped']:,} · "
+                            f"ข้อมูลไม่ครบ {total['blocked']:,} · ผิดพลาด {total['failed']:,}")
                     return total
                 result=self.state.start_job("build",run_build)
             elif path=="/api/job/cancel":
