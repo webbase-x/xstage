@@ -640,6 +640,35 @@ try
     if (normalizedHosts.ActiveCount != 0 || normalizedHosts.WaitingCount != 0)
         throw new Exception("Normalized host test leaked scheduler slots.");
 
+    // A cancelled waiter from a saturated host must not reserve global capacity
+    // after that host releases its active lease. A different host can proceed.
+    var cancellationIsolation = new TransferSlotQueue(1, 1);
+    using (var active = await cancellationIsolation.EnterAsync(
+        "isolation-active", "first.test", 1, CancellationToken.None))
+    {
+        using var cancel = new CancellationTokenSource();
+        var waiting = cancellationIsolation.EnterAsync(
+            "isolation-cancelled", "first.test", 1, cancel.Token);
+        if (waiting.IsCompleted || cancellationIsolation.WaitingCount != 1)
+            throw new Exception("Saturated host waiter must remain queued.");
+        cancel.Cancel();
+        try
+        {
+            using var unexpected = await waiting.WaitAsync(TimeSpan.FromSeconds(3));
+            throw new Exception("Cancelled saturated-host waiter acquired a lease.");
+        }
+        catch (OperationCanceledException) { }
+    }
+    using (var next = await cancellationIsolation.EnterAsync(
+        "isolation-next", "second.test", 1, CancellationToken.None)
+        .WaitAsync(TimeSpan.FromSeconds(3)))
+    {
+        if (cancellationIsolation.ActiveCount != 1 || cancellationIsolation.WaitingCount != 0)
+            throw new Exception("Cancelled host waiter blocked the next independent host.");
+    }
+    if (cancellationIsolation.ActiveCount != 0 || cancellationIsolation.WaitingCount != 0)
+        throw new Exception("Cancellation isolation leaked scheduler capacity.");
+
     // Very large resumable files must retain contiguous, overflow-safe byte
     // boundaries, including when the file is smaller than the range count.
     foreach (var size in new long[] { 0, 1, 7, 31, 32, 33, 1025, long.MaxValue })
