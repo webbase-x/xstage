@@ -155,6 +155,15 @@ def validate_sqlite_sidecars(data, names):
 
 
 def rollback(data,safety,existed,replaced=FILES):
+    # Direct callers must not escape the application data directory or
+    # restore the same file twice. Validate names before any filesystem access.
+    allowed = set(FILES + OPTIONAL_FILES)
+    if (not isinstance(replaced, (list, tuple)) or not isinstance(existed, (list, tuple))
+            or any(not isinstance(name, str) or name not in allowed for name in replaced)
+            or any(not isinstance(name, str) or name not in allowed for name in existed)
+            or len(set(replaced)) != len(replaced) or len(set(existed)) != len(existed)
+            or not set(existed).issubset(replaced)):
+        raise ValueError('รายการไฟล์ย้อนคืนไม่ปลอดภัย')
     data, safety = Path(data), Path(safety)
     # This function is also called directly by recovery tests and tools.
     # Refuse redirected directories before reading snapshots or changing live data.
