@@ -659,7 +659,7 @@ try
         if (actual != expected)
             throw new Exception($"Adaptive size boundary {fileBytes}: expected {expected}, got {actual}.");
         if (AdaptiveSegmentPlanner.Recommend(8, fileBytes, 64 * mib, false) >
-            8 || AdaptiveSegmentPlanner.Recommend(32, bytes, 64 * mib, true) != 32)
+            8 || AdaptiveSegmentPlanner.Recommend(32, fileBytes, 64 * mib, true) != 32)
             throw new Exception("Adaptive size threshold overrode user or checkpoint geometry.");
     }
     foreach (var (speed, expected) in new (double Speed, int Parts)[]
