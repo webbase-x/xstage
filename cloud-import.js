@@ -498,6 +498,18 @@ class Importer {
     this.dom.input?.addEventListener('cancel',()=>{this.resumeAfterPicker=false;});
     scope.addEventListener('pagehide',()=>this.stop('ปิดหน้าเว็บ · หยุดและจดจำจุดทำต่อ'));
     const authUpdated=()=>{
+      const auth=this.session();
+      // Explicit login performed elsewhere in the app may renew the same
+      // account. Preserve the plan and clear only its expired-token warning.
+      if(auth?.sub&&auth.sub===this.selectedSub&&
+         Number(auth.expiresAt)>Date.now()+60000&&this.authRequired){
+        this.authRequired=false;
+        if(this.saved){
+          this.saved.error='';
+          void checkpoint(auth.sub,this.saved);
+        }
+        this.status('Google เชื่อมต่อแล้ว · กดทำต่อเพื่อใช้ไฟล์ที่ยังไม่เสร็จ');
+      }
       this.updateOpen();this.refreshButtons();
     };
     scope.addEventListener('xstage:auth-ready',authUpdated);
@@ -708,15 +720,15 @@ class Importer {
       'เริ่มตรวจ MD5 และนำเข้า ('+approved.length.toLocaleString('th-TH')+')';
     if(this.dom.done)this.dom.done.textContent=this.completed?'เสร็จแล้ว · ปิด':'ปิดหน้าต่าง';
     const verified=!!this.session()?.token&&!!this.session()?.sub;
-    this.dom.start.disabled=this.running||this.lockPending||!approved.length||!verified;
+    this.dom.start.disabled=this.running||this.lockPending||!approved.length||!verified||needsGoogle;
     if(this.dom.done)this.dom.done.disabled=false;
     this.dom.start.hidden=!!this.running;
     this.dom.pause.disabled=!this.running;
     this.dom.pause.hidden=!this.running;
     this.dom.cancel.disabled=!this.running;
     this.dom.cancel.hidden=true;
-    this.dom.resume.disabled=this.running||this.lockPending||!resumable||!verified;
-    this.dom.resume.hidden=this.running||!resumable;
+    this.dom.resume.disabled=this.running||this.lockPending||!resumable||!verified||needsGoogle;
+    this.dom.resume.hidden=this.running||!resumable||needsGoogle;
     if(this.dom.reauthorize){
       this.dom.reauthorize.hidden=this.running||!needsGoogle;
       this.dom.reauthorize.disabled=this.running||this.lockPending||!this.options.reconnect;
