@@ -10,6 +10,7 @@ namespace XStageDownloadManager;
 public sealed partial class MainForm
 {
     private readonly TreeView _categories = new();
+    private readonly ImageList _categoryIcons = new() { ImageSize = new Size(20, 20), ColorDepth = ColorDepth.Depth32Bit };
     private readonly Dictionary<string, TreeNode> _categoryNodes = new();
     private TableLayoutPanel? _workspaceRoot;
     private Panel? _entryShell;
@@ -104,17 +105,32 @@ public sealed partial class MainForm
             BackColor = DarkTop, ForeColor = Color.White,
             Font = new Font("Segoe UI", 9, FontStyle.Regular),
             GripStyle = ToolStripGripStyle.Hidden,
+            ImageScalingSize = new Size(18, 18),
+            Renderer = new ToolStripProfessionalRenderer(new XStageMenuColors()),
             LayoutStyle = ToolStripLayoutStyle.HorizontalStackWithOverflow
         };
         ToolStripMenuItem Action(string name, EventHandler handler)
         {
-            var item = new ToolStripMenuItem(name);
+            var glyph = MenuGlyph(name);
+            var item = new ToolStripMenuItem(name)
+            {
+                Image = DrawToolbarGlyph(glyph, GlyphColor(glyph)),
+                ForeColor = Color.FromArgb(236, 246, 251),
+                BackColor = DarkPanel,
+                ToolTipText = name
+            };
             item.Click += handler;
             return item;
         }
         ToolStripMenuItem Menu(string title, params ToolStripItem[] children)
         {
-            var item = new ToolStripMenuItem(title) { ForeColor = Color.White };
+            var glyph = MenuGlyph(title);
+            var item = new ToolStripMenuItem(title)
+            {
+                Image = DrawToolbarGlyph(glyph, GlyphColor(glyph)),
+                ForeColor = Color.White,
+                BackColor = DarkTop
+            };
             item.DropDownItems.AddRange(children);
             return item;
         }
@@ -125,6 +141,7 @@ public sealed partial class MainForm
             (_, _) => WithSelectedJob(RenameCompletedJob));
         menu.Items.Add(Menu("งาน",
             addUrl,
+            new ToolStripSeparator(),
             Action("เริ่ม / ต่อรายการที่เลือก", (_, _) => SelectedAction(_engine.Start)),
             Action("พักรายการที่เลือก", (_, _) => SelectedAction(_engine.Pause)),
             Action("ทำต่อทุกงานที่ยังไม่เสร็จ", (_, _) => StartIncomplete()),
@@ -147,11 +164,13 @@ public sealed partial class MainForm
         };
         menu.Items.Add(Menu("คิว",
             priority,
+            new ToolStripSeparator(),
             selectQueue,
             Action("สร้างคิวสำหรับรายการที่เลือก...",
                 (_, _) => WithSelectedJob(CreateJobQueue)),
             Action("เปลี่ยนชื่อคิวปัจจุบัน...",
                 (_, _) => WithSelectedJob(RenameJobQueue)),
+            new ToolStripSeparator(),
             Action("จำกัดความเร็ว HTTP รายไฟล์...",
                 (_, _) => WithSelectedJob(ConfigureFileSpeed)),
             Action("ตั้งค่าความเร็วรวมและจำนวนงาน...",
@@ -176,17 +195,20 @@ public sealed partial class MainForm
                 {
                     if (job.Kind == "Video") OpenVideoLog(job);
                 })),
+            new ToolStripSeparator(),
             Action("แสดงเฉพาะวิดีโอ", (_, _) => SelectCategory("video"))));
 
         menu.Items.Add(Menu("ไฟล์",
             Action("เปิดไฟล์ / โฟลเดอร์", (_, _) => OpenSelected()),
             renameFile,
+            new ToolStripSeparator(),
             Action("ลบรายการจากประวัติ", (_, _) => RemoveSelectedJob()),
             Action("ลบเฉพาะประวัติที่เสร็จแล้ว", (_, _) => ClearCompletedHistory())));
         menu.Items.Add(Menu("ตั้งค่า",
             Action("ประสิทธิภาพ / การเชื่อมต่อ...", (_, _) => ConfigurePerformance()),
             Action("จำนวนครั้งลองใหม่...", (_, _) => ConfigureNetworkRetry()),
             Action("รับดาวน์โหลดจาก Chrome / Edge...", (_, _) => SetupBrowserIntegration()),
+            new ToolStripSeparator(),
             Action("ตรวจสอบอัปเดต", async (_, _) => await CheckForUpdatesAsync(true))));
         menu.Items.Add(Menu("มุมมอง",
             Action("งานทั้งหมด", (_, _) => SelectCategory("all")),
@@ -194,6 +216,7 @@ public sealed partial class MainForm
             Action("รอคิว", (_, _) => SelectCategory("queued")),
             Action("ข้อผิดพลาด", (_, _) => SelectCategory("failed")),
             Action("ดาวน์โหลดเสร็จแล้ว", (_, _) => SelectCategory("completed")),
+            new ToolStripSeparator(),
             Action("แสดง/ซ่อนช่องเพิ่ม URL", (_, _) => ShowInputPanel(!_inputVisible))));
         menu.Items.Add(Menu("ช่วยเหลือ",
             Action("เกี่ยวกับ X-Stage Download Manager", (_, _) =>
@@ -246,36 +269,189 @@ public sealed partial class MainForm
             item.Click += callback;
             bar.Items.Add(item);
         }
-        Button("＋ เพิ่มงาน", "＋", Accent,
+        Button("＋ เพิ่มงาน", "add", Accent,
             (_, _) => ShowAddUrlFromClipboard(), "เพิ่ม URL หรือวิดีโอ โดยไม่เริ่มอัตโนมัติจากคลิปบอร์ด");
-        Button("▶ เริ่ม / ต่อ", "▶", Color.FromArgb(140, 193, 255),
+        Button("▶ เริ่ม / ต่อ", "play", Color.FromArgb(140, 193, 255),
             (_, _) => SelectedAction(_engine.Start), "เริ่มงานที่เลือก");
-        Button("Ⅱ พัก", "Ⅱ", Color.FromArgb(245, 185, 125),
+        Button("Ⅱ พัก", "pause", Color.FromArgb(245, 185, 125),
             (_, _) => SelectedAction(_engine.Pause), "พักงานที่เลือก");
-        Button("◷ คิว", "◷", Color.FromArgb(228, 204, 153),
+        Button("◷ คิว", "queue", Color.FromArgb(228, 204, 153),
             (_, _) => SelectCategory("queued"), "ดูรายการที่กำลังรอคิว");
-        Button("⚙ ความเร็ว", "⚙", Color.FromArgb(165, 186, 244),
+        Button("⚙ ความเร็ว", "gauge", Color.FromArgb(165, 186, 244),
             (_, _) => ConfigurePerformance(), "ตั้งค่าความเร็วและจำนวนงานพร้อมกัน");
-        Button("↧ เบราว์เซอร์", "↧", Color.FromArgb(137, 216, 255),
+        Button("↧ เบราว์เซอร์", "browser", Color.FromArgb(137, 216, 255),
             (_, _) => SetupBrowserIntegration(), "ตั้งค่าการรับดาวน์โหลดจาก Chrome / Edge");
         _toolbar = bar;
         return bar;
     }
 
+    private static string MenuGlyph(string label)
+    {
+        if (label.Contains("เพิ่ม") || label.Contains("สร้างคิว")) return "add";
+        if (label.Contains("เริ่ม") || label.Contains("ต่อรายการ") || label.Contains("ทำต่อ")) return "play";
+        if (label.Contains("พัก") || label.Contains("หยุด")) return "pause";
+        if (label.Contains("คิว") || label.Contains("ลำดับ")) return "queue";
+        if (label.Contains("ความเร็ว") || label.Contains("ประสิทธิภาพ")) return "gauge";
+        if (label.Contains("เบราว์เซอร์") || label.Contains("Chrome")) return "browser";
+        if (label.Contains("ข้อผิดพลาด") || label.Contains("บันทึกข้อผิดพลาด")) return "alert";
+        if (label.Contains("วิดีโอ") || label.Contains("สื่อ")) return "video";
+        if (label.Contains("อัปเดต") || label.Contains("ลองใหม่")) return "refresh";
+        if (label.Contains("ลบ")) return "trash";
+        if (label.Contains("เปิดไฟล์") || label.Contains("โฟลเดอร์")) return "folder";
+        if (label.Contains("เสร็จ")) return "check";
+        if (label.Contains("ไฟล์")) return "file";
+        if (label.Contains("มุมมอง") || label.Contains("แสดง")) return "eye";
+        if (label.Contains("ตั้งค่า")) return "settings";
+        if (label.Contains("ช่วยเหลือ") || label.Contains("เกี่ยวกับ")) return "info";
+        if (label.Contains("สูง") || label.Contains("ต่ำ") || label.Contains("ปกติ")) return "queue";
+        return "file";
+    }
+
+    private static Color GlyphColor(string glyph) => glyph switch
+    {
+        "pause" or "queue" => Color.FromArgb(240, 195, 127),
+        "trash" or "alert" => Color.FromArgb(248, 152, 152),
+        "play" => Color.FromArgb(145, 198, 250),
+        "check" => Color.FromArgb(140, 227, 172),
+        "video" or "browser" => Color.FromArgb(143, 202, 254),
+        _ => Accent
+    };
+
+    // These symbols are original antialiased vector drawings, not icons
+    // copied from any third-party download manager. They scale consistently
+    // even when Windows does not have a particular symbol font installed.
     private static Image DrawToolbarGlyph(string glyph, Color color)
     {
         var image = new Bitmap(40, 40);
-        using var g = Graphics.FromImage(image);
-        g.Clear(Color.Transparent);
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        using var font = new Font("Segoe UI Symbol", 27, FontStyle.Regular, GraphicsUnit.Pixel);
-        using var brush = new SolidBrush(color);
-        using var format = new StringFormat
+        using var graphics = Graphics.FromImage(image);
+        graphics.Clear(Color.Transparent);
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        using var pen = new Pen(color, 2.8f)
         {
-            Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center
+            StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round
         };
-        g.DrawString(glyph, font, brush, new RectangleF(0, -2, 40, 40), format);
+        using var brush = new SolidBrush(color);
+
+        switch (glyph)
+        {
+            case "add":
+                graphics.DrawEllipse(pen, 6, 6, 28, 28);
+                graphics.DrawLine(pen, 20, 12, 20, 28);
+                graphics.DrawLine(pen, 12, 20, 28, 20);
+                break;
+            case "play":
+                graphics.FillPolygon(brush, new[]
+                {
+                    new Point(13, 9), new Point(31, 20), new Point(13, 31)
+                });
+                break;
+            case "pause":
+                graphics.FillRectangle(brush, 11, 10, 6, 20);
+                graphics.FillRectangle(brush, 23, 10, 6, 20);
+                break;
+            case "queue":
+                for (var i = 0; i < 3; i++)
+                {
+                    var y = 12 + i * 8;
+                    graphics.FillEllipse(brush, 7, y - 2, 4, 4);
+                    graphics.DrawLine(pen, 16, y, 33, y);
+                }
+                break;
+            case "gauge":
+                graphics.DrawArc(pen, 7, 8, 26, 26, 180, 180);
+                graphics.DrawLine(pen, 20, 25, 28, 15);
+                graphics.FillEllipse(brush, 17, 22, 6, 6);
+                break;
+            case "browser":
+                graphics.DrawRectangle(pen, 7, 8, 26, 24);
+                graphics.DrawLine(pen, 7, 15, 33, 15);
+                graphics.FillEllipse(brush, 10, 11, 2.5f, 2.5f);
+                graphics.FillEllipse(brush, 15, 11, 2.5f, 2.5f);
+                break;
+            case "video":
+                graphics.DrawRectangle(pen, 7, 9, 26, 22);
+                graphics.FillPolygon(brush, new[]
+                {
+                    new Point(17, 15), new Point(27, 20), new Point(17, 25)
+                });
+                break;
+            case "folder":
+                graphics.DrawLines(pen, new[]
+                {
+                    new Point(6, 14), new Point(6, 10), new Point(17, 10),
+                    new Point(21, 14), new Point(34, 14), new Point(34, 30),
+                    new Point(6, 30), new Point(6, 14)
+                });
+                break;
+            case "refresh":
+                graphics.DrawArc(pen, 9, 9, 22, 22, 35, 280);
+                graphics.DrawLine(pen, 29, 12, 32, 20);
+                graphics.DrawLine(pen, 32, 20, 24, 18);
+                break;
+            case "trash":
+                graphics.DrawRectangle(pen, 12, 14, 16, 20);
+                graphics.DrawLine(pen, 9, 11, 31, 11);
+                graphics.DrawLine(pen, 17, 7, 23, 7);
+                graphics.DrawLine(pen, 17, 19, 17, 28);
+                graphics.DrawLine(pen, 23, 19, 23, 28);
+                break;
+            case "check":
+                graphics.DrawEllipse(pen, 6, 6, 28, 28);
+                graphics.DrawLines(pen, new[]
+                {
+                    new Point(12, 21), new Point(18, 27), new Point(29, 14)
+                });
+                break;
+            case "alert":
+                graphics.DrawEllipse(pen, 6, 6, 28, 28);
+                graphics.DrawLine(pen, 20, 12, 20, 23);
+                graphics.FillEllipse(brush, 18, 28, 4, 4);
+                break;
+            case "eye":
+                graphics.DrawArc(pen, 6, 13, 28, 15, 195, 150);
+                graphics.DrawArc(pen, 6, 13, 28, 15, 15, 150);
+                graphics.FillEllipse(brush, 17, 17, 6, 6);
+                break;
+            case "settings":
+                graphics.DrawEllipse(pen, 12, 12, 16, 16);
+                graphics.DrawEllipse(pen, 17, 17, 6, 6);
+                for (var i = 0; i < 8; i++)
+                {
+                    var angle = i * Math.PI / 4;
+                    var x1 = 20 + (int)Math.Round(Math.Cos(angle) * 11);
+                    var y1 = 20 + (int)Math.Round(Math.Sin(angle) * 11);
+                    var x2 = 20 + (int)Math.Round(Math.Cos(angle) * 16);
+                    var y2 = 20 + (int)Math.Round(Math.Sin(angle) * 16);
+                    graphics.DrawLine(pen, x1, y1, x2, y2);
+                }
+                break;
+            case "info":
+                graphics.DrawEllipse(pen, 6, 6, 28, 28);
+                graphics.DrawLine(pen, 20, 18, 20, 28);
+                graphics.FillEllipse(brush, 18, 11, 4, 4);
+                break;
+            default:
+                graphics.DrawRectangle(pen, 10, 6, 20, 28);
+                graphics.DrawLine(pen, 14, 15, 26, 15);
+                graphics.DrawLine(pen, 14, 21, 26, 21);
+                break;
+        }
         return image;
+    }
+
+    private sealed class XStageMenuColors : ProfessionalColorTable
+    {
+        public override Color ToolStripDropDownBackground => DarkPanel;
+        public override Color ImageMarginGradientBegin => DarkPanel;
+        public override Color ImageMarginGradientMiddle => DarkPanel;
+        public override Color ImageMarginGradientEnd => DarkPanel;
+        public override Color MenuItemSelected => Color.FromArgb(31, 79, 91);
+        public override Color MenuItemSelectedGradientBegin => Color.FromArgb(31, 79, 91);
+        public override Color MenuItemSelectedGradientEnd => Color.FromArgb(31, 79, 91);
+        public override Color MenuItemBorder => Accent;
+        public override Color MenuItemPressedGradientBegin => DarkPanel;
+        public override Color MenuItemPressedGradientEnd => DarkPanel;
     }
 
     private Panel CreateQuickEntry()
@@ -402,6 +578,19 @@ public sealed partial class MainForm
         side.Controls.Add(section);
         _categories.Dock = DockStyle.Fill;
         _categories.BorderStyle = BorderStyle.None;
+        _categories.ImageList = _categoryIcons;
+        foreach (var (key, glyph) in new (string Key, string Glyph)[]
+        {
+            ("all", "folder"), ("active", "play"), ("queued", "queue"),
+            ("incomplete", "pause"), ("failed", "alert"),
+            ("completed", "check"), ("type", "folder"), ("video", "video"),
+            ("music", "file"), ("document", "file"), ("program", "settings"),
+            ("archive", "folder"), ("other", "file")
+        })
+        {
+            using var icon = DrawToolbarGlyph(glyph, GlyphColor(glyph));
+            _categoryIcons.Images.Add(key, icon);
+        }
         _categories.ShowLines = false;
         _categories.ShowRootLines = false;
         _categories.HideSelection = false;
@@ -409,7 +598,7 @@ public sealed partial class MainForm
         _categories.BackColor = DarkPanel;
         _categories.ForeColor = Color.FromArgb(230, 239, 249);
         _categories.Font = new Font("Segoe UI", 10);
-        _categories.ItemHeight = 31;
+        _categories.ItemHeight = 33;
         _categories.Indent = 17;
         _categories.AfterSelect += (_, e) =>
         {
@@ -419,23 +608,24 @@ public sealed partial class MainForm
                 RefreshRows();
             }
         };
-        var all = AddCategory(null, "all", "▣  ดาวน์โหลดทั้งหมด");
-        AddCategory(all, "active", "◉  กำลังดาวน์โหลด");
-        AddCategory(all, "queued", "◷  รอคิว");
-        AddCategory(all, "incomplete", "Ⅱ  ยังไม่เสร็จ");
-        AddCategory(all, "failed", "！  ข้อผิดพลาด");
-        AddCategory(null, "completed", "✓  เสร็จแล้ว");
-        var type = new TreeNode("▦  ประเภทไฟล์")
+        var all = AddCategory(null, "all", "ดาวน์โหลดทั้งหมด");
+        AddCategory(all, "active", "กำลังดาวน์โหลด");
+        AddCategory(all, "queued", "รอคิว");
+        AddCategory(all, "incomplete", "ยังไม่เสร็จ");
+        AddCategory(all, "failed", "ข้อผิดพลาด");
+        AddCategory(null, "completed", "เสร็จแล้ว");
+        var type = new TreeNode("ประเภทไฟล์")
         {
-            ForeColor = MutedText, NodeFont = new Font("Segoe UI", 10, FontStyle.Bold)
+            ForeColor = MutedText, NodeFont = new Font("Segoe UI", 10, FontStyle.Bold),
+            ImageKey = "type", SelectedImageKey = "type"
         };
         _categories.Nodes.Add(type);
-        AddCategory(type, "video", "▣  วิดีโอ");
-        AddCategory(type, "music", "♫  เพลงและเสียง");
-        AddCategory(type, "document", "▤  เอกสาร");
-        AddCategory(type, "program", "▧  โปรแกรม");
-        AddCategory(type, "archive", "▥  ไฟล์บีบอัด");
-        AddCategory(type, "other", "◇  อื่น ๆ");
+        AddCategory(type, "video", "วิดีโอ");
+        AddCategory(type, "music", "เพลงและเสียง");
+        AddCategory(type, "document", "เอกสาร");
+        AddCategory(type, "program", "โปรแกรม");
+        AddCategory(type, "archive", "ไฟล์บีบอัด");
+        AddCategory(type, "other", "อื่น ๆ");
         all.Expand();
         type.Expand();
 
@@ -570,7 +760,10 @@ public sealed partial class MainForm
 
     private TreeNode AddCategory(TreeNode? parent, string key, string title)
     {
-        var node = new TreeNode(title) { Tag = key };
+        var node = new TreeNode(title)
+        {
+            Tag = key, ImageKey = key, SelectedImageKey = key
+        };
         if (parent is null) _categories.Nodes.Add(node);
         else parent.Nodes.Add(node);
         _categoryNodes[key] = node;
