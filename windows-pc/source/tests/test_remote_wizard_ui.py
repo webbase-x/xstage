@@ -50,6 +50,11 @@ class RemoteWizardUiTests(unittest.TestCase):
             for name in ('StringVar','IntVar','BooleanVar'):
                 stack.enter_context(patch('karaoke.remote_ui.tk.'+name, Variable))
             stack.enter_context(patch('PIL.ImageTk.PhotoImage', return_value=Mock()))
+            # A Windows CI runner can have a private Ethernet IP even while
+            # this test simulates a denied Wi-Fi permission. Keep scenarios
+            # deterministic instead of accidentally using the runner's LAN.
+            stack.enter_context(patch('karaoke.remote_boot.lan_address',
+                side_effect=lambda state: state.address if state.ready else ''))
             factory = stack.enter_context(patch('karaoke.remote.RemoteServer', side_effect=[OSError('port busy'), server]))
             remote_window(app)
             self.assertEqual(button('ถัดไป →').options['state'], 'disabled')
@@ -83,6 +88,8 @@ class RemoteWizardUiTests(unittest.TestCase):
             server.close.assert_not_called()
             click('หยุดรีโมท'); server.close.assert_called_once()
             self.assertIsNone(app.remote)
+            self.assertFalse(app.settings['remote_auto_start'],
+                             'Explicit Stop prevents surprise remote restart')
             self.assertFalse(button('หยุดรีโมท').visible)
             self.assertIsNotNone(button('ถัดไป →'))
 
