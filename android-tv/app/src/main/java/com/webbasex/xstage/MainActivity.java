@@ -346,7 +346,8 @@ public final class MainActivity extends Activity {
                 case KeyEvent.KEYCODE_ENTER:
                 case KeyEvent.KEYCODE_NUMPAD_ENTER:
                 case KeyEvent.KEYCODE_BUTTON_A:
-                    activateWebFocus();
+                    // Holding OK must not activate playback or change songs repeatedly.
+                    if (event.getRepeatCount() == 0) activateWebFocus();
                     return true;
                 default:
                     break;
@@ -357,6 +358,20 @@ public final class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        // Repeat arrows for navigation but never auto-repeat transport actions.
+        if (event != null && event.getRepeatCount() > 0) {
+            switch (keyCode) {
+                case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+                case KeyEvent.KEYCODE_HEADSETHOOK:
+                case KeyEvent.KEYCODE_MEDIA_NEXT:
+                case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
+                case KeyEvent.KEYCODE_MENU:
+                case KeyEvent.KEYCODE_SEARCH:
+                    return true;
+                default:
+                    break;
+            }
+        }
         switch (keyCode) {
             case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
             case KeyEvent.KEYCODE_HEADSETHOOK:

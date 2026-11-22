@@ -131,6 +131,62 @@ assert.ok(host.includes("type:'request-received'")&&host.includes('if(playImmedi
 assert.ok(remote.includes("data.type==='playback-status'"),
   'phone must receive actual stage playback success or error');
 
+// TV remote actions must reuse the hosted Karaoke Online controls and queue.
+assert.ok(app.includes('function xstageTvRefreshQuickMenu(panel){'),
+  'TV quick menu must display fresh Online playback state');
+for(const id of ['xstage-tv-quick-play','xstage-tv-quick-previous',
+  'xstage-tv-quick-next','xstage-tv-quick-restart',
+  'xstage-tv-quick-key-down','xstage-tv-quick-key-up',
+  'xstage-tv-quick-queue-list']){
+  assert.ok(app.includes(id),'missing TV transport or queue action: '+id);
+}
+assert.ok(app.includes('xstageTvRefreshQuickMenu(panel);')&&
+  app.includes("panel.querySelector('button:not([hidden]):not([disabled])')"),
+  'TV menu must refresh and focus an enabled visible button');
+assert.ok(app.includes("'android-tv-update-panel:not([hidden]):not(.during-playback)'"),
+  'nonblocking APK notification cannot steal D-pad menu focus');
+assert.ok(main.includes('if (event.getRepeatCount() == 0) activateWebFocus();')&&
+  main.includes('if (event != null && event.getRepeatCount() > 0)'),
+  'holding OK or media remote keys must not repeat actions');
+const refreshCode=segment(app,'function xstageTvRefreshQuickMenu(panel){','function xstageTvQuickMenu(){');
+{
+  const controls=new Map();
+  for(const id of ['play-pause','next','previous','restart-current',
+    'midi-key-down','midi-key-up','midi-transpose-control'])
+    controls.set(id,{disabled:id==='previous',hidden:false});
+  const nodes=new Map(),list={items:[],replaceChildren(){this.items=[];},
+    append(item){this.items.push(item);}};
+  for(const id of ['xstage-tv-quick-now','xstage-tv-quick-key',
+    'xstage-tv-quick-queue-count','xstage-tv-quick-login',
+    'xstage-tv-quick-play','xstage-tv-quick-previous',
+    'xstage-tv-quick-next','xstage-tv-quick-restart',
+    'xstage-tv-quick-key-down','xstage-tv-quick-key-up'])
+    nodes.set(id,{textContent:'',hidden:false,disabled:false});
+  nodes.set('xstage-tv-quick-queue-list',list);
+  const panel={querySelector(s){return nodes.get(s.slice(1));}};
+  const document={getElementById(id){return controls.get(id)||null;},
+    createElement(){return {textContent:''};}};
+  const state={current:{title:'เพลงที่กำลังร้อง',artist:'นักร้อง'},
+    queue:[{title:'คิว ๑',artist:'ศิลปิน'},{title:'คิว ๒'}],
+    liveMidiSource:{},token:'logged-in'};
+  const ui={songKey:{textContent:'คีย์ C'}};
+  const refresh=new Function('state','document','ui',
+    refreshCode+'\nreturn xstageTvRefreshQuickMenu;')(state,document,ui);
+  refresh(panel);
+  assert.equal(nodes.get('xstage-tv-quick-now').textContent,'เพลงที่กำลังร้อง · นักร้อง');
+  assert.equal(nodes.get('xstage-tv-quick-key').textContent,'คีย์ C');
+  assert.equal(nodes.get('xstage-tv-quick-queue-count').textContent,'คิวถัดไป 2 เพลง');
+  assert.deepEqual(list.items.map(x=>x.textContent),['คิว ๑ · ศิลปิน','คิว ๒']);
+  assert.equal(nodes.get('xstage-tv-quick-login').hidden,true);
+  assert.equal(nodes.get('xstage-tv-quick-previous').disabled,true);
+  assert.equal(nodes.get('xstage-tv-quick-key-up').disabled,false);
+  state.liveMidiSource=null;state.queue=[];state.token='';
+  refresh(panel);
+  assert.equal(nodes.get('xstage-tv-quick-login').hidden,false);
+  assert.equal(nodes.get('xstage-tv-quick-key-up').disabled,true);
+  assert.equal(list.items[0].textContent,'ยังไม่มีเพลงรอในคิว');
+}
+
 console.log('Android TV integration: update detection, nonintrusive toast, login refresh, remote & native safety passed');
 
 assert.ok(app.includes("function setAndroidTvStageAccess(granted,accountSub='')"),'native stage access gate must exist');

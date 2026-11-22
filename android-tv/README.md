@@ -1,14 +1,25 @@
-## Fresh XStageSong library for Android TV / APK
+## Shared XStageKaraoke library — Android TV / APK
 
-The WebView player uses the same hosted X-Stage Karaoke Web catalog as PWA.
-For a fresh library the shared Drive root is `XStageSong`; new files are
-classified as `AUDIO/<bucket>/`, `VIDEO/<bucket>/`, `MIDI/MID/`,
-`MIDI/KAR/`, `MIDI/XSK/`, `MIDI/NCN/{SONG,LYRICS,CURSOR}/`,
-`LYRICS/<bucket>/`, and `SOUNDFONT/`. The compatible v4 catalog pointer
-stays at `LYRICS/current.json`, and the player addresses songs by Google
-Drive file ID, not by guessing paths. This documentation change also requests
-an APK build from the source containing the updated shared importer; only
-a green Android workflow and matching published SHA-256 prove a new binary.
+Android TV and tablets load the **same hosted** X-Stage Karaoke Online player
+at `https://webbase-x.github.io/xstage/karaoke.html`: one playback engine,
+one song catalog, one queue/remote protocol and one Google Drive layout.
+
+The only supported active Drive root is `XStageKaraoke`. Its primary folders
+are `SONGS/`, `DB/` and `SOUNDFONT/` (plus optional `BACKUP/`,
+`CACHE/` and `LOGS/`). The shared catalog's SQLite3 database lives under
+`DB/`. The APK must never create a separate library or fall back to retired
+roots. See `config.js` for the canonical folder map and revoked-root denylist.
+
+TV remote MENU/OK opens the TV-only quick menu with the live song, key and
+upcoming queue. Play/Pause, Previous, Next, Restart and MIDI transposition
+delegate to the **existing** Karaoke Online controls. Unavailable commands
+are disabled. Holding OK or a transport key cannot trigger repeated actions.
+
+Hosted web changes require no native APK rebuild. Java bridge changes do.
+An Android/TrueID TV hardware test is still necessary for WebView playback,
+Google device login, pairing, audio metering and update installation.
+
+---
 
 ## NCN MIDI/LYR/CUR on Android TV — v1.0.103 Build 1103
 

@@ -3572,6 +3572,25 @@ body.xstage-native-tv #remote-pair-panel #remote-pair-status{
 }
 
 
+/* TV quick menu inherits live Karaoke Online song, queue and key state. */
+.xstage-tv-quick-summary{
+  display:grid;gap:5px;margin-top:12px;padding:12px 15px;
+  border:1px solid rgba(107,192,210,.35);border-radius:13px;
+  background:rgba(2,19,37,.65);color:#d0edf5;font-size:clamp(.84rem,1.15vw,1rem);
+}
+.xstage-tv-quick-now{font-weight:850;font-size:clamp(1rem,1.45vw,1.25rem);color:#fff;overflow-wrap:anywhere}
+.xstage-tv-quick-key{color:#99f6dd;font-weight:800}
+.xstage-tv-quick-queue-list{margin:0;padding-left:1.5em;display:grid;gap:2px;max-height:6.2em;overflow:hidden}
+.xstage-tv-quick-queue-list li{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.xstage-tv-quick-actions button:disabled{opacity:.42;cursor:not-allowed;transform:none;box-shadow:none}
+@media(max-height:760px){
+  .xstage-tv-quick-box{padding:16px 20px;max-height:94dvh}
+  .xstage-tv-quick-box p{margin:5px 0}
+  .xstage-tv-quick-actions{gap:8px;margin-top:12px}
+  .xstage-tv-quick-actions button{min-height:52px;padding:7px 11px}
+  .xstage-tv-quick-summary{margin-top:8px;padding:8px 12px}
+}
+
 /* Android APK direct-audio metering: audio remains on HTMLMediaElement's
    native speaker path; this visual canvas reads only a SILENT capture stream.
    Keep meters below the fixed top-left brand, clear of QR and song lyrics. */

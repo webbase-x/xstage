@@ -293,8 +293,10 @@ function xstageTvVisible(element){
 }
 function xstageTvActiveScope(){
   const nativeTv=document.body.classList.contains('xstage-native-tv');
+  const quickMenu=document.getElementById('xstage-tv-quick-menu');
+  if(nativeTv&&xstageTvVisible(quickMenu))return quickMenu;
   const selectors=[
-    '.android-tv-update-panel:not([hidden])',
+    '.android-tv-update-panel:not([hidden]):not(.during-playback)',
     '.android-tv-auth-panel:not([hidden])',
     '.xstage-tv-quick-menu:not([hidden])',
     ...(nativeTv?[]:['.remote-pair-panel:not([hidden])']),
@@ -316,8 +318,58 @@ function xstageTvFocusable(scope=xstageTvActiveScope()){
   const selector='button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   return [...scope.querySelectorAll(selector)].filter(xstageTvVisible);
 }
-// Minimal TV-only control surface. The stage stays clean; physical MENU/Back
-// gives D-pad users a way to reach pairing, playback and updates.
+// Android TV shares the Karaoke Online engine, queue and transport actions.
+function xstageTvRefreshQuickMenu(panel){
+  const current=state.current;
+  const now=panel.querySelector('#xstage-tv-quick-now');
+  if(now)now.textContent=current
+    ?String(current.title||current.code||'เพลงปัจจุบัน')+
+      (current.artist?' · '+String(current.artist):'')
+    :'ยังไม่มีเพลงที่กำลังเล่น';
+  const key=panel.querySelector('#xstage-tv-quick-key');
+  if(key)key.textContent=ui.songKey?.textContent||'คีย์ —';
+  const count=panel.querySelector('#xstage-tv-quick-queue-count');
+  if(count)count.textContent='คิวถัดไป '+state.queue.length+' เพลง';
+  const list=panel.querySelector('#xstage-tv-quick-queue-list');
+  if(list){
+    list.replaceChildren();
+    const queued=state.queue.slice(0,3);
+    if(!queued.length){
+      const item=document.createElement('li');
+      item.textContent='ยังไม่มีเพลงรอในคิว';
+      list.append(item);
+    }else{
+      for(const song of queued){
+        const item=document.createElement('li');
+        item.textContent=String(song.title||song.code||'ไม่ทราบชื่อเพลง')+
+          (song.artist?' · '+String(song.artist):'');
+        list.append(item);
+      }
+    }
+  }
+  const login=panel.querySelector('#xstage-tv-quick-login');
+  if(login)login.hidden=!!state.token;
+  for(const [quickId,controlId] of [
+    ['xstage-tv-quick-play','play-pause'],
+    ['xstage-tv-quick-next','next'],
+    ['xstage-tv-quick-previous','previous'],
+    ['xstage-tv-quick-restart','restart-current']
+  ]){
+    const quick=panel.querySelector('#'+quickId);
+    const control=document.getElementById(controlId);
+    if(quick)quick.disabled=!control||control.disabled;
+  }
+  const transpose=document.getElementById('midi-transpose-control');
+  const midiReady=!!state.liveMidiSource&&!!transpose&&!transpose.hidden;
+  for(const [quickId,controlId] of [
+    ['xstage-tv-quick-key-down','midi-key-down'],
+    ['xstage-tv-quick-key-up','midi-key-up']
+  ]){
+    const quick=panel.querySelector('#'+quickId);
+    const control=document.getElementById(controlId);
+    if(quick)quick.disabled=!midiReady||!control||control.disabled;
+  }
+}
 function xstageTvQuickMenu(){
   let panel=document.getElementById('xstage-tv-quick-menu');
   if(panel)return panel;
@@ -330,15 +382,26 @@ function xstageTvQuickMenu(){
   panel.setAttribute('aria-label','เมนูรีโมททีวี X-Stage');
   panel.innerHTML='<div class="xstage-tv-quick-box">'+
     '<strong>X-STAGE · รีโมททีวี</strong>'+
-    '<p>ใช้ปุ่มลูกศรเลือกคำสั่ง กด OK เพื่อยืนยัน</p>'+
+    '<p>ใช้ลูกศรเลือกคำสั่ง กด OK เพื่อยืนยัน · ใช้ฐานเพลงเดียวกับ Karaoke Online</p>'+
+    '<div class="xstage-tv-quick-summary" role="status" aria-live="polite">'+
+      '<span id="xstage-tv-quick-now" class="xstage-tv-quick-now">ยังไม่มีเพลงที่กำลังเล่น</span>'+
+      '<span id="xstage-tv-quick-key" class="xstage-tv-quick-key">คีย์ —</span>'+
+      '<span id="xstage-tv-quick-queue-count">คิวถัดไป 0 เพลง</span>'+
+      '<ol id="xstage-tv-quick-queue-list" class="xstage-tv-quick-queue-list"></ol>'+
+    '</div>'+
     '<div class="xstage-tv-quick-actions">'+
-    '<button type="button" id="xstage-tv-quick-login">เข้าสู่ระบบ Google Drive</button>'+ 
+    '<button type="button" id="xstage-tv-quick-login">เข้าสู่ระบบ Google Drive</button>'+
     '<button type="button" id="xstage-tv-quick-qr">แสดง QR รีโมทมือถือ</button>'+
     '<button type="button" id="xstage-tv-quick-new-qr">สร้าง QR ใหม่</button>'+
     '<button type="button" id="xstage-tv-quick-play">เล่น / พักเพลง</button>'+
+    '<button type="button" id="xstage-tv-quick-previous">เพลงก่อนหน้า</button>'+
+    '<button type="button" id="xstage-tv-quick-next">เพลงถัดไป</button>'+
+    '<button type="button" id="xstage-tv-quick-restart">เริ่มเพลงใหม่</button>'+
+    '<button type="button" id="xstage-tv-quick-key-down">ลดคีย์ MIDI −</button>'+
+    '<button type="button" id="xstage-tv-quick-key-up">เพิ่มคีย์ MIDI +</button>'+
     '<button type="button" id="xstage-tv-quick-update">ตรวจสอบอัปเดต</button>'+
-    '<button type="button" id="xstage-tv-quick-refresh">↻ รีเฟรชหน้าจอทีวี</button>'+
-    '<button type="button" id="xstage-tv-quick-home">☆ เพิ่มไอคอนลงหน้าหลักทีวี</button>'+
+    '<button type="button" id="xstage-tv-quick-refresh">รีเฟรชหน้าจอทีวี</button>'+
+    '<button type="button" id="xstage-tv-quick-home">เพิ่มไอคอนลงหน้าหลักทีวี</button>'+
     '<button type="button" id="xstage-tv-quick-close">กลับสู่เวที</button>'+
     '</div></div>';
   document.body.append(panel);
@@ -354,10 +417,20 @@ function xstageTvQuickMenu(){
     panel.hidden=true;
     window.XStageRemoteQr?.retry?.();
   });
-  panel.querySelector('#xstage-tv-quick-play').addEventListener('click',()=>{
-    document.getElementById('play-pause')?.click();
-    panel.hidden=true;
-  });
+  for(const [quickId,controlId] of [
+    ['xstage-tv-quick-play','play-pause'],
+    ['xstage-tv-quick-previous','previous'],
+    ['xstage-tv-quick-next','next'],
+    ['xstage-tv-quick-restart','restart-current'],
+    ['xstage-tv-quick-key-down','midi-key-down'],
+    ['xstage-tv-quick-key-up','midi-key-up']
+  ]){
+    panel.querySelector('#'+quickId).addEventListener('click',()=>{
+      const control=document.getElementById(controlId);
+      if(control&&!control.disabled)control.click();
+      panel.hidden=true;
+    });
+  }
   panel.querySelector('#xstage-tv-quick-update').addEventListener('click',()=>{
     panel.hidden=true;
     void triggerImmediateVersionUpdate();
@@ -376,7 +449,10 @@ window.XStageTvOpenMenu=()=>{
   }))return false;
   const panel=xstageTvQuickMenu();
   panel.hidden=!panel.hidden;
-  if(!panel.hidden)panel.querySelector('button')?.focus?.({preventScroll:true});
+  if(!panel.hidden){
+    xstageTvRefreshQuickMenu(panel);
+    panel.querySelector('button:not([hidden]):not([disabled])')?.focus?.({preventScroll:true});
+  }
   return true;
 };
 window.XStageTvHandleBack=()=>{
@@ -385,7 +461,11 @@ window.XStageTvHandleBack=()=>{
   const update=document.getElementById('android-tv-update-panel');
   if(update&&!update.hidden){document.getElementById('android-tv-update-later')?.click();return true;}
   const auth=document.getElementById('android-tv-auth-panel');
-  if(auth&&!auth.hidden){document.getElementById('android-tv-auth-cancel')?.click();return true;}
+  if(auth&&!auth.hidden){
+    const cancel=document.getElementById('android-tv-auth-cancel');
+    if(cancel&&!cancel.hidden){cancel.click();return true;}
+    return false;
+  }
   return false;
 };
 window.XStageTvMoveFocus=direction=>{
