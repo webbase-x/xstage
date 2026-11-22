@@ -45,8 +45,11 @@ async function routeDrive(route){
     const q=url.searchParams.get('q')||'';
     const parent=q.match(/'([^']+)' in parents/)?.[1]||'root';
     let items=group(parent);
-    if(q.includes("name='current.json'"))items=items.filter(x=>x.name==='current.json');
-    if(q.includes("name='XStageKaraoke'"))items=items.filter(x=>x.name==='XStageKaraoke');
+    // Match Google Drive's server-side name predicate, including DB lookups
+    // during player auth restore. Returning all sibling folders made a valid
+    // XStageKaraoke appear to contain duplicate DBs and logged the user out.
+    const requestedName=q.match(/(?:^|\\s)name='([^']+)'/)?.[1];
+    if(requestedName)items=items.filter(item=>item.name===requestedName);
     return send(200,{files:items});
   }
   if(url.pathname==='/drive/v3/files'&&method==='POST'){
