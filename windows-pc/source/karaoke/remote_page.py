@@ -100,7 +100,7 @@ setInterval(heartbeat,15000);
 let fragment=new URLSearchParams(location.hash.slice(1));if(fragment.has('code')){$('token').value=fragment.get('code');history.replaceState(null,'',location.pathname)}if(token)entered();
 setInterval(poll,500); // automatic fallback when WebSocket cannot connect
 setInterval(()=>{if(token&&!document.hidden&&!liveActive)startLiveSocket()},5000);
-setInterval(()=>{if(liveSocket?.readyState===WebSocket.OPEN&&!document.hidden)
+setInterval(()=>{if(typeof WebSocket==='function'&&liveSocket?.readyState===WebSocket.OPEN&&!document.hidden)
   try{liveSocket.send(JSON.stringify({type:'ping'}))}catch{}},10000);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)closeLiveSocket();else{poll();startLiveSocket()}});
 window.addEventListener('pagehide',closeLiveSocket);
