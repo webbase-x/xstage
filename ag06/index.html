@@ -60,7 +60,8 @@
  </div>
  <section class="panel effects" aria-labelledby="fx-title">
   <div class="section-header"><div><div class="eyebrow">05 / AUDIO PROCESSING</div><h2 id="fx-title">Software DSP</h2></div><span class="chip">STEREO USB MIX</span></div>
-  <div class="fx-grid">
+  <div class="studio-toolbar"><button type="button" class="button subtle" id="dsp-simple" aria-pressed="false">Simple · ปรับรวดเร็ว</button><button type="button" class="button subtle" id="dsp-detail" aria-pressed="true">Detail · ปรับละเอียด</button></div>
+  <div class="fx-grid" id="dsp-controls">
    <div class="fx-group"><div class="fx-heading"><span>01</span><h3>Filter & Equalizer</h3></div>
     <label class="range-control">High-pass <output data-output="hpf"></output><input data-param="hpf" type="range" min="20" max="250" step="5"></label>
     <label class="range-control">Low EQ <output data-output="low"></output><input data-param="low" type="range" min="-12" max="12" step="1"></label>
@@ -79,7 +80,7 @@
  </div>
  <section class="panel studio-workspace" id="studio-workspace" aria-labelledby="studio-title">
   <div class="section-header"><div><div class="eyebrow">06 / MULTITRACK PRODUCTION</div><h2 id="studio-title">Studio Workspace · มัลติแทร็ก</h2></div><span class="chip">LOCAL MIX · WAV EXPORT</span></div>
-  <p class="subtle-text">นำเข้าเสียงที่คุณมีสิทธิ์ใช้งาน หรือเพิ่มเทคจากระบบบันทึกด้านบนได้สูงสุด 12 แทร็ก ปรับ Volume, Mute/Solo, จุดเริ่ม–จบ และตำแหน่งเข้าเพลง ก่อนมิกซ์เป็น WAV ในเครื่อง ไม่อัปโหลดเสียงขึ้นเซิร์ฟเวอร์</p>
+  <p class="subtle-text">นำเข้าเสียงที่คุณมีสิทธิ์ใช้งาน หรือเพิ่มเทคจากระบบบันทึกด้านบนได้สูงสุด 12 แทร็ก ปรับ Volume, Mute/Solo, จุดเริ่ม–จบ และตำแหน่งเข้าเพลง เลือกประเภทแทร็กเสียงพูด/ดนตรี เพื่อใช้ Ducking ก่อนมิกซ์เป็น WAV ในเครื่อง ไม่อัปโหลดเสียงขึ้นเซิร์ฟเวอร์</p>
   <div class="studio-toolbar">
     <label class="button subtle" for="studio-files">＋ นำเข้าไฟล์เสียง</label>
     <input id="studio-files" type="file" accept="audio/*" multiple hidden>
@@ -88,6 +89,7 @@
     <button type="button" class="button" id="studio-stop">■ หยุด</button>
     <button type="button" class="button primary" id="studio-export">ส่งออก WAV</button>
   </div>
+  <div class="studio-toolbar"><label class="studio-check"><input type="checkbox" id="studio-ducking"> Auto Ducking · ลดเสียงดนตรีเมื่อมีเสียงพูด</label><label class="studio-check"><input type="checkbox" id="studio-normalize"> Normalize Peak · ปรับพีกก่อนส่งออก</label></div>
   <div id="studio-tracks" class="studio-tracks" aria-live="polite"><p class="subtle-text">ยังไม่มีแทร็ก · เริ่มจากนำเข้าไฟล์เสียง</p></div>
   <p id="studio-state" class="subtle-text" role="status">การทำงานขึ้นกับหน่วยความจำอุปกรณ์ · รองรับไฟล์ละไม่เกิน 80 MB และแทร็กละไม่เกิน 10 นาที</p>
  </section>
