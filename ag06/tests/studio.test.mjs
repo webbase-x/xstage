@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {StudioSession,encodeWav,clamp,safeName} from "../studio-session.js";
-import {waveformPeaks,noteSequence,encodeProject,decodeProject,midiFrequency} from "../studio-advanced.js";
+import {waveformPeaks,noteSequence,encodeProject,decodeProject,midiFrequency,encodeMidi,decodeMidi} from "../studio-advanced.js";
 const read=path=>readFileSync(new URL(path,new URL("../",import.meta.url)),"utf8");
 test("WAV encoder writes valid RIFF mono samples",()=>{
  const b={numberOfChannels:1,length:2,sampleRate:44100,getChannelData:()=>new Float32Array([-1,1])};
@@ -53,4 +53,20 @@ test("new editor buttons and both desktop/mobile bundles are wired",()=>{
  assert.match(app,/drawWaveform/);assert.match(app,/decodeProject/);assert.match(app,/renderSynth/);
  assert.match(read("desktop/package.json"),/studio-advanced\.js/);
  assert.match(read("android/app/build.gradle"),/studio-advanced\.js/);
+});
+
+test("Standard MIDI writer and reader roundtrip notes and tempo",()=>{
+ const notes=[{pitch:60,beat:0,length:1,velocity:.8},{pitch:64,beat:1,length:2,velocity:.7}];
+ const bytes=encodeMidi(notes,120),parsed=decodeMidi(bytes);
+ assert.equal(String.fromCharCode(...bytes.slice(0,4)),"MThd");
+ assert.equal(parsed.bpm,120);assert.equal(parsed.notes.length,2);
+ assert.equal(parsed.notes[1].pitch,64);assert.equal(parsed.notes[1].beat,1);
+ assert.throws(()=>decodeMidi(new Uint8Array([1,2,3,4])));
+});
+test("Android bridge and MIDI UI expose real file import/export actions",()=>{
+ const native=read("android/app/src/main/java/com/webbasex/ag06studio/MainActivity.java");
+ const ui=read("index.html");
+ assert.match(native,/onShowFileChooser/);assert.match(native,/saveProjectFile/);assert.match(native,/saveMidiFile/);
+ for(const id of ["midi-import","midi-export","midi-instrument"])assert.match(ui,new RegExp('id="'+id+'"'));
+ assert.match(read("app.js"),/decodeMidi/);assert.match(read("app.js"),/encodeMidi/);
 });
