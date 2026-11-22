@@ -134,10 +134,20 @@
   });
   signout.addEventListener('click',()=>{finish();$('logout')?.click();});
   stage.addEventListener('pointerdown',e=>{
-    if(!menu.hidden&&!menu.contains(e.target)&&!toggle.contains(e.target))setMenu(false);
+    // The visible mobile hamburger is the LOWER trigger. Do not close the
+    // menu on pointerdown before its click handler can toggle it.
+    const lowerToggle=$('stage-tools-toggle');
+    if(!menu.hidden&&!menu.contains(e.target)&&!toggle.contains(e.target)&&
+       !lowerToggle?.contains(e.target))setMenu(false);
   });
   document.addEventListener('keydown',e=>{
-    if(e.key==='Escape'&&!menu.hidden){e.preventDefault();setMenu(false);toggle.focus();}
+    if(e.key==='Escape'&&!menu.hidden){
+      e.preventDefault();setMenu(false);
+      const lowerToggle=$('stage-tools-toggle');
+      if(document.body.classList.contains('xstage-mobile-search-bottom')&&
+         lowerToggle&&!lowerToggle.hidden)lowerToggle.focus();
+      else toggle.focus();
+    }
   });
 
   // Pull-to-refresh for compact screens/Web App. Ignore all interactive/scrolling surfaces.
