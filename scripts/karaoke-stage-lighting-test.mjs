@@ -82,4 +82,57 @@ assert.equal(lights.status().source,'audio');
 assert.ok(lights.status().energy>.5,'Audio lights use existing true analyser levels');
 media.emit('ended');
 assert.equal(lights.status().active,false);
+
+// Real analyser samples must drive the lights, not just legacy CSS variables.
+stage.style.setProperty('--xstage-viz-energy','0');
+stage.style.setProperty('--xstage-viz-bass','0');
+context.window.XStageStageLiveSpectrum=()=>({
+  bands:[.8,.5,.3],active:true,updatedAt:Date.now()
+});
+media.emit('playing');paint(300);
+assert.ok(lights.status().energy>.5,
+  'Live post-EQ analyser spectrum must illuminate the stage even when legacy CSS is zero');
+media.muted=true;paint(400);
+assert.equal(lights.status().energy,0,'Muted playback must not show phantom stage EQ energy');
+media.muted=false;media.emit('pause');
+assert.equal(lights.status().energy,0,'Paused playback must release light energy');
+
+const webEq=read('pc-extensions.js');
+const nativeEq=read('native-audio-meter.js');
+assert.match(webEq,/XStageStageLiveSpectrum/, 'Web analyser must publish actual frequency bands');
+assert.match(nativeEq,/XStageStageLiveSpectrum/, 'Android analyser must publish actual frequency bands');
+assert.match(html,/pc-extensions\.js\?v=1136-live-stage-eq/, 'Web meter cache must refresh');
+assert.match(html,/native-audio-meter\.js\?v=1136-live-stage-eq/, 'Android meter cache must refresh');
+assert.match(html,/stage-lighting\.js\?v=1164-midi-eq-bars-1165-live-spectrum/,
+  'Concert light script cache must refresh');
+assert.match(css,/1\.0\.137: reserve usable EQ meter widths/,
+  'Narrow phone layout must preserve both banner-side EQ meters');
+
+// Execute the actual stage-meter painting function against realistic narrow
+// canvases. Even 20px must not clip bars outside the drawing surface.
+const from=webEq.indexOf('function paintStageBars(');
+const to=webEq.indexOf('\nfunction sampledStageWave(',from);
+assert.ok(from>=0&&to>from,'Web responsive EQ drawing function must exist');
+const paintBars=vm.runInNewContext(webEq.slice(from,to)+'\npaintStageBars;',{
+  resizeStageVizCanvas:canvas=>({w:canvas.width,h:canvas.height}),
+  Math
+});
+for(const width of [20,28,44,64,120,320]){
+  for(const mirror of [false,true]){
+    const positions=[];
+    const drawing={
+      clearRect(){},createLinearGradient:()=>({addColorStop(){}}),
+      beginPath(){},rect(x,y,w,h){positions.push([x,w]);},
+      roundRect(x,y,w,h){positions.push([x,w]);},
+      fill(){},globalAlpha:1,shadowBlur:0,shadowColor:''
+    };
+    const canvas={width,height:80,getContext:()=>drawing};
+    const levels=Array.from({length:28},(_,i)=>(i+1)/28);
+    paintBars(canvas,levels,{top:'#fff',mid:'#0ff',bottom:'#00f',glow:'transparent'},mirror);
+    assert.ok(positions.length>0,'EQ must draw visible bars at '+width+'px');
+    assert.ok(positions.every(([x,w])=>x>=0&&x+w<=width+.001),
+      'No side-banner EQ bar may extend beyond '+width+'px drawing width');
+  }
+}
+
 console.log('PASS: stage left/right EQ bars and concert beams follow MIDI notes and real audio; pause stops lights');
