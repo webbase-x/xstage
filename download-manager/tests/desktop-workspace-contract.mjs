@@ -9,6 +9,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const workspace = readFileSync(join(root, 'MainForm.IdmLayout.cs'), 'utf8');
 const main = readFileSync(join(root, 'MainForm.cs'), 'utf8');
 const performance = readFileSync(join(root, 'MainForm.Performance.cs'), 'utf8');
+const preview = readFileSync(join(root, 'MainForm.XStagePreview.cs'), 'utf8');
 
 const contracts = [
   ['branded header', /CreateBrandHeader\(\)/, workspace],
@@ -24,8 +25,16 @@ const contracts = [
   ['file-type submenu', /var fileTypes = Menu\("แสดงตามประเภทไฟล์"/, workspace],
   ['grouped diagnostics', /var diagnostics = Menu\("ตรวจสอบปัญหา"/, workspace],
   ['Ctrl+F find shortcut', /findJob\.ShortcutKeys = Keys\.Control \| Keys\.F/, workspace],
-  ['toolbar avoids duplicate symbol-font icons', /Button\("เพิ่มงาน", "add", Accent/, workspace],
+  ['toolbar avoids duplicate symbol-font icons', /Button\("เพิ่มงาน", "add", Color\.FromArgb/, workspace],
   ['live overview tiles', /CreateOverviewTiles\(\)/, workspace],
+  ['new detailed dock', /split\.Panel2\.Controls\.Add\(CreateLivePreview\(\)\)/, workspace],
+  ['adaptive collapse on short windows', /split\.Height < 335/, workspace],
+  ['data grid file icon column', /new DataGridViewImageColumn/, workspace],
+  ['data grid displays actual queue', /Column\("QueueName", "คิว"/, workspace],
+  ['live priority queue categories', /AddCategory\(priorityGroups, "priority-high"/, workspace],
+  ['toolbar uses large vertical icons', /TextImageRelation = TextImageRelation\.ImageAboveText/, workspace],
+  ['live speed linked to engine', /RecordTransferSpeed\(speedTotal\)/, main],
+  ['selected file details linked to row', /UpdateLivePreview\(job\)/, main],
   ['transfer desk', /CreateTransferDesk\(\)/, workspace],
   ['accessible search', /AccessibleName = "ค้นหารายการดาวน์โหลด"/, workspace],
   ['search wiring', /_jobSearch\.TextChanged \+= \(_, _\) => RefreshRows\(\)/, workspace],
@@ -47,6 +56,10 @@ const contracts = [
   ['download engine entrypoint preserved', /private readonly DownloadEngine _engine = new\(\)/, main],
   ['queue functionality exists', /private void RenameJobQueue\(DownloadJob job\)/, performance],
   ['speed configuration exists', /private void ConfigureFileSpeed\(DownloadJob job\)/, performance],
+  ['tabbed details, chart and diagnostics', /new TabControl/, preview],
+  ['real speed samples', /_speedSamples\.Add\(_latestTransferRate\)/, preview],
+  ['selected job diagnostics', /private void UpdateLivePreview\(DownloadJob\? job\)/, preview],
+  ['unknown speed is not fabricated', /กำลังเก็บข้อมูลความเร็วจริง/, preview],
   ['files menu', /menu\.Items\.Add\(Menu\("ไฟล์",/, workspace],
   ['work menu', /menu\.Items\.Add\(Menu\("งาน",/, workspace],
   ['view menu', /menu\.Items\.Add\(Menu\("มุมมอง",/, workspace],
