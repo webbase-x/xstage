@@ -21,7 +21,7 @@ assert.ok(!midi.includes("name==='AUDIO'"),'No SoundFont fallback to legacy AUDI
 assert.ok(midi.includes("x.name==='SOUNDFONT'"));
 assert.ok(midi.includes("['SF2','SF3']"));
 assert.ok(html.includes('cloud-import.js?v=1173-multidevice-midi-dedup'));
-assert.ok(html.includes('cloud-import.css?v=1138-visible-import-cta'));
+assert.ok(html.includes('cloud-import.css?v=1172-direct-db-layout'));
 assert.ok(html.includes('id="cloud-import-action-hint"'));
 assert.ok(html.includes('id="cloud-import-start"'));
 assert.ok(importer.includes('onVideoApproved(item)'));
