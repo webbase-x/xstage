@@ -774,6 +774,15 @@ try
         SocialVideoDownloader.VideoRateLimitKib(0, 128) != 128 ||
         SocialVideoDownloader.VideoRateLimitKib(256, 128) != 128)
         throw new Exception("yt-dlp speed caps must honor the strictest configured limit.");
+    // Legacy SQLite imports may have short IDs; a separate-copy request
+    // must not throw from an unchecked [..8] slice before yt-dlp starts.
+    var shortIdCopy = new DownloadJob { Id = "old1", Url = videoHosts[0],
+        Folder = folder, Parts = 4, VideoQuality = "Best",
+        OutputFormat = "mp4", IsRedownload = true };
+    var shortIdArgs = SocialVideoDownloader.BuildArguments(shortIdCopy, folder, folder);
+    var outputIndex = shortIdArgs.ToList().IndexOf("-o");
+    if (outputIndex < 0 || !shortIdArgs[outputIndex + 1].Contains("(again-old1)"))
+        throw new Exception("Short legacy video IDs must preserve stable redownload naming.");
     video.FileSpeedLimitKib = 0;
     var uncappedVideo = SocialVideoDownloader.BuildArguments(video, folder, folder).ToArray();
     if (uncappedVideo.Contains("--limit-rate"))
