@@ -20,7 +20,7 @@ const htmlIds=new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1])
 const listenerIds=[...js.matchAll(/\$\("([^"]+)"\)\.addEventListener/g)].map(match=>match[1]);
 assert.deepEqual([...new Set(listenerIds.filter(id=>!htmlIds.has(id)))],[],
  'every JavaScript event target must exist in the HTML');
-for(const page of ['import','lyrics','media','preview','manual','build','library','risks']){
+for(const page of ['import','drive','lyrics','media','preview','manual','build','library','risks']){
   assert.ok(html.includes('data-view="'+page+'"'),'missing menu '+page);
 }
 for(const [name,call] of [
@@ -62,6 +62,14 @@ for(const route of [
   '/api/build','/api/update/check','/api/update/install',
   '/api/swipe/scan','/api/swipe/open-source'
 ])assert.ok(server.includes('"'+route+'"'),'API route missing: '+route);
+assert.ok(html.includes('id="drive-folder"')&&
+  html.includes('id="drive-check"')&&
+  html.includes('id="drive-download"')&&
+  html.includes('id="drive-browse"')&&
+  js.includes('startJob("drive-import"')&&
+  server.includes('"/api/import/google-drive"')&&
+  server.includes('"/api/drive/check"'),
+ 'Google Drive song import and download must be accessible from the studio menu');
 assert.ok(!server.includes('import tkinter as tk'),
  'Native Windows app must never open tkinter in the HTTP worker thread');
 assert.ok(server.includes('self.state.native_picker('),
@@ -102,12 +110,13 @@ assert.ok(!html.includes('id="groups-prev"')&&
           html.includes('id="groups-scroll-status"')&&
           js.includes('groupNearBottom()'),
  'Grouped lyric results must scroll continuously with bounded SQLite batches and virtual DOM');
-assert.ok(html.includes('id="build-tab-ready"')&&
-          html.includes('id="build-tab-attention"')&&
-          html.includes('id="build-scroll-status"')&&
+assert.ok(html.includes('class="build-selection-internal" hidden aria-hidden="true"')&&
+          !html.includes('<span class="label-top">CHOOSE SONGS</span>')&&
+          html.includes('id="build-everything"')&&
+          html.includes('id="build-ready-all"')&&
           js.includes('async function loadMoreBuildSongs(')&&
           js.includes('function renderBuildRows('),
- 'XMID/X-Media build must offer ready/review tabs and bounded scroll fetching');
+ 'Build must hide retired CHOOSE SONGS UI while preserving core export actions');
 assert.ok(js.includes('const review=song.manual_status==="review"')&&
           js.includes('check.disabled=!selectable')&&
           js.includes('await api("/api/manual/approve"'),
