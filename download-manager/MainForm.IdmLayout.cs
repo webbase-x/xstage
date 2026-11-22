@@ -155,11 +155,20 @@ public sealed partial class MainForm
         selectQueue.DropDownOpening += (_, _) =>
         {
             selectQueue.DropDownItems.Clear();
+            var selectedQueue = Selected()?.QueueName;
             foreach (var name in _engine.GetQueueNames())
             {
                 var queueName = name;
-                selectQueue.DropDownItems.Add(Action(queueName,
-                    (_, _) => WithSelectedJob(j => AssignJobQueue(j, queueName))));
+                var choice = new ToolStripMenuItem(queueName)
+                {
+                    Checked = string.Equals(
+                        string.IsNullOrWhiteSpace(selectedQueue) ? "ทั่วไป" : selectedQueue.Trim(),
+                        queueName, StringComparison.OrdinalIgnoreCase),
+                    ForeColor = Color.FromArgb(236, 246, 251),
+                    BackColor = DarkPanel
+                };
+                choice.Click += (_, _) => WithSelectedJob(j => AssignJobQueue(j, queueName));
+                selectQueue.DropDownItems.Add(choice);
             }
         };
         menu.Items.Add(Menu("คิว",
