@@ -433,6 +433,11 @@ public sealed class DownloadEngine
                 return;
             }
         }
+        var previousStatus = job.Status;
+        var previousError = job.Error;
+        var previousRestart = job.ResumeAfterRestart;
+        var previousNetwork = job.ResumeWhenNetworkReturns;
+        var previousInterrupted = job.InterruptedOnStartup;
         job.ResumeAfterRestart = false;
         job.ResumeWhenNetworkReturns = false;
         job.InterruptedOnStartup = false;
@@ -440,7 +445,19 @@ public sealed class DownloadEngine
         job.Error = "";
         var cts = new CancellationTokenSource();
         job.Cancellation = cts;
-        Save();
+        var checkpointError = Save();
+        if (checkpointError.Length > 0)
+        {
+            job.Status = previousStatus;
+            job.Error = previousError;
+            job.ResumeAfterRestart = previousRestart;
+            job.ResumeWhenNetworkReturns = previousNetwork;
+            job.InterruptedOnStartup = previousInterrupted;
+            job.Cancellation = null;
+            _active.TryRemove(job.Id, out _);
+            cts.Dispose();
+            throw new IOException(checkpointError);
+        }
         _ = Task.Run(async () =>
         {
             IDisposable? slot = null;
