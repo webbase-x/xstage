@@ -50,6 +50,10 @@ const contracts = [
   ['custom X-Stage menu palette', /class XStageMenuColors : ProfessionalColorTable/, workspace],
   ['menu icons', /Image = DrawToolbarGlyph\(glyph, GlyphColor\(glyph\)\)/, workspace],
   ['category image list', /_categories\.ImageList = _categoryIcons/, workspace],
+  ['keep category image sources alive for deferred native GDI handle', /_categoryIconSources\.Add\(icon\)/, workspace],
+  ['dispose category source images after native ImageList', /_categoryIcons\.Dispose\(\);\s*foreach \(var image in _categoryIconSources\) image\.Dispose\(\)/, main],
+  ['valid drawable chart bounds', /if \(area\.Width < 130 \|\| area\.Height < 85\) return;/, preview],
+  ['real Windows UI smoke invocation', /_uiSmokeMode = args\.Contains\("--ui-smoke"/, main],
   ['category image keys', /ImageKey = key, SelectedImageKey = key/, workspace],
   ['live menu selected-queue indicator', /Checked = string\.Equals\(/, workspace],
   ['grouped menu separators', /new ToolStripSeparator\(\)/, workspace],
@@ -103,6 +107,9 @@ const contracts = [
 ];
 for (const [title, pattern, source] of contracts)
   assert.match(source, pattern, title);
+assert.doesNotMatch(workspace,
+  /using var icon = DrawToolbarGlyph\(glyph, GlyphColor\(glyph\)\)/,
+  'do not dispose deferred native ImageList source bitmaps before handle creation');
 assert.doesNotMatch(workspace, /CreateIdmLayout\(|IDM-inspired/, 'new workspace must not use legacy IDM layout');
 assert.ok(!workspace.includes('DownloadJob {'), 'workspace must not create or replace user download records');
 assert.doesNotMatch(background, /ShellExecute = true|Process\.Start\("https?:|_state\.Save/,
