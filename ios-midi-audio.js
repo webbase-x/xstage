@@ -95,9 +95,17 @@ function attach(ctx,source,{onStatus=()=>{}}={}){
       if(!record.failed&&!record.keepAliveForQueue&&record.sources.size<=1)
         record.audio.pause();
     },
-    resume(){
-      if(!record.failed&&!record.closed&&scope.document?.hidden!==true&&
-         record.audio.paused)void start(record);
+    async resume(){
+      if(record.failed)return true; // Audio is already on the single direct fallback.
+      if(record.closed||scope.document?.hidden===true)return false;
+      activate();
+      // A locked iPhone can suspend the HTMLMediaElement even when the MIDI
+      // transport still reports 'playing'. Try the existing relay again, do
+      // not create a second output or permanently reroute after a wake denial.
+      try{
+        await record.audio.play();
+        return !record.audio.paused;
+      }catch{return false;} // Safari may require another user interaction.
     },
     dispose(){
       if(!record.sources.delete(source))return;
