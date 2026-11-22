@@ -146,7 +146,9 @@ def validate_sqlite_sidecars(data, names):
     for name in names:
         if not name.endswith('.sqlite3'):
             continue
-        for suffix in ('-wal', '-shm'):
+        # SQLite can use a rollback journal as well as WAL/SHM files.
+        # Treat all three as untrusted filesystem entries before opening DBs.
+        for suffix in ('-wal', '-shm', '-journal'):
             sidecar = Path(data) / (name + suffix)
             if (sidecar.is_symlink()
                     or getattr(sidecar, 'is_junction', lambda: False)()
