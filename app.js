@@ -4330,6 +4330,19 @@ function startManualGoogleLogin(){
   login({remembered:hasRememberedLogin()});
 }
 ui.login.addEventListener('click',startManualGoogleLogin);ui.gateLogin.addEventListener('click',startManualGoogleLogin);
+const googleSwitchButton=$('gate-switch-google');
+function syncRememberedAccountChooser(){
+  if(googleSwitchButton)googleSwitchButton.hidden=!hasRememberedLogin()||!!state.token;
+}
+googleSwitchButton?.addEventListener('click',()=>{
+  // Explicitly forget the saved identity before opening Google's account picker.
+  // A different Google account is never selected as part of silent renewal.
+  rememberLogin(false);clearActiveAuth();clearPendingAuth();
+  syncRememberedAccountChooser();
+  login({remembered:false});
+});
+window.addEventListener('xstage:auth-ready',syncRememberedAccountChooser);
+window.addEventListener('xstage:auth-cleared',syncRememberedAccountChooser);
 $('gate-close')?.addEventListener('click',dismissLoginGate);
 ui.gate?.addEventListener('click',event=>{if(event.target===ui.gate)dismissLoginGate();});
 if(ui.gate)new MutationObserver(syncLoginGateState).observe(ui.gate,{attributes:true,attributeFilter:['hidden']});
@@ -4799,6 +4812,7 @@ async function recoverPendingGoogleAuth(reason='กำลังกู้คื�
   }
 }
 (function restoreTabSession(){
+  syncRememberedAccountChooser();
   // Android APK login is owned by the encrypted native token store, not JS.
   if(androidTvNativeBridgeReady())return;
   const saved=readActiveAuth();
