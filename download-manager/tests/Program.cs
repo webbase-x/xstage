@@ -586,6 +586,31 @@ try
     if (resizing.ActiveCount != 0 || resizing.WaitingCount != 0)
         throw new Exception("Repeated lease disposal must not leak scheduler slots.");
 
+    // A saturated host must not head-of-line block a different host even
+    // when its queued transfer has higher priority. This is important when
+    // 32 Range workers contend with independent downloads.
+    var independentHosts = new TransferSlotQueue(2, 1);
+    using (var first = await independentHosts.EnterAsync(
+        "host-one-active", "one.test", 1, CancellationToken.None))
+    {
+        var blocked = independentHosts.EnterAsync(
+            "host-one-blocked", "one.test", 0, CancellationToken.None);
+        using (var second = await independentHosts.EnterAsync(
+            "host-two-active", "two.test", 2, CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3)))
+        {
+            if (blocked.IsCompleted || independentHosts.ActiveCount != 2 ||
+                independentHosts.WaitingCount != 1)
+                throw new Exception("Saturated host blocked independent host admission.");
+        }
+        if (blocked.IsCompleted || independentHosts.ActiveCount != 1)
+            throw new Exception("Host limit was bypassed after another host exited.");
+        first.Dispose();
+        using var resumed = await blocked.WaitAsync(TimeSpan.FromSeconds(3));
+    }
+    if (independentHosts.ActiveCount != 0 || independentHosts.WaitingCount != 0)
+        throw new Exception("Cross-host backpressure leaked a transfer slot.");
+
     // Adaptive recommendations are bounded by requested parts, file size and
     // measured throughput; existing checkpoint geometry is immutable.
     foreach (var parts in DownloadEngine.AllowedParts)
