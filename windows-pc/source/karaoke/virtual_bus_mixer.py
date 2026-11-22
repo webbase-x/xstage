@@ -37,10 +37,17 @@ class VirtualBusMixer:
         self.ceiling = float(ceiling)
         self.meters = {i: (0., 0.) for i in range(bus_count)}
 
-    def configure(self, bus, *, gain=1., pan=0., mute=False, solo=False):
+    def configure(self, bus, *, gain=None, pan=None, mute=None, solo=None):
         if type(bus) is not int or bus not in self.strips:
             raise ValueError("Unknown bus")
-        self.strips[bus] = BusStrip(gain, pan, mute, solo)
+        # A single UI control must not silently reset the other strip controls.
+        current = self.strips[bus]
+        self.strips[bus] = BusStrip(
+            current.gain if gain is None else gain,
+            current.pan if pan is None else pan,
+            current.mute if mute is None else mute,
+            current.solo if solo is None else solo,
+        )
 
     def process(self, bus, pcm):
         if type(bus) is not int or bus not in self.strips:
