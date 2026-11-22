@@ -7,8 +7,7 @@ const read=path=>fs.readFileSync(new URL('../'+path,import.meta.url),'utf8');
 const page=read('karaoke.html'),app=read('app.js'),style=read('cloud-import.css');
 const ids=['cloud-import-open','cloud-import-dialog','cloud-import-pick','cloud-import-input',
   'cloud-import-ready','cloud-import-fonts','cloud-import-blocked','cloud-import-start',
-  'cloud-import-pause','cloud-import-resume','cloud-import-cancel','cloud-import-progress',
-  'cloud-import-allow-create'];
+  'cloud-import-done','cloud-import-progress','cloud-import-allow-create'];
 for(const id of ids)assert.ok(page.includes('id="'+id+'"'),'Missing cloud importer control: '+id);
 assert.ok(page.includes('cloud-import-core.js?v=')&&page.includes('cloud-import.js?v=')&&
   page.includes('cloud-import.css?v='),'Browser importer must be loaded with the main WEB shell');
@@ -77,6 +76,16 @@ const legacyRecords=new Map([
   ['another_mid_same_code', {webSongId:'another_mid_same_code',
     code:'100',midi:{md5Checksum:digestB}}]
 ]);
+const {fiveDigitXmidCode}=ctx.XStageCloudImport;
+assert.equal(fiveDigitXmidCode('00000001'),'00001');
+assert.equal(fiveDigitXmidCode('1'),'00001');
+assert.equal(fiveDigitXmidCode('99999'),'99999');
+assert.throws(()=>fiveDigitXmidCode('100000'),/00001/);
+assert.throws(()=>fiveDigitXmidCode('AB001'),/ตัวเลข/);
+const xmidCode=read('cloud-import.js');
+assert.ok(xmidCode.includes("const sourceCode=opened.code")&&
+  xmidCode.includes("const name=isXmid?embeddedCode+'.XMID'"),
+  'XMID stored basename must use the embedded song code, not the input filename');
 const indexed=await buildMidiIndex(legacyRecords,{getSqlite:async()=>{throw Error('unexpected fetch');}},()=>{});
 assert.equal(indexed.duplicates,1,'Repeated MIDI must collapse even if codes differ');
 assert.equal(legacyRecords.size,2,'A different MIDI must remain available');
@@ -302,8 +311,19 @@ assert.ok(app.includes('async function ensureImporterGoogleAuth(force=false,inte
   app.includes('state.accountSub!==expectedSub')&&
   app.includes("requestAccessToken({prompt:interactive?'select_account':''})"),
   'Importer renewal must verify and preserve the same Google account');
-assert.ok(page.includes('id="cloud-import-reauthorize"'),
-  'Paused work must expose a manual Google reconnection control');
+const footerHtml=page.split('class="cloud-import-footer-buttons"')[1]?.split('</div>')[0]||'';
+assert.equal((footerHtml.match(/<button /g)||[]).length,2,
+  'Import footer must expose only Start/Pause and Close');
+for(const obsolete of ['cloud-import-consolidate','cloud-import-resume',
+  'cloud-import-pause','cloud-import-reauthorize','cloud-import-cancel'])
+  assert.ok(!page.includes('id="'+obsolete+'"'),'Remove obsolete footer button '+obsolete);
+assert.ok(importerUsesSingleToggle(),
+  'Start/Pause must be wired to the same button');
+function importerUsesSingleToggle(){
+  const src=read('cloud-import.js');
+  return src.includes("this.toggleStartPause()")&&
+    src.includes("this.running?'พัก':'เริ่ม'");
+}
 
 const importUi=read('cloud-import.js');
 assert.ok(importUi.includes('input[data-import-group],input[data-import-item]')&&
@@ -336,7 +356,7 @@ assert.ok(style.includes('.cloud-import-body{')&&
   style.includes('flex:0 0 auto'),
   'Import Start and status must be anchored outside scrollable contents');
 assert.ok(page.includes('cloud-import.js?v=1174-auto-migrate-mid')&&
-  page.includes('cloud-import.css?v=1138-visible-import-cta')&&
+  page.includes('cloud-import.css?v=1172-direct-db-layout')&&
   page.includes('video-metadata-editor.js?v=1138-verified-video-selection'),
   'Updated scripts and styles must bypass stale browser caches');
 const oldDoc=ctx.document,oldAdd=ctx.addEventListener,oldScan=ctx.XStageImportCore.scan;
@@ -375,9 +395,8 @@ try{
   assert.equal(importer.chosenItems.size,1,'Verified bundles must be preselected');
   assert.equal(importer.dom.start.disabled,false,'Start must be enabled after valid folder selection');
   assert.equal(importer.dom.start.hidden,false,'Start must be visible before uploading');
-  assert.ok(importer.dom.start.textContent.includes('(1)'));
-  assert.equal(importer.dom.resume.hidden,true,'Resume must not appear for a brand-new selection');
-  assert.ok(importer.dom.status.textContent.includes('กด “เริ่มตรวจ MD5 และนำเข้า”'));
+  assert.equal(importer.dom.start.textContent,'เริ่ม');
+  assert.ok(importer.dom.status.textContent.includes('กด “เริ่ม”'));
   importer.selectEveryItem(false);
   assert.equal(importer.dom.start.disabled,true,'Clearing selection disables unsafe empty import');
   assert.ok(importer.dom.actionHint.textContent.includes('ยังไม่ได้เลือกรายการ'));
@@ -388,12 +407,16 @@ try{
   assert.ok(importer.dom.status.textContent.includes('พร้อมตรวจ MD5'));
   importer.saved={status:'paused'};
   importer.refreshButtons();
-  assert.equal(importer.dom.resume.hidden,false,'A paused upload must expose Resume');
+  assert.equal(importer.dom.start.disabled,false,'Paused upload must use the same Start button');
+  assert.equal(importer.dom.start.textContent,'เริ่ม');
+  importer.running=true;importer.refreshButtons();
+  assert.equal(importer.dom.start.textContent,'พัก','Start switches to Pause during upload');
+  assert.equal(importer.dom.start.disabled,false,'Pause stays available while running');
+  importer.running=false;importer.refreshButtons();
   const fullyVerified=importer.options.session;
   importer.options.session=()=>({token:'test-token',sub:''});
   importer.refreshButtons();
   assert.equal(importer.dom.start.disabled,true,'Unverified account must not start a Drive import');
-  assert.equal(importer.dom.resume.disabled,true,'Unverified account must not resume a Drive import');
   assert.equal(importer.dom.open.hidden,true,'Upload entry must await verified Google identity');
   importer.options.session=fullyVerified;
   importer.refreshButtons();
