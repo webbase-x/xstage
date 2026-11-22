@@ -5289,3 +5289,14 @@ body.xstage-ui-v2 .windows-volume-connect:focus-visible{
     z-index:280!important
   }
 }
+
+/* Thai search-result glyph shaping: keep stacked vowels/tone marks visible on iOS Safari. */
+html body.xstage-ui-v2 .stage .stage-search-slot .song-details strong,
+html body.xstage-ui-v2 .stage .stage-search-slot .song-details small{
+  font-family:"Thonburi","Noto Sans Thai","Leelawadee UI",Tahoma,system-ui,sans-serif!important;
+  line-height:1.5!important;
+  letter-spacing:normal!important;
+}
+html body.xstage-ui-v2 .stage .stage-search-slot .song-match{
+  font-weight:inherit!important;
+}
