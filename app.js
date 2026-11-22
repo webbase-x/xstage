@@ -1141,10 +1141,15 @@ async function googleFetch(url,options={},label='Google',retries=1){
   }
 }
 function driveError(status, subject) {
-  if (status === 401) return new Error('สิทธิ์ Google หมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง');
-  if (status === 403) return new Error('บัญชีนี้ไม่มีสิทธิ์เข้าถึง ' + subject + ' (ตรวจสิทธิ์ drive.file และบัญชีที่ซิงก์)');
-  if (status === 404) return new Error('ไม่พบ ' + subject + ' ใน Google Drive ของบัญชีนี้');
-  return new Error(`อ่าน ${subject} ไม่สำเร็จ (HTTP ${status})`);
+  // A Drive 404 is not proof that Google login expired: drive.file only grants
+  // access to files created or explicitly opened with this OAuth application.
+  const message=status===401?'สิทธิ์ Google หมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง':
+    status===403?'บัญชีนี้ไม่มีสิทธิ์เข้าถึง '+subject+' (ตรวจสิทธิ์ drive.file และบัญชีที่ซิงก์)':
+    status===404?'แอปยังไม่ได้รับสิทธิ์อ่าน '+subject+' (HTTP 404) · ไฟล์อาจยังอยู่ใน Google Drive · ใช้การนำเข้าผ่าน X-Stage Karaoke Online เพื่ออนุญาตไฟล์':
+    `อ่าน ${subject} ไม่สำเร็จ (HTTP ${status})`;
+  const error=new Error(message);
+  error.driveStatus=status;error.driveSubject=subject;
+  return error;
 }
 async function driveList(q, token) {
   // Google Drive files.list can return fewer than pageSize results and provide
@@ -4738,10 +4743,17 @@ async function recoverPendingGoogleAuth(reason='กำลังกู้คื�
   const id=++state.authId;
   openDrive(saved.token,id,saved.expiresAt,saved.sub).catch(error=>{
     if(id!==state.authId)return;
+    if([403,404].includes(error?.driveStatus)&&error?.driveSubject==='ไฟล์เพลงส่วนตัว'){
+      hideCatalogLoading();
+      setSearchAvailability(false);
+      ui.libraryState.textContent='เชื่อม Google สำเร็จ · ฐานเพลงยังอ่านไม่ได้';
+      setStatus('Google Login ยังใช้ได้ แต่แอปอ่านฐานเพลงไม่สำเร็จ: '+error.message,'error');
+      return;
+    }
     clearActiveAuth();
     resetPrivate({keepAuth:true});
     if(readPendingAuth())void recoverPendingGoogleAuth('เซสชันเดิมใช้ไม่ได้ · กำลังกู้คืนการเข้าสู่ระบบ…');
-    else setStatus('เซสชันหมดอายุหรือเข้าถึงคลังไม่ได้: '+error.message,'error');
+    else setStatus('ไม่สามารถเชื่อมต่อ Google Drive: '+error.message,'error');
   }).finally(()=>{
     if(id===state.authId)ui.login.disabled=ui.gateLogin.disabled=false;
   });
@@ -4756,7 +4768,14 @@ window.addEventListener('online',()=>{
   setStatus('กลับมาออนไลน์แล้ว · กำลังกู้คืนเซสชัน Google…');
   const id=++state.authId;
   openDrive(saved.token,id,saved.expiresAt,saved.sub).catch(error=>{
-    if(id!==state.authId)return;clearActiveAuth();resetPrivate({keepAuth:true});setStatus('กู้คืนเซสชันไม่สำเร็จ: '+error.message,'error');
+    if(id!==state.authId)return;
+    if([403,404].includes(error?.driveStatus)&&error?.driveSubject==='ไฟล์เพลงส่วนตัว'){
+      hideCatalogLoading();setSearchAvailability(false);
+      setStatus('Google Login ยังใช้ได้ แต่ฐานเพลงยังไม่ได้รับสิทธิ์: '+error.message,'error');
+      return;
+    }
+    clearActiveAuth();resetPrivate({keepAuth:true});
+    setStatus('กู้คืนเซสชันไม่สำเร็จ: '+error.message,'error');
   }).finally(()=>{if(id===state.authId)ui.login.disabled=ui.gateLogin.disabled=false;});
 });
 
