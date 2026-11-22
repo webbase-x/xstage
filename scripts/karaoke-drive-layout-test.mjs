@@ -26,7 +26,7 @@ assert.ok(html.includes('id="cloud-import-action-hint"'));
 assert.ok(html.includes('id="cloud-import-start"'));
 assert.ok(importer.includes('onVideoApproved(item)'));
 assert.ok(importer.includes('this.chosenItems.add(entry.key)'));
-assert.ok(html.includes('browser-midi.js?v=1134-fast-gm-start'));
+assert.ok(html.includes('browser-midi.js?v=1139-soundfont-extension'));
 
 const first=importer.indexOf('function pathFor(');
 const end=importer.indexOf('async function db()',first);
