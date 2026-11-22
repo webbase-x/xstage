@@ -177,6 +177,20 @@ try
         rejectedEngine.Jobs.Any(j => j.Url.Contains("must-not-start.bin")))
         throw new Exception("Failed SQLite insert left a phantom download job.");
 
+    // A detached job object must never bypass SQLite registration and start
+    // writing output files. Simulate a caller retaining an obsolete job object.
+    var untracked = new DownloadJob { Id = "detached",
+        Url = server.Url + "range/untracked.bin", Folder = folder, Status = "Paused" };
+    try
+    {
+        rejectedEngine.Start(untracked);
+        throw new Exception("Untracked download was accepted.");
+    }
+    catch (ArgumentException) { }
+    if (untracked.Status != "Paused" || untracked.Cancellation is not null ||
+        rejectedEngine.Jobs.Any(j => j.Id == "detached"))
+        throw new Exception("Rejected untracked job changed state or history.");
+
     // Scheduler: high-priority jobs overtake low priority without changing
     // persistence order; live reprioritization and cancellation release slots.
     var scheduler = new TransferSlotQueue(1, 1);
