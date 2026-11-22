@@ -66,6 +66,50 @@ await assert.rejects(loadCatalog({
       {name:'songs.sqlite3',id:'sqlite22222'}]
 },'root'),/songs.sqlite3 ซ้ำ/);
 delete ctx.XStageDriveSQLite;
+// Imports from different folders/computers MUST compare raw MIDI bytes, not
+// code, filename, JSON lyric digest, or wrapped XSK/XMID package digest.
+const {buildMidiIndex,distinctImportCode}=ctx.XStageCloudImport;
+const digestA='a'.repeat(32),digestB='b'.repeat(32);
+const legacyRecords=new Map([
+  ['old', {webSongId:'old',code:'100',midi:{md5Checksum:digestA}}],
+  ['old_duplicate_different_filename', {webSongId:'old_duplicate_different_filename',
+    code:'999',midi:{md5Checksum:digestA}}],
+  ['another_mid_same_code', {webSongId:'another_mid_same_code',
+    code:'100',midi:{md5Checksum:digestB}}]
+]);
+const indexed=await buildMidiIndex(legacyRecords,{getSqlite:async()=>{throw Error('unexpected fetch');}},()=>{});
+assert.equal(indexed.duplicates,1,'Repeated MIDI must collapse even if codes differ');
+assert.equal(legacyRecords.size,2,'A different MIDI must remain available');
+assert.equal(indexed.hashes.size,2);
+assert.equal(distinctImportCode('100','c'.repeat(32),new Map([
+  ['100',[{webSongId:'old'}]]
+])),'100-cccccccc','Distinct MIDI from other source must receive safe code alias');
+assert.equal(distinctImportCode('101','c'.repeat(32),new Map()),'101');
+// Validate old XSK and XMID packages against existing naked MIDI recordings,
+// so a different container format does not bypass content deduplication.
+const rawBytes=Buffer.from('MThd-cross-format-midi-fixture');
+const rawMd5=createHash('md5').update(rawBytes).digest('hex');
+const packages=new Map([['wrappedA',new Uint8Array([1,2,3])],['wrappedB',new Uint8Array([4,5,6])]]);
+ctx.XStageXmid={openPackage:async()=>({midi:new Blob([rawBytes])})};
+ctx.XStageXsk={openPackage:async()=>({midi:new Blob([rawBytes])})};
+const crossFormat=new Map([
+  ['raw', {webSongId:'raw',code:'R1',midi:{md5Checksum:rawMd5}}],
+  ['xmid', {webSongId:'xmid',code:'R2',xmid:{fileId:'wrappedA'}}],
+  ['xsk', {webSongId:'xsk',code:'R3',xsk:{fileId:'wrappedB'}}]
+]);
+const crossResult=await buildMidiIndex(crossFormat,{
+  getSqlite:async id=>{assert.ok(packages.has(id));return packages.get(id);}
+},()=>{});
+assert.equal(crossResult.duplicates,2);
+assert.equal(crossResult.backfilled,2);
+assert.equal(crossFormat.size,1);
+assert.equal(crossResult.hashes.get(rawMd5).webSongId,'raw');
+const importerText=read('cloud-import.js');
+assert.ok(importerText.includes('core.hashBlob(opened.midi,()=>this.check())'),
+  'Wrapped XMID/XSK input must hash the internal MIDI content');
+assert.ok(importerText.includes('if(byMidi.has(midiHash))') &&
+  importerText.includes('byMidi.set(midiHash,record)'),
+  'Every round must skip a previously imported raw MIDI');
 const uploaded=new Map(),children=new Map(),sessions=new Map();
 let serial=0,sessionNumber=0,putRequests=0;
 const id=()=>('item'+String(++serial).padStart(7,'0'));
