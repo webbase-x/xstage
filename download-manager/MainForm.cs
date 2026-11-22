@@ -30,7 +30,7 @@ public sealed partial class MainForm : Form
 
     public MainForm(string[] args)
     {
-        Text = "X-Stage Download Manager · v0.2.21 Build 24";
+        Text = "X-Stage Download Manager · v" + UpdateChecker.CurrentVersion + " Build " + UpdateChecker.CurrentBuild;
         MinimumSize = new Size(880, 590);
         Size = new Size(1250, 780);
         StartPosition = FormStartPosition.CenterScreen;
