@@ -75,6 +75,69 @@ const makeLiveChecker=new Function('androidTvNativeBridgeReady','window','checkA
   web.checkLiveAppUpdate();
   assert.equal(webChecks,1,'browser must also check its own version regularly');
 }
+// Mid-song web updates must appear without navigation. Prefetch only the
+// public shell and its same-origin scripts/styles, never private Drive media.
+assert.ok(app.includes("notice.classList.toggle('during-playback',playbackBusyForUpdate())"),
+  'New release must remain visible while a song is playing');
+assert.ok(app.includes('state.updateAfterTrack=true;')&&
+  app.includes("void performAppUpdateReload({preserveSnapshot:true})"),
+  'Update after song must preserve the next queued song across reload');
+assert.ok(app.includes("sessionStorage.setItem(PLAYBACK_RESUME_KEY,JSON.stringify({"),
+  'Song boundary must save resumable queue state');
+const html=read('karaoke.html'),updateCss=read('xstage-ux.css');
+assert.ok(html.includes('id="app-update-action"')&&
+  html.includes('id="app-update-after-song"'),
+  'Web update must offer Update Now and After Current Song');
+assert.ok(updateCss.includes('.app-update-notice.during-playback'),
+  'Mid-song update notice must remain compact and non-modal');
+const stageStart=app.indexOf('let webUpdateStageBuild=0,webUpdateStageReady=false');
+const stageEnd=app.indexOf('async function performAppUpdateReload(',stageStart);
+assert.ok(stageStart>=0&&stageEnd>stageStart,'Web update prefetch must be available');
+let prefetched=[],parsed=0,cacheReloads=0;
+const mockPage={href:'https://webbase-x.github.io/xstage/karaoke.html',origin:'https://webbase-x.github.io'};
+const mockElements=new Map([
+ ['app-update-notice',{hidden:true,classList:{toggle(){}}}],
+ ['app-update-text',{textContent:''}],
+ ['app-update-action',{textContent:'',disabled:false}],
+ ['app-update-after-song',{hidden:false,textContent:'',disabled:false}]
+]);
+const fakeDOMParser=class{
+  parseFromString(){
+    parsed++;
+    return {querySelectorAll:()=>[
+      {getAttribute:key=>key==='src'?'app.js?v=NEW':null},
+      {getAttribute:key=>key==='href'?'xstage-ux.css?v=NEW':null},
+      {getAttribute:key=>key==='src'?'https://www.googleapis.com/drive/v3/files/PRIVATE':null}
+    ]};
+  }
+};
+const stageState={updateAvailable:{version:'1.0.137',build:1137},updateAfterTrack:false};
+const makeStager=new Function('androidTvNativeBridgeReady','navigator','location','fetch',
+ 'DOMParser','URL','state','appUpdateElements','playbackBusyForUpdate','console',
+ app.slice(stageStart,stageEnd)+
+ '\nreturn {stageWebUpdateFiles,isReady:()=>webUpdateStageReady};');
+const stage=makeStager(()=>false,{connection:{saveData:false}},mockPage,
+ async(url,opts)=>{
+   prefetched.push(String(url));
+   if(opts.cache!=='reload')throw Error('Assets must enter browser HTTP cache');
+   cacheReloads++;
+   if(String(url).includes('karaoke.html'))
+     return {ok:true,text:async()=>'<html></html>'};
+   return {ok:true,arrayBuffer:async()=>new ArrayBuffer(8)};
+ },fakeDOMParser,URL,stageState,()=>({
+  notice:mockElements.get('app-update-notice'),
+  text:mockElements.get('app-update-text'),
+  action:mockElements.get('app-update-action'),
+  after:mockElements.get('app-update-after-song')
+ }),()=>true,{warn(){}});
+assert.equal(await stage.stageWebUpdateFiles(stageState.updateAvailable),true);
+assert.equal(stage.isReady(),true);
+assert.equal(cacheReloads,3,'Only public HTML, JS and CSS should be staged');
+assert.ok(prefetched.every(url=>url.startsWith('https://webbase-x.github.io/xstage/')),
+ 'Private Drive API requests must NEVER be prefetched');
+assert.equal(await stage.stageWebUpdateFiles(stageState.updateAvailable),true);
+assert.equal(cacheReloads,3,'Same build must not download its assets repeatedly');
+
 assert.ok(app.includes('if(!newlyPublished&&!manuallyChecked)return;'),'same Android build must not reopen a dismissed notice during background checks');
 assert.ok(app.includes('nativeUpdateDismissedBuild===next.build'),'Later must suppress repeat dialogs for the same build');
 assert.ok(app.includes("panel.classList.toggle('during-playback',active)"),'notification must be compact during karaoke');
