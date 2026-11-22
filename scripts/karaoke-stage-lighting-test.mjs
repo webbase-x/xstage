@@ -207,6 +207,19 @@ assert.ok(meterBars.some(height=>height>2),
 video.hidden=true;
 media.emit('pause');
 
+// A native audio pause during an otherwise live MIDI handoff must not
+// permanently kill the stage animation; MIDI timeupdate restarts it.
+virtualMidi.playing=true;
+virtualMidi.currentTime=1.05;
+media.emit('pause');
+assert.equal(lights.status().active,false,'Transient native pause stops the old animation loop');
+media.emit('timeupdate');
+assert.equal(lights.status().active,true,'Actual MIDI timeline restores the lighting loop');
+paint(800);
+assert.ok(lights.status().energy>.1,'Recovered stage animation must draw active MIDI notes');
+virtualMidi.playing=false;
+media.emit('pause');
+
 const meterGuardStart=webEq.indexOf('function drawStageBrandVisualizer(');
 const meterGuardEnd=webEq.indexOf('\nfunction startStageBrandVisualizer(',meterGuardStart);
 assert.ok(meterGuardStart>=0&&meterGuardEnd>meterGuardStart,
