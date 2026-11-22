@@ -11,6 +11,9 @@ public sealed partial class MainForm
 {
     private readonly TreeView _categories = new();
     private readonly ImageList _categoryIcons = new() { ImageSize = new Size(20, 20), ColorDepth = ColorDepth.Depth32Bit };
+    // WinForms ImageList can defer materializing source images until its
+    // native handle exists. Keep originals alive until the whole form closes.
+    private readonly List<Image> _categoryIconSources = new();
     private readonly Dictionary<string, TreeNode> _categoryNodes = new();
     private TableLayoutPanel? _workspaceRoot;
     private Panel? _entryShell;
@@ -698,7 +701,8 @@ public sealed partial class MainForm
             ("archive", "folder"), ("other", "file")
         })
         {
-            using var icon = DrawToolbarGlyph(glyph, GlyphColor(glyph));
+            var icon = DrawToolbarGlyph(glyph, GlyphColor(glyph));
+            _categoryIconSources.Add(icon);
             _categoryIcons.Images.Add(key, icon);
         }
         _categories.ShowLines = false;
