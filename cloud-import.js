@@ -14,7 +14,16 @@ const $=id=>document.getElementById(id);
 const MIME_FOLDER='application/vnd.google-apps.folder';
 const API='https://www.googleapis.com/drive/v3/files';
 const UPLOAD='https://www.googleapis.com/upload/drive/v3/files';
-const CHUNK=8*1024*1024,MAX_LRC=2*1024*1024,MAX_JSON=128*1024*1024;
+const MiB=1024*1024,CHUNK=8*MiB,MAX_CHUNK=32*MiB,MAX_LRC=2*MiB,MAX_JSON=128*MiB;
+// Larger acknowledged resumable chunks reduce request overhead on fast links.
+// Every non-final Drive chunk remains a multiple of 256 KiB, and only one
+// chunk per resumable session is in flight so Range checkpoints stay reliable.
+function nextUploadChunk(current,bytesPerSecond,fileSize){
+  if(fileSize<32*MiB)return CHUNK;
+  if(bytesPerSecond>=16*MiB)return MAX_CHUNK;
+  if(bytesPerSecond>=6*MiB)return 16*MiB;
+  return current;
+}
 const MEDIA_MIME={MP3:'audio/mpeg',M4A:'audio/mp4',WAV:'audio/wav',
   AAC:'audio/aac',FLAC:'audio/flac',OGG:'audio/ogg',OGA:'audio/ogg',
   MP4:'video/mp4',WEBM:'video/webm'};
@@ -269,7 +278,8 @@ class Drive {
       fail('Google Drive คืน Upload URL ที่ไม่อยู่ในโดเมนที่อนุญาต');
     // Google requires Range verification for every 308 response. Never
     // assume a chunk was committed when the Range header is absent.
-    let answer=null,start=0,retries=0;
+    let answer=null,start=0,retries=0,chunkSize=CHUNK,speed=0;
+    const startedAt=Date.now();
     const uploadStatus=async()=>{
       // Retry only transient failures; never guess a committed byte range.
       for(let attempt=0;attempt<4;attempt++){
@@ -297,7 +307,8 @@ class Drive {
     };
     while(start<file.size){
       this.assertLive();
-      const end=Math.min(start+CHUNK,file.size);
+      const end=Math.min(start+chunkSize,file.size);
+      const chunkStarted=Date.now(),chunkStartingAt=start;
       let response=null;
       try{
         response=await this.signedFetch(location.href,{method:'PUT',
@@ -326,6 +337,12 @@ class Drive {
           continue;
         }
         start=accepted;retries=0;
+        const duration=Math.max(.001,(Date.now()-chunkStarted)/1000);
+        const currentRate=(accepted-chunkStartingAt)/duration;
+        if(Number.isFinite(currentRate)&&currentRate>0){
+          speed=speed?speed*.65+currentRate*.35:currentRate;
+          chunkSize=nextUploadChunk(chunkSize,speed,file.size);
+        }
       }else if(response.ok){
         answer=await response.json();
         start=file.size;retries=0;
@@ -339,7 +356,12 @@ class Drive {
         if(response.status===401||response.status===403)fail('สิทธิ์ Google Drive หมดอายุหรือไม่อนุญาตให้อัปโหลด');
         fail('ส่งข้อมูลขึ้น Google Drive ไม่สำเร็จ (HTTP '+response.status+')');
       }
-      if(onBytes)onBytes(start,file.size);
+      // Always report committed bytes, never bytes merely sent to the socket.
+      if(onBytes){
+        const elapsed=Math.max(.001,(Date.now()-startedAt)/1000);
+        const measured=start/elapsed;
+        onBytes(start,file.size,Number.isFinite(measured)?measured:0);
+      }
     }
     if(!answer?.id)fail('Google Drive ไม่คืน File ID หลังอัปโหลด');
     const verified=answer.md5Checksum?answer:await this.metadata(answer.id);
@@ -1076,7 +1098,8 @@ class Importer {
         this.check();
         const parent=await drive.ensurePath(rootId,parts);
         const item=await drive.upload(parent,file,name,mime,hash,
-          (done,total)=>show('อัปโหลด '+(file.name||name)+' · '+(done/1024/1024).toFixed(1)+' / '+(total/1024/1024).toFixed(1)+' MB',
+          (done,total,bytesPerSecond=0)=>show('อัปโหลด '+(file.name||name)+' · '+(done/MiB).toFixed(1)+' / '+(total/MiB).toFixed(1)+' MB'+
+            (bytesPerSecond>0?' · '+(bytesPerSecond/MiB).toFixed(1)+' MB/s':''),
             Math.min(.99,from+(done/Math.max(1,total))*span)));
         return {fileId:item.id,path:[...parts,name].join('/'),md5Checksum:hash,size:file.size};
       };
