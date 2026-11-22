@@ -46,6 +46,18 @@ public static class SocialVideoDownloader
     // Very high video concurrency can cause 403/429 and slower transfers.
     public static int VideoFragmentConcurrency(int chosenParts) => Math.Clamp(chosenParts, 1, 4);
 
+    // yt-dlp runs outside the native HTTP byte gate. Apply the strictest
+    // configured cap per video process; this is not yet an aggregate global
+    // cap when several native/video jobs run simultaneously.
+    public static int VideoRateLimitKib(int globalLimitKib, int fileLimitKib)
+    {
+        if (globalLimitKib < 0 || fileLimitKib < 0)
+            throw new ArgumentOutOfRangeException(nameof(globalLimitKib));
+        if (globalLimitKib == 0) return fileLimitKib;
+        if (fileLimitKib == 0) return globalLimitKib;
+        return Math.Min(globalLimitKib, fileLimitKib);
+    }
+
     public static bool IsYtDlpError(string line) =>
         line.Contains("ERROR:", StringComparison.OrdinalIgnoreCase) ||
         line.StartsWith("ERROR ", StringComparison.OrdinalIgnoreCase) ||
@@ -72,7 +84,7 @@ public static class SocialVideoDownloader
         return "ดาวน์โหลดวิดีโอไม่สำเร็จ (รหัส " + exitCode + ")";
     }
 
-    public static IReadOnlyList<string> BuildArguments(DownloadJob job, string work, string tools)
+    public static IReadOnlyList<string> BuildArguments(DownloadJob job, string work, string tools, int globalLimitKib = 0)
     {
         if (!IsVideoUrl(job.Url)) throw new ArgumentException("ลิงก์นี้ไม่ใช่แพลตฟอร์มวิดีโอที่รองรับ");
         if (!AllowedQualities.Contains(job.VideoQuality)) throw new ArgumentException("รูปแบบวิดีโอไม่ถูกต้อง");
@@ -109,6 +121,12 @@ public static class SocialVideoDownloader
             "--js-runtimes", "deno:" + Path.Combine(tools, "deno.exe"),
             "-N", VideoFragmentConcurrency(job.Parts).ToString(CultureInfo.InvariantCulture),
         };
+        var rateLimitKib = VideoRateLimitKib(globalLimitKib, job.FileSpeedLimitKib);
+        if (rateLimitKib > 0)
+        {
+            args.Add("--limit-rate");
+            args.Add(rateLimitKib.ToString(CultureInfo.InvariantCulture) + "K");
+        }
         if (job.OutputFormat == "mp3" || job.VideoQuality == "AudioMP3")
         {
             args.AddRange(new[] { "-f", "ba/b", "-x", "--audio-format", "mp3", "--audio-quality", "0" });
@@ -197,7 +215,7 @@ public static class SocialVideoDownloader
         => postProcessing ? noByteProgress >= TimeSpan.FromMinutes(15)
                           : noByteProgress >= TimeSpan.FromMinutes(2);
 
-    public static async Task DownloadAsync(DownloadJob job, string work, CancellationToken ct)
+    public static async Task DownloadAsync(DownloadJob job, string work, CancellationToken ct, int globalLimitKib = 0)
     {
         var tools = Path.Combine(AppContext.BaseDirectory, "tools");
         var ytDlp = Path.Combine(tools, "yt-dlp.exe");
@@ -229,7 +247,7 @@ public static class SocialVideoDownloader
         info.Environment["YTDLP_NO_PLUGINS"] = "1";
         info.Environment["PYTHONIOENCODING"] = "utf-8";
         info.Environment["PYTHONUTF8"] = "1";
-        foreach (var arg in BuildArguments(job, work, tools)) info.ArgumentList.Add(arg);
+        foreach (var arg in BuildArguments(job, work, tools, globalLimitKib)) info.ArgumentList.Add(arg);
 
         using var process = new Process { StartInfo = info };
         if (!process.Start()) throw new IOException("ไม่สามารถเปิดตัวดาวน์โหลดวิดีโอได้");
