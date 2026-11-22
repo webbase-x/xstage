@@ -37,7 +37,7 @@ public sealed partial class MainForm : Form
         ForeColor = Color.FromArgb(23, 34, 55);
         Font = new Font("Segoe UI", 10);
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        CreateIdmLayout();
+        CreateXStageWorkspace();
         FormClosed += (_, _) => _completedMenu.Dispose();
         _parts.Items.AddRange(new object[] { "1", "2", "4", "8", "16", "32" });
         _parts.SelectedItem = _engine.DefaultParts.ToString();
