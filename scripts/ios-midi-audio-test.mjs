@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const source=fs.readFileSync(new URL('../ios-midi-audio.js',import.meta.url),'utf8');
 function setup({ios=true,allowPlay=true,bridge=true}={}){
   const calls=[];
-  let audio=null;
+  let audio=null,canPlay=allowPlay;
   const navigator={userAgent:ios?'Mozilla/5.0 (iPhone; CPU iPhone OS 27_2)':'Mozilla/5.0 (Windows NT 10.0)',
     maxTouchPoints:ios?5:0,audioSession:{type:'auto'}};
   const document={
@@ -14,7 +14,7 @@ function setup({ios=true,allowPlay=true,bridge=true}={}){
       assert.equal(tag,'audio');
       return {
         paused:true,srcObject:null,style:{},setAttribute(){},
-        play(){calls.push('play');if(!allowPlay)return Promise.reject(Error('NotAllowedError'));
+        play(){calls.push('play');if(!canPlay)return Promise.reject(Error('NotAllowedError'));
           this.paused=false;return Promise.resolve();},
         pause(){calls.push('pause');this.paused=true},
         remove(){calls.push('remove')}
@@ -31,7 +31,8 @@ function setup({ios=true,allowPlay=true,bridge=true}={}){
   };
   const scope={navigator,document};
   vm.runInNewContext(source,{window:scope,console,Promise});
-  return {ios:scope.XStageIOSMidiAudio,navigator,ctx,sourceNode,calls,get audio(){return audio}};
+  return {ios:scope.XStageIOSMidiAudio,navigator,ctx,sourceNode,calls,
+    setAllowPlay(value){canPlay=!!value;},get audio(){return audio}};
 }
 {
   const fake=setup();
@@ -91,4 +92,22 @@ function setup({ios=true,allowPlay=true,bridge=true}={}){
   assert.equal(out.mode,'direct');
   out.dispose();
 }
+{
+  const fake=setup();
+  const output=fake.ios.attach(fake.ctx,fake.sourceNode);
+  await output.start();
+  fake.audio.paused=true; // Safari suspended the hidden playback element.
+  fake.setAllowPlay(false); // Background autoplay denied until next gesture.
+  assert.equal(await output.resume(),false,'Wake must signal that Safari denied output');
+  assert.equal(fake.calls.filter(x=>x==='connect-direct').length,0,
+    'Autoplay denial must not silently create a second speaker route');
+  assert.equal(fake.audio.paused,true);
+  fake.setAllowPlay(true);
+  assert.equal(await output.resume(),true,'On user gesture the same relay can resume');
+  assert.equal(fake.audio.paused,false);
+  assert.equal(fake.calls.filter(x=>x==='append').length,1,
+    'Screen wake must not create a second hidden audio element');
+  output.dispose();fake.ios.release();
+}
+
 console.log('PASS: iPhone audio session, MediaStream output, single route, autoplay fallback, desktop isolation');
