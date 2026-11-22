@@ -101,12 +101,63 @@ const webEq=read('pc-extensions.js');
 const nativeEq=read('native-audio-meter.js');
 assert.match(webEq,/XStageStageLiveSpectrum/, 'Web analyser must publish actual frequency bands');
 assert.match(nativeEq,/XStageStageLiveSpectrum/, 'Android analyser must publish actual frequency bands');
-assert.match(html,/pc-extensions\.js\?v=1136-live-stage-eq/, 'Web meter cache must refresh');
+assert.match(html,/pc-extensions\.js\?v=1136-unfiltered-output-visual-only/, 'Unfiltered Web speaker graph cache must refresh');
 assert.match(html,/native-audio-meter\.js\?v=1136-live-stage-eq/, 'Android meter cache must refresh');
 assert.match(html,/stage-lighting\.js\?v=1164-midi-eq-bars-1165-live-spectrum/,
   'Concert light script cache must refresh');
 assert.match(css,/1\.0\.137: reserve usable EQ meter widths/,
   'Narrow phone layout must preserve both banner-side EQ meters');
+
+
+// Verify the REAL audio graph is a single unfiltered audible route with a
+// separate, silent tap for the stage RTA (including meter-init failures).
+const audioGraphStart=webEq.indexOf('function ensureEqAudio(){');
+const audioGraphEnd=webEq.indexOf('\nfunction nativeAndroidTvAudioMode()',audioGraphStart);
+assert.ok(audioGraphStart>=0&&audioGraphEnd>audioGraphStart,
+  'Unfiltered speaker graph must be inspectable for behavior tests');
+for(const breakMeter of [false,true]){
+  const edges=[];
+  let equalizerFilters=0;
+  class AudioNode{
+    constructor(name){this.name=name;}
+    connect(target,outputIndex){edges.push([this.name,target.name,outputIndex]);return target;}
+  }
+  class FakeAudioContext{
+    constructor(){this.state='running';this.destination=new AudioNode('speaker');}
+    createMediaElementSource(){return new AudioNode('player');}
+    createAnalyser(){return new AudioNode('spectrum');}
+    createChannelSplitter(){if(breakMeter)throw Error('meter init failed');return new AudioNode('splitter');}
+    createGain(){const node=new AudioNode('silent');node.gain={value:1};return node;}
+    createBiquadFilter(){equalizerFilters++;throw Error('EQ filter must never be constructed');}
+    addEventListener(){}
+  }
+  const environment={
+    window:{AudioContext:FakeAudioContext,addEventListener(){}},
+    audio:{paused:false,muted:false,ended:false,volume:1},
+    nativeAndroidTvAudioMode:()=>false,
+    eqContext:null,eqSource:null,eqNodes:[],eqAnalyser:null,
+    eqLeft:null,eqRight:null,eqMeterSink:null,
+    startStageBrandVisualizer(){},
+    console:{warn(){}},
+    state:{current:null},CustomEvent:class{}
+  };
+  const graphSource=webEq.slice(audioGraphStart,audioGraphEnd);
+  const created=vm.runInNewContext(graphSource+'\nensureEqAudio();',environment);
+  assert.equal(created,true,'Speaker route must survive optional spectrum failure');
+  assert.equal(equalizerFilters,0,'EQ filters are forbidden even when visualizer is enabled');
+  assert.equal(edges.filter(([from,to])=>from==='player'&&to==='speaker').length,1,
+    'Exactly one dry/unfiltered audible player path is allowed');
+  assert.ok(!edges.some(([from,to])=>to==='speaker'&&from==='spectrum'),
+    'Spectrum node cannot be wired as an audible route');
+  if(!breakMeter){
+    assert.equal(environment.eqMeterSink.gain.value,0,
+      'Spectrum and side meters must be connected only through a zero-gain output');
+    assert.ok(edges.some(([from,to])=>from==='player'&&to==='spectrum'),
+      'The unprocessed player samples must feed the display-only spectrum');
+    assert.ok(edges.some(([from,to])=>from==='silent'&&to==='speaker'),
+      'Silent tap should finish in a zero-gain output, not another audible output');
+  }
+}
 
 // Execute the actual stage-meter painting function against realistic narrow
 // canvases. Even 20px must not clip bars outside the drawing surface.
