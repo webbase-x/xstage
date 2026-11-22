@@ -186,6 +186,27 @@ virtualMidi.playing=false;
 media.emit('pause');
 assert.equal(lights.status().energy,0,'Stopped virtual MIDI must clear the lights');
 
+// Regression: songs with a visible background video must retain both the
+// music-driven concert beams and the actual MIDI side EQ by the logo.
+assert.match(css,/Video is a backdrop, NOT a reason to hide concert lighting or EQ/,
+  'Video background must no longer suppress stage effects');
+assert.match(css,/\.stage:has\(#karaoke-video:not\(\[hidden\]\)\) \.stage-hero\{/,
+  'Video stage must explicitly restore the complete brand and EQ overlay');
+assert.doesNotMatch(css,/\.stage:has\(#karaoke-video:not\(\[hidden\]\)\) \.xstage-stage-lights\{\s*display:none!important/,
+  'No video style may hide the entire concert lighting layer');
+video.hidden=false;
+virtualMidi.playing=true;
+virtualMidi.currentTime=1.05;
+meterBars.length=0;
+media.emit('playing');
+paint(700);
+assert.ok(lights.status().energy>.1,
+  'Playing MIDI with visible video must still illuminate the concert beams');
+assert.ok(meterBars.some(height=>height>2),
+  'Playing MIDI with visible video must still paint both real side EQ canvases');
+video.hidden=true;
+media.emit('pause');
+
 const meterGuardStart=webEq.indexOf('function drawStageBrandVisualizer(');
 const meterGuardEnd=webEq.indexOf('\nfunction startStageBrandVisualizer(',meterGuardStart);
 assert.ok(meterGuardStart>=0&&meterGuardEnd>meterGuardStart,
