@@ -51,3 +51,12 @@ Official Yamaha information:
 - https://usa.yamaha.com/audio/streaming-gaming/products/mixers/ag-series/specs.html
 - https://usa.yamaha.com/audio/streaming-gaming/products/mixers/ag-series/support.html
 - https://usa.yamaha.com/audio/streaming-gaming/explore/guides/ag-controller.html
+
+
+## Editor additions (current scope)
+
+- Waveform rendering with horizontal timeline zoom and pointer-to-trim-start (Shift+click to trim end), plus exact start/end/offset fields. This is a waveform-assisted trimming view, not a full nondestructive multiregion DAW timeline.
+- Built-in note editor: add/remove MIDI-pitch note events, adjust timing/BPM, preview an original triangle-wave synthesizer and render as an audio track. It does not yet import/export Standard MIDI Files or support third-party VST instruments.
+- Portable .xstageaudio project: serializes PCM sample data, trim/mix settings and note events into JSON for manual export/import. Projects are currently limited to 100 MiB, with decoded audio per track limited by the application's original constraints. The project is not continuously autosaved; keep a downloaded copy before closing. Treat untrusted project files cautiously.
+- Voice Cleanup is a basic 90 Hz high-pass filter with amplitude noise gate on voice tracks, not AI spectral denoising. It operates during preview and offline mix. It can cut quiet speech and should be used judiciously.
+- Yamaha AG06 hardware DSP: no independent hardware control is implemented. To change hardware COMP/EQ, reverb or amp simulation, use Yamaha AG Controller on a supported OS. This app does not claim USB protocol interoperability; the browser's ordinary USB audio enumeration is not hardware DSP access.
