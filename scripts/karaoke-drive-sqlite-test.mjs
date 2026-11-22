@@ -19,6 +19,14 @@ assert.ok(importer.includes("x.name==='current.json'||x.name==='.xstage-songstud
 assert.ok(!importer.includes("drive.upload(dbRoot,marker,'current.json'"));
 assert.ok(app.includes("name='songs.sqlite3' and trashed=false"));
 assert.ok(app.includes("function directCatalogPointer(file)"));
+assert.ok(app.includes('xstageCloudImporter.consolidate()'),
+  'Legacy user libraries must automatically migrate with the verified web OAuth session');
+assert.ok(app.includes('onConsolidationStatus:message=>setStatus(message'),
+  'One-time migration must expose progress/error status on the main player');
+assert.ok(importer.includes('acquireCatalogLease(drive,cacheRoot,check,status)'),
+  'Multi-computer imports must coordinate a Drive writer lease');
+assert.ok(importer.includes("const {hashes:byMidi,duplicates:olderDuplicates,backfilled:olderHashes}"),
+  'All existing MID/XSK/XMID sources must be indexed globally');
 assert.ok(app.includes("activeDriveCatalog(state.catalogDbDirId,token)"));
 assert.ok(importer.includes("moveToFolder"));
 assert.ok(!importer.includes("catalog-base-'+generation+'.json"));
