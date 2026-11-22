@@ -129,9 +129,17 @@ assert.equal(crossResult.hashes.get(rawMd5).webSongId,'raw');
 const importerText=read('cloud-import.js');
 assert.ok(importerText.includes('core.hashBlob(opened.midi,()=>this.check())'),
   'Wrapped XMID/XSK input must hash the internal MIDI content');
-assert.ok(importerText.includes('if(byMidi.has(midiHash))') &&
+assert.ok(importerText.includes('sameMidiBytes(byMidi,midiHash,midiSize)') &&
   importerText.includes('byMidi.set(midiHash,record)'),
-  'Every round must skip a previously imported raw MIDI');
+  'Every import must compare MIDI byte length and MD5 before uploading media');
+assert.ok(importerText.includes('const CATALOG_BATCH_SIZE=200')&&
+  importerText.includes('if(revisions.length>=CATALOG_BATCH_SIZE)await publish();'),
+  'Large imports should publish a verified SQLite snapshot in batches, not after every song');
+assert.ok(importerText.includes('originalRelativePath:item.relative||item.file.name')&&
+  importerText.includes('originalRelativePath:item.midi?.relative||midiFile.name'),
+  'All MIDI import paths must preserve the local source filename and relative directory');
+assert.ok(!importerText.includes('if(revisions.length>=25)await publish();'),
+  'Publishing the full catalog every 25 files causes avoidable Drive I/O');
 // Two computers share a Drive-scoped publication lease in CACHE, never DB.
 // The holder verifies ownership and releases the app-owned lock after success.
 const leases=new Map();
