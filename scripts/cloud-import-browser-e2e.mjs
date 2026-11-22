@@ -93,6 +93,21 @@ async function routeDrive(route){
         'Content-Length':String(item.data.length)},body:item.data});
     return send(200,item);
   }
+  if(url.pathname.startsWith('/drive/v3/files/')&&method==='PATCH'){
+    const itemId=url.pathname.split('/').pop();
+    const item=records.get(itemId);assert.ok(item,'Move must target a real Drive file');
+    const from=url.searchParams.get('removeParents');
+    const to=url.searchParams.get('addParents');
+    assert.ok(from&&to&&from!==to,'Move must specify source and target folder');
+    const before=group(from);
+    const index=before.findIndex(x=>x.id===itemId);
+    assert.ok(index>=0,'Moved file must be in its current folder');
+    before.splice(index,1);
+    const metadata=JSON.parse(req.postData()||'{}');
+    Object.assign(item,metadata,{parents:[to]});
+    group(to).push(item);
+    return send(200,item);
+  }
   if(url.pathname.startsWith('/upload/drive/v3/files/')&&method==='PATCH'){
     const itemId=url.pathname.split('/').pop();
     const existing=records.get(itemId);
@@ -323,12 +338,19 @@ try{
   assert.equal(rootCreated,1,'Only one private XStageKaraoke root should be created');
   assert.ok([...records.values()].some(x=>x.name==='current.json'),'Playable DB pointer must be created');
   const pointer=[...records.values()].find(x=>x.name==='current.json');
-  assert.equal(JSON.parse(pointer.data.toString('utf8')).songCount,4);
+  const firstManifest=JSON.parse(pointer.data.toString('utf8'));
+  assert.equal(firstManifest.songCount,4);
+  assert.equal(firstManifest.layoutVersion,6);
+  assert.equal(firstManifest.deltaFileIds.length,0);
   assert.ok([...records.values()].some(x=>x.name.endsWith('.mp4')));
-  // Song rows are now stored only in real SQLite3 snapshots/deltas.
-  // The small current.json is an atomic pointer, not a song database.
-  const published=[...records.values()].filter(x=>x.name.endsWith('.sqlite3'));
-  assert.ok(published.some(x=>x.name.startsWith('songs-')),'SQLite3 song snapshot must exist');
+  // Only one SQLite catalog may be active in DB; previous snapshots belong
+  // to BACKUP and are still available by immutable Google Drive File ID.
+  const rootId=group('root').find(x=>x.name==='XStageKaraoke').id;
+  const dbId=group(rootId).find(x=>x.name==='DB').id;
+  const activeDbFiles=()=>group(dbId).filter(x=>x.name.endsWith('.sqlite3'));
+  assert.deepEqual(activeDbFiles().map(x=>x.name),['songs.sqlite3']);
+  const published=[...records.values()].filter(x=>x.name==='songs.sqlite3');
+  assert.equal(published.length,1,'First upload publishes exactly one SQLite3 DB');
   assert.ok(published.every(x=>x.data.subarray(0,16).toString('latin1')==='SQLite format 3\0'),
     'All published catalogs must contain SQLite3 bytes, not renamed JSON');
   const SQL=await initSqlJs();
@@ -410,6 +432,9 @@ try{
   const finalPointer=[...records.values()].find(x=>x.name==='current.json');
   assert.equal(JSON.parse(finalPointer.data.toString('utf8')).songCount,5,
     'Reopening and resuming must publish the missing track without losing previous entries');
+  assert.deepEqual(activeDbFiles().map(x=>x.name),['songs.sqlite3'],
+    'Repeated browser imports must never accumulate SQLite delta files in DB');
+  assert.equal(JSON.parse(finalPointer.data.toString('utf8')).deltaFileIds.length,0);
   assert.deepEqual(scriptErrors,[], 'No browser JavaScript errors are allowed');
   console.log('PASS: Chromium folder selection, Google session, private Drive uploads, pointer/catalog and replay-safe MD5 dedup');
   await context.close();
