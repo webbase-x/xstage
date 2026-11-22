@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {StudioSession,encodeWav,clamp,safeName} from "../studio-session.js";
+import {waveformPeaks,noteSequence,encodeProject,decodeProject,midiFrequency} from "../studio-advanced.js";
 const read=path=>readFileSync(new URL(path,new URL("../",import.meta.url)),"utf8");
 test("WAV encoder writes valid RIFF mono samples",()=>{
  const b={numberOfChannels:1,length:2,sampleRate:44100,getChannelData:()=>new Float32Array([-1,1])};
@@ -27,4 +28,29 @@ test("workspace UI and packaging include independent module",()=>{
  assert.match(read("index.html"),/id="studio-ducking"/);
  assert.match(read("index.html"),/id="studio-normalize"/);
  assert.match(read("android/app/src/main/java/com/webbasex/ag06studio/MainActivity.java"),new RegExp("data:audio/wav"));
+});
+
+test("waveform extracts peaks without requiring screen or device",()=>{
+ const peaks=waveformPeaks({getChannelData:()=>new Float32Array([0,.1,-.6,1,0])},5);
+ assert.equal(peaks.length,5);assert.equal(peaks[3],1);
+});
+test("note editor bounds pitch, beat and tempo",()=>{
+ assert.equal(Math.round(midiFrequency(69)),440);
+ const notes=noteSequence([{pitch:150,beat:2,length:1,velocity:.8}],120);
+ assert.equal(notes[0].pitch,96);assert.equal(notes[0].start,1);
+});
+test("project format round trip restores metadata and embedded PCM",()=>{
+ const session=new StudioSession();session.tracks=[{name:"Voice",volume:1,mute:false,solo:false,role:"voice",start:0,end:.001,offset:0,buffer:{
+  sampleRate:8000,numberOfChannels:1,getChannelData:()=>new Float32Array([0,.25,-.25,0])}}];
+ const project=decodeProject(encodeProject(session,[{pitch:60,beat:0,length:1,velocity:.8}]));
+ assert.equal(project.tracks[0].name,"Voice");assert.equal(project.notes[0].pitch,60);
+ assert.throws(()=>decodeProject('{"format":"invalid","version":1,"tracks":[]}'));
+});
+test("new editor buttons and both desktop/mobile bundles are wired",()=>{
+ const html=read("index.html"),app=read("app.js");
+ for(const id of ["studio-timeline","studio-zoom","studio-noise-gate","studio-save-project","studio-open-project","midi-notes","midi-add","midi-play","midi-to-track","hardware-dsp"])
+  assert.match(html,new RegExp('id="'+id+'"'));
+ assert.match(app,/drawWaveform/);assert.match(app,/decodeProject/);assert.match(app,/renderSynth/);
+ assert.match(read("desktop/package.json"),/studio-advanced\.js/);
+ assert.match(read("android/app/build.gradle"),/studio-advanced\.js/);
 });
