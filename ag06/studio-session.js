@@ -20,7 +20,7 @@ export function encodeWav(buffer){
   return new Blob([wav],{type:"audio/wav"});
 }
 export class StudioSession {
-  constructor(){this.tracks=[];this.ctx=null;this.players=[];this.ducking=false;this.normalize=false;}
+  constructor(){this.tracks=[];this.ctx=null;this.players=[];this.ducking=false;this.normalize=false;this.noiseGate=false;}
   async addFile(file,name=file.name){
     if(this.tracks.length>=MAX_TRACKS)throw new Error("รองรับสูงสุด "+MAX_TRACKS+" แทร็ก");
     if(!file.size||file.size>MAX_FILE_BYTES)throw new Error("ไฟล์ต้องมีขนาด 1–80 MB");
@@ -67,7 +67,17 @@ export class StudioSession {
           gain.gain.linearRampToValueAtTime(clamp(track.volume,0,2)*smoothed,ctx.currentTime+at+.05);
         }
       }
-      source.connect(gain);gain.connect(dest);
+      if(this.noiseGate&&track.role==="voice"){
+        const filter=ctx.createBiquadFilter();filter.type="highpass";filter.frequency.value=90;source.connect(filter);filter.connect(gain);
+        const pcm=track.buffer.getChannelData(0),rate=track.buffer.sampleRate;
+        for(let at=track.start;at<track.end;at+=.03){
+          let sum=0,count=0;const first=Math.floor(at*rate),last=Math.min(pcm.length,first+Math.ceil(rate*.03));
+          for(let i=first;i<last;i+=4){sum+=pcm[i]*pcm[i];count++;}
+          const rms=Math.sqrt(sum/Math.max(1,count)),floor=rms<.012?.05:1;
+          gain.gain.setTargetAtTime(clamp(track.volume,0,2)*floor,ctx.currentTime+track.offset+at-track.start,.008);
+        }
+      }else source.connect(gain);
+      gain.connect(dest);
       const duration=track.end-track.start;
       if(duration>0){source.start(ctx.currentTime+track.offset,track.start,duration);nodes.push(source);}
     }
