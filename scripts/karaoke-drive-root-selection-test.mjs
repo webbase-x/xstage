@@ -47,7 +47,7 @@ assert.ok(app.includes('String(saved.rootId||\'\')!==String(state.libraryRootId)
  'Resume must never cross to a song with an identical code in a different Drive folder');
 assert.ok(app.includes('rootId:String(state.libraryRootId||\'\')'),
  'Session resume records must preserve their root identity');
-assert.ok(app.includes("saved?.layoutVersion!==5")&&
+assert.ok(app.includes("![5,6].includes(saved?.layoutVersion)")&&
   app.includes("saved?.format!=='xstage-sqlite3-v1'"),
   'Legacy JSON catalog caches cannot masquerade as new SQLite snapshots');
 assert.ok(imp.includes("const activeRootId=String(auth.rootId||'')"),
