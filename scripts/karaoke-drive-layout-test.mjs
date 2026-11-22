@@ -20,7 +20,7 @@ assert.ok(importer.includes("for(const folder of ['SONGS','DB','SOUNDFONT','BACK
 assert.ok(!midi.includes("name==='AUDIO'"),'No SoundFont fallback to legacy AUDIO');
 assert.ok(midi.includes("x.name==='SOUNDFONT'"));
 assert.ok(midi.includes("['SF2','SF3']"));
-assert.ok(html.includes('cloud-import.js?v=1138-visible-import-cta'));
+assert.ok(html.includes('cloud-import.js?v=1139-auth-ready-import-cta'));
 assert.ok(html.includes('cloud-import.css?v=1138-visible-import-cta'));
 assert.ok(html.includes('id="cloud-import-action-hint"'));
 assert.ok(html.includes('id="cloud-import-start"'));
