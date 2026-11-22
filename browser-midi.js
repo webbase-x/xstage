@@ -563,7 +563,7 @@ async function refreshFonts(auth){
             fail('พบ '+format+' ซ้ำใน SOUNDFONT');
         for(const dir of formatDirs)
           for(const f of (await listFolder(dir.id,auth.token)).filter(x=>
-            /\\.sf[23]$/i.test(x.name)&&x.mimeType!=='application/vnd.google-apps.folder')){
+            /\.sf[23]$/i.test(x.name)&&x.mimeType!=='application/vnd.google-apps.folder')){
             const option=new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id);
             option.dataset.size=String(Number(f.size)||0);
             choices.push(option);
