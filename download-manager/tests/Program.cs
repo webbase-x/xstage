@@ -645,7 +645,7 @@ try
     // never increase user-selected parallelism or repartition saved chunks.
     // Check exact threshold transitions rather than just representative speeds.
     var mib = 1024L * 1024;
-    foreach (var (bytes, expected) in new (long Bytes, int Parts)[]
+    foreach (var (fileBytes, expected) in new (long Bytes, int Parts)[]
     {
         (2 * mib - 1, 1), (2 * mib, 2),
         (8 * mib - 1, 2), (8 * mib, 4),
@@ -654,11 +654,11 @@ try
         (512 * mib - 1, 16), (512 * mib, 32)
     })
     {
-        var actual = AdaptiveSegmentPlanner.Recommend(32, bytes,
+        var actual = AdaptiveSegmentPlanner.Recommend(32, fileBytes,
             64 * mib, false);
         if (actual != expected)
-            throw new Exception($"Adaptive size boundary {bytes}: expected {expected}, got {actual}.");
-        if (AdaptiveSegmentPlanner.Recommend(8, bytes, 64 * mib, false) >
+            throw new Exception($"Adaptive size boundary {fileBytes}: expected {expected}, got {actual}.");
+        if (AdaptiveSegmentPlanner.Recommend(8, fileBytes, 64 * mib, false) >
             8 || AdaptiveSegmentPlanner.Recommend(32, bytes, 64 * mib, true) != 32)
             throw new Exception("Adaptive size threshold overrode user or checkpoint geometry.");
     }
