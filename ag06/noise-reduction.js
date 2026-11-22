@@ -44,6 +44,8 @@ export function reduceSpectralNoise(samples,sampleRate,amount=.8){
   candidates.push({frame,offset});
  }
  candidates.sort((a,b)=>a.frame.energy-b.frame.energy);
+ // Without quiet reference material do not infer noise from continuous foreground audio.
+ if(candidates[0].frame.energy>0.0025)return new Float32Array(samples);
  const selected=candidates.slice(0,Math.max(1,Math.min(12,Math.ceil(candidates.length*.12))));
  const floor=new Float32Array(N/2+1);
  for(const item of selected){const {re,im}=item.frame;for(let k=0;k<floor.length;k++)floor[k]+=Math.hypot(re[k],im[k])/selected.length;}
