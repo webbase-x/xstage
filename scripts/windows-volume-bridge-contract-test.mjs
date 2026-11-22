@@ -15,7 +15,7 @@ for(const id of ['windows-volume-connect','windows-volume-dialog','windows-volum
   assert.ok(html.includes('id="'+id+'"'),'Missing Windows volume control '+id);
 }
 assert.ok(html.includes('windows-volume-bridge.js?v='),'Bridge must be loaded on Karaoke Online');
-assert.ok(html.includes('stage-ui.js?v=1154-wheel-volume-bridge'),'Wheel updates must bypass cached stage UI');
+assert.ok(html.includes('stage-ui.js?v=1164-bottom-menu'),'Wheel updates must bypass cached stage UI');
 assert.ok(css.includes('.windows-volume-dialog')&&css.includes('.windows-volume-connect'));
 assert.ok(stage.includes("volumeControl.addEventListener('wheel',adjustWheelVolume"),
   'Wheel over the volume slider must work even when slider is inside stage');
