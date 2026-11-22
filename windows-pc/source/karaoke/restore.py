@@ -155,6 +155,9 @@ def validate_sqlite_sidecars(data, names):
 
 
 def rollback(data,safety,existed,replaced=FILES):
+    # A safety snapshot may be tampered with while an interrupted restore is
+    # pending. Never open its SQLite database with linked journal sidecars.
+    validate_sqlite_sidecars(safety, replaced)
     validate_sqlite_sidecars(data, replaced)
     # Validate every destination before any rollback mutation. This also
     # protects files that did not exist in the original snapshot.
