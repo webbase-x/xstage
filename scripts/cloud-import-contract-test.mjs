@@ -176,4 +176,81 @@ assert.ok(importUi.includes('group.entries.slice(0,pageSize)')&&
   'Folder expansion must limit DOM rows and preserve scroll position');
 assert.ok(!read('cloud-import.js').includes('localStorage.setItem('),
   'Never persist Drive bearer tokens or upload session URLs in localStorage');
-console.log('PASS: WEB upload DOM, Drive resumable chunks, MD5 dedup, catalog safety and auth isolation');
+
+// User-visible workflow contract: the footer must stay outside the scrollable
+// file list, a verified bundle must enable Start immediately, and an unreviewed
+// video must never be silently eligible for upload.
+const openDialog=page.indexOf('<dialog id="cloud-import-dialog"');
+const bodyStart=page.indexOf('class="cloud-import-body"',openDialog);
+const bodyEnd=page.indexOf('</div>\n      <footer class="cloud-import-footer"',bodyStart);
+const footerStart=page.indexOf('<footer class="cloud-import-footer"',bodyEnd);
+const startBtn=page.indexOf('id="cloud-import-start"',footerStart);
+const hint=page.indexOf('id="cloud-import-action-hint"',footerStart);
+assert.ok(openDialog>=0&&bodyStart>openDialog&&bodyEnd>bodyStart&&
+  footerStart>bodyEnd&&startBtn>footerStart&&hint>footerStart,
+  'The import action bar must sit outside the scrollable content and include clear guidance');
+assert.ok(style.includes('.cloud-import-body{')&&
+  style.includes('overflow-y:auto')&&
+  style.includes('.cloud-import-footer-buttons{')&&
+  style.includes('flex:0 0 auto'),
+  'Import Start and status must be anchored outside scrollable contents');
+assert.ok(page.includes('cloud-import.js?v=1138-visible-import-cta')&&
+  page.includes('cloud-import.css?v=1138-visible-import-cta')&&
+  page.includes('video-metadata-editor.js?v=1138-verified-video-selection'),
+  'Updated scripts and styles must bypass stale browser caches');
+const oldDoc=ctx.document,oldAdd=ctx.addEventListener,oldScan=ctx.XStageImportCore.scan;
+const fakeNodes=new Map();
+const node=id=>{
+  if(id==='cloud-import-selection-list')return null;
+  if(!fakeNodes.has(id))fakeNodes.set(id,{
+    hidden:false,disabled:false,textContent:'',value:'',
+    addEventListener(){},setAttribute(){},removeAttribute(){}
+  });
+  return fakeNodes.get(id);
+};
+let videoApproved=false;
+const sourceFile={name:'READY.mid',size:31};
+const videoFile={name:'REVIEW.mp4',size:79};
+const verified={key:'song-ready',midi:{file:sourceFile,relative:'MIDI/NCN/SONG/R/READY.mid'}};
+const unreviewed={key:'video-review',video:{file:videoFile,relative:'VIDEO/MP4/SONG/R/REVIEW.mp4'}};
+ctx.document={getElementById:node};
+ctx.addEventListener=()=>{};
+ctx.XStageVideoEditor={init:()=>({
+  setPlan(){},get:item=>item===unreviewed&&videoApproved?{title:'Verified'}:null,
+  pendingCount:()=>videoApproved?0:1,eligibleCount:()=>videoApproved?1:0,
+  exportEdits:()=>[]
+})};
+ctx.XStageImportCore.scan=()=>({
+  files:2,songs:[unreviewed],midis:[verified],xsks:[],fonts:[],blocked:[]
+});
+try{
+  const importer=ctx.XStageCloudImport.init({
+    session:()=>({token:'test-token',sub:''}),refresh:async()=>{}
+  });
+  await importer.acceptFiles([
+    {file:sourceFile,relative:'MIDI/NCN/SONG/R/READY.mid'},
+    {file:videoFile,relative:'VIDEO/MP4/SONG/R/REVIEW.mp4'}
+  ],null);
+  assert.equal(importer.chosenItems.size,1,'Verified bundles must be preselected');
+  assert.equal(importer.dom.start.disabled,false,'Start must be enabled after valid folder selection');
+  assert.equal(importer.dom.start.hidden,false,'Start must be visible before uploading');
+  assert.ok(importer.dom.start.textContent.includes('(1)'));
+  assert.equal(importer.dom.resume.hidden,true,'Resume must not appear for a brand-new selection');
+  assert.ok(importer.dom.status.textContent.includes('กด “เริ่มตรวจ MD5 และนำเข้า”'));
+  importer.selectEveryItem(false);
+  assert.equal(importer.dom.start.disabled,true,'Clearing selection disables unsafe empty import');
+  assert.ok(importer.dom.actionHint.textContent.includes('ยังไม่ได้เลือกรายการ'));
+  videoApproved=true;
+  importer.onVideoApproved(unreviewed);
+  assert.equal(importer.dom.start.disabled,false,'Approved video must enable Start');
+  assert.equal(importer.chosenItems.size,1,'Only the newly approved video is selected');
+  assert.ok(importer.dom.status.textContent.includes('พร้อมตรวจ MD5'));
+  importer.saved={status:'paused'};
+  importer.refreshButtons();
+  assert.equal(importer.dom.resume.hidden,false,'A paused upload must expose Resume');
+}finally{
+  ctx.document=oldDoc;ctx.addEventListener=oldAdd;
+  ctx.XStageImportCore.scan=oldScan;delete ctx.XStageVideoEditor;
+}
+
+console.log('PASS: WEB upload DOM, visible Start, selection/review/resume, Drive chunks, MD5 and catalog safety');
