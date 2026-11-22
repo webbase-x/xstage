@@ -37,6 +37,18 @@ class RemoteServer:
                 self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'none'; frame-ancestors 'none'")
                 self.end_headers()
                 self.wfile.write(data)
+            def valid_lan_host(self):
+                # A browser opened via QR uses a numeric LAN IPv4 address.
+                # Reject arbitrary Host headers to prevent DNS-rebinding
+                # access from an unrelated internet site.
+                from .remote_boot import usable_remote_ip
+                authority=self.headers.get('Host','')
+                name,separator,port=authority.rpartition(':')
+                if not separator or not name or not port.isdecimal():
+                    return False
+                if int(port)!=owner.port:
+                    return False
+                return name=='127.0.0.1' or usable_remote_ip(name)
             def session(self):
                 token = self.headers.get('Authorization','').removeprefix('Bearer ')
                 with owner.lock:
@@ -69,6 +81,8 @@ class RemoteServer:
                              mine=own, pending=pending)
                 return state
             def get(self):
+                if not self.valid_lan_host():
+                    return self.response(403, {'error':'รีโมทรับการเชื่อมต่อจาก IP ภายใน LAN เท่านั้น'})
                 url = urlparse(self.path)
                 if url.path == '/': return self.response(200, PAGE, 'text/html; charset=utf-8')
                 if url.path == '/assets/mobile-logo.jpg':
@@ -102,6 +116,8 @@ class RemoteServer:
                     return self.response(200,{'songs':[{**{k:row[k] for k in keys}, 'supports_key':song_supports_key(row)} for row in songs]})
                 return self.response(404, {'error':'ไม่พบรายการ'})
             def do_POST(self):
+                if not self.valid_lan_host():
+                    return self.response(403, {'error':'รีโมทรับการเชื่อมต่อจาก IP ภายใน LAN เท่านั้น'})
                 origin = self.headers.get('Origin')
                 if origin and urlparse(origin).netloc != self.headers.get('Host'):
                     return self.response(403, {'error':'Origin ไม่ตรงกับเครื่องเล่น'})
