@@ -32,6 +32,7 @@
           "audio-engine.js",
           "studio-session.js",
           "studio-advanced.js",
+          "noise-reduction.js",
           "presets.js",
           "style.css",
           "icon.svg"
