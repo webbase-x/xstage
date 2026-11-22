@@ -23,4 +23,5 @@ test("workspace UI and packaging include independent module",()=>{
  assert.match(read("desktop/package.json"),/studio-session\.js/);
  assert.match(read("android/app/build.gradle"),/studio-session\.js/);
  assert.match(read("studio-session.js"),/new OfflineAudioContext/);
+ assert.match(read("android/app/src/main/java/com/webbasex/ag06studio/MainActivity.java"),/data:audio\\/wav/);
 });
