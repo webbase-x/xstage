@@ -157,15 +157,17 @@ jobs:
         shell: pwsh
         run: |
           python songstudio-plus/make_icon.py
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --icon "songstudio-plus/app-plus.ico" --name "XStageSongStudioPro" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" --hidden-import "windows_picker" songstudio-plus/app.py
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --icon "songstudio-plus/app-plus.ico" --name "XStageSongStudioPro" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" --hidden-import "windows_picker" songstudio-plus/app.py
           if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
-          if (!(Test-Path "dist/XStageSongStudioPro.exe")) { throw "App payload missing" }
-          python scripts/verify_songstudio_exe_icon.py "dist/XStageSongStudioPro.exe"
+          if (!(Test-Path "dist/XStageSongStudioPro/XStageSongStudioPro.exe")) { throw "App payload missing" }
+          if (!(Test-Path "dist/XStageSongStudioPro/_internal/python313.dll")) { throw "Bundled CPython 3.13 runtime missing" }
+          if (!(Test-Path "dist/XStageSongStudioPro/_internal/PySide6")) { throw "Bundled Qt runtime missing" }
+          python scripts/verify_songstudio_exe_icon.py "dist/XStageSongStudioPro/XStageSongStudioPro.exe"
           if ($LASTEXITCODE -ne 0) { throw "EXE icon verification failed" }
       - name: Smoke-test the actual Windows EXE and embedded Qt WebView
         shell: pwsh
         run: |
-          python scripts/test_songstudio_pro_exe_smoke.py "dist/XStageSongStudioPro.exe"
+          python scripts/test_songstudio_pro_exe_smoke.py "dist/XStageSongStudioPro/XStageSongStudioPro.exe"
           if ($LASTEXITCODE -ne 0) { throw "Packaged EXE Qt WebView smoke test failed" }
       - uses: actions/upload-artifact@v6
         if: always()
