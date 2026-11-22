@@ -419,6 +419,28 @@ async function loadCatalog(drive,root){
     return {pointerFile:null,pointer:null,rows:new Map()};
   }
   const dbChildren=await drive.listChildren(dbDirs[0].id);
+  // Canonical mode: discover the one SQLite file by its name within the
+  // selected XStageKaraoke/DB folder. No JSON index or external file ID.
+  const canonical=dbChildren.filter(x=>x.name==='songs.sqlite3'&&x.mimeType!==MIME_FOLDER);
+  if(canonical.length>1)fail('พบ songs.sqlite3 ซ้ำใน DB · ไม่เลือกไฟล์โดยคาดเดา');
+  if(canonical.length){
+    if(!scope.XStageDriveSQLite)fail('ไม่พบตัวอ่าน SQLite3');
+    const base=await scope.XStageDriveSQLite.read(await drive.getSqlite(canonical[0].id));
+    if(base.schemaVersion!==1||base.kind!=='snapshot'||!Array.isArray(base.songs))
+      fail('DB/songs.sqlite3 ไม่ใช่ฐานข้อมูลเพลงที่ถูกต้อง');
+    const rows=new Map();
+    for(const row of base.songs){
+      if(!row||typeof row.webSongId!=='string'||rows.has(row.webSongId))
+        fail('ฐานเพลงมีรหัสซ้ำหรือข้อมูลไม่ถูกต้อง');
+      rows.set(row.webSongId,row);
+    }
+    return {pointerFile:null,rows,pointer:{schemaVersion:1,layoutVersion:6,
+      format:'xstage-sqlite3-v1',directFile:true,generation:base.generation,
+      catalogFileId:canonical[0].id,catalogMd5:String(canonical[0].md5Checksum||''),
+      deltaFileIds:[],songCount:rows.size}};
+  }
+  // Read current.json only to migrate an older v5 library. New publications
+  // never create this file and archive the legacy copy after verification.
   const pointers=dbChildren.filter(x=>x.name==='current.json'&&x.mimeType!==MIME_FOLDER);
   if(pointers.length>1)fail('พบ current.json ซ้ำใน DB · หยุดเพื่อไม่ให้ฐานเสีย');
   if(!pointers.length){
@@ -459,10 +481,8 @@ async function loadCatalog(drive,root){
   if(pointer.songCount!==rows.size)fail('จำนวนเพลงบน Drive ไม่ตรงกับ Catalog');
   return {pointerFile:pointers[0],pointer,rows};
 }
-// One catalog for Karaoke Online, the browser importer and Song Studio Pro.
-// Publish a verified, immutable SQLite snapshot in CACHE first; preserve
-// prior snapshots and every legacy v5 delta in BACKUP (by moving Drive IDs,
-// never deleting their bytes). current.json is switched last.
+// Publish the catalog as DB/songs.sqlite3 without current.json. All media,
+// legacy delta IDs and older snapshots remain recoverable in BACKUP.
 async function publishSingleCatalog({drive,rootId,pointerFile,pointer,rows,check,status}){
   check();
   const dbRoot=await drive.ensurePath(rootId,['DB']);
@@ -472,66 +492,79 @@ async function publishSingleCatalog({drive,rootId,pointerFile,pointer,rows,check
   if(!codec)fail('ไม่พบตัวอ่าน SQLite3 บนเว็บ');
   const generation=Array.from(scope.crypto.getRandomValues(new Uint8Array(12)))
     .map(x=>x.toString(16).padStart(2,'0')).join('');
-  const verifyPointer=async()=>{
+  const verifySource=async()=>{
     check();
-    const latest=await drive.list("'"+driveId(dbRoot)+"' in parents and name='current.json' and trashed=false");
-    if(pointerFile){
-      if(latest.length!==1||latest[0].id!==pointerFile.id)
-        fail('พบ current.json เปลี่ยนหรือซ้ำระหว่างนำเข้า · หยุดเพื่อรักษาข้อมูล');
-      const current=await drive.getJson(pointerFile.id);
-      if(current.generation!==pointer.generation||
-         current.catalogFileId!==pointer.catalogFileId)
-        fail('มีการอัปเดตฐานเพลงจากอีกอุปกรณ์ · หยุดเพื่อไม่เขียนทับ');
-    }else if(latest.length)fail('มีฐานเพลงใหม่จากอีกอุปกรณ์ · หยุดเพื่อไม่สร้างซ้ำ');
+    // Query Drive directly, not its cached folder listing. A different
+    // browser/computer may have published while this batch was uploading.
+    const canonical=await drive.list("'"+driveId(dbRoot)+
+      "' in parents and name='songs.sqlite3' and trashed=false");
+    if(canonical.length>1)fail('พบ songs.sqlite3 ซ้ำใน DB');
+    if(pointer?.directFile){
+      if(canonical.length!==1||canonical[0].id!==pointer.catalogFileId)
+        fail('ฐาน songs.sqlite3 เปลี่ยนจากอีกอุปกรณ์ระหว่างนำเข้า');
+      const meta=await drive.metadata(pointer.catalogFileId);
+      if(pointer.catalogMd5&&String(meta.md5Checksum||'')!==pointer.catalogMd5)
+        fail('ฐาน SQLite ถูกแก้ไขจากอีกอุปกรณ์ · หยุดเพื่อไม่เขียนทับ');
+    }else{
+      if(canonical.length)fail('มีฐาน songs.sqlite3 ใหม่แล้ว · เปิดคลังใหม่ก่อนเผยแพร่');
+      const legacy=await drive.list("'"+driveId(dbRoot)+
+        "' in parents and name='current.json' and trashed=false");
+      if(pointerFile){
+        if(legacy.length!==1||legacy[0].id!==pointerFile.id)
+          fail('ฐานเดิม current.json เปลี่ยนจากอีกอุปกรณ์');
+        const old=await drive.getJson(pointerFile.id);
+        if(old.generation!==pointer.generation||
+          old.catalogFileId!==pointer.catalogFileId)
+          fail('มีการนำเข้าจากอีกอุปกรณ์ระหว่างงาน · หยุดเพื่อรักษาข้อมูล');
+      }else if(legacy.length){
+        fail('มีฐานเดิมเพิ่งถูกสร้างจากอีกอุปกรณ์ · หยุดเพื่อไม่เขียนทับ');
+      }
+    }
   };
-  await verifyPointer();
-  status?.('กำลังรวมฐานเพลง '+rows.size.toLocaleString('th-TH')+' รายการเป็น SQLite3 ไฟล์เดียว');
+  await verifySource();
+  status?.('กำลังสร้าง DB/songs.sqlite3 สำหรับ '+rows.size.toLocaleString('th-TH')+' เพลง');
   const bytes=await codec.create('snapshot',[...rows.values()],[],generation);
   const local=await codec.read(bytes);
   if(local.kind!=='snapshot'||local.songs.length!==rows.size||
-     local.generation!==generation)
-    fail('ตรวจ SQLite3 ก่อนอัปโหลดไม่ผ่าน');
+     local.generation!==generation)fail('ฐาน SQLite3 ในเครื่องตรวจสอบไม่ผ่าน');
   const blob=new Blob([bytes],{type:'application/vnd.sqlite3'});
   const digest=await core.hashBlob(blob,check);
   const staged=await drive.upload(cacheRoot,blob,'songs-stage-'+generation+'.sqlite3',
     'application/vnd.sqlite3',digest);
-  const stagedDb=await codec.read(await drive.getSqlite(staged.id));
-  if(stagedDb.kind!=='snapshot'||stagedDb.generation!==generation||
-     stagedDb.songs.length!==rows.size)
-    fail('ตรวจ SQLite3 หลังอัปโหลดไม่ผ่าน · ยังไม่เปลี่ยนฐานเดิม');
-  await verifyPointer();
-  // Existing readers use File IDs, not the folder path, so moving historical
-  // files to BACKUP cannot break an in-flight player with a v5 pointer.
+  const uploaded=await codec.read(await drive.getSqlite(staged.id));
+  if(uploaded.kind!=='snapshot'||uploaded.generation!==generation||
+     uploaded.songs.length!==rows.size)
+    fail('ฐาน SQLite3 บน Drive ตรวจสอบไม่ผ่าน · ยังไม่แทนที่ฐานเดิม');
+  await verifySource();
+  // File IDs of the old v5 snapshots/deltas remain valid after moving them.
+  // The old pointer stays available until the new DB is verified in place.
   const older=(await drive.listChildren(dbRoot)).filter(x=>
     /\.sqlite3$/i.test(x.name)&&x.mimeType!==MIME_FOLDER);
   for(let i=0;i<older.length;i++){
     check();
-    status?.('เก็บฐานรุ่นเดิมใน BACKUP '+(i+1)+'/'+older.length);
+    status?.('สำรองฐานก่อนหน้า '+(i+1)+'/'+older.length);
     await drive.moveToFolder(older[i].id,dbRoot,backupRoot);
   }
-  await verifyPointer();
   await drive.moveToFolder(staged.id,cacheRoot,dbRoot,'songs.sqlite3');
   const active=(await drive.listChildren(dbRoot)).filter(x=>
     /\.sqlite3$/i.test(x.name)&&x.mimeType!==MIME_FOLDER);
   if(active.length!==1||active[0].id!==staged.id||active[0].name!=='songs.sqlite3')
-    fail('DB ต้องมี songs.sqlite3 เพียงไฟล์เดียว · ยังไม่ได้สลับ current.json');
-  await verifyPointer();
+    fail('DB ต้องมี songs.sqlite3 เพียงไฟล์เดียว');
+  const final=await codec.read(await drive.getSqlite(staged.id));
+  if(final.kind!=='snapshot'||final.generation!==generation||
+     final.songs.length!==rows.size)
+    fail('อ่าน SQLite3 จาก DB หลังเผยแพร่ไม่ผ่าน · สำเนาเก่าอยู่ BACKUP');
+  // Only after the playable snapshot is verified may the legacy JSON pointer
+  // and temporary import marker leave DB. Never delete their backups.
+  const oldJson=(await drive.listChildren(dbRoot)).filter(x=>
+    x.mimeType!==MIME_FOLDER&&
+    (x.name==='current.json'||x.name==='.xstage-songstudio-staging.json'));
+  for(const legacy of oldJson)await drive.moveToFolder(legacy.id,dbRoot,backupRoot);
   const next={schemaVersion:1,layoutVersion:6,format:'xstage-sqlite3-v1',
-    generation,catalogFileId:staged.id,deltaFileIds:[],songCount:rows.size};
-  const marker=encode(next),hash=await core.hashBlob(marker,check);
-  if(pointerFile)await drive.updatePointer(pointerFile.id,marker,hash);
-  else{
-    const item=await drive.upload(dbRoot,marker,'current.json','application/json',hash);
-    pointerFile={id:item.id,name:'current.json'};
-  }
-  const verifiedPointer=await drive.getJson(pointerFile.id);
-  if(verifiedPointer.generation!==generation||
-     verifiedPointer.catalogFileId!==staged.id||
-     verifiedPointer.songCount!==rows.size)
-    fail('ตรวจ current.json หลังสลับฐานไม่ผ่าน');
-  status?.('เผยแพร่ DB/songs.sqlite3 ไฟล์เดียวแล้ว · '+
-    rows.size.toLocaleString('th-TH')+' เพลง');
-  return {pointerFile,pointer:next};
+    directFile:true,generation,catalogFileId:staged.id,catalogMd5:digest,
+    deltaFileIds:[],songCount:rows.size};
+  status?.('เผยแพร่ DB/songs.sqlite3 โดยตรง · '+rows.size.toLocaleString('th-TH')+' เพลง');
+  return {pointerFile:null,pointer:next};
 }
 class Importer {
   constructor(options){
@@ -1095,12 +1128,14 @@ class Importer {
         const rootId=chooseImportRoot(roots,String(auth.rootId||''));
         if(!rootId)fail('ไม่พบโฟลเดอร์ XStageKaraoke · ไม่สร้างคลังใหม่ขณะรวมฐาน');
         const {pointerFile,pointer,rows}=await loadCatalog(drive,rootId);
-        if(!pointer||!pointerFile){this.status('ยังไม่มีฐานเพลงบน Drive ให้รวม');return;}
+        if(!pointer){this.status('ยังไม่มีฐานเพลงบน Drive ให้รวม');return;}
         const currentFiles=(await drive.listChildren(await drive.ensurePath(rootId,['DB'])))
           .filter(x=>/\.sqlite3$/i.test(x.name));
-        if(pointer.layoutVersion===6&&currentFiles.length===1&&
+        if(pointer.directFile&&currentFiles.length===1&&
            currentFiles[0].name==='songs.sqlite3'&&
-           currentFiles[0].id===pointer.catalogFileId){
+           currentFiles[0].id===pointer.catalogFileId&&
+           !(await drive.listChildren(await drive.ensurePath(rootId,['DB']))).some(
+             x=>x.name==='current.json'||x.name==='.xstage-songstudio-staging.json')){
           this.status('ฐานเพลงเป็นมาตรฐานเดียวแล้ว · DB/songs.sqlite3 1 ไฟล์ · '+
             rows.size.toLocaleString('th-TH')+' เพลง');
           return;
@@ -1199,7 +1234,7 @@ class Importer {
         await drive.folder(rootId,folder);
       if(pointer && ![5,6].includes(pointer.layoutVersion))
         fail('ฐานเพลงใน XStageKaraoke มีรูปแบบที่ไม่รองรับ · หยุดเพื่อไม่เขียนทับ');
-      if(!pointerFile){
+      if(!pointerFile&&!pointer){
         const textRoot=await drive.ensurePath(rootId,['DB']);
         const textFiles=await drive.listChildren(textRoot);
         const rootFiles=await drive.listChildren(rootId);
@@ -1261,7 +1296,7 @@ class Importer {
         return tasks.map(task=>task.value);
       };
       const publish=async()=>{
-        if(!revisions.length&&(!pointer||pointer.layoutVersion===6))return;
+        if(!revisions.length&&(!pointer||pointer.directFile))return;
         ({pointerFile,pointer}=await publishSingleCatalog({
           drive,rootId,pointerFile,pointer,rows,check:()=>this.check(),
           status:message=>this.status(message)
