@@ -5,6 +5,8 @@
 'use strict';
 const cfg = window.XSTAGE_CONFIG || {};
 const driveLayout=window.XSTAGE_DRIVE_LAYOUT||{root:'XStageKaraoke',db:'DB'};
+const retiredDriveRootIds=new Set(window.XSTAGE_RETIRED_DRIVE_ROOT_IDS||[]);
+const isRetiredDriveRoot=id=>retiredDriveRootIds.has(String(id||''));
 const $ = id => document.getElementById(id);
 const ui = {
   status: $('status'), login: $('login'), gateLogin: $('gate-login'), gateStatus:$('gate-auth-status'), logout: $('logout'), gate: $('gate'), catalogLoading:$('catalog-loading'), catalogLoadingTitle:$('catalog-loading-title'), catalogLoadingDetail:$('catalog-loading-detail'), catalogProgress:$('catalog-progress'), catalogProgressValue:$('catalog-progress-value'),
@@ -417,11 +419,12 @@ function readPreferredLibraryRoot(sub){
   if(!sub)return '';
   try{
     const map=JSON.parse(localStorage.getItem(LIBRARY_PREF_KEY)||'{}');
-    return String(map?.[sub]||'');
+    const id=String(map?.[sub]||'');
+    return isRetiredDriveRoot(id)?'':id;
   }catch{return '';}
 }
 function savePreferredLibraryRoot(sub,rootId){
-  if(!sub||!rootId)return;
+  if(!sub||!rootId||isRetiredDriveRoot(rootId))return;
   try{
     const map=JSON.parse(localStorage.getItem(LIBRARY_PREF_KEY)||'{}');
     map[sub]=String(rootId);
@@ -444,7 +447,7 @@ function libraryLabel(root){
     (created?' · '+created:'')+' · …'+String(root.id||'').slice(-5);
 }
 function renderLibrarySelector(roots,activeId){
-  state.availableLibraries=Array.isArray(roots)?roots.slice():[];
+  state.availableLibraries=Array.isArray(roots)?roots.filter(root=>!isRetiredDriveRoot(root.id)):[];
   if(!ui.librarySelect||!ui.librarySwitcher)return;
   ui.librarySelect.replaceChildren();
   for(const root of state.availableLibraries){
@@ -457,7 +460,7 @@ function renderLibrarySelector(roots,activeId){
   ui.librarySwitcher.hidden=state.availableLibraries.length<2;
 }
 async function loadLatestCachedCatalog(sub,rootId=''){
-  if(!sub)return null;
+  if(!sub||isRetiredDriveRoot(rootId))return null;
   try{
     const saved=await catalogStorage('get',libraryCacheOwner(sub,rootId));
     const catalog=saved?.catalog;
@@ -1197,6 +1200,10 @@ async function openSharedLibraryPicker(){
           ui.gateStatus.textContent='ไม่ได้รับรหัสโฟลเดอร์จาก Google Picker';
           return;
         }
+        if(isRetiredDriveRoot(id)){
+          ui.gateStatus.textContent='คลัง Google Drive นี้ถูกยกเลิกแล้ว กรุณาเลือกคลังใหม่';
+          return;
+        }
         if(name&&name!==driveLayout.root){
           ui.gateStatus.textContent='กรุณาเลือกโฟลเดอร์ '+driveLayout.root+' ที่เจ้าของแชร์ให้';
           return;
@@ -1357,7 +1364,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
 
   // A new short-lived token for the SAME account must not reset the player,
   // downloaded audio, search results or queue. Only the credential changes.
-  if (reuseExistingSession && state.token && state.accountSub===account.sub && state.libraryRootId) {
+  if (reuseExistingSession && state.token && state.accountSub===account.sub && state.libraryRootId && !isRetiredDriveRoot(state.libraryRootId)) {
     state.token=token;
     state.tokenExpiresAt=tokenExpiresAt;
     rememberLogin(true);
@@ -1404,8 +1411,9 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
   }
 
   try{
-    const roots=await driveList("name='"+driveLayout.root+
-      "' and mimeType='application/vnd.google-apps.folder' and trashed=false",token);
+    const roots=(await driveList("name='"+driveLayout.root+
+      "' and mimeType='application/vnd.google-apps.folder' and trashed=false",token))
+      .filter(root=>!isRetiredDriveRoot(root.id));
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','พบคลังเพลง · กำลังตรวจ current.json…',24);
     if(authId!==state.authId)return;
     if(!roots.length){
@@ -3749,7 +3757,7 @@ for(const name of ['play','playing','pause','ended','seeked','timeupdate','loade
 // The stage clock runs independently in index.html.
 ui.librarySelect?.addEventListener('change',()=>{
   const rootId=String(ui.librarySelect.value||'');
-  if(!rootId||!state.accountSub)return;
+  if(!rootId||!state.accountSub||isRetiredDriveRoot(rootId))return;
   savePreferredLibraryRoot(state.accountSub,rootId);
   if(rootId===String(state.libraryRootId||''))return;
   const target=state.availableLibraries.find(item=>String(item.id)===rootId);
