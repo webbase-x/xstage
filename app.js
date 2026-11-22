@@ -673,7 +673,7 @@ function rememberedGoogleAccount(){
   try{
     const account=JSON.parse(localStorage.getItem(REMEMBERED_ACCOUNT_KEY)||'null');
     if(!account||typeof account.sub!=='string'||!account.sub||
-       typeof account.email!=='string'||!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(account.email))
+       typeof account.email!=='string'||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(account.email))
       return null;
     return {sub:account.sub,email:account.email};
   }catch{return null;}
