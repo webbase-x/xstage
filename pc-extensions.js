@@ -338,6 +338,14 @@ function paintStageWave(canvas,wave,palette){
 }
 function drawStageBrandVisualizer(now=performance.now()){
   if(!eqAnalyser||!eqContext){stageVizFrame=0;return;}
+  // MIDI is rendered by a separate SoundFont synthesizer. Its HTML audio
+  // element is deliberately silent, so do not overwrite the live MIDI EQ
+  // canvases with zero-filled HTML audio FFT frames every 16 milliseconds.
+  if(window.XStageStagePlaybackClock?.()?.midi){
+    stageLiveSpectrum={bands:[0,0,0],active:false,updatedAt:Date.now()};
+    stageVizFrame=requestAnimationFrame(drawStageBrandVisualizer);
+    return;
+  }
   const bins=new Uint8Array(eqAnalyser.frequencyBinCount),timeData=new Uint8Array(eqAnalyser.fftSize);
   eqAnalyser.getByteFrequencyData(bins);eqAnalyser.getByteTimeDomainData(timeData);
   const levels=stageFrequencyLevels(bins),wave=sampledStageWave(timeData);
