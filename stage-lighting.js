@@ -123,6 +123,7 @@
     deck.classList.remove('is-active');
     for(const beam of beams)beam.style.opacity='0';
     floor.style.opacity='0';
+    deck.style.setProperty('--xstage-light-power','0');
   }
   function render(timestamp){
     frame=requestAnimationFrame(render);
