@@ -35,6 +35,22 @@ if (args.Contains("--ui-smoke", StringComparer.Ordinal))
                 main.DrawToBitmap(target, new Rectangle(0, 0, width, height));
                 Application.DoEvents();
             }
+            // Force native ImageList materialization AFTER construction.
+            // Disposing bitmaps immediately after Images.Add previously left
+            // deferred GDI+ image sources unusable ("Parameter is not valid").
+            var imageField = typeof(MainForm).GetField("_categoryIcons",
+                BindingFlags.NonPublic | BindingFlags.Instance) ??
+                throw new Exception("Category icon ImageList is missing");
+            var imageList = (ImageList)(imageField.GetValue(main) ??
+                throw new Exception("Category ImageList is null"));
+            if (imageList.Images.Count < 10)
+                throw new Exception("Category icon list is unexpectedly empty");
+            using (var imageTarget = new Bitmap(50, 50))
+            using (var imageGraphics = Graphics.FromImage(imageTarget))
+            {
+                for (var i = 0; i < imageList.Images.Count; i++)
+                    imageList.Draw(imageGraphics, 2, 2, i);
+            }
             // Test every custom GDI+ glyph using the same code as menus,
             // category image lists and transfer table image cells.
             var draw = typeof(MainForm).GetMethod("DrawToolbarGlyph",
@@ -66,7 +82,7 @@ if (args.Contains("--ui-smoke", StringComparer.Ordinal))
     if (failure is not null)
         throw new Exception("X-Stage desktop UI render smoke failed: " +
             failure, failure);
-    Console.WriteLine("PASS: WinForms desktop, six viewport changes and 16 vector glyphs render without GDI+ parameter errors");
+    Console.WriteLine("PASS: WinForms desktop, six viewport changes, live ImageList handle and 16 vector glyphs render without GDI+ errors");
     return;
 }
 
