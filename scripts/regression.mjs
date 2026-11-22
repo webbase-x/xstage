@@ -34,7 +34,7 @@ const androidWorkflow=read('.github/workflows/build-android-tv.yml');
 // Search highlighting must preserve Thai grapheme clusters, including stacked
 // vowel/tone marks, on iPhone Safari and on browsers without Intl.Segmenter.
 const thaiSearchStart=app.indexOf('function expandMatchToGrapheme(');
-const thaiSearchEnd=app.indexOf('\\nfunction normalizeSearchText(',thaiSearchStart);
+const thaiSearchEnd=app.indexOf('\nfunction normalizeSearchText(',thaiSearchStart);
 assert.ok(thaiSearchStart>=0&&thaiSearchEnd>thaiSearchStart,'Thai-safe song highlighting must be present');
 const thaiHighlightDocument={
   createTextNode:text=>({kind:'text',textContent:String(text)}),
@@ -42,7 +42,7 @@ const thaiHighlightDocument={
 };
 for(const intlImplementation of [Intl,{}]){
   const renderThaiSearch=new Function('document','Intl',
-    app.slice(thaiSearchStart,thaiSearchEnd)+'\\nreturn renderMatchedText;')(
+    app.slice(thaiSearchStart,thaiSearchEnd)+'\nreturn renderMatchedText;')(
       thaiHighlightDocument,intlImplementation);
   for(const [title,query,expected] of [
     ['รู้จักทุกอย่าง','ร','รู้'],
