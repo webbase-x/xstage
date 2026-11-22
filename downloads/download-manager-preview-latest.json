@@ -1,12 +1,12 @@
 {
   "name": "X-Stage Download Manager",
-  "version": "0.2.21",
-  "build": 24,
+  "version": "0.2.22",
+  "build": 25,
   "channel": "preview",
   "available": true,
-  "file": "X-Stage-Download-Manager-v0.2.21-build24-win-x64-Setup.exe",
-  "sha256": "44c50ec2ff94b7fc83e850ceb839fd0fc815fa755f80237a3b70cf3c27f28621",
-  "size_bytes": 214677417,
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.21-build24-preview/X-Stage-Download-Manager-v0.2.21-build24-win-x64-Setup.exe",
-  "note": "Verified Windows Setup EXE installed under Program Files (UAC required); in-app SHA-256-checked download/install/restart, solid green completed progress, priority-aware queue, configurable per-host concurrent jobs and HTTP bandwidth cap, smoothed speed/ETA, friendly filename recovery, resilient per-chunk exponential backoff and HTTP Range fallback, SQLite WAL state recovery and safe JSON migration, sortable IDM-style download table with file-type metadata and URL clipboard paste, dark workspace and filterable categories, video redownload without overwriting old media, verified playable MP4 instead of broken partial output, yt-dlp error details in file menu and capped video streams, simplified toolbar, CDN filename repair and resumable SHA-256 update, video-only controls and countdown updater, MP4 default, MKV/WEBM/MP3 options. Unsigned preview."
+  "file": "X-Stage-Download-Manager-v0.2.22-build25-win-x64-Setup.exe",
+  "sha256": "f1acfd70f1954e90fdb93e723d1fe132106fb64c3fa7b6bbe669f73f3bf95e93",
+  "size_bytes": 214688407,
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.22-build25-preview/X-Stage-Download-Manager-v0.2.22-build25-win-x64-Setup.exe",
+  "note": "Verified Windows Setup EXE installed under Program Files (UAC required); in-app SHA-256-checked download/install/restart, solid green completed progress, priority-aware queue, configurable per-host concurrent jobs and HTTP bandwidth cap, smoothed speed/ETA, friendly filename recovery, resilient per-chunk exponential backoff and HTTP Range fallback, SQLite WAL state recovery and safe JSON migration, original X-Stage icon workspace and sortable download table with file-type metadata and URL clipboard paste, dark workspace and filterable categories, video redownload without overwriting old media, verified playable MP4 instead of broken partial output, yt-dlp error details in file menu and capped video streams, simplified toolbar, CDN filename repair and resumable SHA-256 update, video-only controls and countdown updater, MP4 default, MKV/WEBM/MP3 options. Opt-in live watcher (15/30/60-second checks) without browser playback, system tray, preserved MKV and silence-aligned MP4 clips on stop; the app and PC must remain running. Unsigned preview."
 }
