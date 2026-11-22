@@ -17,8 +17,8 @@ assert.ok(!/\b(?:context|ctx)\.createMediaElementSource\s*\(/.test(meter),
 assert.ok(meter.includes('player.captureStream()'),'only media capture may feed the visual meter');
 assert.ok(meter.includes('mute.gain.value=0'),'the meter output must always be silent');
 assert.ok(host.includes('nativeAudioDirect:!!window.XStageNativeAudioBypass'),'remote must receive native audio bypass state');
-assert.ok(host.includes('Android APK ใช้เสียงตรง · EQ ปิดถาวร'),'Owner EQ controls must be rejected on native APK');
-assert.ok(remote.includes("eqSelect.disabled=direct"),'Owner remote must disable EQ on native APK');
+assert.ok(host.includes('เสียงลำโพงไม่ผ่าน EQ · ระบบแสดงระดับเสียงเท่านั้น'),'Owner EQ writes must be rejected in monitor-only mode');
+assert.ok(remote.includes("eqSelect.disabled=direct||!data.eqActive"),'Owner EQ controls must stay disabled for both native and Web monitor-only output');
 assert.ok(css.includes('html body.xstage-native-tv.xstage-native-audio-direct.xstage-ui-v2 .stage .stage-hero #stage-viz-right'),
   'native TV must restore the right EQ meter beside the single banner');
 assert.ok(meter.includes('const rightCanvas=document.getElementById(\'stage-viz-right\')'),
