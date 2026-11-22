@@ -1256,18 +1256,9 @@ class Importer {
         await drive.folder(rootId,folder);
       if(pointer && ![5,6].includes(pointer.layoutVersion))
         fail('ฐานเพลงใน XStageKaraoke มีรูปแบบที่ไม่รองรับ · หยุดเพื่อไม่เขียนทับ');
-      if(!pointerFile&&!pointer){
-        const textRoot=await drive.ensurePath(rootId,['DB']);
-        const textFiles=await drive.listChildren(textRoot);
-        const rootFiles=await drive.listChildren(rootId);
-        if(!textFiles.some(x=>x.name==='.xstage-songstudio-staging.json')&&
-           !rootFiles.some(x=>x.name==='.xstage-songstudio-staging.json')){
-          const marker=encode({format:'xstage-songstudio-upload-staging-v1',schemaVersion:1,
-            note:'Private browser import; no playable catalog published yet'});
-          const hash=await core.hashBlob(marker,()=>this.check());
-          await drive.upload(textRoot,marker,'.xstage-songstudio-staging.json','application/json',hash);
-        }
-      }
+      // No JSON marker is created in DB. Incomplete uploads are resumed from
+      // browser checkpoints and verified media IDs; only a published SQLite
+      // file becomes authoritative for playback.
       const byPair=new Map(),byCode=new Map();
       function addMaps(row){
         const code=String(row.code||'').toLowerCase();
