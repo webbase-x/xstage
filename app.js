@@ -88,21 +88,73 @@ document.addEventListener('focusout',()=>setTimeout(syncNativeTextEditingState,0
 window.addEventListener('pageshow',syncNativeTextEditingState);
 const XSTAGE_RELEASE=window.XSTAGE_RELEASE||{version:'0.0.0',build:0};
 function appUpdateElements(){
-  return {notice:$('app-update-notice'),text:$('app-update-text'),action:$('app-update-action')};
+  return {
+    notice:$('app-update-notice'),text:$('app-update-text'),
+    action:$('app-update-action'),after:$('app-update-after-song')
+  };
 }
 function playbackBusyForUpdate(){
   return !!(state.loading||state.current&&player.src&&!player.ended&&(!player.paused||state.queue.length||state.medley));
 }
+let webUpdateStageBuild=0,webUpdateStageReady=false,webUpdateStagePromise=null;
 function renderAppUpdateNotice(){
-  const {notice,text,action}=appUpdateElements();
+  const {notice,text,action,after}=appUpdateElements();
   if(!notice||!text||!action)return;
   const remote=state.updateAvailable;
   if(!remote){notice.hidden=true;return;}
-  state.updateAfterTrack=false;
   notice.hidden=false;
-  text.textContent='มี X-Stage v'+remote.version+' · Build '+remote.build+' พร้อมอัปเดต';
+  notice.classList.toggle('during-playback',playbackBusyForUpdate());
+  const preparation=webUpdateStageBuild===remote.build
+    ?(webUpdateStageReady?' · เตรียมไฟล์แล้ว':' · กำลังเตรียมไฟล์…'):'';
+  text.textContent='พบ X-Stage v'+remote.version+' · Build '+remote.build+preparation;
   action.textContent='อัปเดตตอนนี้';
   action.disabled=false;
+  if(after){
+    after.hidden=!playbackBusyForUpdate();
+    after.textContent=state.updateAfterTrack?'ตั้งค่าแล้ว · หลังจบเพลง':'อัปเดตหลังจบเพลง';
+    after.disabled=!!state.updateAfterTrack;
+  }
+}
+// Prefetch ONLY public same-origin HTML/CSS/JS. Do not touch private Drive,
+// Google tokens, service workers, or the active player. A newer shell can then
+// start quickly after the user chooses Update Now / the next song boundary.
+async function stageWebUpdateFiles(remote){
+  const build=Number(remote?.build)||0;
+  if(!build||androidTvNativeBridgeReady())return false;
+  if(webUpdateStageBuild===build)
+    return webUpdateStagePromise||Promise.resolve(webUpdateStageReady);
+  webUpdateStageBuild=build;webUpdateStageReady=false;
+  const task=(async()=>{
+    if(navigator.connection?.saveData)return false;
+    const page=new URL('karaoke.html',location.href);
+    page.searchParams.set('xstage_stage',String(build));
+    const html=await fetch(page.href,{cache:'reload'});
+    if(!html.ok)throw Error('ยังโหลดหน้าเว็บรุ่นใหม่ไม่ได้');
+    const doc=new DOMParser().parseFromString(await html.text(),'text/html');
+    const assets=[...doc.querySelectorAll('script[src],link[rel="stylesheet"][href]')]
+      .map(node=>node.getAttribute('src')||node.getAttribute('href'))
+      .filter(Boolean).map(href=>new URL(href,page.href))
+      .filter(url=>url.origin===location.origin&&url.pathname.startsWith(new URL('./',page.href).pathname));
+    // Two concurrent requests avoid saturating the link carrying live music.
+    for(let i=0;i<assets.length;i+=2){
+      const batch=assets.slice(i,i+2);
+      const results=await Promise.allSettled(batch.map(url=>fetch(url.href,{cache:'reload'})));
+      if(results.some(result=>result.status!=='fulfilled'||!result.value.ok))
+        throw Error('ไฟล์อัปเดตบางส่วนยังดาวน์โหลดไม่สำเร็จ');
+      if(webUpdateStageBuild!==build)return false;
+    }
+    if(webUpdateStageBuild!==build)return false;
+    webUpdateStageReady=true;
+    renderAppUpdateNotice();
+    return true;
+  })().catch(error=>{
+    console.warn('Web update prefetch deferred:',error?.message||error);
+    if(webUpdateStageBuild===build){webUpdateStageReady=false;renderAppUpdateNotice();}
+    return false;
+  });
+  webUpdateStagePromise=task;
+  renderAppUpdateNotice();
+  return task;
 }
 async function performAppUpdateReload(){
   try{savePlaybackResumeState();}catch{}
@@ -146,15 +198,19 @@ async function checkAppVersion(){
         state.updateAvailable?.version!==String(remote.version||'');
       state.updateAvailable={version:String(remote.version||''),build:remoteBuild};
       renderAppUpdateNotice();
-      if(changed)window.dispatchEvent(new CustomEvent('xstage:web-update',{detail:state.updateAvailable}));
-      // Reload the old web app as soon as a newer published web release is
-      // confirmed. During active playback, preserve the song and show the
-      // existing Update Now button instead.
+      if(changed){
+        state.updateAfterTrack=false;
+        window.dispatchEvent(new CustomEvent('xstage:web-update',{detail:state.updateAvailable}));
+        // Prepare the shell while the song continues to play normally.
+        void stageWebUpdateFiles(state.updateAvailable);
+      }
+      // Never automatically reload during a song, authentication or a popup.
       autoApplyWebUpdate(state.updateAvailable);
       return true;
     }else{
       state.updateAvailable=null;
       state.updateAfterTrack=false;
+      webUpdateStageBuild=0;webUpdateStageReady=false;webUpdateStagePromise=null;
       renderAppUpdateNotice();
       return false;
     }
@@ -176,8 +232,10 @@ async function triggerImmediateVersionUpdate(){
     return;
   }
   const found=await checkAppVersion();
-  if(found===true)await performAppUpdateReload();
-  else if(found===false)setStatus('X-Stage เป็นเวอร์ชันล่าสุดแล้ว');
+  if(found===true){
+    // Explicit user request: refresh now and restore the saved song position.
+    await performAppUpdateReload();
+  }else if(found===false)setStatus('X-Stage เป็นเวอร์ชันล่าสุดแล้ว');
   else setStatus('ตรวจสอบเวอร์ชันไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่');
 }
 // Installed Android APKs load this hosted UI, including older builds. A live
@@ -192,8 +250,20 @@ function checkLiveAppUpdate(){
   void checkAppVersion();
 }
 function setupAppUpdateWatcher(){
-  const {action}=appUpdateElements();
-  action?.addEventListener('click',()=>{if(state.updateAvailable)void performAppUpdateReload();});
+  const {action,after}=appUpdateElements();
+  action?.addEventListener('click',()=>{
+    if(!state.updateAvailable)return;
+    if(webGoogleAuthFlow||state.authRecovering){
+      setStatus('Google กำลังยืนยันบัญชี · อัปเดตหลังยืนยันเสร็จ');return;
+    }
+    void performAppUpdateReload();
+  });
+  after?.addEventListener('click',()=>{
+    if(!state.updateAvailable)return;
+    state.updateAfterTrack=true;
+    renderAppUpdateNotice();
+    if(!playbackBusyForUpdate())void performAppUpdateReload();
+  });
   $('desktop-update-version')?.addEventListener('click',()=>{void triggerImmediateVersionUpdate();});
   // An older native APK might finish loading the WebView before its deferred
   // JS update callback exists. Recheck once after hosted scripts initialize.
