@@ -1497,7 +1497,8 @@ class Importer {
             }
             for(const row of pending){
               const midiHash=String(row.midiHash||row.midi?.md5Checksum||'').toLowerCase();
-              if(midiHash&&indexed.hashes.has(midiHash)){
+              if(midiHash&&sameMidiBytes(indexed.hashes,midiHash,
+                Number(row.midiSize||row.midi?.size||0))){
                 this.stats.duplicates++;continue;
               }
               if(fresh.rows.has(row.webSongId)){
