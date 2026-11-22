@@ -256,13 +256,12 @@ const EQ_PRESETS={
  classical:[2,2,2,1.5,1,0.5,0,0,-0.5,-1,-1,-.5,0,.5,1,1.5,2,2.5,2.5,2,1.5,1,.5,.5,1,1.5,2,2.5,3,3,2.5]
 };
 let eqContext=null,eqNodes=[],eqAnalyser=null,eqLeft=null,eqRight=null,eqSource=null,eqMeterSink=null;
-let eqBandInputs=[],eqBandLights=[],eqBypassed=false,eqPreset='auto',eqLastSong='',eqFrame=0;
+let eqBandInputs=[],eqBandLights=[],eqBypassed=true,eqPreset='flat',eqLastSong='',eqFrame=0;
 const eqVisualLevels=Array(31).fill(0);
 const eqPanel=$pc('xstage-eq-panel'),eqBands=$pc('xstage-eq-bands'),eqPresetSelect=$pc('xstage-eq-preset'),eqDisplay=$pc('xstage-eq-display'),eqDisplayWrap=$pc('xstage-eq-display-wrap');
 const eqPrefs=window.XStageUiPrefs?.read?.()||{};
 let eqDisplayTarget=['main','singer','both'].includes(eqPrefs.eqDisplayTarget)?eqPrefs.eqDisplayTarget:'main';
-if(typeof eqPrefs.eqPreset==='string')eqPreset=eqPrefs.eqPreset;
-if(typeof eqPrefs.eqBypassed==='boolean')eqBypassed=eqPrefs.eqBypassed;
+// Old saved EQ presets must never be restored as audible speaker processing.
 // EQ preferences are inert until the user explicitly enables EQ in this session.
 function eqFreqLabel(f){
   if(f<1000)return String(f);
@@ -478,7 +477,7 @@ function setEqPreset(name,{save=true}={}){
 }
 function buildEqBands(){
  if(!eqBands||eqBands.children.length)return;
- const saved=(savedEqGains()||EQ_PRESETS.flat).map(v=>Math.round(v));
+ const saved=EQ_PRESETS.flat; // Visualization-only: all audio gain bands remain 0 dB.
  EQ_FREQS.forEach((freq,i)=>{
   const band=document.createElement('label');band.className='xstage-eq-band';band.style.setProperty('--band-color',eqBandColor(freq));
   const gain=document.createElement('span');gain.className='xstage-eq-gain';gain.textContent=(saved[i]>0?'+':'')+String(saved[i]);
@@ -591,7 +590,7 @@ function fitEqPanelToViewport(){
  window.addEventListener('resize',fitEqPanelToViewport);
  window.addEventListener('orientationchange',()=>setTimeout(fitEqPanelToViewport,80));
 })();
-audio.addEventListener('play',()=>{if(eqPreset==='auto'&&state.current){const id=songIdentity(state.current);if(id!==eqLastSong){eqLastSong=id;setEqPreset('auto',{save:false});}}});
+// Song changes cannot auto-activate an EQ preset or alter the output spectrum.
 let lastRecordedHistorySong='';
 audio.addEventListener('play',()=>{
   if(!state.current)return;
@@ -601,8 +600,8 @@ audio.addEventListener('play',()=>{
   loadPersistentLibraryData();
   recordPersistentHistory(state.current);
 });
-window.addEventListener('message',e=>{if(e.origin!==location.origin||e.source!==screen||e.data?.type!=='xstage-eq-command')return;const d=e.data;if(d.action==='open')openEq('singer');else if(d.action==='close'){eqDisplayTarget='main';syncEqDisplaySelector();applyEqVisibility();}else if(d.action==='preset')setEqPreset(String(d.value||'flat'));else if(d.action==='bypass'){eqBypassed=!!d.value;applyEqGains();}else if(d.action==='gain'&&Number.isInteger(d.index)&&eqBandInputs[d.index]){eqBandInputs[d.index].value=String(Math.max(-12,Math.min(12,Number(d.value)||0)));eqBandInputs[d.index].dispatchEvent(new Event('input',{bubbles:true}));}});
-if(eqPresetSelect)eqPresetSelect.value=(eqPreset==='auto'||eqPreset==='custom'||EQ_PRESETS[eqPreset])?eqPreset:'flat';syncEqDisplaySelector();
+window.addEventListener('message',e=>{if(e.origin!==location.origin||e.source!==screen||e.data?.type!=='xstage-eq-command')return;const d=e.data;if(d.action==='open')openEq('singer');else if(d.action==='close'){eqDisplayTarget='main';syncEqDisplaySelector();applyEqVisibility();} /* Preset, bypass, and gain writes are ignored in monitor-only mode. */});
+if(eqPresetSelect){eqPresetSelect.value='flat';eqPresetSelect.disabled=true;}syncEqDisplaySelector();
 function downloadQueue(){
  const data={schemaVersion:1,source:'XStageSongQueue',songs:state.queue.map(songIdentity)};
  const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
