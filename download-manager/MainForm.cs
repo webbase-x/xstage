@@ -27,9 +27,11 @@ public sealed partial class MainForm : Form
     private bool _networkAvailable = System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable();
     private volatile bool _sleeping;
     private long _lastSpeedMeasurementTick;
+    private bool _uiSmokeMode;
 
     public MainForm(string[] args)
     {
+        _uiSmokeMode = args.Contains("--ui-smoke", StringComparer.Ordinal);
         Text = "X-Stage Download Manager · v" + UpdateChecker.CurrentVersion + " Build " + UpdateChecker.CurrentBuild;
         MinimumSize = new Size(880, 590);
         Size = new Size(1250, 780);
@@ -37,7 +39,12 @@ public sealed partial class MainForm : Form
         BackColor = Color.FromArgb(23, 26, 34);
         ForeColor = Color.FromArgb(23, 34, 55);
         Font = new Font("Segoe UI", 10);
-        Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        // A Windows host process or installation without a valid embedded
+        // icon can make GDI+ throw "Parameter is not valid" at startup.
+        // Keep the brand UI usable with a known-good system fallback.
+        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application; }
+        catch (ArgumentException) { Icon = SystemIcons.Application; }
+        catch (System.ComponentModel.Win32Exception) { Icon = SystemIcons.Application; }
         CreateXStageWorkspace();
         FormClosed += (_, _) => _completedMenu.Dispose();
         _parts.Items.AddRange(new object[] { "1", "2", "4", "8", "16", "32" });
@@ -69,8 +76,11 @@ public sealed partial class MainForm : Form
             CheckNetworkRecovery();
             RefreshRows();
         };
-        Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
-        _timer.Start();
+        if (!_uiSmokeMode)
+        {
+            Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
+            _timer.Start();
+        }
         FormClosing += (_, e) =>
         {
             // Keep the UI process alive until separately recorded livestreams
@@ -103,6 +113,9 @@ public sealed partial class MainForm : Form
         };
         Shown += async (_, _) =>
         {
+            // CI smoke renders the actual WinForms controls, but must not
+            // start browser IPC, recovery or update calls against an account.
+            if (_uiSmokeMode) return;
             if (_engine.InterruptedJobCount > 0)
             {
                 var count = _engine.InterruptedJobCount;
