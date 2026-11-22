@@ -61,7 +61,7 @@ class ContextMenuTests(unittest.TestCase):
         self.assertFalse(any(e.get('label','').startswith('ค้นหาเพลง') for e in menu.find('7. ตัวเลือก')['menu'].entries))
         self.assertEqual(labels[:4], ['เมนูหลัก · 6 หมวด (หมายเลข 1–6)','7. ตัวเลือกและตัวกรอง','8. พื้นหลัง','9. เครื่องมือขั้นสูง'])
         self.assertEqual(labels[-1], '14. โปรแกรมและการออก')
-        self.assertEqual(len(menu.children),10)
+        self.assertEqual(len(menu.children),9)
         self.assertLessEqual(len(menu.entries),20)
         menu.find('13. ทางลัด')['menu'].find('ซาวด์ฟอนท์')['command']()
         app.audio_settings.assert_called_once()
