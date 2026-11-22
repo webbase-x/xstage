@@ -1,0 +1,79 @@
+name: Build X-Stage Windows Volume Bridge
+on:
+  push:
+    branches: [main]
+    paths:
+      - "windows-pc/source/karaoke/web_volume_bridge.py"
+      - "windows-pc/source/karaoke/system_volume.py"
+      - "windows-pc/source/tests/test_web_volume_bridge.py"
+      - "windows-pc/source/Start-Web-Volume-Bridge.ps1"
+      - "windows-volume-bridge.js"
+      - "scripts/windows-volume-bridge-contract-test.mjs"
+      - ".github/workflows/build-web-volume-bridge.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify app UI, paired volume protocol and JavaScript syntax
+        run: |
+          node --check windows-volume-bridge.js
+          node --check stage-ui.js
+          node scripts/windows-volume-bridge-contract-test.mjs
+      - name: Verify paired loopback HTTP protocol with mocked Windows Core Audio
+        env:
+          PYTHONPATH: windows-pc/source
+        run: python -m unittest discover -s windows-pc/source/tests -p test_web_volume_bridge.py -v
+  windows-exe:
+    needs: contract
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test Windows HTTP bridge using fake Core Audio endpoints
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = (Resolve-Path 'windows-pc/source').Path
+          python -m unittest discover -s windows-pc/source/tests -p test_web_volume_bridge.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Bridge protocol tests failed' }
+      - name: Build Windows console helper (explicit user launch)
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller==6.16.0
+          python -m PyInstaller --onefile --console --clean --name XStageWindowsVolumeBridge --paths windows-pc/source windows-pc/source/karaoke/web_volume_bridge.py
+          if ($LASTEXITCODE -ne 0) { throw 'PyInstaller bridge build failed' }
+          if (-not (Test-Path 'dist/XStageWindowsVolumeBridge.exe')) { throw 'Missing Windows EXE' }
+      - name: Smoke-test locally running EXE (no audio hardware asserted)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath (Resolve-Path 'dist/XStageWindowsVolumeBridge.exe').Path -PassThru -RedirectStandardOutput 'volume-bridge.log'
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              Start-Sleep -Seconds 1
+              try {
+                $response = Invoke-RestMethod -Uri 'http://127.0.0.1:48731/v1/health' -Headers @{ Origin = 'https://webbase-x.github.io' } -TimeoutSec 2
+                if ($response.service -eq 'XStageWindowsVolumeBridge') { $ready = $true; break }
+              } catch {}
+            }
+            if (-not $ready) { throw 'Windows bridge did not serve authenticated-origin localhost health endpoint' }
+          } finally {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XStageWindowsVolumeBridge-Windows-EXE
+          path: dist/XStageWindowsVolumeBridge.exe
+          if-no-files-found: error
+          retention-days: 14
