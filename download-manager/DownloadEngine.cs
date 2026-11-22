@@ -718,7 +718,7 @@ public sealed class DownloadEngine
         Directory.CreateDirectory(job.Folder);
         if (SocialVideoDownloader.IsVideoUrl(job.Url))
         {
-            await SocialVideoDownloader.DownloadAsync(job, WorkDir(job), ct);
+            await SocialVideoDownloader.DownloadAsync(job, WorkDir(job), ct, GlobalLimitKib);
             return;
         }
         var probe = await ProbeAsync(job, ct);
