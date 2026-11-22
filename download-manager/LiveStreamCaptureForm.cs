@@ -279,6 +279,16 @@ public sealed class LiveStreamCaptureForm : Form
                 Environment.NewLine + "ต้นฉบับ MKV ถูกเก็บไว้เสมอ",
                 "บันทึกสตรีมเสร็จแล้ว", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
+        catch (OperationCanceledException)
+        {
+            _state.Text = "ยกเลิกการแปลงตามคำสั่ง · ไฟล์ต้นฉบับยังอยู่";
+            _open.Enabled = Directory.Exists(_capture.SessionDirectory);
+            MessageBox.Show(this,
+                "ยกเลิกแล้ว เก็บไฟล์ต้นฉบับและคลิปที่สร้างเสร็จไว้ใน:" +
+                Environment.NewLine + _capture.SessionDirectory,
+                "X-Stage Live Capture", MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
         catch (Exception error)
         {
             // Preserve the raw recording for recovery after a stream/codec,
