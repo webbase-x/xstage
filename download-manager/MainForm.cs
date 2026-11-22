@@ -110,6 +110,8 @@ public sealed partial class MainForm : Form
             _normalFileFont.Dispose();
             foreach (var image in _rowIcons.Values) image.Dispose();
             _categoryIcons.Dispose();
+            foreach (var image in _categoryIconSources) image.Dispose();
+            _categoryIconSources.Clear();
         };
         Shown += async (_, _) =>
         {
