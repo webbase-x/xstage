@@ -1104,6 +1104,69 @@ async function privateFile(id, token, opts = {}) {
   if (!r.ok) throw driveError(r.status, 'ไฟล์เพลงส่วนตัว');
   return r;
 }
+// High-throughput private Drive reads for bounded media files. Parallel
+// requests are permitted only when Google returns *exact* 206 byte ranges.
+// Otherwise fall back to the original single HTTP stream, with no truncation.
+const FAST_DOWNLOAD_MIB=1024*1024;
+function fastDownloadParts(bytes){
+  if(!Number.isSafeInteger(bytes)||bytes<24*FAST_DOWNLOAD_MIB||
+     bytes>192*FAST_DOWNLOAD_MIB||navigator.connection?.saveData)return 1;
+  if(Number(navigator.deviceMemory||4)<=2)return 1;
+  const mobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
+  return mobile?2:bytes>=64*FAST_DOWNLOAD_MIB?4:2;
+}
+async function fastPrivateBlob(id,token,opts={}){
+  const size=Number(opts.size);
+  const parts=fastDownloadParts(size);
+  if(parts===1)return (await privateFile(id,token,opts)).blob();
+  const url='https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media';
+  const controller=new AbortController();
+  const abort=()=>controller.abort();
+  if(opts.signal?.aborted)throw new DOMException('Aborted','AbortError');
+  opts.signal?.addEventListener?.('abort',abort,{once:true});
+  const step=Math.ceil(size/parts/(256*1024))*(256*1024);
+  const ranges=[];
+  for(let from=0;from<size;from+=step)ranges.push([from,Math.min(size-1,from+step-1)]);
+  try{
+    const results=await Promise.allSettled(ranges.map(async([from,to])=>{
+      const response=await googleFetch(url,{
+        headers:{...requestHeaders(token),Range:'bytes='+from+'-'+to},
+        signal:controller.signal,cache:'no-store'
+      },'Google Drive',1);
+      if(response.status===401||response.status===403||response.status===404)
+        throw driveError(response.status,'ไฟล์เพลงส่วนตัว');
+      if(response.status!==206){
+        try{await response.body?.cancel?.();}catch{}
+        throw Error('Google Drive ไม่รองรับการแบ่งช่วงไฟล์');
+      }
+      const range=String(response.headers?.get?.('Content-Range')||'');
+      const match=range.match(/^bytes (\d+)-(\d+)\/(\d+)$/);
+      if(!match||Number(match[1])!==from||Number(match[2])!==to||
+         Number(match[3])!==size){
+        try{await response.body?.cancel?.();}catch{}
+        throw Error('Google Drive ส่ง Content-Range ไม่ตรงคำขอ');
+      }
+      const data=await response.arrayBuffer();
+      if(data.byteLength!==to-from+1)
+        throw Error('Google Drive ส่งข้อมูลช่วงไฟล์ไม่ครบ');
+      return new Uint8Array(data);
+    }));
+    if(opts.signal?.aborted)throw new DOMException('Aborted','AbortError');
+    const fatal=results.find(item=>item.status==='rejected'&&
+      /ไม่มีสิทธิ์|หมดอายุ|ไม่พบ/.test(String(item.reason?.message||'')));
+    if(fatal)throw fatal.reason;
+    if(results.some(item=>item.status==='rejected'))
+      return (await privateFile(id,token,opts)).blob();
+    const combined=new Blob(results.map(item=>item.value));
+    if(combined.size!==size)
+      throw Error('Google Drive คืนขนาดไฟล์ไม่ตรงฐานข้อมูล');
+    return combined;
+  }finally{
+    opts.signal?.removeEventListener?.('abort',abort);
+    controller.abort();
+  }
+}
+
 async function privateJson(id, token, opts) {
   const response = await privateFile(id, token, opts);
   try { return await response.json(); }
@@ -3118,16 +3181,17 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     const readyPrepared=prepared||pendingPrepared;
     let embeddedKaraokeLyrics=null,liveMidiBytes=null,liveFontBytes=null,lateFontPromise=null;
     const loadMedia=async()=>{
-      if(!getFileId(song.midi))return privateFile(song.audio.fileId,token,
-        {signal:controller.signal}).then(r=>r.blob());
+      if(!getFileId(song.midi))return fastPrivateBlob(song.audio.fileId,token,
+        {signal:controller.signal,size:Number(song.audio.size)||0});
       if(!window.XStageBrowserMidi)throw Error('ไม่พบเครื่องเล่น MIDI ของเว็บ กรุณาอัปเดตหน้าเว็บ');
       setPlayStatus('กำลังโหลด MIDI และ SoundFont จาก Google Drive…');
       const fontTask=getStartupSoundFont(token,controller.signal);
-      const midiResponse=await privateFile(song.midi.fileId,token,{signal:controller.signal});
+      const midiBlob=await fastPrivateBlob(song.midi.fileId,token,
+        {signal:controller.signal,size:Number(song.midi.size)||0});
       const {bytes:fontBytes,pending:lateFont}=await fontTask;
       lateFontPromise=lateFont;
       if(controller.signal.aborted)throw new DOMException('ยกเลิก','AbortError');
-      const midiBytes=new Uint8Array(await midiResponse.arrayBuffer());
+      const midiBytes=new Uint8Array(await midiBlob.arrayBuffer());
       if(song.sourceFormat==='KAR'&&!getFileId(song.lyrics)){
         const parsed=window.XStageBrowserMidi.parseMidi(midiBytes);
         embeddedKaraokeLyrics=window.XStageBrowserMidi.midiLyrics(parsed,song.code);
