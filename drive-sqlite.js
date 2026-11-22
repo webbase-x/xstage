@@ -151,12 +151,33 @@ async function read(bytes){
     if(metadata.format!==FORMAT||Number(metadata.schemaVersion)!==VERSION||
        !['snapshot','delta'].includes(metadata.kind))
       fail('ฐานเพลง SQLite ไม่ตรงเวอร์ชันหรือชนิดที่รองรับ');
-    const songRows=(db.exec('SELECT web_song_id,payload FROM songs')[0]?.values)||[];
-    const songs=[];
-    for(const [id,payload] of songRows){
+    // Older v1 snapshots lack the indexed fingerprint columns. Support
+    // reading them for migration, while independently checking indexed data
+    // against each new record's stored payload to catch inconsistent catalogs.
+    const columns=new Set((db.exec('PRAGMA table_info(songs)')[0]?.values||[])
+      .map(row=>String(row[1])));
+    const indexed=columns.has('midi_md5')&&columns.has('midi_size');
+    const rowsSql=indexed
+      ?'SELECT web_song_id,payload,midi_md5,midi_size FROM songs'
+      :'SELECT web_song_id,payload FROM songs';
+    const songRows=(db.exec(rowsSql)[0]?.values)||[];
+    const songs=[],rawMidiHashes=new Set();
+    for(const [id,payload,storedHash,storedSize] of songRows){
       let song;
       try{song=JSON.parse(payload);}catch{fail('ข้อมูล JSON ในแถว SQLite ไม่ถูกต้อง');}
       if(!validId(id)||song?.webSongId!==id)fail('รหัสอ้างอิงในฐานเพลงไม่ตรงกัน');
+      if(indexed){
+        const actualHash=String(song.midiHash||song.midi?.md5Checksum||'').toLowerCase();
+        const normalized=/^[0-9a-f]{32}$/.test(actualHash)?actualHash:null;
+        const actualSize=Number(song.midiSize||song.midi?.size||0)||null;
+        if(storedHash!==normalized||
+          (storedSize===null?null:Number(storedSize))!==actualSize)
+          fail('ดัชนี MIDI กับข้อมูลเพลงใน SQLite ไม่ตรงกัน');
+        if(normalized){
+          if(rawMidiHashes.has(normalized))fail('พบ MIDI ซ้ำในฐานเพลง');
+          rawMidiHashes.add(normalized);
+        }
+      }
       songs.push(song);
     }
     const removes=(db.exec('SELECT web_song_id FROM removed_songs')[0]?.values||[]).map(x=>x[0]);
