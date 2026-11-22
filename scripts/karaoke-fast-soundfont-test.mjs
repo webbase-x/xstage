@@ -80,6 +80,9 @@ assert.equal(largeDownloads,0,'Do not download 243 MB automatically on login');
 const first=await midi.selectedFont(auth.token);
 assert.equal(first.byteLength,bank.byteLength,'Public GM must have real validated samples');
 assert.equal(publicFetches,1);
+assert.ok(select.options.some(option=>option.value===large),
+  'The SOUNDFONT/SF2 browser picker must expose the 243 MB file: '+
+  JSON.stringify(select.options.map(option=>({value:option.value,size:option.dataset?.size}))));
 select.value=large;
 select.onchange(); // Explicit large-bank choice may start a background fetch.
 assert.equal(midi.prefersCompactGm(),true,
