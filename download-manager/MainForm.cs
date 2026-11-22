@@ -980,6 +980,7 @@ public sealed partial class MainForm : Form
             speedTotal += job.Status == "Running" ? job.SpeedBytesPerSecond : 0;
         }
 
+        TrackLiveEvents(jobs);
         var selectedId = Selected()?.Id;
         var visible = DownloadTableSort.Sort(jobs.Where(job => InSelectedCategory(job) && MatchesSearch(job)),
             _sortColumn, _sortDescending, jobs);
