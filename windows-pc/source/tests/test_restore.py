@@ -67,6 +67,27 @@ class RestoreTests(unittest.TestCase):
         (self.source/'songs.sqlite3').write_bytes(b'not a database')
         with self.assertRaises(sqlite3.Error):restore.validate_backup(self.source)
 
+    def test_backup_sqlite_sidecar_directory_is_rejected_before_staging(self):
+        (self.source/'songs.sqlite3-wal').mkdir()
+        with self.assertRaisesRegex(ValueError, 'SQLite journal'):
+            restore.stage_restore(self.source, self.data)
+        self.assertEqual(self.title(), 'ปัจจุบัน')
+        self.assertFalse((self.data/'restore-pending').exists())
+
+    def test_backup_sqlite_sidecar_symlink_is_rejected_before_staging(self):
+        external=self.root/'external-wal'
+        external.write_bytes(b'outside')
+        sidecar=self.source/'songs.sqlite3-wal'
+        try:
+            sidecar.symlink_to(external)
+        except (OSError, NotImplementedError):
+            self.skipTest('filesystem cannot create symlinks')
+        with self.assertRaisesRegex(ValueError, 'SQLite journal'):
+            restore.stage_restore(self.source, self.data)
+        self.assertEqual(external.read_bytes(), b'outside')
+        self.assertEqual(self.title(), 'ปัจจุบัน')
+        self.assertFalse((self.data/'restore-pending').exists())
+
     def test_linked_backup_file_is_rejected_without_staging(self):
         outside = self.root/'outside.json'
         write_json(outside, {'title':'external'})
