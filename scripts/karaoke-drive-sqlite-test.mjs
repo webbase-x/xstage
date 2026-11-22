@@ -7,7 +7,7 @@ const read=path=>fs.readFileSync(new URL('../'+path,import.meta.url),'utf8');
 const source=read('drive-sqlite.js');
 const app=read('app.js'),importer=read('cloud-import.js'),page=read('karaoke.html');
 const version=JSON.parse(read('version.json'));
-assert.equal(version.build,1139);
+assert.equal(version.build,1140);
 assert.ok(page.indexOf('drive-sqlite.js?v=1170-single-sqlite')<page.indexOf('cloud-import.js?v=1175-mid-bytes-and-md5'));
 assert.ok(app.includes('codec.read(new Uint8Array(buffer))'));
 assert.ok(importer.includes("application/vnd.sqlite3"));
