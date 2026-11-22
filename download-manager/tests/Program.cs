@@ -726,6 +726,20 @@ try
         JoinedIds(DownloadTableSort.Sort(filteredQueue, "Queue", true, sortJobs)) != "s4,s2" ||
         JoinedIds(sortJobs) != "s1,s2,s3,s4")
         throw new Exception("Sorting a filtered list must preserve original queue order and identity.");
+    // Approved X-Stage transfer table adds a visible named-queue column.
+    // Sorting must use the persisted queue name without reordering the real
+    // transfer queue or changing the selected job ID.
+    sortJobs[0].QueueName = "C";
+    sortJobs[1].QueueName = "A";
+    sortJobs[2].QueueName = "D";
+    sortJobs[3].QueueName = "B";
+    if (JoinedIds(DownloadTableSort.Sort(sortJobs, "QueueName", false, sortJobs)) != "s2,s4,s1,s3" ||
+        JoinedIds(DownloadTableSort.Sort(sortJobs, "QueueName", true, sortJobs)) != "s3,s1,s4,s2" ||
+        JoinedIds(DownloadTableSort.Sort(sortJobs, "No", false, sortJobs)) != "s1,s2,s3,s4" ||
+        JoinedIds(DownloadTableSort.Sort(sortJobs, "No", true, sortJobs)) != "s4,s3,s2,s1" ||
+        JoinedIds(sortJobs) != "s1,s2,s3,s4")
+        throw new Exception("X-Stage named queue / row number sorting must be stable and read-only.");
+
     // Ctrl+N and the toolbar use the same parser: clipboard URL is inserted
     // into the editable field, not submitted to the download engine automatically.
     if (MainForm.ExtractClipboardUrls("https://example.com/demo.zip") != "https://example.com/demo.zip" ||
