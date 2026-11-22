@@ -12,6 +12,7 @@ const performance = readFileSync(join(root, 'MainForm.Performance.cs'), 'utf8');
 const preview = readFileSync(join(root, 'MainForm.XStagePreview.cs'), 'utf8');
 const live = readFileSync(join(root, 'LiveStreamCapture.cs'), 'utf8');
 const liveUi = readFileSync(join(root, 'LiveStreamCaptureForm.cs'), 'utf8');
+const background = readFileSync(join(root, 'LiveBackgroundMonitor.cs'), 'utf8');
 const testProject = readFileSync(join(root, 'tests/DownloadEngine.Tests.csproj'), 'utf8');
 
 const contracts = [
@@ -20,6 +21,20 @@ const contracts = [
   ['live media command', /Action\("บันทึกไลฟ์สด · ตัดคลิปตามช่วงหยุดพูด/, workspace],
   ['live dialog is nonmodal', /window\.Show\(this\)/, workspace],
   ['live minute choices', /AllowedClipMinutes = \{ 1, 3, 5, 10, 15, 20, 30, 60 \}/, live],
+  ['background live polling choices', /AllowedPollSeconds = \{ 15, 30, 60 \}/, background],
+  ['metadata-only public extractor', /"xstage-live-status:%\(live_status\)s"/, background],
+  ['live HLS manifest detection', /IsActiveHlsManifest\(string\? content\)/, background],
+  ['live DASH manifest detection', /IsActiveDashManifest\(string\? content\)/, background],
+  ['finished HLS rejected', /!content\.Contains\("#EXT-X-ENDLIST"/, background],
+  ['monitor has bounded request timeout', /timeout\.CancelAfter\(TimeSpan\.FromSeconds\(12\)\)/, background],
+  ['monitor supports cancellation', /Task\.Delay\(TimeSpan\.FromSeconds\(pollSeconds\), cancellationToken\)/, background],
+  ['auto-start when live', /await _monitor\.WaitForLiveAsync\(url, seconds, ShowPhase,/, liveUi],
+  ['monitor never opens video webpage', /ไม่เปิดหน้าเว็บหรือเล่นภาพ\/เสียง/, liveUi],
+  ['background tray icon', /private readonly NotifyIcon _trayIcon = new\(\)/, liveUi],
+  ['restore window from tray', /private void RestoreFromTray\(\)/, liveUi],
+  ['waiting can be cancelled safely', /if \(_waitingForLive\)/, liveUi],
+  ['main form protected from active recording exit', /Application\.OpenForms\.OfType<LiveStreamCaptureForm>\(\)/, main],
+  ['metadata-only monitor linked in windows test', /LiveBackgroundMonitor\.cs/, testProject],
   ['master preservation', /"master\.recording\.mkv"/, live],
   ['stopped FFmpeg gracefully', /process\.StandardInput\.WriteLine\("q"\)/, live],
   ['silence detector connected', /silencedetect=noise=-35dB:d=0\.6/, live],
@@ -90,6 +105,8 @@ for (const [title, pattern, source] of contracts)
   assert.match(source, pattern, title);
 assert.doesNotMatch(workspace, /CreateIdmLayout\(|IDM-inspired/, 'new workspace must not use legacy IDM layout');
 assert.ok(!workspace.includes('DownloadJob {'), 'workspace must not create or replace user download records');
+assert.doesNotMatch(background, /ShellExecute = true|Process\.Start\("https?:|_state\.Save/,
+  'background monitoring must not open a web player or mutate SQLite');
 assert.doesNotMatch(live, /_state\.Save|Jobs\.Add|File\.Delete\(RecordingPath\)/,
   'live capture must not touch SQLite or delete source recordings');
 console.log(`PASS: ${contracts.length} X-Stage desktop workspace, menu and state-preservation contracts`);
