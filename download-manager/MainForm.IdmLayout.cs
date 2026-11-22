@@ -40,11 +40,11 @@ public sealed partial class MainForm
             BackColor = DarkTop
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72)); // X-Stage branded masthead
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60)); // Compact command deck
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56)); // branded menu
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 94)); // large-icon command deck
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));  // URL input, expandable
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Sidebar + main list
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 84)); // Status and details
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); // live status strip
         _workspaceRoot = root;
 
         root.Controls.Add(CreateBrandHeader(), 0, 0);
@@ -66,7 +66,7 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1,
             BackColor = DarkTop, Margin = Padding.Empty, Padding = Padding.Empty
         };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 265));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 215));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         var identity = new TableLayoutPanel
@@ -75,18 +75,18 @@ public sealed partial class MainForm
             Padding = new Padding(17, 6, 2, 5), BackColor = DarkTop
         };
         identity.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        identity.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        identity.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         identity.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         identity.Controls.Add(new Label
         {
-            Text = "X-STAGE",
+            Text = "X-STAGE  /  DM",
             Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font("Segoe UI", 20, FontStyle.Bold),
+            Font = new Font("Segoe UI", 15, FontStyle.Bold),
             ForeColor = Accent, AutoEllipsis = true
         }, 0, 0);
         identity.Controls.Add(new Label
         {
-            Text = "DOWNLOAD  /  COMMAND CENTER",
+            Text = "DOWNLOAD MANAGER",
             Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft,
             Font = new Font("Segoe UI", 8, FontStyle.Bold),
             ForeColor = MutedText, AutoEllipsis = true
@@ -100,8 +100,8 @@ public sealed partial class MainForm
     {
         var menu = new MenuStrip
         {
-            Dock = DockStyle.Fill, AutoSize = false, Height = 72,
-            Padding = new Padding(2, 20, 5, 10),
+            Dock = DockStyle.Fill, AutoSize = false, Height = 56,
+            Padding = new Padding(2, 11, 5, 3),
             BackColor = DarkTop, ForeColor = Color.White,
             Font = new Font("Segoe UI", 9, FontStyle.Regular),
             GripStyle = ToolStripGripStyle.Hidden,
@@ -268,45 +268,64 @@ public sealed partial class MainForm
     {
         var bar = new ToolStrip
         {
-            Dock = DockStyle.Fill, AutoSize = false, Height = 60,
+            Dock = DockStyle.Fill, AutoSize = false, Height = 94,
             GripStyle = ToolStripGripStyle.Hidden,
             LayoutStyle = ToolStripLayoutStyle.HorizontalStackWithOverflow,
+            Renderer = new ToolStripProfessionalRenderer(new XStageMenuColors()),
             BackColor = DarkPanel, ForeColor = Color.White,
-            RenderMode = ToolStripRenderMode.System,
-            ImageScalingSize = new Size(22, 22),
-            Padding = new Padding(15, 6, 10, 6),
+            ImageScalingSize = new Size(33, 33),
+            Padding = new Padding(12, 5, 10, 5),
             Font = new Font("Segoe UI", 9, FontStyle.Bold)
         };
-        void Button(string label, string symbol, Color color, EventHandler callback, string tooltip)
+        void Button(string name, string glyph, Color color,
+            EventHandler action, string help, int width = 104)
         {
             var item = new ToolStripButton
             {
-                Text = label, Image = DrawToolbarGlyph(symbol, color),
+                Text = name, Image = DrawToolbarGlyph(glyph, color),
                 DisplayStyle = ToolStripItemDisplayStyle.ImageAndText,
-                TextImageRelation = TextImageRelation.ImageBeforeText,
-                ImageAlign = ContentAlignment.MiddleLeft,
-                TextAlign = ContentAlignment.MiddleLeft,
-                AutoSize = false, Size = new Size(label.Length > 12 ? 150 : 118, 44),
-                Margin = new Padding(0, 0, 5, 0), Padding = new Padding(8, 3, 7, 3),
-                ToolTipText = tooltip, ForeColor = Color.White, BackColor = DarkTop
+                TextImageRelation = TextImageRelation.ImageAboveText,
+                ImageAlign = ContentAlignment.MiddleCenter,
+                TextAlign = ContentAlignment.MiddleCenter,
+                AutoSize = false, Size = new Size(width, 77),
+                Margin = new Padding(0, 0, 3, 0), Padding = new Padding(4, 2, 4, 2),
+                BackColor = DarkTop, ForeColor = Color.White,
+                ToolTipText = help, AccessibleName = name
             };
-            item.Click += callback;
+            item.Click += action;
             bar.Items.Add(item);
         }
-        Button("เพิ่มงาน", "add", Accent,
-            (_, _) => ShowAddUrlFromClipboard(), "เพิ่ม URL หรือวิดีโอ โดยไม่เริ่มอัตโนมัติจากคลิปบอร์ด");
-        Button("เริ่ม / ต่อ", "play", Color.FromArgb(140, 193, 255),
-            (_, _) => SelectedAction(_engine.Start), "เริ่มงานที่เลือก");
-        Button("พักงาน", "pause", Color.FromArgb(245, 185, 125),
-            (_, _) => SelectedAction(_engine.Pause), "พักงานที่เลือก");
-        Button("ดูคิว", "queue", Color.FromArgb(228, 204, 153),
-            (_, _) => SelectCategory("queued"), "ดูรายการที่กำลังรอคิว");
-        Button("ความเร็ว", "gauge", Color.FromArgb(165, 186, 244),
-            (_, _) => ConfigurePerformance(), "ตั้งค่าความเร็วและจำนวนงานพร้อมกัน");
-        Button("เบราว์เซอร์", "browser", Color.FromArgb(137, 216, 255),
-            (_, _) => SetupBrowserIntegration(), "ตั้งค่าการรับดาวน์โหลดจาก Chrome / Edge");
+        Button("เพิ่มงาน", "add", Color.FromArgb(59, 228, 137),
+            (_, _) => ShowAddUrlFromClipboard(), "เพิ่ม URL (Ctrl+N)");
+        Button("เริ่ม", "play", Color.FromArgb(98, 166, 255),
+            (_, _) => SelectedAction(_engine.Start), "เริ่ม / ต่อรายการที่เลือก");
+        Button("พัก", "pause", Color.FromArgb(142, 187, 255),
+            (_, _) => SelectedAction(_engine.Pause), "พักรายการที่เลือก");
+        Button("หยุดทั้งหมด", "pause", Color.FromArgb(250, 142, 158),
+            (_, _) => _engine.PauseAll(), "พักทุกงาน ไม่ลบข้อมูล");
+        Button("ลบ", "trash", Color.FromArgb(252, 110, 131),
+            (_, _) => RemoveSelectedJob(), "ลบประวัติของรายการที่เลือก");
+        Button("จัดคิว", "queue", Color.FromArgb(97, 205, 248),
+            (_, _) => WithSelectedJob(CreateJobQueue), "สร้างคิวและย้ายงานที่เลือก");
+        Button("จำกัดความเร็ว", "gauge", Color.FromArgb(94, 222, 126),
+            (_, _) => ConfigurePerformance(), "ตั้งค่าความเร็วและจำนวนงาน", 125);
+        Button("ดาวน์โหลดวิดีโอ", "video", Color.FromArgb(175, 130, 246),
+            (_, _) => ShowAddUrlFromClipboard(), "เพิ่ม URL สำหรับดาวน์โหลดสื่อ", 129);
+        Button("วิเคราะห์ปัญหา", "alert", Color.FromArgb(148, 176, 252),
+            (_, _) => ShowDiagnosticsPanel(), "รายละเอียดข้อผิดพลาดจริง", 124);
+        Button("ตั้งค่า", "settings", Color.FromArgb(178, 201, 255),
+            (_, _) => ShowInputPanel(true, true), "โฟลเดอร์และจำนวนส่วน");
         _toolbar = bar;
         return bar;
+    }
+
+    private void ShowDiagnosticsPanel()
+    {
+        if (_transferSplit is not null && _transferSplit.Panel2Collapsed &&
+            _transferSplit.Height >= 240)
+            _transferSplit.Panel2Collapsed = false;
+        if (_previewTabs is not null && !_previewTabs.IsDisposed)
+            _previewTabs.SelectedIndex = 2;
     }
 
     private static string MenuGlyph(string label)
@@ -579,6 +598,9 @@ public sealed partial class MainForm
         return shell;
     }
 
+    private SplitContainer? _transferSplit;
+    private readonly Label _transferHeading = new();
+
     private SplitContainer CreateDownloadWorkspace()
     {
         var split = new SplitContainer
@@ -586,20 +608,40 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill, Orientation = Orientation.Vertical,
             Size = new Size(1000, 600), // ensure min-panel sizes before assigning splitter
             FixedPanel = FixedPanel.Panel1, SplitterWidth = 5,
-            Panel1MinSize = 150, Panel2MinSize = 360,
-            SplitterDistance = 212, BackColor = Color.FromArgb(62, 73, 90)
+            Panel1MinSize = 185, Panel2MinSize = 360,
+            SplitterDistance = 250, BackColor = Color.FromArgb(27, 70, 96)
         };
         var side = split.Panel1;
         side.BackColor = DarkPanel;
         var section = new Label
         {
-            Text = "  X-STAGE  /  คลังงาน", Dock = DockStyle.Top, Height = 41,
+            Text = "  คลังดาวน์โหลด", Dock = DockStyle.Top, Height = 37,
             TextAlign = ContentAlignment.MiddleLeft,
             Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            ForeColor = Color.White, BackColor = Color.FromArgb(42, 48, 63)
+            ForeColor = Color.White, BackColor = DarkPanel
+        };
+        var brand = new Panel
+        {
+            Dock = DockStyle.Top, Height = 80,
+            BackColor = Color.FromArgb(8, 33, 56)
+        };
+        brand.Paint += (_, e) =>
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using var xFont = new Font("Segoe UI", 30, FontStyle.Bold);
+            using var titleFont = new Font("Segoe UI", 12, FontStyle.Bold);
+            using var captionFont = new Font("Segoe UI", 8, FontStyle.Italic);
+            using var xBrush = new SolidBrush(Color.FromArgb(30, 225, 240));
+            using var titleBrush = new SolidBrush(Color.White);
+            using var captionBrush = new SolidBrush(Accent);
+            e.Graphics.DrawString("X", xFont, xBrush, 10, 8);
+            e.Graphics.DrawString("X-Stage", titleFont, titleBrush, 67, 16);
+            e.Graphics.DrawString("Download Manager", captionFont, captionBrush, 67, 42);
         };
         side.Controls.Add(_categories);
         side.Controls.Add(section);
+        side.Controls.Add(brand);
+
         _categories.Dock = DockStyle.Fill;
         _categories.BorderStyle = BorderStyle.None;
         _categories.ImageList = _categoryIcons;
