@@ -763,6 +763,21 @@ try
         if (SocialVideoDownloader.IsVideoUrl(uri))
             throw new Exception("Unsafe or deceptive social URL incorrectly accepted: " + uri);
     var video = new DownloadJob { Url = videoHosts[0], Folder = folder, Parts = 16, VideoQuality = "1080" };
+    // Video subprocess must honor the stricter persisted per-file/global cap.
+    // This is a per-process cap; aggregate cross-engine shaping is still pending.
+    video.FileSpeedLimitKib = 128;
+    var cappedVideo = SocialVideoDownloader.BuildArguments(video, folder, folder, 256).ToArray();
+    var capIndex = Array.IndexOf(cappedVideo, "--limit-rate");
+    if (capIndex < 0 || capIndex + 1 >= cappedVideo.Length || cappedVideo[capIndex + 1] != "128K" ||
+        SocialVideoDownloader.VideoRateLimitKib(0, 0) != 0 ||
+        SocialVideoDownloader.VideoRateLimitKib(256, 0) != 256 ||
+        SocialVideoDownloader.VideoRateLimitKib(0, 128) != 128 ||
+        SocialVideoDownloader.VideoRateLimitKib(256, 128) != 128)
+        throw new Exception("yt-dlp speed caps must honor the strictest configured limit.");
+    video.FileSpeedLimitKib = 0;
+    var uncappedVideo = SocialVideoDownloader.BuildArguments(video, folder, folder).ToArray();
+    if (uncappedVideo.Contains("--limit-rate"))
+        throw new Exception("Unlimited video downloads must not receive a rate cap.");
     var videoArgs = SocialVideoDownloader.BuildArguments(video, Path.Combine(folder, ".temp"), Path.Combine(folder, "tools")).ToArray();
     if (!videoArgs.Contains("--no-playlist") || !videoArgs.Contains("--ignore-config") ||
         !videoArgs.Contains("--no-plugin-dirs") ||
