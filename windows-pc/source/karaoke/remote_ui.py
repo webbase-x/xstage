@@ -172,6 +172,14 @@ def remote_window(app):
     ttk.Label(codes,style='Remote.TLabel',text='รหัสผู้ร้อง').pack(anchor='w')
     guest=ttk.Label(codes,style='Remote.TLabel',text='—',font=('Consolas',40,'bold'),foreground='#ffe269');guest.pack(anchor='w')
     url_label=ttk.Label(codes,style='Remote.TLabel',text='',wraplength=420);url_label.pack(anchor='w')
+    ttk.Label(codes,style='Remote.TLabel',wraplength=420,
+              text='มือถือและ PC ต้องอยู่ใน LAN เดียวกัน · ไม่ต้องล็อกอิน Google บนมือถือ · ผู้ดูแลปิดเป็นค่าเริ่มต้น').pack(anchor='w',pady=(8,4))
+    def open_firewall_settings():
+        import os
+        if os.name=='nt':
+            os.startfile('ms-settings:windowsdefender-firewall')
+    ttk.Button(codes,style='Remote.TButton',text='ตั้งค่า Windows Firewall (อนุญาตเฉพาะ Private Network)',
+               command=open_firewall_settings).pack(anchor='w',pady=(2,4))
     operator_code=ttk.Label(codes,style='Remote.TLabel',text='',font=('Tahoma',13),foreground='#b5cadf');operator_code.pack(anchor='w',pady=(12,0))
     status=ttk.Label(window.footer,style='Remote.TLabel',text='ยังไม่เปิดรีโมท',wraplength=540);status.pack(anchor='w',padx=16,pady=8)
     options=ttk.Frame(pages[1],style='Remote.TFrame',padding=16);options.pack(fill='x')
