@@ -45,6 +45,9 @@ class ClassicApp(KaraokeApp):
         # Only observe a library selected by the operator on an earlier run.
         self._pc_last_attempt = None
         self.after(8000, self._watch_songstudio_pc_catalog)
+        # Local mobile remote is LAN-first; no cloud service or Google login.
+        # Start after the player UI is ready so snapshots run on Tk's thread.
+        self.after(1200, self._boot_local_remote)
 
     def _setup_style(self):
         super()._setup_style()
@@ -102,7 +105,10 @@ class ClassicApp(KaraokeApp):
         ttk.Button(bar, text='เพิ่มเพลง', command=self.add_folder).pack(side='left', padx=5)
         ttk.Button(bar, text='ค้นหา F3', command=self.search_popup).pack(side='left')
         ttk.Button(bar, text='จอร้อง F11', command=self.toggle_stage).pack(side='right')
-        ttk.Button(bar, text='รีโมต', command=self.remote_window).pack(side='right', padx=5)
+        ttk.Button(bar, text='รีโมท QR', command=self.remote_window).pack(side='right', padx=5)
+        self.remote_quick_var = tk.StringVar(value='รีโมท LAN: กำลังเริ่ม…')
+        ttk.Label(bar, textvariable=self.remote_quick_var,
+                  style='Muted.TLabel').pack(side='right', padx=5)
         self.song_count = tk.StringVar()
         ttk.Label(bar, textvariable=self.song_count, style='Muted.TLabel').pack(side='right', padx=8)
         body = ttk.Panedwindow(outer, orient='horizontal')
@@ -892,6 +898,30 @@ class ClassicApp(KaraokeApp):
                 self.apply_volume()
         self.update_remote_snapshot()
         return {'ok': True}
+
+    def _boot_local_remote(self):
+        if getattr(self, 'closing', False):
+            return
+        try:
+            if not self.__dict__.get('_wifi_monitor'):
+                from .wifi_network import WifiMonitor
+                self._wifi_monitor = WifiMonitor()
+            from .remote_boot import start_local_remote
+            start_local_remote(self)
+        except Exception:
+            logging.exception('LOCAL_REMOTE initialization failed')
+            self.remote_quick_var.set('รีโมท LAN: เริ่มไม่สำเร็จ · เปิดเมนูรีโมทเพื่อตรวจ')
+        self._refresh_local_remote()
+
+    def _refresh_local_remote(self):
+        if getattr(self, 'closing', False):
+            return
+        try:
+            from .remote_boot import refresh_local_remote
+            refresh_local_remote(self)
+        except Exception:
+            logging.exception('LOCAL_REMOTE network refresh failed')
+        self.after(5000, self._refresh_local_remote)
 
     def remote_window(self):
         from .remote_ui import remote_window
