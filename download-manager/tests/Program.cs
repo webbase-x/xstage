@@ -177,6 +177,39 @@ try
         rejectedEngine.Jobs.Any(j => j.Url.Contains("must-not-start.bin")))
         throw new Exception("Failed SQLite insert left a phantom download job.");
 
+    // Simulate a full SQLite checkpoint rejection while restarting a known
+    // paused job. The worker must not start or alter its recovery intent.
+    var restartFolder = Path.Combine(folder, "failed-start-checkpoint");
+    var restartState = new DownloadStateStore(restartFolder);
+    restartState.SaveSnapshot(new[]
+    {
+        new DownloadJob { Id = "restart-checkpoint",
+            Url = server.Url + "range/restart-checkpoint.bin",
+            Folder = folder, Status = "Paused", ResumeAfterRestart = true,
+            Error = "previous error" }
+    });
+    var restartEngine = new DownloadEngine(restartFolder);
+    var restartJob = restartEngine.Jobs.Single();
+    using (var db = new Microsoft.Data.Sqlite.SqliteConnection(
+        "Data Source=" + restartEngine.DatabasePath))
+    {
+        db.Open();
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = "CREATE TRIGGER reject_restart BEFORE INSERT ON xstage_download_jobs BEGIN SELECT RAISE(ABORT, 'simulated checkpoint failure'); END;";
+        cmd.ExecuteNonQuery();
+    }
+    try
+    {
+        restartEngine.Start(restartJob);
+        throw new Exception("A restart was allowed despite failed SQLite checkpoint.");
+    }
+    catch (IOException) { }
+    if (restartJob.Status != "Paused" || !restartJob.ResumeAfterRestart ||
+        restartJob.Cancellation != null || restartJob.Error != "previous error")
+        throw new Exception("Failed restart checkpoint altered existing job or recovery intent.");
+    if (File.Exists(Path.Combine(folder, "restart-checkpoint.bin")))
+        throw new Exception("Failed restart checkpoint unexpectedly created output.");
+
     // A detached job object must never bypass SQLite registration and start
     // writing output files. Simulate a caller retaining an obsolete job object.
     var untracked = new DownloadJob { Id = "detached",
