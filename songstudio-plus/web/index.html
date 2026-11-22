@@ -373,6 +373,13 @@
             <button class="primary-btn full" id="build-everything" type="button" disabled>สร้างทั้งหมด (ทุกเพลงในฐานข้อมูล) <span>↗</span></button>
             <button class="quiet-btn full" id="build-ready-all" type="button" disabled>สร้างเฉพาะที่พร้อม <span>↗</span></button>
             <p class="field-hint">สร้างทั้งหมดจะตรวจทุกเพลงใน SQLite · เพลง MIDI เป็น XMID และชนิดอื่นเป็น X ตามชนิดสื่อ · เพลง MIDI ตรวจซ้ำจาก SHA-256 ของ MID ใน SQLite และสร้าง XMID เพียงไฟล์เดียวแม้คนละรอบ · ไฟล์เดิมข้ามซ้ำ · เนื้อร้องหรือ CUR ไม่ครบให้บันทึกสาเหตุ ไม่สร้างไฟล์เสีย</p>
+            <section id="build-operation-progress" class="build-operation-progress" role="status" aria-live="polite" aria-label="ความคืบหน้าการสร้างไฟล์ X-Stage">
+              <div class="build-operation-head"><strong id="build-progress-state">ยังไม่มีงานสร้างไฟล์</strong><strong id="build-progress-percent">—</strong></div>
+              <div class="build-progress-track" role="progressbar" aria-label="เปอร์เซ็นต์การสร้างไฟล์" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="build-progress-track"><div class="build-progress-fill" id="build-progress-fill"></div></div>
+              <p id="build-progress-count" class="build-progress-count">เริ่มงานจากปุ่มสร้างไฟล์ด้านบน</p>
+              <p id="build-progress-results" class="build-progress-results">สร้าง 0 · ข้ามซ้ำ 0 · ข้อมูลไม่ครบ 0 · ผิดพลาด 0</p>
+              <p id="build-progress-current" class="field-hint">เปอร์เซ็นต์คำนวณจากจำนวนเพลงที่ตรวจเสร็จจริงในฐานข้อมูล SQLite</p>
+            </section>
             <p class="field-hint" id="build-feedback">แสดงเพลงที่ยังไม่แปลงและแปลงแล้วแยกกัน · ข้ามเพลงที่แปลงแล้วโดยไม่สร้างซ้ำ · เพลงต้องปรับปรุงต้องตรวจหรือยืนยันก่อน</p>
           </article>
         </div>
