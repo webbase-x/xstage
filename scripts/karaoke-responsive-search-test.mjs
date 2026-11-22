@@ -22,7 +22,7 @@ assert.match(patch,/#search\{[\s\S]*?font-size:16px!important/);
 assert.match(html,/meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/);
 assert.match(html,/id="search" type="search"/);
 assert.doesNotMatch(html,/id="voice-search"/,'Voice microphone must be removed completely');
-assert.match(html,/xstage-ux\.css\?v=1163-mobile-edge-search/);
+assert.match(html,/xstage-ux\.css\?v=1164-mobile-controls-lights/);
 for(const [viewport,leftSafe,rightSafe] of [
   [320,0,0],[375,0,0],[390,0,0],[402,0,0],[430,0,0],[440,0,0],
   [667,44,44],[844,59,59],[932,59,59],[1024,0,0]
@@ -44,41 +44,42 @@ assert.ok(mobile.includes('layoutHeight-visualHeight-visualTop')&&
   mobile.includes('--xs-search-visual-height')&&
   mobile.includes('(max-width:820px)'),
   'Mobile keyboard and tablet-size phones must keep the bottom search visible');
-assert.match(html,/mobile-layout\.js\?v=1163-mobile-edge-search/);
+assert.match(html,/mobile-layout\.js\?v=1164-mobile-controls-lights/);
 const topHeader=html.split('<header class="mobile-stage-header stage-toolbar"')[1]?.split('</header>')[0]||'';
 const songStatus=html.split('<div class="transport-song-info">')[1]?.split('<div class="timeline">')[0]||'';
-assert.doesNotMatch(topHeader,/id="toolbar-song-key"/,
-  'Song-key text stays inside Song Status');
+const mobileRules=css.split('/* 1.16.4 — One lower-right menu')[1];
+assert.ok(mobileRules,'The final responsive rule must place the menu at bottom right');
+assert.match(mobileRules,/\.stage \.stage-toolbar\{[\s\S]*?display:none!important/,
+  'Mobile top toolbar and clock must be hidden');
+assert.match(mobileRules,/#mobile-stage-clock\{[\s\S]*?display:none!important/,
+  'Phone clock must not occupy a row');
+assert.match(mobileRules,/#stage-tools-toggle:not\(\[hidden\]\)\{[\s\S]*?display:grid!important/,
+  'Original lower menu must be visible after the queue button');
+assert.match(mobileRules,/\.transport-right-actions\{[\s\S]*?flex-direction:row!important/,
+  'Queue and hamburger must share the lower-right row');
+assert.ok(html.indexOf('id="stage-queue-toggle"')<html.indexOf('id="stage-tools-toggle"'),
+  'Bottom menu belongs after the queue button in tab and visual order');
 assert.match(topHeader,/id="midi-transpose-control"/,
-  'MIDI transpose buttons belong after the upper search field');
-assert.ok(topHeader.indexOf('id="midi-transpose-control"')<topHeader.indexOf('id="mobile-stage-clock"'),
-  'Transpose comes immediately before the toolbar clock');
+  'The original transpose is initially in the toolbar for desktop');
+assert.match(mobile,/transportPanel\.insertBefore\(transpose,transportRow\)/,
+  'Same transpose must move into the lower transport row on phones');
+assert.match(mobile,/transposeToolbar\.insertBefore\(transpose,transposeAnchor\)/,
+  'Desktop must restore the transpose without duplicate controls');
+assert.match(mobile,/mainControls\.insertBefore\(nextButton,cancelButton\)/,
+  'Next must move directly after Play and before Stop/Cancel');
+assert.match(mobile,/nextAnchor\.parentNode\?\.insertBefore\(nextButton,nextAnchor\)/,
+  'Desktop Next button order must be restored');
+assert.match(mobileRules,/#play-pause\{order:1\}/);
+assert.match(mobileRules,/#next\{order:2\}/);
+assert.match(mobileRules,/#cancel-current\{order:3\}/);
+assert.match(app,/transportTop-16\*density/,
+  'Lyric drawing must reserve the true top of the bottom player');
 assert.match(songStatus,/id="toolbar-song-key"[^>]*>คีย์ —<\/span>/,
-  'Current musical key must appear as text with Song Status on every screen');
+  'Musical key label stays in Song Status, not duplicated');
 assert.match(html,/id="toggle-keyboard"[^>]*hidden/,
-  'Search keyboard handler stays connected to the menu and remote');
-assert.match(app,/setSongKeyDisplay\(musicalKey\)/,
-  'Song selection updates both key labels');
-assert.match(ui,/lowerMenuTrigger\.hidden=upperVisible/,
-  'Lower menu must be hidden when upper menu is visible');
-assert.match(ui,/getClientRects\(\)\.length>0/,
-  'Menu placement follows actual responsive CSS visibility');
-assert.match(css,/#stage-tools-toggle\[hidden\]/,
-  'Hidden menu must override stronger transport styles');
-assert.doesNotMatch(html,/id="midi-keyboard-control"/,
-  'The former top piano button must be completely removed');
+  'Remote keyboard must remain available via its existing handler');
+assert.ok(topHeader.indexOf('id="midi-transpose-control"')<topHeader.indexOf('id="mobile-stage-clock"'));
 assert.match(html,/<nav id="mobile-stage-menu"[\s\S]*?id="midi-keyboard-toggle"/,
-  'The MIDI keyboard is available from the upper menu');
-assert.ok(css.includes('html body.xstage-ui-v2:not(.xstage-native-tv) .stage .transport-right-actions #stage-tools-toggle{\\n')===false
-  || css.includes('display:none!important'),'Lower menu must be suppressed');
-const finalStyles=css.split('/* 1.15.7 — One upper hamburger')[1];
-assert.ok(finalStyles,'Final responsive CSS overrides must exist');
-assert.match(finalStyles,/#mobile-menu-toggle\{[\s\S]*?display:inline-flex!important/,
-  'The upper hamburger must appear on phone widths');
-assert.match(css,/\.transport-song-info \.song-key-stack\{[\s\S]*?display:flex!important/,
-  'Only the key text should remain in Song Status');
-assert.match(css,/\.stage-toolbar #midi-transpose-control\{[\s\S]*?display:inline-flex!important/,
-  'Transpose controls must occupy a compact slot after search');
-assert.match(finalStyles,/#stage-tools-toggle\{\s*display:none!important/,
-  'The bottom hamburger must be removed when the top menu exists');
-console.log('PASS: voice search removed, bottom mobile search with upward results, safe-area/keyboard, one top menu');
+  'MIDI keyboard remains accessible in the menu');
+assert.doesNotMatch(html,/id="midi-keyboard-control"/);
+console.log('PASS: bottom phone search, bottom-right queue and menu, clock hidden, MIDI transpose and next beside play, lyrics clear');
