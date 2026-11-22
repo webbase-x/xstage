@@ -23,6 +23,23 @@ Web and Android players do not yet decode the new binary format.
 - The UI gets a total-catalog count endpoint and does not need to load
   every song into the browser before building.
 
+## v0.1.38 — Persistent MID identity and XMID deduplication
+
+- Added `xstage_midi_export_registry` in the existing SQLite workspace.
+  The unique identifier is SHA-256 of the original MIDI/MID/KAR bytes,
+  independent of song titles, filenames, database codes or UI pages.
+- Every successful XMID stores its source MID signature, canonical song,
+  output path, current lyric revision and verified output SHA-256.
+- Subsequent exports (even after restarting Windows) reuse the single
+  verified XMID without rewriting or changing its file timestamp. An
+  existing v0.1.37 XMID is adopted from `xstage_exports` on demand.
+- Corrupt, missing or moved outputs cannot be silently counted as valid
+  duplicates. The canonical song may regenerate its same output path after
+  a change in lyrics.
+- Exact original MIDI bytes define duplication; nonidentical MIDI files
+  are never deduplicated on song title alone. The importer already prevents
+  storing two `xstage_media` entries with an identical source SHA-256.
+
 ## v0.1.38 — Verified Windows popup stability release
 
 - Carry forward the native Windows file/LRC picker window-ownership fix,

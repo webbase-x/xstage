@@ -125,6 +125,62 @@ class PlusTests(unittest.TestCase):
                     plus.build_song(self.workspace,song["id"])
         self.assertEqual(plus.catalog_song_count(self.workspace),2)
 
+    def test_mid_registry_dedup_survives_separate_builds_and_restarts(self):
+        # Same physical MIDI can be registered under different names/paths.
+        # The SQLite catalog and XMID output must contain only one copy.
+        original=self.put("A/song-a.mid",midi())
+        self.lrc(original)
+        duplicate=self.put("B/song-b.mid",original.read_bytes())
+        self.lrc(duplicate)
+        imported=plus.import_folder(self.workspace,self.src)
+        self.assertEqual(imported["files_new"],1)
+        self.assertEqual(imported["media_duplicates"],1)
+        songs=plus.songs(self.workspace)
+        self.assertEqual(len(songs),1)
+        sid=songs[0]["id"]
+        first=plus.build_song(self.workspace,sid)
+        self.assertFalse(first["skipped"])
+        output=Path(first["path"])
+        self.assertEqual(output.suffix,".xmid")
+        initial_mtime=output.stat().st_mtime_ns
+        with plus.connect(self.workspace) as db:
+            row=db.execute("""SELECT * FROM xstage_midi_export_registry""").fetchone()
+            self.assertEqual(row["midi_sha256"],plus.digest(original))
+            self.assertEqual(row["song_id"],sid)
+            self.assertEqual(row["output_sha256"],first["sha256"])
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM xstage_midi_export_registry").fetchone()[0],1)
+        for _ in range(2):
+            reused=plus.build_song(self.workspace,sid)
+            self.assertTrue(reused["skipped"])
+            self.assertEqual(reused["sha256"],first["sha256"])
+            self.assertEqual(output.stat().st_mtime_ns,initial_mtime)
+        plus._INITIALIZED.clear()  # simulate another app process
+        self.assertTrue(plus.build_song(self.workspace,sid)["skipped"])
+        self.assertEqual(output.stat().st_mtime_ns,initial_mtime)
+        # Older SQLite databases lack the new fingerprint ledger. Backfill
+        # verified existing files instead of creating a duplicate output.
+        with plus.connect(self.workspace) as db:
+            db.execute("DELETE FROM xstage_midi_export_registry")
+        self.assertTrue(plus.build_song(self.workspace,sid)["skipped"])
+        with plus.connect(self.workspace) as db:
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM xstage_midi_export_registry").fetchone()[0],1)
+        self.assertEqual(output.stat().st_mtime_ns,initial_mtime)
+
+    def test_mid_registry_rejects_corrupt_output_in_later_run(self):
+        src=self.put("corruption.mid",midi())
+        self.lrc(src)
+        plus.import_folder(self.workspace,self.src)
+        song=plus.songs(self.workspace)[0]
+        built=plus.build_song(self.workspace,song["id"])
+        target=Path(built["path"])
+        with target.open("ab") as out:
+            out.write(b"corrupt-content")
+        plus._INITIALIZED.clear()
+        with self.assertRaisesRegex(ValueError,"ปลายทางมีไฟล์ที่ไม่ตรงกับทะเบียน"):
+            plus.build_song(self.workspace,song["id"])
+
     def test_exported_song_does_not_enter_build_queue_again(self):
         import manual_editor as manual
         path=self.put("single.mp3",b"PAYLOAD-MP3"*900)

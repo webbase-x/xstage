@@ -219,4 +219,11 @@ assert.ok(server.includes('if path=="/api/build/catalog-count":')&&
           server.includes('core.catalog_song_ids(self.state.workspace)')&&
           core.includes('def catalog_song_ids(workspace,batch_size=256):'),
   'Build entire SQLite registry (not just reviewed songs) with bounded batches and duplicate skip');
+assert.ok(core.includes('CREATE TABLE IF NOT EXISTS xstage_midi_export_registry')&&
+          core.includes('midi_sha256 TEXT PRIMARY KEY')&&
+          core.includes('def _midi_export_for_build(')&&
+          core.includes('def _verified_midi_export(')&&
+          server.includes('if info.get("duplicate_mid")')&&
+          html.includes('เพลง MIDI ตรวจซ้ำจาก SHA-256 ของ MID ใน SQLite'),
+  'One XMID per exact MID content, persisted in SQLite across separate runs');
 console.log('PASS: '+buttons.length+' visible action buttons, eight menus, 19 critical actions, APIs, Windows picker, Desktop Standalone and diagnostic log');

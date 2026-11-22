@@ -352,7 +352,7 @@
             <button class="primary-btn full" id="build-start" type="button" disabled>สร้างไฟล์ที่เลือก <span>↗</span></button>
             <button class="primary-btn full" id="build-everything" type="button" disabled>สร้างทั้งหมด (ทุกเพลงในฐานข้อมูล) <span>↗</span></button>
             <button class="quiet-btn full" id="build-ready-all" type="button" disabled>สร้างเฉพาะที่พร้อม <span>↗</span></button>
-            <p class="field-hint">สร้างทั้งหมดจะตรวจทุกเพลงใน SQLite · เพลง MIDI เป็น XMID และชนิดอื่นเป็น X ตามชนิดสื่อ · เพลงที่สร้างแล้วข้ามซ้ำ · รายการไม่มีเนื้อร้องหรือ CUR ไม่ครบจะบันทึกสาเหตุและไม่สร้างไฟล์เสีย</p>
+            <p class="field-hint">สร้างทั้งหมดจะตรวจทุกเพลงใน SQLite · เพลง MIDI เป็น XMID และชนิดอื่นเป็น X ตามชนิดสื่อ · เพลง MIDI ตรวจซ้ำจาก SHA-256 ของ MID ใน SQLite และสร้าง XMID เพียงไฟล์เดียวแม้คนละรอบ · ไฟล์เดิมข้ามซ้ำ · เนื้อร้องหรือ CUR ไม่ครบให้บันทึกสาเหตุ ไม่สร้างไฟล์เสีย</p>
             <p class="field-hint" id="build-feedback">แสดงเพลงที่ยังไม่แปลงและแปลงแล้วแยกกัน · ข้ามเพลงที่แปลงแล้วโดยไม่สร้างซ้ำ · เพลงต้องปรับปรุงต้องตรวจหรือยืนยันก่อน</p>
           </article>
         </div>
