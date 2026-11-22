@@ -81,7 +81,7 @@ assert.ok(keyDisplayUpdates>0,'Transpose must refresh Song Status key');
 const stageUi=read('stage-ui.js');
 assert.match(stageUi,/function migrateSongKeyToToolbar\(\)/);
 assert.match(stageUi,/info\.insertBefore\(detail,info\.firstChild\)/);
-assert.match(stageUi,/if\(stack\.parentNode!==detail\)detail\.append\(stack\)/);
+assert.match(stageUi,/if\(stack\.parentNode!==titleRow\)titleRow\.append\(stack\)/);
 assert.match(stageUi,/toolbar\.insertBefore\(transpose,clock\|\|null\)/);
 assert.match(stageUi,/transpose\.classList\.remove\('speed-control'\)/);
 console.log('PASS: plain Song Status key; search then live MIDI -/+ then clock; -12/+12 and cached DOM relocation');
