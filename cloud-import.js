@@ -864,7 +864,11 @@ class Importer {
       if(this.plan.xsks.some(x=>x.kind==='XMID')&&!scope.XStageXmid)
         fail('ยังไม่โหลดตัวอ่าน XMID ของเบราว์เซอร์');
       this.status('กำลังตรวจ XStageKaraoke/DB/current.json บน Google Drive…');
-      const rootQuery="'root' in parents and name='"+driveLayout.root+"' and mimeType='"+MIME_FOLDER+"' and trashed=false";
+      // Discover the same accessible libraries as Karaoke Online, including
+      // folders nested in My Drive and folders shared by another owner.
+      // Restricting this search to 'root' would create another XStageKaraoke
+      // when an existing library was moved or shared.
+      const rootQuery="name='"+driveLayout.root+"' and mimeType='"+MIME_FOLDER+"' and trashed=false";
       const roots=await drive.list(rootQuery);
       // Pin new uploads to the folder actually selected in Karaoke Online.
       // Do not silently use the first same-name root or create a third copy.
@@ -875,6 +879,11 @@ class Importer {
       if(!rootId){
         if(!this.dom['allow-create'].checked)
           fail('ไม่พบ XStageKaraoke · กรุณาอนุญาตสร้างคลังใหม่ก่อนนำเข้า');
+        // Recheck immediately before creation: another tab/device may have
+        // created the root since the initial listing.
+        const latestRoots=await drive.list(rootQuery);
+        if(latestRoots.length)
+          fail('พบ XStageKaraoke บน Google Drive ระหว่างนำเข้า · เปิดคลังที่มีอยู่ใหม่ก่อน ไม่สร้างซ้ำ');
         rootId=await drive.folder('root',driveLayout.root);
       }
       let {pointerFile,pointer,rows}=await loadCatalog(drive,rootId);
