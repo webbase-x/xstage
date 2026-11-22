@@ -15,6 +15,7 @@ const MIME_FOLDER='application/vnd.google-apps.folder';
 const API='https://www.googleapis.com/drive/v3/files';
 const UPLOAD='https://www.googleapis.com/upload/drive/v3/files';
 const MiB=1024*1024,CHUNK=8*MiB,MAX_CHUNK=32*MiB,MAX_LRC=2*MiB,MAX_JSON=128*MiB;
+const CATALOG_BATCH_SIZE=200; // Large verified batches avoid O(n²) SQLite republishing.
 // Larger acknowledged resumable chunks reduce request overhead on fast links.
 // Every non-final Drive chunk remains a multiple of 256 KiB, and only one
 // chunk per resumable session is in flight so Range checkpoints stay reliable.
@@ -1568,12 +1569,14 @@ class Importer {
               'application/octet-stream',xskHash,0,1);
             const record={webSongId:ident,code,sourceCode,midiHash:rawMidiHash,
               midiSize:rawMidiSize,originalFilename:item.file.name,
+              originalRelativePath:item.relative||item.file.name,
+              originalFileSize:item.file.size,
               title:identity.title,artist:identity.artist,
               sourceFormat:isXmid?'XMID':'XSK',lyricsMode:'timed',
               ...(isXmid?{xmid:packed}:{xsk:packed})};
             rows.set(ident,record);addMaps(record);byMidi.set(rawMidiHash,record);
             revisions.push(record);this.stats.newSongs++;
-            if(revisions.length>=25)await publish();
+            if(revisions.length>=CATALOG_BATCH_SIZE)await publish();
           }else if(item.isMidi){
             const runtime=scope.XStageBrowserMidi;
             if(!runtime)fail('ไม่พบระบบ MIDI ที่ติดมากับหน้าเว็บ · อัปเดตเว็บก่อนนำเข้า');
@@ -1651,7 +1654,10 @@ class Importer {
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิง MIDI ชนเพลงอื่น');
             const identity=core.songIdentity(doc,code,same);
             const record={...(same||{}),webSongId:ident,code,sourceCode,midiHash,
-              midiSize,title:identity.title,artist:identity.artist,
+              midiSize,originalFilename:midiFile.name,
+              originalRelativePath:item.midi?.relative||midiFile.name,
+              originalFileSize:midiFile.size,
+              title:identity.title,artist:identity.artist,
               sourceFormat:type,midi:media,lyrics,
               ...(ncnSource?{ncnSource}: {})};
             delete record.lyr;delete record.cur;delete record.lrc;
@@ -1664,7 +1670,7 @@ class Importer {
             rows.set(ident,record);addMaps(record);byPair.set(pair,record);
             byMidi.set(midiHash,record);
             revisions.push(record);this.stats[same?'updated':'newSongs']++;
-            if(revisions.length>=25)await publish();
+            if(revisions.length>=CATALOG_BATCH_SIZE)await publish();
           }else if(item.isFont){
             if(!await core.validFont(item.file))throw Error('SF2/SF3 ไม่มีหัว RIFF sfbk หรือขนาดไม่สมบูรณ์');
             const hash=await core.hashBlob(item.file,()=>this.check());
@@ -1822,7 +1828,7 @@ class Importer {
             rows.set(ident,record);addMaps(record);byPair.set(pair,record);
             revisions.push(record);
             this.stats[same?'updated':'newSongs']++;
-            if(revisions.length>=25)await publish();
+            if(revisions.length>=CATALOG_BATCH_SIZE)await publish();
           }
         }catch(error){
           if(aborted(error)||this.stopRequested)throw error;
