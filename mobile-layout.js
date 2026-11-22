@@ -15,6 +15,41 @@
   if(!stage||!menu||!toggle||!queueDock||!stageColumn)return;
   const mq=window.matchMedia('(max-width: 820px), (max-height: 520px) and (pointer: coarse)');
   const isCompact=()=>mq.matches;
+  // Keep the existing search input, results, and listeners; physically move
+  // that ONE dock out of the top toolbar on phones. Never duplicate its ID.
+  const searchSlot=document.querySelector('.stage-search-slot');
+  const searchToolbar=searchSlot?.parentNode||null;
+  const searchAnchor=searchSlot&&searchToolbar?document.createComment('original search toolbar slot'):null;
+  if(searchAnchor)searchToolbar.insertBefore(searchAnchor,searchSlot);
+  const bottomSearchQuery=window.matchMedia('(max-width:760px), (max-height:540px) and (pointer:coarse)');
+  const visualViewport=window.visualViewport;
+  function syncSearchKeyboardInset(){
+    if(!document.body.classList.contains('xstage-mobile-search-bottom'))return;
+    // On iOS the visual viewport rises above the on-screen keyboard while
+    // window.innerHeight still measures the old layout viewport.
+    const inset=visualViewport?
+      Math.max(0,Math.round(window.innerHeight-(visualViewport.height+visualViewport.offsetTop))):0;
+    document.documentElement.style.setProperty('--xs-search-keyboard-inset',inset+'px');
+  }
+  function syncBottomSearch(){
+    if(!searchSlot||!searchToolbar)return;
+    const mobile=bottomSearchQuery.matches&&!document.body.classList.contains('xstage-native-tv');
+    if(mobile&&searchSlot.parentNode!==stage){
+      stage.insertBefore(searchSlot,stage.querySelector('.mobile-stage-menu'));
+    }else if(!mobile&&searchSlot.parentNode!==searchToolbar){
+      searchToolbar.insertBefore(searchSlot,searchAnchor);
+    }
+    document.body.classList.toggle('xstage-mobile-search-bottom',mobile);
+    if(!mobile)document.documentElement.style.removeProperty('--xs-search-keyboard-inset');
+    else syncSearchKeyboardInset();
+  }
+  bottomSearchQuery.addEventListener?.('change',syncBottomSearch);
+  visualViewport?.addEventListener('resize',syncSearchKeyboardInset,{passive:true});
+  visualViewport?.addEventListener('scroll',syncSearchKeyboardInset,{passive:true});
+  window.addEventListener('resize',syncBottomSearch,{passive:true});
+  window.addEventListener('orientationchange',syncBottomSearch,{passive:true});
+  document.getElementById('search')?.addEventListener('focus',syncSearchKeyboardInset);
+  document.getElementById('search')?.addEventListener('blur',syncSearchKeyboardInset);
   function setMenu(open){
     menu.hidden=!open;
     toggle.setAttribute('aria-expanded',String(open));
@@ -152,5 +187,6 @@
   if(accountLogout)observer.observe(accountLogout,{attributes:true,attributeFilter:['hidden']});
   if(queueCount)observer.observe(queueCount,{childList:true,subtree:true,characterData:true});
   if(songTotal)observer.observe(songTotal,{childList:true,subtree:true,characterData:true});
+  syncBottomSearch();
   setMenu(false);updateIndicators();
 })();
