@@ -187,6 +187,9 @@ public sealed partial class MainForm
                 (_, _) => ConfigurePerformance())));
 
         menu.Items.Add(Menu("สื่อ",
+            Action("บันทึกไลฟ์สด · ตัดคลิปตามช่วงหยุดพูด...",
+                (_, _) => OpenLiveCapture()),
+            new ToolStripSeparator(),
             Action("เพิ่มลิงก์วิดีโอ...", (_, _) => ShowAddUrlFromClipboard()),
             Action("ดาวน์โหลดวิดีโอใหม่ / เปลี่ยนคุณภาพ...",
                 (_, _) => WithSelectedJob(job =>
@@ -312,12 +315,22 @@ public sealed partial class MainForm
             (_, _) => ConfigurePerformance(), "ตั้งค่าความเร็วและจำนวนงาน", 125);
         Button("ดาวน์โหลดวิดีโอ", "video", Color.FromArgb(175, 130, 246),
             (_, _) => ShowAddUrlFromClipboard(), "เพิ่ม URL สำหรับดาวน์โหลดสื่อ", 129);
+        Button("บันทึกไลฟ์สด", "video", Color.FromArgb(236, 130, 207),
+            (_, _) => OpenLiveCapture(), "เปิดโหมดบันทึกไลฟ์และตัดคลิปตามช่วงเงียบ", 118);
         Button("วิเคราะห์ปัญหา", "alert", Color.FromArgb(148, 176, 252),
             (_, _) => ShowDiagnosticsPanel(), "รายละเอียดข้อผิดพลาดจริง", 124);
         Button("ตั้งค่า", "settings", Color.FromArgb(178, 201, 255),
             (_, _) => ShowInputPanel(true, true), "โฟลเดอร์และจำนวนส่วน");
         _toolbar = bar;
         return bar;
+    }
+
+    private void OpenLiveCapture()
+    {
+        // Non-modal so the existing DownloadEngine, SQLite checkpoints and
+        // running file jobs remain responsive while a live session records.
+        var window = new LiveStreamCaptureForm(_folder.Text);
+        window.Show(this);
     }
 
     private void ShowDiagnosticsPanel()
