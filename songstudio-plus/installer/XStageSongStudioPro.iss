@@ -35,7 +35,7 @@ RestartApplications=no
 Name: "desktopicon"; Description: "Create desktop shortcut"; Flags: unchecked
 
 [Files]
-Source: "dist\{#MyAppExe}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\XStageSongStudioPro\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\X-Stage Song Studio Pro"; Filename: "{app}\{#MyAppExe}"
