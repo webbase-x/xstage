@@ -74,6 +74,22 @@ class RollbackSourcePreflightTests(unittest.TestCase):
                              '{"title":"current"}')
             self.assertEqual((data / "queue.json").read_text(encoding="utf-8"), '[]')
 
+    def test_scalar_json_safety_snapshot_does_not_partially_rollback(self):
+        for name, invalid in (("settings.json", "null"), ("queue.json", "42")):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as root:
+                data, safety = Path(root) / "live", Path(root) / "safety"
+                data.mkdir()
+                safety.mkdir()
+                live = {"settings.json": '{"title":"live"}', "queue.json": "[]"}
+                for filename, value in live.items():
+                    (data / filename).write_text(value, encoding="utf-8")
+                    (safety / filename).write_text(value, encoding="utf-8")
+                (safety / name).write_text(invalid, encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, name):
+                    rollback(data, safety, list(live), tuple(live))
+                for filename, value in live.items():
+                    self.assertEqual((data / filename).read_text(encoding="utf-8"), value)
+
     def test_linked_later_safety_file_does_not_mutate_live_files(self):
         with tempfile.TemporaryDirectory() as root:
             data, safety = Path(root) / "live", Path(root) / "safety"
