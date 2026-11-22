@@ -106,6 +106,7 @@ def check(idx,width,height):
       // The CHOOSE SONGS panel and three status tabs were intentionally
       // retired. Validate the new build action surface rather than
       // expecting old tabs to remain visible.
+      document.querySelector('[data-view="build"]').click();
       const buildPanel=document.getElementById("view-build");
       const legacySelection=buildPanel.querySelector(".build-selection-internal");
       const hasHiddenLegacy=legacySelection &&
@@ -124,10 +125,11 @@ def check(idx,width,height):
         getComputedStyle(button).visibility!=="hidden";
       if(!visibleAction(all)||!visibleAction(ready))
         issues.push("build-main-actions-not-visible");
+      document.querySelector('[data-view="drive"]').click();
       const drive=document.getElementById("view-drive");
-      if(!drive||!drive.querySelector("#drive-browse")||
-         !drive.querySelector("#drive-check")||
-         !drive.querySelector("#drive-download"))
+      const driveControls=["drive-browse","drive-check","drive-download"]
+        .map(id=>drive?.querySelector("#"+id));
+      if(driveControls.some(button=>!visibleAction(button)))
         issues.push("drive-missing-import-controls");
       const source=document.getElementById("source-folder");
       const direct=document.getElementById("song-download-url");
