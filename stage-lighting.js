@@ -44,9 +44,10 @@
       const ctx=canvas.getContext('2d');
       if(!ctx)return;
       ctx.clearRect(0,0,w,h);
-      const count=Math.max(7,Math.min(22,Math.floor(w/Math.max(3,dpr*2.5))));
-      const gap=Math.max(1,Math.round(w/count*.16));
-      const barWidth=Math.max(1,(w-gap*(count-1))/count);
+      // Fit every bar inside narrow mobile EQ panels instead of clipping.
+      const count=Math.max(1,Math.min(22,Math.floor(w/4.5)));
+      const gap=Math.min(2,Math.max(.5,w/(count*8)));
+      const barWidth=Math.max(.5,(w-gap*(count-1))/count);
       for(let i=0;i<count;i++){
         const index=side?count-1-i:i;
         const band=bands[index/count<.33?0:index/count<.7?1:2]||0;
@@ -102,6 +103,18 @@
     const index=Math.max(0,Math.min(midiBands[0].length-1,Math.floor((Number(position)||0)*RATE)));
     return [clamp(midiBands[0][index]*.66),clamp(midiBands[1][index]*.52),clamp(midiBands[2][index]*.63)];
   }
+  function currentPlayback(){
+    // app.js exposes its MIDI proxy transport. The native audio element is
+    // intentionally paused for MIDI and cannot provide the playback clock.
+    const clock=window.XStageStagePlaybackClock?.();
+    if(clock&&typeof clock.playing==='boolean')return clock;
+    return {
+      playing:!media.paused&&!media.ended,
+      currentTime:Number(media.currentTime)||0,
+      muted:!!media.muted,
+      volume:Number(media.volume??1)
+    };
+  }
   function readLiveSpectrum(){
     // Both the Web post-EQ analyser and Android silent-capture analyser
     // expose actual bass/mid/high energy. No new audio path or microphone.
@@ -130,7 +143,8 @@
     if(timestamp-lastFrame<45)return;
     lastFrame=timestamp;
     const video=document.getElementById('karaoke-video');
-    if(!playing||media.paused||media.ended||media.muted||media.volume===0||
+    const playback=currentPlayback();
+    if(!playing||!playback.playing||playback.muted||playback.volume<=0||
        !stage.classList.contains('playing')||video?.hidden===false){dark();return;}
     const live=readLiveSpectrum();
     // MIDI can reach the browser output through a separate synthesizer.
@@ -138,10 +152,11 @@
     // note-on events. Never invent a beat or route a second audio output.
     const midiFallback=activeSource==='midi'&&(!live||!live.some(value=>value>.012));
     const bands=midiFallback
-      ?readMidiBands(media.currentTime)
+      ?readMidiBands(playback.currentTime)
       :(live||readAudioBands());
     const master=clamp(bands.reduce((a,b)=>a+b,0)/3);
-    if(activeSource==='midi'&&midiFallback)paintMidiSideMeters(bands,master>.005);
+    // While playing MIDI, this is the only writer of the two banner meters.
+    if(activeSource==='midi')paintMidiSideMeters(bands,master>.005);
     if(master<=.005){dark();return;}
     deck.classList.add('is-active');
     for(let i=0;i<beams.length;i++){
@@ -168,7 +183,7 @@
   for(const event of ['pause','ended','emptied'])media.addEventListener(event,onStop);
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden)onStop();
-    else if(stage.classList.contains('playing')&&typeof player!=='undefined'&&!player.paused)onPlay();
+    else if(stage.classList.contains('playing')&&currentPlayback().playing)onPlay();
   });
   window.addEventListener('pagehide',onStop);
   window.XStageStageLighting={
@@ -176,8 +191,8 @@
     status:()=>({active:playing,source:activeSource,hasMidiNotes:!!midiBands,
       beamCount:beams.length,energy:Number(deck.style.getPropertyValue('--xstage-light-power'))||0})
   };
-  // Keep a faint resting LED outline even before the first track. During
-  // playback these bars show measured Web Audio or real MIDI note energy.
+  // Keep a faint resting LED outline even before the first track.
   paintMidiSideMeters([0,0,0],false);
   dark();
+  if(stage.classList.contains('playing')&&currentPlayback().playing)onPlay();
 })();
