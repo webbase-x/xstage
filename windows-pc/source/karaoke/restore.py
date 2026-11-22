@@ -163,6 +163,13 @@ def rollback(data,safety,existed,replaced=FILES):
             if (source.is_symlink() or getattr(source, 'is_junction', lambda: False)()
                     or not source.is_file()):
                 raise ValueError('ไฟล์สำรองเพื่อย้อนคืนไม่ปลอดภัย: ' + name)
+    # Verify every saved database before touching any live target. A corrupt
+    # snapshot must never be copied over a still-recoverable user database.
+    for name in replaced:
+        if name in existed and name.endswith('.sqlite3'):
+            with closing(readonly(safety/name)) as db:
+                if db.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
+                    raise ValueError('ฐานข้อมูลสำรองเพื่อย้อนคืนเสียหาย: ' + name)
     for name in replaced:
         target=data/name
         if name.endswith('.sqlite3'):
