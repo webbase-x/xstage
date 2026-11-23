@@ -5433,7 +5433,7 @@ html body.xstage-ui-v2 .account-tools .google-renew-button[hidden]{
 .xstage-tv-search-close{
   align-self:flex-end;min-height:54px;padding:10px 22px;
   border:1px solid #65b6c9;border-radius:12px;
-  background:#164361;color:#fff;font:700 1.05rem inherit;cursor:pointer
+  background:#164361;color:#fff;font-family:inherit;font-size:1.05rem;font-weight:700;cursor:pointer
 }
 .xstage-tv-search-panel :is(button,input):focus-visible,
 .xstage-tv-search-panel :is(button,input):focus{
