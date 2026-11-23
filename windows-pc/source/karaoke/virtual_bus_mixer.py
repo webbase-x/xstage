@@ -176,6 +176,17 @@ class VirtualBusMixer:
             raise ValueError("Unknown bus")
         self.total_clipped_samples[bus] = 0
 
+    def reset_invalid_totals(self, bus=None):
+        """Clear cumulative non-finite PCM counts without resetting live meters.
+
+        Validate the requested bus before mutating diagnostic state.
+        """
+        if bus is not None and (type(bus) is not int or bus not in self.strips):
+            raise ValueError("Unknown bus")
+        targets = self.strips if bus is None else (bus,)
+        for index in targets:
+            self.total_invalid_samples[index] = 0
+
     def reset_peak_holds(self, bus=None):
         """Clear peak holds without changing audio, strips or clipping totals."""
         if bus is None:
