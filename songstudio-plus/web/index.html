@@ -75,6 +75,9 @@
             <div class="panel-head"><h2>นำเข้าเพลง</h2></div>
             <label class="field-label" for="source-folder">โฟลเดอร์เพลง</label>
             <div class="input-wrap"><span class="folder-glyph">▤</span><input id="source-folder" type="text" spellcheck="false" autocomplete="off" placeholder="เลือกโฟลเดอร์บน PC / USB / HDD"><button id="source-browse" class="browse-btn" type="button">เลือกโฟลเดอร์</button></div>
+            <label class="field-label" for="import-destination">ปลายทางจัดเก็บ SQLite และไฟล์ XMID</label>
+            <div class="input-wrap"><span class="folder-glyph">▤</span><input id="import-destination" type="text" autocomplete="off" spellcheck="false" placeholder="Music\\XStageSongPlus"><button id="import-destination-browse" type="button" class="browse-btn">เลือกปลายทาง</button></div>
+            <div class="toolbar folder-actions"><button id="import-destination-save" class="quiet-btn" type="button">บันทึกปลายทาง</button><span id="import-destination-status" class="field-hint" aria-live="polite">เปลี่ยนปลายทางมีผลเมื่อเปิดโปรแกรมใหม่ ไม่ย้ายข้อมูลเดิม</span></div>
             <div class="toolbar folder-actions"><button id="source-open" class="quiet-btn" type="button">เปิดโฟลเดอร์</button><span class="field-hint" id="folder-picker-status" aria-live="polite"></span></div>
             <button class="primary-btn full" id="import-start" type="button">นำเข้าเพลงทั้งโฟลเดอร์ <span>↗</span></button>
             <div class="import-extras" aria-label="นำเข้าไฟล์เดี่ยวและดาวน์โหลด">
