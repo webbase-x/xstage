@@ -199,3 +199,7 @@
  .xstage-drive-source-row button{width:100%}
  #xstage-drive-build-db{width:100%}
 }
+
+.xstage-drive-build-controls{display:flex;flex-wrap:wrap;gap:8px}
+.xstage-drive-build-controls button{flex:1 1 190px}
+#xstage-drive-cancel-db:not(:disabled){background:#4f2d32;border-color:#c17b7d}
