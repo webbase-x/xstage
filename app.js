@@ -2827,10 +2827,13 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
   const unpacked=await (isXmid?window.XStageXmid:window.XStageXsk).openPackage(packed);
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   // Never play a different song under a stale catalog title/code.
-  if(String(song.code||'')!==unpacked.code ||
+  // A distinct MIDI may share an embedded code with another export. The
+  // catalog keeps a unique alias in song.code and the original package code
+  // in sourceCode; validate against the latter without weakening title checks.
+  if(String(song.sourceCode||song.code||'')!==unpacked.code ||
      String(song.title||'')!==String(unpacked.document.title||'') ||
      String(song.artist||'')!==String(unpacked.document.artist||''))
-    throw Error('XSK2 ภายในไฟล์ไม่ตรงกับชื่อเพลง/ศิลปินใน DB · กรุณานำเข้าอีกครั้ง');
+    throw Error('XMID/XSK2 ภายในไฟล์ไม่ตรงกับข้อมูลเพลงใน DB · กรุณานำเข้าอีกครั้ง');
   const midiBytes=new Uint8Array(await unpacked.midi.arrayBuffer());
   if(prefetch&&!window.XStageBrowserMidi?.supportsRealtime?.()){
     // OfflineAudioContext uses floating-point PCM before encoding to WAV.
