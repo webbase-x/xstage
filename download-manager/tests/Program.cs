@@ -659,6 +659,35 @@ try
     if (cancellableNormalizedHosts.ActiveCount != 0 || cancellableNormalizedHosts.WaitingCount != 0)
         throw new Exception("Normalized host test leaked scheduler slots.");
 
+    // DNS fully-qualified names with a trailing dot refer to the same host.
+    // They must share the per-host slot rather than bypass the rate scheduler.
+    var fqdnHosts = new TransferSlotQueue(2, 1);
+    using (var active = await fqdnHosts.EnterAsync(
+        "fqdn-active", "Example.Test.", 1, CancellationToken.None))
+    {
+        using var cancellation = new CancellationTokenSource();
+        var blocked = fqdnHosts.EnterAsync(
+            "fqdn-blocked", " example.test ", 1, cancellation.Token);
+        if (blocked.IsCompleted || fqdnHosts.WaitingCount != 1)
+            throw new Exception("Trailing DNS dot bypassed per-host concurrency.");
+        cancellation.Cancel();
+        try
+        {
+            using var unexpected = await blocked.WaitAsync(TimeSpan.FromSeconds(3));
+            throw new Exception("Cancelled FQDN waiter acquired a slot.");
+        }
+        catch (OperationCanceledException) { }
+    }
+    if (fqdnHosts.ActiveCount != 0 || fqdnHosts.WaitingCount != 0)
+        throw new Exception("FQDN normalization leaked scheduler slots.");
+    try
+    {
+        using var unexpected = await fqdnHosts.EnterAsync(
+            "invalid-host", " ... ", 1, CancellationToken.None);
+        throw new Exception("Empty normalized hostname was accepted.");
+    }
+    catch (ArgumentException) { }
+
     // A cancelled waiter from a saturated host must not reserve global capacity
     // after that host releases its active lease. A different host can proceed.
     var cancellationIsolation = new TransferSlotQueue(1, 1);
