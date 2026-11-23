@@ -95,6 +95,8 @@ const contracts = [
   ['speed configuration exists', /private void ConfigureFileSpeed\(DownloadJob job\)/, performance],
   ['file speed rejects invalid 1–63 KiB/s before changing engine state', /if \(speed\.Value is > 0 and < 64\)/, performance],
   ['file speed dialog has explicit cancellation', /dialog\.CancelButton = cancel;/, performance],
+  ['performance dialog keeps input when SQLite save fails', /ok\.Click[\s\S]*?dialog\.DialogResult = DialogResult\.None;[\s\S]*?_engine\.ConfigurePerformance\([\s\S]*?catch \(Exception ex\)[\s\S]*?MessageBox\.Show\(dialog, ex\.Message/, performance],
+  ['per-file dialog keeps input when SQLite save fails', /save\.Click[\s\S]*?dialog\.DialogResult = DialogResult\.None;[\s\S]*?_engine\.SetFileSpeedLimit\([\s\S]*?catch \(Exception ex\)[\s\S]*?MessageBox\.Show\(dialog, ex\.Message/, performance],
   ['legacy out-of-range speed does not crash settings dialog', /Value = Math\.Clamp\(job\.FileSpeedLimitKib, 0, 1_048_576\)/, performance],
   ['tabbed details, chart and diagnostics', /new TabControl/, preview],
   ['real speed samples', /_speedSamples\.Add\(_latestTransferRate\)/, preview],
