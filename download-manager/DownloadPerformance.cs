@@ -186,6 +186,10 @@ public sealed class TransferRateGate
                 "ความเร็วต้องเป็น 0 (ไม่จำกัด) หรือ 64–1048576 KiB/s");
         lock (_mutex)
         {
+            // Reapplying an unchanged setting must not erase outstanding
+            // reservations: a settings save during active downloads could
+            // otherwise grant the entire bandwidth budget a second time.
+            if (_limitKib == limitKib) return;
             _nextDueMs = Environment.TickCount64;
             _configurationVersion++;
             Volatile.Write(ref _limitKib, limitKib);
