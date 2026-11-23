@@ -59,7 +59,7 @@ public sealed partial class MainForm
         var ok = new Button
         {
             Text = "บันทึก", Width = 112, Height = 35,
-            DialogResult = DialogResult.OK
+            DialogResult = DialogResult.None
         };
         var cancel = new Button
         {
@@ -244,7 +244,7 @@ public sealed partial class MainForm
         var save = new Button
         {
             Text = "บันทึก", Left = 270, Top = 123,
-            Width = 110, Height = 30, DialogResult = DialogResult.OK
+            Width = 110, Height = 30, DialogResult = DialogResult.None
         };
         var cancel = new Button
         {
