@@ -1631,6 +1631,53 @@ async function loadGooglePickerApi(){
     }
   });
 }
+async function chooseUserDriveFolder(kind){
+  const labels={music:'เพลง',soundfont:'SoundFont',fx:'FX'};
+  if(!Object.hasOwn(labels,kind))throw Error('ประเภทโฟลเดอร์ไม่ถูกต้อง');
+  if(!state.token||!state.accountSub||!state.libraryRootId)
+    throw Error('กรุณาเชื่อม Google และเลือกคลัง XStageKaraoke ก่อน');
+  if(!sharedLibraryFeatureReady())
+    throw Error('ยังไม่ได้ตั้งค่า Google Picker API key / App ID');
+  await ensureImporterGoogleAuth(false,false);
+  await loadGooglePickerApi();
+  const account=state.accountSub,rootId=state.libraryRootId,token=state.token;
+  return new Promise((resolve,reject)=>{
+    let complete=false;
+    const finish=(value,error)=>{
+      if(complete)return;complete=true;
+      if(error)reject(error);else resolve(value);
+    };
+    try{
+      const view=new google.picker.DocsView(google.picker.ViewId.DOCS)
+        .setIncludeFolders(true)
+        .setMimeTypes('application/vnd.google-apps.folder')
+        .setSelectFolderEnabled(true)
+        .setMode(google.picker.DocsViewMode.LIST);
+      const picker=new google.picker.PickerBuilder()
+        .addView(view).setOAuthToken(token)
+        .setDeveloperKey(String(cfg.googlePickerApiKey).trim())
+        .setAppId(String(cfg.googleAppId).trim())
+        .setOrigin(location.origin)
+        .setTitle('เลือกโฟลเดอร์'+labels[kind]+' บน Google Drive')
+        .setCallback(data=>{
+          const action=data?.[google.picker.Response.ACTION];
+          if(action===google.picker.Action.CANCEL){finish(null);return;}
+          if(action!==google.picker.Action.PICKED)return;
+          if(account!==state.accountSub||rootId!==state.libraryRootId){
+            finish(null,Error('บัญชีหรือคลัง XStageKaraoke เปลี่ยนระหว่างเลือกโฟลเดอร์'));return;
+          }
+          const doc=data?.[google.picker.Response.DOCUMENTS]?.[0]||{};
+          const id=String(doc[google.picker.Document.ID]||'');
+          const name=String(doc[google.picker.Document.NAME]||'');
+          if(!/^[A-Za-z0-9_-]{5,256}$/.test(id)||isRetiredDriveRoot(id)){
+            finish(null,Error('ไม่สามารถเลือกโฟลเดอร์ที่ยกเลิกหรือ Folder ID ไม่ถูกต้อง'));return;
+          }
+          finish({id,name});
+        }).build();
+      picker.setVisible(true);
+    }catch(error){finish(null,error);}
+  });
+}
 async function openSharedLibraryPicker(){
   if(!state.token){setSharedLibraryGate(true,'กรุณาเข้าสู่ระบบด้วยอีเมลที่ได้รับเชิญก่อน');return;}
   const key=String(cfg.googlePickerApiKey||'').trim();
@@ -5048,6 +5095,25 @@ const xstageCloudImporter=window.XStageCloudImport?.init({
     // Use a NEW auth request ID but never silently switch Google accounts.
     const token=state.token,id=++state.authId;
     await openDrive(token,id,state.tokenExpiresAt);
+  }
+});
+const xstageDriveFolders=window.XStageDriveFolders?.init({
+  session:()=>({token:state.token,sub:state.accountSub,
+    rootId:state.libraryRootId}),
+  chooseFolder:chooseUserDriveFolder,
+  ensureAuth:ensureImporterGoogleAuth,
+  onSoundfontChange:()=>{
+    if(!state.token||!state.accountSub||!state.libraryRootId)return;
+    void window.XStageBrowserMidi?.refreshFonts({
+      token:state.token,rootId:state.libraryRootId,sub:state.accountSub,
+      ownedByMe:state.libraryRootOwnedByMe
+    }).catch(error=>console.warn('Selected SoundFont folder:',error.message));
+  },
+  onFxChange:folderId=>window.dispatchEvent(new CustomEvent(
+    'xstage:drive-fx-folder-change',{detail:{folderId}})),
+  refresh:async()=>{
+    if(!state.token||!state.accountSub)return;
+    await openDrive(state.token,++state.authId,state.tokenExpiresAt);
   }
 });
 
