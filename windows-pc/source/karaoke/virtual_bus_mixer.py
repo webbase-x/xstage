@@ -108,6 +108,30 @@ class VirtualBusMixer:
             "total_clipped_samples": self.total_clipped_samples.copy(),
         }
 
+    def levels_dbfs_snapshot(self, *, floor_db=-120.0):
+        """Detached dBFS peak/RMS values for readable mixer meters.
+
+        Silence is represented by the finite floor, keeping the result safe
+        for JSON and GUI renderers. This is diagnostic only, not a gain stage.
+        """
+        if type(floor_db) not in (int, float) or not math.isfinite(floor_db) or not -300 <= floor_db <= 0:
+            raise ValueError("Invalid dBFS floor")
+        floor = float(floor_db)
+
+        def dbfs(value):
+            if not math.isfinite(value) or value <= 0:
+                return floor
+            return max(floor, 20.0 * math.log10(value))
+
+        return {
+            "peak_dbfs": {bus: tuple(dbfs(v) for v in pair)
+                          for bus, pair in self.meters.items()},
+            "rms_dbfs": {bus: tuple(dbfs(v) for v in pair)
+                         for bus, pair in self.rms_meters.items()},
+            "peak_hold_dbfs": {bus: tuple(dbfs(v) for v in pair)
+                               for bus, pair in self.peak_holds.items()},
+        }
+
     def reset_clipping_totals(self, bus=None):
         """Clear lifetime clipping diagnostics without changing audio or presets."""
         if bus is None:
