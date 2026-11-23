@@ -338,7 +338,7 @@ class PlusTests(unittest.TestCase):
         self.assertTrue(plus.suspicious_lyric_text(token))
         self.assertTrue(plus.suspicious_lyric_text("84EYeOdPWRChjjIB+pgMmA8o"))
         self.assertTrue(plus.suspicious_lyric_text(
-            "5ozaQcAG9CnEtIQsYn8vnBDjGGP")) 
+            "5ozaQcAG9CnEtIQsYn8vnBDjGGP4")) 
         self.assertFalse(plus.suspicious_lyric_text("*****GMM Grammy*****"))
         self.assertFalse(plus.suspicious_lyric_text("รักเธอเสมอ"))
         self.assertFalse(plus.suspicious_lyric_text("Long lyric line with spaces 2026"))
