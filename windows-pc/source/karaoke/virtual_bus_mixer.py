@@ -61,6 +61,27 @@ class VirtualBusMixer:
             current.solo if solo is None else solo,
         )
 
+    def configure_many(self, changes):
+        """Atomically apply partial strip changes from a mixer UI or scene.
+
+        All bus IDs, field names and values are validated before any strip is
+        changed. Diagnostics and existing audio routing are not reset.
+        """
+        if type(changes) is not dict:
+            raise ValueError("Invalid mixer changes")
+        candidate = self.strips.copy()
+        allowed = {"gain", "pan", "mute", "solo"}
+        for bus, fields in changes.items():
+            if type(bus) is not int or bus not in candidate:
+                raise ValueError("Unknown bus")
+            if type(fields) is not dict or not fields or not set(fields) <= allowed:
+                raise ValueError("Invalid mixer strip changes")
+            current = candidate[bus]
+            values = {name: getattr(current, name) for name in allowed}
+            values.update(fields)
+            candidate[bus] = BusStrip(**values)
+        self.strips = candidate
+
     def snapshot(self):
         """Return a JSON-serializable, independent preset of every bus strip."""
         return {
