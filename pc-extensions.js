@@ -680,11 +680,77 @@ let rec=null;async function micRecording(){if(rec){const r=rec;rec=null;r.stop()
  recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());if(parts.length){const url=URL.createObjectURL(new Blob(parts,{type:recorder.mimeType}));const link=document.createElement('a');link.href=url;link.download='xstage-mic.'+(recorder.mimeType.includes('ogg')?'ogg':'webm');link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}};
  recorder.start();rec=recorder;setPlayStatus('กำลังบันทึกไมโครโฟน…');}catch(e){setPlayStatus(e.message);}
 }
-const effects=new Map();function stageEffects(){show('เสียงเอฟเฟกต์หน้าเวที (จากเครื่องนี้)');body.append(paragraph('เลือก WAV/MP3 ได้สูงสุด 10 ไฟล์เพื่อเล่นเฉพาะแท็บ ไม่อัปโหลดไป Drive'));
- const input=document.createElement('input');input.type='file';input.accept='.mp3,.wav,audio/*';input.multiple=true;
- const list=document.createElement('div');input.onchange=()=>{for(const url of effects.values())URL.revokeObjectURL(url);effects.clear();for(const [i,f] of [...input.files].slice(0,10).entries())effects.set(i,URL.createObjectURL(f));renderFx();};
- function renderFx(){list.replaceChildren();for(const [i,url] of effects)list.append(b('เอฟเฟกต์ '+(i+1),()=>new Audio(url).play().catch(()=>{})));}body.append(input,list);renderFx();}
+const effects=new Map(),fxLabels=new Map();
+function clearStageFx(){
+ for(const url of effects.values())URL.revokeObjectURL(url);
+ effects.clear();fxLabels.clear();
+}
+function stageEffects(){
+ show('เสียงเอฟเฟกต์หน้าเวที');
+ body.append(paragraph('ใช้ WAV/MP3 จากเครื่อง หรือเลือกโฟลเดอร์ FX บน Google Drive ในหน้า “นำเข้าเพลง” · เล่นเฉพาะแท็บ ไม่คัดลอกไฟล์ขึ้น Drive'));
+ const input=document.createElement('input');input.type='file';
+ input.accept='.mp3,.wav,audio/*';input.multiple=true;
+ const list=document.createElement('div');
+ function renderFx(){
+   list.replaceChildren();
+   for(const [i,url] of effects)
+     list.append(b(fxLabels.get(i)||'เอฟเฟกต์ '+(i+1),()=>
+       new Audio(url).play().catch(error=>setPlayStatus('FX: '+error.message))));
+ }
+ input.onchange=()=>{
+   clearStageFx();
+   for(const [i,f] of [...input.files].filter(f=>f.size>0&&f.size<=12*1048576)
+     .slice(0,10).entries()){
+     effects.set(i,URL.createObjectURL(f));fxLabels.set(i,f.name.slice(0,90));
+   }
+   renderFx();
+ };
+ body.append(input);
+ const current=window.XStageDriveFolders?.readSelections?.(
+   state.accountSub,state.libraryRootId)?.fx;
+ if(current?.id&&state.token){
+   const hint=paragraph('FX บน Drive: '+current.name+' · โหลดเฉพาะไฟล์เสียงที่แอปมีสิทธิ์อ่าน (สูงสุด 10 ไฟล์ / 48 MB)');
+   body.append(hint);
+   const load=b('โหลด FX จาก Google Drive',async()=>{
+     load.disabled=true;
+     const originalSub=state.accountSub,originalRoot=state.libraryRootId;
+     const prepared=[];let total=0;
+     try{
+       if(!/^[A-Za-z0-9_-]{5,256}$/.test(current.id))
+         throw Error('Folder ID ของ FX ไม่ถูกต้อง');
+       const children=await driveList("'"+current.id+"' in parents and trashed=false",state.token);
+       const candidate=children.filter(f=>
+         f.mimeType!=='application/vnd.google-apps.folder'&&
+         /\.(?:mp3|wav|ogg|m4a)$/i.test(f.name||'')&&
+         Number(f.size)>0&&Number(f.size)<=12*1048576).slice(0,10);
+       if(!candidate.length)throw Error('ไม่พบไฟล์ FX ที่อ่านได้ในโฟลเดอร์ที่เลือก');
+       for(const file of candidate){
+         if(originalSub!==state.accountSub||originalRoot!==state.libraryRootId)
+           throw Error('บัญชีหรือคลังเพลงเปลี่ยนระหว่างโหลด FX');
+         const response=await privateFile(file.id,state.token);
+         const blob=await response.blob();
+         if(blob.size!==Number(file.size)||total+blob.size>48*1048576)
+           throw Error('ไฟล์ FX มีขนาดไม่ตรงข้อมูล Drive หรือเกินงบหน่วยความจำ');
+         total+=blob.size;
+         prepared.push({label:String(file.name).slice(0,90),url:URL.createObjectURL(blob)});
+       }
+       if(originalSub!==state.accountSub||originalRoot!==state.libraryRootId)
+         throw Error('บัญชีหรือคลังเพลงเปลี่ยนระหว่างโหลด FX');
+       clearStageFx();
+       prepared.forEach((entry,i)=>{effects.set(i,entry.url);fxLabels.set(i,entry.label);});
+       renderFx();
+       hint.textContent='พร้อมเล่น FX จาก Google Drive '+prepared.length+' ไฟล์ · ไม่ย้ายหรือลบต้นฉบับ';
+     }catch(error){
+       prepared.forEach(item=>URL.revokeObjectURL(item.url));
+       hint.textContent='โหลด FX จาก Drive ไม่สำเร็จ: '+String(error.message||error);
+     }finally{load.disabled=false;}
+   });
+   body.append(load);
+ }
+ body.append(list);renderFx();
+}
 const previousTools=el('pc-other-tools').onclick;
 el('pc-other-tools').onclick=()=>{previousTools?.();body.append(b('แก้ไข / นำเข้าเนื้อร้อง LRC',lyricEditor),b(rec?'หยุดบันทึกไมโครโฟน':'บันทึกไมโครโฟน',micRecording),b('เสียงเอฟเฟกต์หน้าเวที',stageEffects),b('สุ่มเพิ่มเพลง 5 รายการ',()=>{const pool=state.songs.filter(playable).slice().sort(()=>Math.random()-.5);for(const song of pool.slice(0,5))state.queue.push(song);renderQueue();d.close();}));};
-ui.logout.addEventListener('click',()=>{if(rec){const r=rec;rec=null;r.stop();}for(const url of effects.values())URL.revokeObjectURL(url);effects.clear();});
+ui.logout.addEventListener('click',()=>{if(rec){const r=rec;rec=null;r.stop();}clearStageFx();});
+window.addEventListener('xstage:drive-fx-folder-change',clearStageFx);
 })();
