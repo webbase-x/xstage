@@ -269,6 +269,30 @@ class VirtualBusMixerTests(unittest.TestCase):
         mixer.reset_clipping_totals(0)
         self.assertEqual(mixer.diagnostics_snapshot()["total_clipped_samples"][0], 0)
 
+    def test_explicit_diagnostics_reset_is_isolated_and_preserves_presets(self):
+        mixer = VirtualBusMixer(2, ceiling=.8)
+        mixer.configure(0, gain=2., pan=.25)
+        mixer.process(0, pcm(.9, -.9))
+        mixer.process(1, pcm(.9, -.9))
+        preset = mixer.snapshot()
+        other = mixer.diagnostics_snapshot()
+        mixer.reset_diagnostics(0)
+        cleared = mixer.diagnostics_snapshot()
+        for field in other:
+            self.assertEqual(cleared[field][1], other[field][1])
+            self.assertEqual(cleared[field][0], 0 if "samples" in field else (0., 0.))
+        self.assertEqual(mixer.snapshot(), preset)
+        before = mixer.diagnostics_snapshot()
+        for invalid in (-1, 2, True, "0"):
+            with self.subTest(bus=invalid), self.assertRaises(ValueError):
+                mixer.reset_diagnostics(invalid)
+            self.assertEqual(mixer.diagnostics_snapshot(), before)
+        mixer.reset_diagnostics()
+        for field, buses in mixer.diagnostics_snapshot().items():
+            for value in buses.values():
+                self.assertEqual(value, 0 if "samples" in field else (0., 0.))
+        self.assertEqual(mixer.snapshot(), preset)
+
     def test_rejects_invalid_config_and_pcm(self):
         mixer = VirtualBusMixer(2)
         with self.assertRaises(ValueError):
