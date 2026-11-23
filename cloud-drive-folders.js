@@ -145,6 +145,9 @@ function createWorkflow(options={}){
       // Permission to select a folder is not always permission to read its
       // children under drive.file. Verify it before saving the choice.
       const available=await drive.listChildren(choice.id);
+      const verifiedSession=session();
+      if(verifiedSession.sub!==s.sub||verifiedSession.rootId!==s.rootId)
+        fail('บัญชี Google หรือคลังเพลงเปลี่ยนระหว่างตรวจสิทธิ์โฟลเดอร์');
       const values=readSelections(s.sub,s.rootId);
       values[kind]={id:choice.id,name:meta.name||choice.name||choice.id};
       saveSelections(s.sub,s.rootId,values);
