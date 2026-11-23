@@ -180,3 +180,22 @@
   .cloud-import-footer>.cloud-import-status{max-height:2.8em}
   .cloud-import-footer-buttons #cloud-import-start{min-height:40px}
 }
+
+/* Independent Google Drive source folder settings and deferred SQLite build. */
+.xstage-drive-sources{display:grid;gap:10px;margin:12px 0 18px;padding:14px;border:1px solid #3a7183;border-radius:12px;background:#0c283a}
+.xstage-drive-sources h3{font-size:.94rem;margin:0;color:#8ef5df}
+.xstage-drive-sources p{font-size:.77rem;line-height:1.65;margin:0;color:#c5dce8}
+.xstage-drive-source-list{display:grid;gap:8px}
+.xstage-drive-source-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border:1px solid #315b70;border-radius:9px;background:#092237}
+.xstage-drive-source-row>div{display:grid;min-width:0;gap:2px;flex:1 1 50%}
+.xstage-drive-source-row strong{font-size:.82rem;color:#e7faff}
+.xstage-drive-source-row output{display:block;min-width:0;font-size:.76rem;color:#a1d1e4;overflow-wrap:anywhere}
+.xstage-drive-source-row button{flex:0 1 auto;font-size:.76rem;white-space:normal}
+#xstage-drive-build-db{background:#146d68;border-color:#3ddfbb}
+.xstage-drive-warning{color:#f8d69e!important}
+#xstage-drive-folder-status{white-space:pre-wrap;overflow-wrap:anywhere;color:#96edd0!important;min-height:1.4em}
+@media(max-width:560px){
+ .xstage-drive-source-row{align-items:stretch;flex-direction:column}
+ .xstage-drive-source-row button{width:100%}
+ #xstage-drive-build-db{width:100%}
+}
