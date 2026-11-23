@@ -159,6 +159,8 @@ jobs:
         shell: pwsh
         run: |
           python songstudio-plus/make_icon.py
+          python songstudio-plus/tests/test_icon_branding.py
+          if ($LASTEXITCODE -ne 0) { throw "Song Studio Pro icon branding regression failed" }
           python -m PyInstaller --noconfirm --clean --onedir --windowed --icon "songstudio-plus/app-plus.ico" --name "XStageSongStudioPro" --paths "songstudio-plus" --add-data "songstudio-plus/web;web" --add-data "songstudio-plus/app-plus.ico;." --hidden-import "PySide6.QtWebEngineWidgets" --hidden-import "PySide6.QtWebEngineCore" --hidden-import "windows_picker" songstudio-plus/app.py
           if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
           if (!(Test-Path "dist/XStageSongStudioPro/XStageSongStudioPro.exe")) { throw "App payload missing" }
