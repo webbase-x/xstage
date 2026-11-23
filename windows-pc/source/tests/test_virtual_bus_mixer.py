@@ -176,6 +176,34 @@ class VirtualBusMixerTests(unittest.TestCase):
         self.assertAlmostEqual(mixer.pre_limit_peaks[0][0], .5)
         self.assertAlmostEqual(mixer.pre_limit_peaks[0][1], .25)
 
+    def test_cumulative_clipping_is_isolated_and_explicitly_reset(self):
+        mixer = VirtualBusMixer(2, ceiling=.8)
+        mixer.process(0, pcm(1., -1.))
+        mixer.process(0, pcm(1., .1))
+        mixer.process(1, pcm(1., 1.))
+        self.assertEqual(mixer.clipped_samples, {0: 1, 1: 2})
+        self.assertEqual(mixer.total_clipped_samples, {0: 3, 1: 2})
+        mixer.process(0, b"")
+        self.assertEqual(mixer.clipped_samples[0], 0)
+        self.assertEqual(mixer.total_clipped_samples[0], 3)
+        mixer.reset_clipping_totals(0)
+        self.assertEqual(mixer.total_clipped_samples, {0: 0, 1: 2})
+        before = mixer.total_clipped_samples.copy()
+        for invalid in (-1, 2, True, "0"):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                mixer.reset_clipping_totals(invalid)
+            self.assertEqual(mixer.total_clipped_samples, before)
+        mixer.reset_clipping_totals()
+        self.assertEqual(mixer.total_clipped_samples, {0: 0, 1: 0})
+
+    def test_cumulative_clipping_ignores_mute_and_invalid_samples(self):
+        mixer = VirtualBusMixer(2)
+        mixer.configure(0, mute=True)
+        mixer.process(0, pcm(2., -2.))
+        mixer.configure(0, mute=False)
+        mixer.process(0, pcm(float("inf"), float("nan")))
+        self.assertEqual(mixer.total_clipped_samples[0], 0)
+
     def test_rejects_invalid_config_and_pcm(self):
         mixer = VirtualBusMixer(2)
         with self.assertRaises(ValueError):
