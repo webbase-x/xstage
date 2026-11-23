@@ -68,11 +68,26 @@ public sealed partial class MainForm
         };
         ok.Click += (_, _) =>
         {
+            // Keep the settings dialog open if validation or SQLite persistence fails.
+            dialog.DialogResult = DialogResult.None;
             if (speed.Value is > 0 and < 64)
             {
                 MessageBox.Show(dialog, "ความเร็วจำกัดต้องเป็น 0 หรืออย่างน้อย 64 KiB/s",
                     "ค่าความเร็วไม่ถูกต้อง", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                dialog.DialogResult = DialogResult.None;
+                return;
+            }
+            try
+            {
+                _engine.ConfigurePerformance((int)jobs.Value, (int)perHost.Value, (int)speed.Value);
+                RefreshRows();
+                _details.Text = "บันทึกการจัดคิวและจำกัดความเร็ว HTTP แล้ว";
+                dialog.DialogResult = DialogResult.OK;
+            }
+            catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or
+                                       Microsoft.Data.Sqlite.SqliteException)
+            {
+                MessageBox.Show(dialog, ex.Message, "บันทึกประสิทธิภาพไม่สำเร็จ",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         };
         controls.Controls.Add(ok);
@@ -82,24 +97,7 @@ public sealed partial class MainForm
         dialog.Controls.Add(table);
         dialog.AcceptButton = ok;
         dialog.CancelButton = cancel;
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        try
-        {
-            if (speed.Value is > 0 and < 64)
-            {
-                MessageBox.Show(this, "ความเร็วจำกัดต้องเป็น 0 หรืออย่างน้อย 64 KiB/s");
-                return;
-            }
-            _engine.ConfigurePerformance((int)jobs.Value, (int)perHost.Value, (int)speed.Value);
-            RefreshRows();
-            _details.Text = "บันทึกการจัดคิวและจำกัดความเร็ว HTTP แล้ว";
-        }
-        catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or
-                                   Microsoft.Data.Sqlite.SqliteException)
-        {
-            MessageBox.Show(this, ex.Message, "บันทึกประสิทธิภาพไม่สำเร็จ",
-                MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
+        dialog.ShowDialog(this);
     }
 
     private void AssignJobQueue(DownloadJob job, string queueName)
@@ -255,31 +253,30 @@ public sealed partial class MainForm
         };
         save.Click += (_, _) =>
         {
+            // A failed save must not dismiss the dialog or lose the user's input.
+            dialog.DialogResult = DialogResult.None;
             if (speed.Value is > 0 and < 64)
             {
                 MessageBox.Show(dialog, "ความเร็วจำกัดรายไฟล์ต้องเป็น 0 หรืออย่างน้อย 64 KiB/s",
                     "ค่าความเร็วไม่ถูกต้อง", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                dialog.DialogResult = DialogResult.None;
+                return;
+            }
+            try
+            {
+                _engine.SetFileSpeedLimit(job, (int)speed.Value);
+                RefreshRows();
+                dialog.DialogResult = DialogResult.OK;
+            }
+            catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or
+                                       Microsoft.Data.Sqlite.SqliteException)
+            {
+                MessageBox.Show(dialog, ex.Message, "กำหนดความเร็วไม่สำเร็จ",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         };
         dialog.Controls.AddRange(new Control[] { label, speed, save, cancel });
         dialog.AcceptButton = save;
         dialog.CancelButton = cancel;
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        if (speed.Value is > 0 and < 64)
-        {
-            MessageBox.Show(this, "ความเร็วจำกัดรายไฟล์ต้องเป็น 0 หรืออย่างน้อย 64 KiB/s",
-                "ค่าความเร็วไม่ถูกต้อง", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-        try
-        {
-            _engine.SetFileSpeedLimit(job, (int)speed.Value);
-            RefreshRows();
-        }
-        catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException)
-        {
-            MessageBox.Show(this, ex.Message, "กำหนดความเร็วไม่สำเร็จ");
-        }
+        dialog.ShowDialog(this);
     }
 }
