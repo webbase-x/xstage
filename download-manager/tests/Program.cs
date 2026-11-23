@@ -1437,6 +1437,20 @@ try
     if (SocialVideoDownloader.VideoRateLimitKib(64, 1_048_576) != 64 ||
         SocialVideoDownloader.VideoRateLimitKib(1_048_576, 64) != 64)
         throw new Exception("yt-dlp speed cap boundary validation regressed.");
+    foreach (var diagnostic in new[] {
+        "ERROR: This video is DRM protected",
+        "ERROR: stream is DRM-protected",
+        "ERROR: encrypted with DRM",
+        "ERROR: This video is DRM encrypted"
+    })
+    {
+        var explanation = SocialVideoDownloader.ExplainFailure(diagnostic, 1);
+        if (!explanation.Contains("DRM", StringComparison.Ordinal) ||
+            !explanation.Contains("ทางการ", StringComparison.Ordinal))
+            throw new Exception("DRM media must direct users to official playback.");
+    }
+    if (SocialVideoDownloader.ExplainFailure("HTTP Error 429", 1).Contains("DRM"))
+        throw new Exception("Non-DRM network failures must retain their own diagnostics.");
     // Legacy SQLite imports may have short IDs; a separate-copy request
     // must not throw from an unchecked [..8] slice before yt-dlp starts.
     var shortIdCopy = new DownloadJob { Id = "old1", Url = videoHosts[0],
