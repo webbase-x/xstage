@@ -102,7 +102,8 @@ async function inspectPackage(drive,file,check){
 function createWorkflow(options={}){
   const labels={music:'คลังเพลง',soundfont:'SoundFont',fx:'FX'};
   const nodes=Object.fromEntries(KIND.map(k=>[k,$('xstage-drive-folder-'+k+'-name')]));
-  const status=$('xstage-drive-folder-status'),buildButton=$('xstage-drive-build-db');
+  const status=$('xstage-drive-folder-status'),buildButton=$('xstage-drive-build-db'),
+    cancelButton=$('xstage-drive-cancel-db');
   let busy=false,controller=null;
   function session(){
     const s=options.session?.()||{};
@@ -126,6 +127,7 @@ function createWorkflow(options={}){
       if(button)button.disabled=busy||!valid;
     }
     if(buildButton)buildButton.disabled=busy||!pref.music?.id;
+    if(cancelButton)cancelButton.disabled=!busy;
   }
   async function choose(kind){
     if(busy||!KIND.includes(kind))return;
@@ -266,6 +268,7 @@ function createWorkflow(options={}){
   for(const kind of KIND)
     $('xstage-drive-folder-'+kind)?.addEventListener('click',()=>void choose(kind));
   buildButton?.addEventListener('click',()=>void rebuild());
+  cancelButton?.addEventListener('click',()=>controller?.abort());
   for(const event of ['xstage:auth-ready','xstage:auth-refreshed','xstage:librarychange',
     'xstage:auth-cleared'])scope.addEventListener?.(event,render);
   render();
