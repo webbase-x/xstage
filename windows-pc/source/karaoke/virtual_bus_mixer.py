@@ -49,6 +49,40 @@ class VirtualBusMixer:
             current.solo if solo is None else solo,
         )
 
+    def snapshot(self):
+        """Return a JSON-serializable, independent preset of every bus strip."""
+        return {
+            "version": 1,
+            "bus_count": len(self.strips),
+            "strips": [
+                {"gain": strip.gain, "pan": strip.pan,
+                 "mute": strip.mute, "solo": strip.solo}
+                for strip in self.strips.values()
+            ],
+        }
+
+    def apply_snapshot(self, preset):
+        """Validate the complete preset before changing any live mixer state.
+
+        Reject missing/extra buses and unexpected fields rather than applying a
+        partially corrupted preset during a performance.
+        """
+        if type(preset) is not dict or set(preset) != {"version", "bus_count", "strips"}:
+            raise ValueError("Invalid mixer preset")
+        if type(preset["version"]) is not int or preset["version"] != 1:
+            raise ValueError("Unsupported mixer preset version")
+        if type(preset["bus_count"]) is not int or preset["bus_count"] != len(self.strips):
+            raise ValueError("Mixer preset bus count mismatch")
+        rows = preset["strips"]
+        if type(rows) is not list or len(rows) != len(self.strips):
+            raise ValueError("Mixer preset strips mismatch")
+        candidate = {}
+        for bus, row in enumerate(rows):
+            if type(row) is not dict or set(row) != {"gain", "pan", "mute", "solo"}:
+                raise ValueError("Invalid mixer preset strip")
+            candidate[bus] = BusStrip(**row)
+        self.strips = candidate
+
     def process(self, bus, pcm):
         if type(bus) is not int or bus not in self.strips:
             raise ValueError("Unknown bus")
