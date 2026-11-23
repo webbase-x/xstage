@@ -481,7 +481,8 @@ assert.ok(androidMain.includes('AudioFocusRequest.Builder(AudioManager.AUDIOFOCU
   'Android native audio focus must be acquired before playback and released when idle');
 assert.ok(app.includes("window.addEventListener('xstage-native-audio-focus'")&&
           app.includes("change==='loss-transient'")&&app.includes("change==='loss-permanent'")&&
-          app.includes("nativeAudioFocusBlocked||!state.resumeAfterInterruption"),
+          app.includes("return !document.hidden&&!nativeAudioFocusBlocked&&!!state.current&&")&&
+          app.includes("!state.loading&&!state.userPaused&&!state.userStopped&&"),
   'Android audio interruptions must preserve manual pause and block autoplay until focus returns');
 assert.ok(androidAuth.includes('synchronized boolean hasStoredSession()'),
   'Google session inspection must serialize with login and logout');

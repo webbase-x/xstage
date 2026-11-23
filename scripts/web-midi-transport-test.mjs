@@ -19,10 +19,10 @@ const original={
 };
 let now=1000,job=null,ended=0;
 const state={liveMidiPlayback:null};
-const run=new Function('ui','performance','setInterval','clearInterval','Event','state',
+const run=new Function('ui','performance','setInterval','clearInterval','Event','state','window',
   app.slice(start,end)+'\nreturn {player,midiTransport};');
 const {player,midiTransport}=run({player:original},{now:()=>now},
-  fn=>{job=fn;return 1;},()=>{job=null;},Event,state);
+  fn=>{job=fn;return 1;},()=>{job=null;},Event,state,{});
 player.addEventListener('ended',()=>{ended++;});
 midiTransport.begin(120);
 assert.equal(player.src,'midi:live');
