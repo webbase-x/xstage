@@ -1478,10 +1478,15 @@ def chosen_rows(db,query,group_keys):
     if not q or not keys or len(keys)>1000 or any(q not in k for k in keys):
         raise ValueError("กรุณาค้นคำและเลือกกลุ่มบรรทัดที่ตรงกับคำค้น")
     placeholders=",".join("?" for _ in keys)
-    return db.execute("""SELECT l.*,v.song_id,s.code FROM xstage_lyric_lines l
+    rows=db.execute("""SELECT l.*,v.song_id,s.code FROM xstage_lyric_lines l
        JOIN xstage_lyric_versions v ON v.id=l.version_id AND v.is_current=1
        JOIN xstage_songs s ON s.id=v.song_id
        WHERE l.normalized_text IN ("""+placeholders+") ORDER BY s.code,l.position",keys).fetchall()
+    # Search keys are casefolded; validate the original mixed-case source
+    # after reading rows to prevent editing hidden binary-looking payloads.
+    if any(suspicious_lyric_text(row["text"]) for row in rows):
+        raise ValueError("รายการนี้มีลักษณะเป็นข้อมูลเข้ารหัส ไม่อนุญาตให้แก้ไขทั้งกลุ่ม")
+    return rows
 
 def plan_edit(workspace,query,keys):
     with connect(workspace) as db:
