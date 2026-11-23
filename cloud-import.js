@@ -506,7 +506,7 @@ async function loadCatalog(drive,root){
   const dbDirs=children.filter(x=>x.name===driveLayout.db&&x.mimeType===MIME_FOLDER);
   if(dbDirs.length>1)fail('พบโฟลเดอร์ DB ซ้ำใน XStageKaraoke');
   if(!dbDirs.length){
-    const unexpected=children.filter(x=>!['SONGS','SOUNDFONT','BACKUP','CACHE','LOGS'].includes(x.name));
+    const unexpected=children.filter(x=>!['SONGS','SOUNDFONT','FX','BACKUP','CACHE','LOGS'].includes(x.name));
     if(unexpected.length)fail('โครงสร้าง XStageKaraoke ไม่ตรงรูปแบบใหม่ · ตรวจ DB ก่อนนำเข้า');
     return {pointer:null,rows:new Map()};
   }
