@@ -48,7 +48,14 @@ function pathFor(code,kind,role,name){
   const bucket=/^[0-9A-Z]/.test(id)?id[0]:'_';
   const video=['mp4','webm','avi','mkv','mov','wmv','flv','mpeg','mpg','vob','dat'].includes(suffix);
   if(suffix==='sf2'||suffix==='sf3')return [driveLayout.soundfont,suffix.toUpperCase(),name];
-  if(suffix==='xsk'||suffix==='xmid')return [driveLayout.songs,'MIDI',suffix.toUpperCase(),bucket,name];
+  // XMID folders follow the first character of the SOURCE FILENAME,
+  // not the embedded MIDI/song code. E.g. 00001.XMID -> XMID/0/.
+  if(suffix==='xmid'){
+    const first=String(name||'').normalize('NFC').charAt(0).toUpperCase();
+    const fileBucket=/^[0-9A-Z]$/.test(first)?first:'_';
+    return [driveLayout.songs,'MIDI','XMID',fileBucket,name];
+  }
+  if(suffix==='xsk')return [driveLayout.songs,'MIDI','XSK',bucket,name];
   if(suffix==='kar')return [driveLayout.songs,'MIDI','KAR',bucket,name];
   if(suffix==='mid'||suffix==='midi')
     return [driveLayout.songs,'MIDI','MID','SONG',bucket,name];
@@ -1779,5 +1786,5 @@ class Importer {
   }
 }
 scope.XStageCloudImport={init:(options)=>new Importer(options),Drive,loadCatalog,
-  buildMidiIndex,distinctImportCode,sourceXmidName,sameMidiBytes,acquireCatalogLease};
+  buildMidiIndex,distinctImportCode,sourceXmidName,pathFor,sameMidiBytes,acquireCatalogLease};
 })(window);
