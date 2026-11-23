@@ -147,6 +147,8 @@ assert.equal(crossResult.hashes.get(rawMd5).webSongId,'raw');
 const importerText=read('cloud-import.js');
 assert.ok(importerText.includes("const CATALOG_BATCH_SIZE=500") &&
   importerText.includes("const FAST_XMID_CONCURRENCY=6") &&
+  importerText.includes("const workerLimit=mobileImporter?2:FAST_XMID_CONCURRENCY") &&
+  importerText.includes("candidate.status===429") &&
   importerText.includes("const uploadXmidBatch=async group=>") &&
   importerText.includes("const reservedMidi=new Set()") &&
   importerText.includes("const outcomes=await Promise.allSettled(tasks.map(entry=>entry.upload))") &&
@@ -477,7 +479,7 @@ assert.ok(style.includes('.cloud-import-body{')&&
   style.includes('.cloud-import-footer-buttons{')&&
   style.includes('flex:0 0 auto'),
   'Import Start and status must be anchored outside scrollable contents');
-assert.ok(page.includes('cloud-import.js?v=1182-fast-multipart-dedup')&&
+assert.ok(page.includes('cloud-import.js?v=1183-fast-safe-retry')&&
   page.includes('cloud-import.css?v=1172-direct-db-layout')&&
   page.includes('video-metadata-editor.js?v=1138-verified-video-selection'),
   'Updated scripts and styles must bypass stale browser caches');
