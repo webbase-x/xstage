@@ -32,7 +32,7 @@ class WindowsWorkspaceTests(unittest.TestCase):
         paths = app.workspace_candidates(
             home=self.home, env=self.env, platform="win32",
             documents=self.home / "OneDrive" / "เอกสาร")
-        self.assertEqual(paths[0], self.local / "XStageSongPlus")
+        self.assertEqual(paths[0], self.home / "Music" / "XStageSongPlus")
         self.assertNotIn(self.home / "Documents" / "XStageSongPlus", paths)
         self.assertFalse((self.home / "Documents").exists())
         plus_core.init(paths[0])
@@ -61,11 +61,33 @@ class WindowsWorkspaceTests(unittest.TestCase):
             env={"LOCALAPPDATA": str(self.home / "missing"),
                  "APPDATA": str(self.roaming)},
             platform="win32", documents=None)
-        self.assertEqual(paths[0], self.roaming / "XStageSongPlus")
+        self.assertEqual(paths[0], self.home / "Music" / "XStageSongPlus")
         paths = app.workspace_candidates(
             home=self.home, env={}, platform="win32",
             documents=self.home / "Documents")
-        self.assertEqual(paths[0], self.home / "XStageSongPlus")
+        self.assertEqual(paths[0], self.home / "Music" / "XStageSongPlus")
+
+    def test_music_folder_can_be_redirected_and_custom_workspace_selected(self):
+        redirected=self.home / "OneDrive" / "Music"
+        paths=app.workspace_candidates(
+            home=self.home, env=self.env, platform="win32",
+            documents=self.home / "Documents", music=redirected)
+        self.assertEqual(paths[0], redirected / "XStageSongPlus")
+        custom=self.base / "CustomMusic" / "Studio"
+        self.assertEqual(app.workspace_candidates(
+            home=self.home, env=self.env, platform="win32", music=custom.parent)[0],
+            custom.parent / "XStageSongPlus")
+
+    def test_existing_appdata_database_stays_in_use_after_new_default(self):
+        old=self.local / "XStageSongPlus"
+        plus_core.init(old)
+        paths=app.workspace_candidates(
+            home=self.home, env=self.env, platform="win32",
+            documents=self.home / "Documents")
+        self.assertEqual(paths[0], old)
+        self.assertEqual(plus_core.db_path(paths[0]), old / "DB" / "xstage_plus.sqlite3")
+        self.assertEqual(plus_core.destination_for(paths[0], {"code": 1}, ".mid"),
+                         old / "MIDI" / "MID" / "XMID" / "0" / "00000001.xmid")
 
     def test_explicit_failed_workspace_shows_error_not_unhandled_exception(self):
         invalid = self.base / "invalid" / "XStageSongPlus"
