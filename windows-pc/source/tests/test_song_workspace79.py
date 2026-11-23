@@ -51,7 +51,14 @@ class WorkspaceGuiTests(unittest.TestCase):
             job=JobWindow(app);app.job_window=job
             def pump():
                 for _ in range(30):app.update();time.sleep(.01)
-            pump();self.assertEqual(len(job.workspace.catalog.get_children()),1)
+            # Catalog loading uses a background SQLite reader. Wait for the
+            # actual UI condition rather than assuming a fixed 300 ms is
+            # sufficient on a loaded Windows CI runner.
+            deadline = time.monotonic() + 10.0
+            while len(job.workspace.catalog.get_children()) != 1 and time.monotonic() < deadline:
+                app.update()
+                time.sleep(.02)
+            self.assertEqual(len(job.workspace.catalog.get_children()),1)
             self.assertIs(app.song_manager,job.window)
             job.hide();KaraokeApp.show_job_progress(app);pump()
             self.assertIs(app.job_window,job);self.assertTrue(job.window.winfo_ismapped())
