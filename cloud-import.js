@@ -738,7 +738,7 @@ function distinctImportCode(requested,rawMidiHash,byCode){
 class Importer {
   constructor(options){
     this.options=options;this.selected=null;this.plan=null;this.running=false;this.paused=false;this.stopRequested=false;
-    this.controller=null;this.folderHandle=null;this.saved=null;this.chosenItems=new Set();this.completed=false;this.authRequired=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,fonts:0,errors:0};
+    this.controller=null;this.folderHandle=null;this.saved=null;this.chosenItems=new Set();this.completed=false;this.authRequired=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,metadataPending:0,fonts:0,errors:0};
     this.dom={};
     for(const key of ['open','dialog','close','pick','input','scan','start',
       'allow-create',
@@ -1314,7 +1314,7 @@ class Importer {
     if(this.selectedSub!==auth.sub){this.status('บัญชี Google เปลี่ยน · กรุณาเลือกโฟลเดอร์อีกครั้งเพื่อป้องกันนำเข้าผิดบัญชี');return;}
     this.account=auth.sub;
     this.videoEditor?.releasePreview();
-    this.running=true;this.stopRequested=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,fonts:0,errors:0};
+    this.running=true;this.stopRequested=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,metadataPending:0,fonts:0,errors:0};
     this.progress(0,1);this.refreshButtons();
     this.controller=new AbortController();
     const drive=new Drive(()=>this.session()?.token,()=>this.check());
@@ -1508,9 +1508,13 @@ class Importer {
           const rawMidiSize=opened.midi.size;
           const rawMidiHash=await core.hashBlob(opened.midi,()=>this.check());
           const identity=core.songIdentity(opened.document,sourceCode);
-          if(!identity.identityComplete)throw Error('XMID: ชื่อเพลงหรือศิลปินจริงไม่ครบ');
+          // Do not discard a checksum-valid MIDI because artist metadata is
+          // missing. The reader marks it as pending and removes placeholder
+          // lyrics without inventing an artist or timed karaoke text.
           const xmidHash=await core.hashBlob(item.file,()=>this.check());
           return {item,sourceCode,rawMidiSize,rawMidiHash,identity,xmidHash,
+            identityComplete:Boolean(identity.identityComplete),
+            lyricsAvailable:Boolean(opened.lyricsAvailable),
             ident:'browser/xmid/'+xmidHash,name:sourceXmidName(item.file.name)};
         }));
         const reservedMidi=new Set(),reservedCodes=new Set(),tasks=[];
@@ -1556,12 +1560,16 @@ class Importer {
             originalRelativePath:entry.item.relative||entry.item.file.name,
             originalFileSize:entry.item.file.size,
             title:entry.identity.title,artist:entry.identity.artist,
-            sourceFormat:'XMID',lyricsMode:'timed',xmid:outcome.value};
+            sourceFormat:'XMID',
+            lyricsMode:entry.lyricsAvailable?'timed':'unavailable',
+            metadataComplete:entry.identityComplete,xmid:outcome.value};
           rows.set(entry.ident,record);addMaps(record);
           byMidi.set(entry.rawMidiHash,record);
           revisions.push(record);this.stats.newSongs++;finished++;
+          if(!entry.identityComplete)this.stats.metadataPending++;
           show('นำเข้า XMID '+finished+' / '+work.length+' · ใหม่ '+this.stats.newSongs+
-            ' · ซ้ำ '+this.stats.duplicates);
+            ' · ซ้ำ '+this.stats.duplicates+
+            ' · รอตรวจชื่อ/ศิลปิน '+this.stats.metadataPending);
           if(revisions.length>=CATALOG_BATCH_SIZE)await publish();
         }
         if(finished-lastSaved>=50){
@@ -1936,7 +1944,8 @@ class Importer {
       this.refreshButtons();
       this.status('เสร็จสิ้น · เพลงใหม่ '+this.stats.newSongs+' · แก้เนื้อร้อง '+this.stats.updated+
         ' · ข้ามซ้ำ '+this.stats.duplicates+' · รหัสชน '+this.stats.conflicts+
-        ' · SoundFont '+this.stats.fonts+' · ข้ามผิดพลาด '+this.stats.errors);
+        ' · SoundFont '+this.stats.fonts+' · รอตรวจชื่อ/ศิลปิน '+this.stats.metadataPending+
+        ' · ข้ามผิดพลาด '+this.stats.errors);
       try{await this.options.refresh();}catch(error){console.warn('Catalog refresh deferred:',error?.message||error);}
     }catch(error){
       this.authRequired=error?.code==='XSTAGE_AUTH_REQUIRED'||
