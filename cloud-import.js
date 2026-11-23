@@ -1282,9 +1282,8 @@ class Importer {
         rootId=await drive.folder('root',driveLayout.root);
       }
       let {pointer,rows}=await loadCatalog(drive,rootId);
-      // Create only missing directories in the NEW root, never migrate old files.
-      for(const folder of ['SONGS','DB','SOUNDFONT','BACKUP','CACHE','LOGS'])
-        await drive.folder(rootId,folder);
+      // Create directories only when an actual upload or catalog publication
+      // needs them. Scanning must never leave empty folders in the library.
       if(pointer&&!pointer.directFile)fail('รองรับเฉพาะ DB/songs.sqlite3');
       // No JSON marker is created in DB. Incomplete uploads are resumed from
       // browser checkpoints and verified media IDs; only a published SQLite
@@ -1327,11 +1326,23 @@ class Importer {
       const uploadMedia=async(file,code,parts,name,mime,hash,from=0,span=1)=>{
         this.check();
         const parent=await drive.ensurePath(rootId,parts);
-        const item=await drive.upload(parent,file,name,mime,hash,
-          (done,total,bytesPerSecond=0)=>show('อัปโหลด '+(file.name||name)+' · '+(done/MiB).toFixed(1)+' / '+(total/MiB).toFixed(1)+' MB'+
+        // Preserve the source filename when available. Different content with
+        // an identical name receives a deterministic hash suffix instead.
+        let chosenName=safeName(name);
+        const colliding=await drive.namedChildren(parent,chosenName);
+        if(colliding.length && !colliding.some(entry=>
+          String(entry.md5Checksum||'').toLowerCase()===hash.toLowerCase() &&
+          Number(entry.size)===file.size)){
+          const dot=chosenName.lastIndexOf('.');
+          const stem=dot>0?chosenName.slice(0,dot):chosenName;
+          const extension=dot>0?chosenName.slice(dot):'';
+          chosenName=safeName(stem).slice(0,80)+'-'+hash.slice(0,16)+extension;
+        }
+        const item=await drive.upload(parent,file,chosenName,mime,hash,
+          (done,total,bytesPerSecond=0)=>show('อัปโหลด '+(file.name||chosenName)+' · '+(done/MiB).toFixed(1)+' / '+(total/MiB).toFixed(1)+' MB'+
             (bytesPerSecond>0?' · '+(bytesPerSecond/MiB).toFixed(1)+' MB/s':''),
             Math.min(.99,from+(done/Math.max(1,total))*span)));
-        return {fileId:item.id,path:[...parts,name].join('/'),md5Checksum:hash,size:file.size};
+        return {fileId:item.id,path:[...parts,chosenName].join('/'),md5Checksum:hash,size:file.size};
       };
       // Independent immutable song+lyrics files may upload simultaneously.
       // Await BOTH completions before updating catalog rows or publishing DB.
@@ -1439,7 +1450,7 @@ class Importer {
             // All export batches may contain 00001.XMID. Keep the original
             // five-digit basename but isolate distinct recordings by MIDI hash.
             const name=isXmid?sourceXmidName(item.file.name):
-              safeName(code)+'-'+xskHash.slice(0,16)+'.xsk';
+              safeName(item.file.name);
             const path=pathFor(sourceCode,isXmid?'xmid':'xsk','',name).slice(0,-1);
             if(isXmid)path.push(rawMidiHash);
             const packed=await uploadMedia(item.file,code,path,name,
@@ -1496,7 +1507,7 @@ class Importer {
               item.kind==='KAR'?'KAR':'SMF';
             const base=safeName(code);
             let media=same?.midi;
-            const name=base+'-'+midiHash.slice(0,16)+'.'+core.ext(midiFile.name);
+            const name=safeName(midiFile.name);
             const midiFolder=item.kind==='NCN'
               ? [driveLayout.songs,'MIDI','NCN','SONG',pathFor(code,'midi','',name)[4]]
               : pathFor(code,'midi','',name).slice(0,-1);
@@ -1517,7 +1528,7 @@ class Importer {
               const bucket=pathFor(code,'midi','',code+'.mid')[4];
               const sourcePart=async(source,role,extension)=>{
                 const hash=await core.hashBlob(source.file,()=>this.check());
-                const sourceName=base+'-'+hash.slice(0,16)+'.'+extension;
+                const sourceName=safeName(source.file.name);
                 return uploadMedia(source.file,code,[driveLayout.songs,'MIDI','NCN',role,bucket],
                   sourceName,'application/octet-stream',hash);
               };
