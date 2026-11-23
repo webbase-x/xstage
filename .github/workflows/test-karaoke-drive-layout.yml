@@ -9,6 +9,8 @@ on:
       - "cloud-drive-folders.js"
       - "browser-midi.js"
       - "scripts/cloud-drive-folders-test.mjs"
+      - "scripts/karaoke-drive-media-sources-test.mjs"
+      - "pc-extensions.js"
       - "browser-midi.js"
       - "karaoke.html"
       - "version.json"
@@ -43,3 +45,4 @@ jobs:
           node scripts/cloud-import-test.mjs
           node scripts/cloud-import-contract-test.mjs
           node scripts/cloud-drive-folders-test.mjs
+          node scripts/karaoke-drive-media-sources-test.mjs
