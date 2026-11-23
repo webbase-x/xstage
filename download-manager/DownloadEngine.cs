@@ -758,6 +758,8 @@ public sealed class DownloadEngine
             // Do not carry the previous source's speed/ETA baseline into
             // the newly probed file.
             job.PreviousBytes = 0;
+            job.SpeedBytesPerSecond = 0;
+            job.SmoothedSpeedBytesPerSecond = 0;
         }
         Directory.CreateDirectory(work);
         job.TotalBytes = probe.Total;
