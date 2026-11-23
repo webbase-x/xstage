@@ -383,6 +383,27 @@
         <button type="button" id="cloud-import-close" aria-label="ปิดหน้าต่างนำเข้า">✕</button>
       </header>
       <div class="cloud-import-body" id="cloud-import-body">
+      <section id="xstage-drive-sources" class="xstage-drive-sources" aria-labelledby="xstage-drive-sources-title">
+        <h3 id="xstage-drive-sources-title">เลือกแหล่งข้อมูลบน Google Drive</h3>
+        <p>เข้าสู่ระบบ Google ครั้งเดียว แล้วเลือกโฟลเดอร์เพลง, SoundFont และ FX แยกกัน · จำ Folder ID เฉพาะบัญชีและคลังนี้ · ไม่ย้ายหรือลบไฟล์เดิม</p>
+        <div class="xstage-drive-source-list">
+          <div class="xstage-drive-source-row">
+            <div><strong>เพลง XMID / XSK</strong><output id="xstage-drive-folder-music-name">ยังไม่เลือกโฟลเดอร์</output></div>
+            <button id="xstage-drive-folder-music" type="button" disabled>เลือกโฟลเดอร์เพลงบน Drive</button>
+          </div>
+          <div class="xstage-drive-source-row">
+            <div><strong>SoundFont (SF2 / SF3)</strong><output id="xstage-drive-folder-soundfont-name">ยังไม่เลือกโฟลเดอร์</output></div>
+            <button id="xstage-drive-folder-soundfont" type="button" disabled>เลือกโฟลเดอร์ SoundFont</button>
+          </div>
+          <div class="xstage-drive-source-row">
+            <div><strong>FX (คลังเอฟเฟกต์)</strong><output id="xstage-drive-folder-fx-name">ยังไม่เลือกโฟลเดอร์</output></div>
+            <button id="xstage-drive-folder-fx" type="button" disabled>เลือกโฟลเดอร์ FX</button>
+          </div>
+        </div>
+        <button id="xstage-drive-build-db" type="button" disabled>ตรวจไฟล์บน Drive และสร้าง DB/songs.sqlite3</button>
+        <p class="xstage-drive-warning">ตัวสร้าง DB จะอ่าน XMID/XSK ที่แอปเข้าถึงได้และข้าม MIDI ที่เนื้อหาเหมือนกัน · ไฟล์ชนิดอื่นยังไม่รวมในโหมดสร้างฐานภายหลัง · ต้องอนุญาตสิทธิ์อ่านไฟล์ภายในโฟลเดอร์ด้วย</p>
+        <p id="xstage-drive-folder-status" role="status" aria-live="polite">เลือกโฟลเดอร์จาก Google Drive เพื่อสร้างฐานเพลงภายหลัง</p>
+      </section>
       <p class="cloud-import-lead">ชื่อไฟล์ XMID เช่น 00001.XMID อาจซ้ำได้ทุกครั้งที่สร้าง · ตรวจขนาดไบต์และ MD5 ของ MIDI ภายในเพื่อข้ามเฉพาะเนื้อ MIDI ที่ซ้ำจริง · นำเข้าได้หลายรอบหลายเครื่อง · ใช้ฐาน DB/songs.sqlite3 ไฟล์เดียว</p>
       <p class="cloud-import-note" id="cloud-import-ios-help">iPhone/iPad: Safari 18.4 ขึ้นไปสามารถเลือกโฟลเดอร์ในแอป Files ได้โดยแตะ “เลือกโฟลเดอร์เพลง” หากเบราว์เซอร์รุ่นเก่าแสดงเฉพาะไฟล์รายตัว อาจไม่ส่งโครงสร้างโฟลเดอร์ครบ ระบบจะตรวจรายการก่อนนำเข้า และจะไม่อัปโหลดชุดเพลงที่องค์ประกอบไม่ครบ</p>
       <div class="cloud-import-actions">
@@ -489,13 +510,14 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="xmid-browser.js?v=1186-optional-artist" defer></script>
   <script src="memory-budget.js?v=1137" defer></script>
   <script src="ios-midi-audio.js?v=1151-queue-handoff-1168-screen-wake" defer></script>
-  <script src="browser-midi.js?v=1139-soundfont-extension-1168-screen-wake" defer></script>
+  <script src="browser-midi.js?v=1187-selected-font-folder" defer></script>
   <script src="midi-pro-engine.js?v=1137-playback-restore-1168-screen-wake" defer></script>
   <script src="video-metadata-editor.js?v=1138-verified-video-selection" defer></script>
   <script src="video-transcode.js?v=1137" defer></script>
-  <script src="cloud-import.js?v=1186-midi-metadata-pending" defer></script>
+  <script src="cloud-import.js?v=1187-drive-folder-scan" defer></script>
+  <script src="cloud-drive-folders.js?v=1" defer></script>
   <script src="tv-refresh.js?v=1144" defer></script>
-  <script src="app.js?v=1186-xmid-source-code-verify" defer></script><script src="pc-extensions.js?v=1137-unfiltered-output-visual-only-1166-midi-eq-canvas" defer></script>
+  <script src="app.js?v=1187-drive-folder-picker" defer></script><script src="pc-extensions.js?v=1137-unfiltered-output-visual-only-1166-midi-eq-canvas" defer></script>
   <script src="midi-keyboard-ui.js?v=1137-clean-title-1157-top-song-key-single-menu" defer></script>
   <script src="native-audio-meter.js?v=1144-live-stage-eq" defer></script>
   <script src="stage-controls.js?v=1137-monitor-only-eq" defer></script>
