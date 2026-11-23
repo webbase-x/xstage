@@ -1271,7 +1271,8 @@ def stats(workspace):
         counts={}
         for label,table in (("songs","xstage_songs"),("media","xstage_media"),
                             ("lyrics","xstage_lyric_versions"),("exports","xstage_exports")):
-            counts[label]=db.execute("SELECT count(*) FROM "+table+\n                (" WHERE id NOT IN (SELECT song_id FROM xstage_hidden_songs)" if label=="songs" else "")).fetchone()[0]
+            counts[label]=db.execute("SELECT count(*) FROM "+table+
+                (" WHERE id NOT IN (SELECT song_id FROM xstage_hidden_songs)" if label=="songs" else "")).fetchone()[0]
         counts["songs_with_lyrics"]=db.execute(
             "SELECT COUNT(*) FROM xstage_lyric_versions WHERE is_current=1 AND timing_status!='incomplete'").fetchone()[0]
         counts["songs_partial_lyrics"]=db.execute(
