@@ -626,6 +626,9 @@ function xstageTvQuickMenu(){
 }
 window.XStageTvOpenMenu=()=>{
   if(!document.body.classList.contains('xstage-native-tv'))return false;
+  if(['xstage-tv-search-panel','xstage-tv-queue-panel'].some(id=>{
+    const modal=document.getElementById(id);return modal&&!modal.hidden;
+  }))return false;
   if(['android-tv-auth-panel','android-tv-update-panel'].some(id=>{
     const element=document.getElementById(id);
     return element&&!element.hidden&&
@@ -4166,6 +4169,10 @@ function setAndroidTvStageAccess(granted,accountSub=''){
     document.body.classList.remove('xstage-native-auth-pending');
     try{window.XStageAndroid.onLoginScreenReady?.();}catch{}
   }else{
+    // Never leave private song titles in TV search/queue overlays after access loss.
+    xstageTvCloseSearch(false);xstageTvCloseQueue(false);
+    const quickMenu=document.getElementById('xstage-tv-quick-menu');
+    if(quickMenu)quickMenu.hidden=true;
     document.documentElement.classList.add('xstage-native-auth-pending');
     document.body.classList.add('xstage-native-auth-pending');
   }
