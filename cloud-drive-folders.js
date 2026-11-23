@@ -144,12 +144,13 @@ function createWorkflow(options={}){
       const meta=await verifyFolder(drive,choice.id,s.rootId,kind);
       // Permission to select a folder is not always permission to read its
       // children under drive.file. Verify it before saving the choice.
-      await drive.listChildren(choice.id);
+      const available=await drive.listChildren(choice.id);
       const values=readSelections(s.sub,s.rootId);
       values[kind]={id:choice.id,name:meta.name||choice.name||choice.id};
       saveSelections(s.sub,s.rootId,values);
       display('เลือก'+labels[kind]+'แล้ว · '+values[kind].name+
-        ' · ใช้ไฟล์จากโฟลเดอร์เดิมโดยไม่คัดลอก');
+        ' · พบ '+available.filter(item=>item.mimeType!==FOLDER).length+
+        ' ไฟล์ในระดับนี้ · ไม่มีการคัดลอกหรือย้ายไฟล์');
       if(kind==='soundfont')options.onSoundfontChange?.(choice.id);
       if(kind==='fx')options.onFxChange?.(choice.id);
     }catch(error){display('เลือกโฟลเดอร์ไม่ได้: '+String(error?.message||error));}
@@ -239,13 +240,15 @@ function createWorkflow(options={}){
               ' · เพิ่ม '+added+' · MIDI ซ้ำ '+duplicates+' · ไฟล์ผิดรูปแบบ '+invalid);
         }
         check();
-        if(added||indexed.duplicates||indexed.backfilled){
+        const needsPublication=Boolean(added||indexed.duplicates||indexed.backfilled);
+        if(needsPublication){
           display('ตรวจเสร็จ · กำลังสร้างและยืนยัน DB/songs.sqlite3 ครั้งเดียว…');
           await scope.XStageCloudImport.publishSingleCatalog({
             drive,rootId:initial.rootId,pointer:existing.pointer,rows,check,status:display
           });
         }
-        display('สร้างฐานเสร็จ · เพิ่ม '+added+' เพลง · ข้าม MIDI ซ้ำ '+duplicates+
+        display((needsPublication?'สร้างฐานเสร็จ':'ตรวจเสร็จ · ไม่มีข้อมูลใหม่ให้เผยแพร่')+
+          ' · เพิ่ม '+added+' เพลง · ข้าม MIDI ซ้ำ '+duplicates+
           ' · ไฟล์ผิดรูปแบบ '+invalid+
           ' · รูปแบบอื่นที่ยังไม่ได้ทำดัชนี '+listing.otherCount+
           ' · ฐานเพลงรวม '+rows.size+' เพลง');
