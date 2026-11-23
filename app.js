@@ -5113,7 +5113,10 @@ const xstageDriveFolders=window.XStageDriveFolders?.init({
     'xstage:drive-fx-folder-change',{detail:{folderId}})),
   refresh:async()=>{
     if(!state.token||!state.accountSub)return;
-    await openDrive(state.token,++state.authId,state.tokenExpiresAt);
+    // Preserve an active song, the queue and the SoundFont when an existing
+    // catalog is rebuilt. On the first build, discover the new DB directory.
+    if(state.catalogDbDirId)await pollPublishedCatalog();
+    else await openDrive(state.token,++state.authId,state.tokenExpiresAt);
   }
 });
 
