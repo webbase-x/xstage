@@ -95,7 +95,7 @@ assert.equal(pathFor('0','xmid','',sourceXmidName('10001.XMID')).join('/'),
 assert.equal(pathFor('5','xmid','',sourceXmidName('00002.xmid')).join('/'),
   'SONGS/MIDI/XMID/0/00002.XMID');
 assert.equal(sourceXmidName('00001.XMID'),'00001.XMID');
-assert.equal(sourceXmidName('00000001.xmid'),'00001.XMID');
+assert.equal(sourceXmidName('00000001.xmid'),'00000001.XMID');
 assert.equal(sourceXmidName('00002.xmid'),'00002.XMID');
 assert.equal(sourceXmidName('batch/Song-A.XMID'),'Song-A.XMID');
 assert.throws(()=>sourceXmidName('00001.mid'),/XMID/);
@@ -479,7 +479,7 @@ assert.ok(style.includes('.cloud-import-body{')&&
   style.includes('.cloud-import-footer-buttons{')&&
   style.includes('flex:0 0 auto'),
   'Import Start and status must be anchored outside scrollable contents');
-assert.ok(page.includes('cloud-import.js?v=1183-fast-safe-retry')&&
+assert.ok(page.includes('cloud-import.js?v=1184-fast-preserve-filename')&&
   page.includes('cloud-import.css?v=1172-direct-db-layout')&&
   page.includes('video-metadata-editor.js?v=1138-verified-video-selection'),
   'Updated scripts and styles must bypass stale browser caches');
