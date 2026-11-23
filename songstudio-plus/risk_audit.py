@@ -230,7 +230,7 @@ def list_findings(workspace,category="structural",limit=100,offset=0):
              FROM xstage_swipe_findings f
              JOIN xstage_lyric_versions v ON v.id=f.version_id AND v.is_current=1
              WHERE f.run_id=? """+condition,args).fetchone()[0]
-        data=db.execute("""SELECT f.song_id,s.code,s.title,s.artist,m.extension,
+        data=db.execute("""SELECT f.song_id,s.code,xc.export_code,s.title,s.artist,m.extension,
             f.version_id,f.category,f.rule,f.line_position,
             f.line_start,f.line_end,f.excerpt,f.evidence,f.detected_at,
             (SELECT r.action FROM xstage_swipe_reviews r
@@ -238,6 +238,7 @@ def list_findings(workspace,category="structural",limit=100,offset=0):
              ORDER BY r.id DESC LIMIT 1) AS review_status
             FROM xstage_swipe_findings f
             JOIN xstage_songs s ON s.id=f.song_id
+             LEFT JOIN xstage_song_export_codes xc ON xc.song_id=s.id
             JOIN xstage_media m ON m.id=s.media_id
             JOIN xstage_lyric_versions v ON v.id=f.version_id AND v.is_current=1
             WHERE f.run_id=? """+condition+"""
@@ -266,8 +267,9 @@ def history(workspace,limit=30):
     with core.connect(workspace) as db:
         runs=[dict(x) for x in db.execute("""SELECT * FROM xstage_swipe_audit_runs
                   ORDER BY started_at DESC LIMIT ?""",(max(1,min(limit,100)),))]
-        reviews=[dict(x) for x in db.execute("""SELECT r.*,s.code,s.title
+        reviews=[dict(x) for x in db.execute("""SELECT r.*,s.code,xc.export_code,s.title
            FROM xstage_swipe_reviews r JOIN xstage_songs s ON s.id=r.song_id
+           LEFT JOIN xstage_song_export_codes xc ON xc.song_id=s.id
            ORDER BY r.id DESC LIMIT 60""")]
         return {"runs":runs,"reviews":reviews}
 
