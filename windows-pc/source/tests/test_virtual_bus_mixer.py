@@ -22,6 +22,28 @@ def samples(data):
 
 
 class VirtualBusMixerTests(unittest.TestCase):
+    def test_process_many_validates_entire_batch_before_meter_mutation(self):
+        mixer = VirtualBusMixer(4)
+        original = mixer.diagnostics_snapshot()
+        with self.assertRaises(ValueError):
+            mixer.process_many({0: pcm(1.5, 0.0), 1: b"bad"})
+        self.assertEqual(mixer.diagnostics_snapshot(), original)
+        with self.assertRaises(ValueError):
+            mixer.process_many({0: pcm(1.5, 0.0), True: pcm(.1, .1)})
+        self.assertEqual(mixer.diagnostics_snapshot(), original)
+
+    def test_process_many_isolates_buses_and_preserves_preset(self):
+        mixer = VirtualBusMixer(4)
+        mixer.configure(1, gain=.5)
+        preset = mixer.snapshot()
+        output = mixer.process_many({0: pcm(.25, -.25), 1: pcm(.5, -.5)})
+        self.assertEqual(list(output), [0, 1])
+        self.assertEqual(samples(output[0]), [.25, -.25])
+        self.assertEqual(samples(output[1]), [.25, -.25])
+        self.assertEqual(mixer.meters[2], (0., 0.))
+        self.assertEqual(mixer.snapshot(), preset)
+        self.assertEqual(mixer.process_many({}), {})
+
     def test_bus_counts_and_isolated_meters(self):
         for count in (2, 4, 8, 16):
             with self.subTest(count=count):
