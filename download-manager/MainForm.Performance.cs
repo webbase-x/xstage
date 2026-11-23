@@ -239,9 +239,21 @@ public sealed partial class MainForm
             Text = "บันทึก", Left = 270, Top = 123,
             Width = 110, Height = 30, DialogResult = DialogResult.OK
         };
-        dialog.Controls.AddRange(new Control[] { label, speed, save });
+        var cancel = new Button
+        {
+            Text = "ยกเลิก", Left = 155, Top = 123,
+            Width = 105, Height = 30, DialogResult = DialogResult.Cancel
+        };
+        dialog.Controls.AddRange(new Control[] { label, speed, save, cancel });
         dialog.AcceptButton = save;
+        dialog.CancelButton = cancel;
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (speed.Value is > 0 and < 64)
+        {
+            MessageBox.Show(this, "ความเร็วจำกัดรายไฟล์ต้องเป็น 0 หรืออย่างน้อย 64 KiB/s",
+                "ค่าความเร็วไม่ถูกต้อง", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         try
         {
             _engine.SetFileSpeedLimit(job, (int)speed.Value);
