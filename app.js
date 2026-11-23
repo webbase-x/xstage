@@ -1641,10 +1641,30 @@ async function chooseUserDriveFolder(kind){
   await ensureImporterGoogleAuth(false,false);
   await loadGooglePickerApi();
   const account=state.accountSub,rootId=state.libraryRootId,token=state.token;
+  // Native <dialog>.showModal() lives in the browser top layer. Google Picker
+  // uses its own iframe overlay outside that top layer, so no z-index can put
+  // Picker above an open modal dialog. Suspend ONLY the dialog presentation;
+  // do not call the importer's close() method (which would stop uploads).
+  const importDialog=$('cloud-import-dialog');
   return new Promise((resolve,reject)=>{
-    let complete=false;
+    let complete=false,picker=null,dialogSuspended=false;
+    const restoreDialog=()=>{
+      if(!dialogSuspended||!importDialog||importDialog.open)return;
+      dialogSuspended=false;
+      try{
+        if(typeof importDialog.showModal==='function')importDialog.showModal();
+        else importDialog.setAttribute('open','');
+      }catch(error){
+        console.warn('X-Stage import dialog could not regain focus:',error);
+      }
+    };
     const finish=(value,error)=>{
       if(complete)return;complete=true;
+      // Dismiss the Google overlay before returning the importer to top layer.
+      try{picker?.setVisible(false);}catch(closeError){
+        console.warn('Google Picker close:',closeError);
+      }
+      restoreDialog();
       if(error)reject(error);else resolve(value);
     };
     try{
@@ -1653,7 +1673,7 @@ async function chooseUserDriveFolder(kind){
         .setMimeTypes('application/vnd.google-apps.folder')
         .setSelectFolderEnabled(true)
         .setMode(google.picker.DocsViewMode.LIST);
-      const picker=new google.picker.PickerBuilder()
+      picker=new google.picker.PickerBuilder()
         .addView(view).setOAuthToken(token)
         .setDeveloperKey(String(cfg.googlePickerApiKey).trim())
         .setAppId(String(cfg.googleAppId).trim())
@@ -1674,6 +1694,10 @@ async function chooseUserDriveFolder(kind){
           }
           finish({id,name});
         }).build();
+      if(importDialog?.open){
+        importDialog.close();
+        dialogSuspended=true;
+      }
       picker.setVisible(true);
     }catch(error){finish(null,error);}
   });
