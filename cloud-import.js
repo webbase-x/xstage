@@ -318,9 +318,27 @@ class Drive {
       ],{type:'multipart/related; boundary='+boundary});
       // Never automatically replay an ambiguous POST: it may have created a
       // remote file even if the browser lost its response.
-      const response=await this.fetch(UPLOAD+'?uploadType=multipart&fields=id,name,mimeType,md5Checksum,size',{
-        method:'POST',headers:{'Content-Type':body.type},body,signal:this.signal?.()
-      });
+      // A definitive 429/rate-limit rejection is safe to retry. Never
+      // blindly replay network failures or 5xx responses after a POST,
+      // because Google might already have created the file.
+      let response=null;
+      for(let attempt=0;attempt<5;attempt++){
+        const candidate=await this.signedFetch(
+          UPLOAD+'?uploadType=multipart&fields=id,name,mimeType,md5Checksum,size',{
+          method:'POST',headers:{'Content-Type':body.type},body,signal:this.signal?.()
+        });
+        if(candidate.ok){response=candidate;break;}
+        const limited=candidate.status===429||(
+          candidate.status===403&&/rateLimitExceeded|userRateLimitExceeded/.test(
+            await candidate.text()));
+        if(!limited){
+          if(candidate.status===401)fail('Google ไม่ยืนยันสิทธิ์ Drive หลังต่ออายุ');
+          if(candidate.status===403)fail('ไม่มีสิทธิ์เขียน/อ่าน XStageKaraoke ใน Google Drive นี้');
+          fail('Google Drive อัปโหลด Multipart ไม่สำเร็จ (HTTP '+candidate.status+')');
+        }
+        if(attempt===4)fail('Google Drive จำกัดความเร็วหลายครั้ง · พักงานและทำต่อภายหลัง');
+        await sleep(Math.min(12000,600*2**attempt+Math.random()*400));
+      }
       const answer=await response.json();
       if(!answer?.id)fail('Google Drive ไม่คืน File ID หลังอัปโหลดแบบ Multipart');
       const verified=answer.md5Checksum?answer:await this.metadata(answer.id);
@@ -1556,13 +1574,20 @@ class Importer {
           throw firstFailure;
         }
       };
+      // Browsers on phones use a smaller queue to bound decompression memory.
+      const mobileImporter=/iPhone|iPad|Android/i.test(scope.navigator?.userAgent||'');
+      const workerLimit=mobileImporter?2:FAST_XMID_CONCURRENCY;
       for(let workIndex=0;workIndex<work.length;workIndex++){
         const originalItem=work[workIndex];
         if(originalItem.isXsk&&originalItem.kind==='XMID'){
           const group=[originalItem];
-          while(group.length<FAST_XMID_CONCURRENCY&&
-                work[workIndex+1]?.isXsk&&work[workIndex+1].kind==='XMID')
+          let groupBytes=Number(originalItem.file?.size||0);
+          while(group.length<workerLimit&&
+                work[workIndex+1]?.isXsk&&work[workIndex+1].kind==='XMID'&&
+                groupBytes+Number(work[workIndex+1].file?.size||0)<=32*MiB){
+            groupBytes+=Number(work[workIndex+1].file?.size||0);
             group.push(work[++workIndex]);
+          }
           await uploadXmidBatch(group);
           continue;
         }
