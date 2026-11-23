@@ -412,6 +412,10 @@
         <button id="cloud-import-scan" type="button" disabled hidden>ตรวจสอบอีกครั้ง</button>
         <input id="cloud-import-input" type="file" webkitdirectory directory multiple hidden>
       </div>
+      <label class="cloud-import-consent">
+        <input id="cloud-import-upload-only" type="checkbox">
+        อัปโหลดไฟล์ XMID/XSK ขึ้น XStageKaraoke/SONGS เท่านั้น · ยังไม่สร้าง DB · ค่อยเลือกโฟลเดอร์เพลงและกด “ตรวจไฟล์บน Drive และสร้าง DB” ภายหลัง
+      </label>
       <p class="cloud-import-note" id="cloud-import-folder-help">ถ้า Chrome แจ้งว่าโฟลเดอร์มีไฟล์ระบบ ให้เลือกเฉพาะโฟลเดอร์ย่อยที่เก็บเพลง เช่น XStageSongPlus/MIDI/MID/XMID หรือกด “เลือกโฟลเดอร์ (วิธีสำรอง)” โดยไม่ต้องปิดการป้องกันของเบราว์เซอร์</p>
       <div id="cloud-import-source" class="cloud-import-source">ยังไม่ได้เลือกโฟลเดอร์</div>
       <div class="cloud-import-stats">
@@ -514,7 +518,7 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="midi-pro-engine.js?v=1137-playback-restore-1168-screen-wake" defer></script>
   <script src="video-metadata-editor.js?v=1138-verified-video-selection" defer></script>
   <script src="video-transcode.js?v=1137" defer></script>
-  <script src="cloud-import.js?v=1187-drive-folder-scan" defer></script>
+  <script src="cloud-import.js?v=1188-drive-upload-only" defer></script>
   <script src="cloud-drive-folders.js?v=1" defer></script>
   <script src="tv-refresh.js?v=1144" defer></script>
   <script src="app.js?v=1187-drive-folder-picker" defer></script><script src="pc-extensions.js?v=1137-unfiltered-output-visual-only-1166-midi-eq-canvas" defer></script>
