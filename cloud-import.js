@@ -708,13 +708,9 @@ async function buildMidiIndex(rows,drive,check){
 // file with the same name receives a hash suffix, not another directory.
 function sourceXmidName(filename){
   const source=String(filename||'').split(/[\\/]/).pop();
-  const match=/^(\d{1,8})\.xmid$/i.exec(source);
-  if(match){
-    const number=Number(match[1]);
-    if(Number.isSafeInteger(number)&&number>0&&number<=99999)
-      return String(number).padStart(5,'0')+'.XMID';
-  }
   if(!/\.xmid$/i.test(source))fail('XMID: ไม่ใช่ไฟล์ .xmid');
+  // Preserve the entire original basename, including leading zeros.
+  // A collision is resolved by uploadMedia, never by renumbering a song.
   return safeName(source.replace(/\.xmid$/i,''))+'.XMID';
 }
 function sameMidiBytes(hashIndex,hash,actualSize){
