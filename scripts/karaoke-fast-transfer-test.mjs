@@ -21,7 +21,7 @@ assert.ok(upload.includes('const uploadPair=async(first,second)=>')&&
   upload.includes('Promise.allSettled([first(),second()])'),
   'Independent song and timed lyrics uploads must await both commits before publishing');
 const pairStart=upload.indexOf('const uploadPair=async(');
-const pairEnd=upload.indexOf('\n      const publish=async',pairStart);
+const pairEnd=upload.indexOf('\n      };',pairStart)+String('\n      };').length;
 assert.ok(pairEnd>pairStart,'Parallel upload helper must be independently testable');
 const uploadPair=vm.runInNewContext(upload.slice(pairStart,pairEnd)+'\nuploadPair;');
 let finished=0;
