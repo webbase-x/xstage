@@ -479,6 +479,13 @@
   <div>
     <div class="modal-head"><div><span class="label-top">SYSTEM & DIAGNOSTICS</span><h2>ตั้งค่าและระบบ</h2></div><button id="settings-close" class="quiet-btn" type="button">✕ ปิด</button></div>
     <p>ตรวจสอบรุ่นล่าสุด ติดตั้งอัปเดต และดู Log การทำงานได้จากเมนูนี้</p>
+    <div class="panel settings-workspace-panel">
+      <div class="panel-head"><div><span class="label-top">MUSIC LIBRARY</span><h3>ตำแหน่งจัดเก็บเพลงและ XMID</h3></div></div>
+      <p class="field-hint">เริ่มต้นที่ Music\\XStageSongPlus · เลือกคลังอื่นได้ และมีผลหลังปิดเปิดโปรแกรมใหม่ · ไม่ย้ายหรือลบฐานข้อมูลเดิม</p>
+      <div class="input-wrap"><input id="settings-workspace-path" type="text" spellcheck="false" autocomplete="off" placeholder="เลือกโฟลเดอร์คลังเพลง"><button id="settings-workspace-browse" type="button" class="browse-btn">เลือกโฟลเดอร์</button></div>
+      <div class="toolbar"><button id="settings-workspace-save" class="primary-btn" type="button">บันทึกตำแหน่งคลังเพลง</button></div>
+      <p id="settings-workspace-status" class="field-hint" aria-live="polite"></p>
+    </div>
     <div class="panel settings-update-panel">
       <div class="panel-head"><div><span class="label-top">UPDATE & VERSION</span><h3>อัปเดต X-Stage Song Studio Pro</h3></div></div>
       <p id="settings-update-version" class="field-hint">กำลังอ่านเวอร์ชันโปรแกรม</p>
