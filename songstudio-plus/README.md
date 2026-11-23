@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.41
+# X-Stage Song Studio Pro — Technical Preview v0.1.42
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -9,7 +9,7 @@ the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
 
-## v0.1.41 — Reliable auto-update shutdown
+## v0.1.42 — Reliable auto-update shutdown
 
 - Wait for the native desktop host and any remaining Song Studio Pro processes to exit before applying the verified Windows Setup; report remaining process IDs instead of failing on a single race-prone snapshot.
 - Continue enforcing Setup SHA-256 validation, UAC elevation, Program Files installation and workspace/SQLite preservation.
