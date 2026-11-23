@@ -56,7 +56,9 @@ class ImportObservabilityTests(unittest.TestCase):
     def test_session_is_canonical_updater_version(self):
         from inspect import getsource
         self.assertIn('"version":updater.VERSION', getsource(app.Handler.handle_get))
-        self.assertEqual(updater.VERSION, "0.1.40")
+        self.assertRegex(updater.VERSION, r"^\d+\.\d+\.\d+$")
+        self.assertEqual(updater.version_tuple(updater.VERSION),
+                         tuple(map(int, updater.VERSION.split("."))))
 
 
 if __name__ == "__main__":
