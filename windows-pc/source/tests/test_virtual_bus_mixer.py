@@ -523,6 +523,29 @@ class VirtualBusMixerTests(unittest.TestCase):
         self.assertEqual(mixer.overload_snapshot(), {0: False, 1: False})
         self.assertEqual(mixer.snapshot(), preset)
 
+    def test_health_flags_snapshot_tracks_latest_block_and_is_detached(self):
+        mixer = VirtualBusMixer(2, ceiling=.8)
+        clean = {"overload": False, "invalid_pcm": False}
+        self.assertEqual(mixer.health_flags_snapshot(), {0: clean, 1: clean})
+        preset = mixer.snapshot()
+        mixer.process(0, pcm(float("nan"), 1.))
+        mixer.process(1, pcm(.9, .25))
+        expected = {
+            0: {"overload": False, "invalid_pcm": True},
+            1: {"overload": True, "invalid_pcm": False},
+        }
+        self.assertEqual(mixer.health_flags_snapshot(), expected)
+        detached = mixer.health_flags_snapshot()
+        detached[0]["invalid_pcm"] = False
+        detached[1]["overload"] = False
+        self.assertEqual(mixer.health_flags_snapshot(), expected)
+        mixer.process(0, b"")
+        self.assertEqual(mixer.health_flags_snapshot()[0], clean)
+        self.assertEqual(mixer.health_flags_snapshot()[1], expected[1])
+        mixer.reset_diagnostics(1)
+        self.assertEqual(mixer.health_flags_snapshot(), {0: clean, 1: clean})
+        self.assertEqual(mixer.snapshot(), preset)
+
     def test_rejects_invalid_config_and_pcm(self):
         mixer = VirtualBusMixer(2)
         with self.assertRaises(ValueError):
