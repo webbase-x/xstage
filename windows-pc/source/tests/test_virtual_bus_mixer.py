@@ -137,6 +137,23 @@ class VirtualBusMixerTests(unittest.TestCase):
         mixer.process(0, pcm(float("inf"), float("nan")))
         self.assertEqual(mixer.clipped_samples[0], 0)
 
+    def test_rms_meters_track_post_fader_audio_and_reset_per_block(self):
+        mixer = VirtualBusMixer(2, ceiling=.8)
+        mixer.configure(0, gain=.5)
+        mixer.process(0, pcm(.4, -.4, .8, -.8))
+        self.assertAlmostEqual(mixer.rms_meters[0][0], (0.2 ** 2 / 2 + 0.4 ** 2 / 2) ** .5)
+        self.assertAlmostEqual(mixer.rms_meters[0][1], mixer.rms_meters[0][0])
+        self.assertEqual(mixer.rms_meters[1], (0., 0.))
+        mixer.configure(0, mute=True)
+        mixer.process(0, pcm(.8, .8))
+        self.assertEqual(mixer.rms_meters[0], (0., 0.))
+        mixer.configure(0, mute=False, gain=2.)
+        mixer.process(0, pcm(.8, -.8))
+        self.assertAlmostEqual(mixer.rms_meters[0][0], .8, places=6)
+        self.assertEqual(mixer.clipped_samples[0], 2)
+        mixer.process(0, b"")
+        self.assertEqual(mixer.rms_meters[0], (0., 0.))
+
     def test_rejects_invalid_config_and_pcm(self):
         mixer = VirtualBusMixer(2)
         with self.assertRaises(ValueError):
