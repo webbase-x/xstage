@@ -56,7 +56,7 @@ assert.ok(workflow.includes('--name "XStageSongStudioPro"'),
  'PyInstaller must build the same stable application payload for every release');
 assert.ok(workflow.includes('dist/XStageSongStudioPro/XStageSongStudioPro.exe'),
  'Windows build must verify the native desktop payload');
-const installerVersion=installer.match(/#define MyAppVersion "([0-9]+\\.[0-9]+\\.[0-9]+)"/)?.[1];
+const installerVersion=installer.match(/#define MyAppVersion "([0-9]+[.][0-9]+[.][0-9]+)"/)?.[1];
 assert.ok(installerVersion,'installer must declare semantic version');
 const setupExe=`X-Stage-Song-Studio-Pro-v${installerVersion}-win-x64-Setup.exe`;
 assert.ok(workflow.includes('path: songstudio-plus/installer/output/'+setupExe),
