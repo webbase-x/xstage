@@ -214,7 +214,8 @@ public sealed partial class MainForm
             _engine.SetJobPriority(job, priority);
             RefreshRows();
         }
-        catch (Exception ex) when (ex is ArgumentOutOfRangeException or IOException)
+        catch (Exception ex) when (ex is ArgumentOutOfRangeException or IOException or
+                                   Microsoft.Data.Sqlite.SqliteException)
         {
             MessageBox.Show(this, ex.Message, "ตั้งค่าลำดับความสำคัญไม่สำเร็จ");
         }
