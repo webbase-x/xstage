@@ -180,9 +180,9 @@ class LatestUpdateTests(unittest.TestCase):
             if len(calls)==1:
                 raise urllib.error.HTTPError(req.full_url,404,"Not Found",{},None)
             return Response(content)
-        with patch.object(updater.sys,"platform","win32"), \\
-             patch.object(updater.sys,"frozen",True,create=True), \\
-             patch.object(updater.urllib.request,"urlopen",side_effect=urlopen), \\
+        with patch.object(updater.sys,"platform","win32"), \
+             patch.object(updater.sys,"frozen",True,create=True), \
+             patch.object(updater.urllib.request,"urlopen",side_effect=urlopen), \
              patch.object(updater.time,"sleep",return_value=None):
             result=updater.download(self.workspace,manifest("0.1.99",content))
         self.assertEqual(calls,["bytes=1048576-",None])
