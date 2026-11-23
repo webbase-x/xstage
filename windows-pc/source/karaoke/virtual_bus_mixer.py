@@ -130,6 +130,8 @@ class VirtualBusMixer:
                          for bus, pair in self.rms_meters.items()},
             "peak_hold_dbfs": {bus: tuple(dbfs(v) for v in pair)
                                for bus, pair in self.peak_holds.items()},
+            "pre_limit_peak_dbfs": {bus: tuple(dbfs(v) for v in pair)
+                                    for bus, pair in self.pre_limit_peaks.items()},
         }
 
     def reset_clipping_totals(self, bus=None):
