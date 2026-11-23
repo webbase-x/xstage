@@ -9,6 +9,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const workspace = readFileSync(join(root, 'MainForm.IdmLayout.cs'), 'utf8');
 const main = readFileSync(join(root, 'MainForm.cs'), 'utf8');
 const engine = readFileSync(join(root, 'DownloadEngine.cs'), 'utf8');
+const engine = readFileSync(join(root, 'DownloadEngine.cs'), 'utf8');
 const performance = readFileSync(join(root, 'MainForm.Performance.cs'), 'utf8');
 const preview = readFileSync(join(root, 'MainForm.XStagePreview.cs'), 'utf8');
 const live = readFileSync(join(root, 'LiveStreamCapture.cs'), 'utf8');
@@ -17,6 +18,7 @@ const background = readFileSync(join(root, 'LiveBackgroundMonitor.cs'), 'utf8');
 const testProject = readFileSync(join(root, 'tests/DownloadEngine.Tests.csproj'), 'utf8');
 
 const contracts = [
+  ['changed source clears stale adaptive throughput', /if \(sourceChanged\)[\s\S]*?job\.PreviousBytes = 0;\s*job\.SpeedBytesPerSecond = 0;\s*job\.SmoothedSpeedBytesPerSecond = 0;/, engine],
   ['protected subscription domains rejected before job creation', /host\.EndsWith\("\." \+ domain, StringComparison\.OrdinalIgnoreCase\)/, engine],
   ['protected subscription domains are explicit', /"netflix\.com", "disneyplus\.com", "primevideo\.com"/, engine],
   ['protected streams rejected before queue mutation', /var host = uri\.IdnHost[\s\S]*?throw new ArgumentException\([\s\S]*?var selectedParts = parts \?\? DefaultParts;/, engine],
