@@ -167,8 +167,8 @@ class RemoteMobileTests(unittest.TestCase):
         value={'queue':[]};enrich_snapshot(self.app,value)
         self.assertEqual(value['offset_ms'],250);self.assertEqual(value['playback_rate'],1.2)
         self.assertEqual(value['lyric_lines'][0]['words'][1],(2,'ดี'))
-    @patch('karaoke.remote_boot.lan_address', return_value='192.168.1.3')
-    def test_invite_toggle_independent_of_accepting(self, _lan_address):
+    @patch('karaoke.remote_ui.sync_wifi_invite')
+    def test_invite_toggle_independent_of_accepting(self, _sync_wifi_invite):
         invite=make_invite('192.168.1.3',8080,self.remote.request_key,'Stage WiFi');self.app.remote_invite=invite
         self.assertIsNone(stage_invite(self.app));self.app.settings.update(remote_show_stage=True,remote_idle_only=True)
         self.assertIs(stage_invite(self.app),invite);self.remote.configure(accepting=False)
