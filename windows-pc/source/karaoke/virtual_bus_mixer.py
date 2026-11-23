@@ -227,6 +227,21 @@ class VirtualBusMixer:
             self.total_invalid_samples[index] = 0
             self.total_clipped_samples[index] = 0
 
+    def process_many(self, blocks):
+        """Process one PCM block per bus after validating the complete batch.
+
+        A malformed later bus must not partially update meters or cumulative
+        counters for earlier buses. This does not mix buses or alter routing.
+        """
+        if type(blocks) is not dict:
+            raise ValueError("Invalid PCM bus batch")
+        for bus, pcm in blocks.items():
+            if type(bus) is not int or bus not in self.strips:
+                raise ValueError("Unknown bus")
+            if not isinstance(pcm, bytes) or len(pcm) % 8:
+                raise ValueError("Expected interleaved stereo float32 PCM")
+        return {bus: self.process(bus, pcm) for bus, pcm in blocks.items()}
+
     def process(self, bus, pcm):
         if type(bus) is not int or bus not in self.strips:
             raise ValueError("Unknown bus")
