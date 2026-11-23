@@ -714,6 +714,8 @@ function stageEffects(){
    const load=b('โหลด FX จาก Google Drive',async()=>{
      load.disabled=true;
      const originalSub=state.accountSub,originalRoot=state.libraryRootId;
+     const stillSelected=()=>window.XStageDriveFolders?.readSelections?.(
+       originalSub,originalRoot)?.fx?.id===current.id;
      const prepared=[];let total=0;
      try{
        if(!/^[A-Za-z0-9_-]{5,256}$/.test(current.id))
@@ -725,8 +727,8 @@ function stageEffects(){
          Number(f.size)>0&&Number(f.size)<=12*1048576).slice(0,10);
        if(!candidate.length)throw Error('ไม่พบไฟล์ FX ที่อ่านได้ในโฟลเดอร์ที่เลือก');
        for(const file of candidate){
-         if(originalSub!==state.accountSub||originalRoot!==state.libraryRootId)
-           throw Error('บัญชีหรือคลังเพลงเปลี่ยนระหว่างโหลด FX');
+         if(originalSub!==state.accountSub||originalRoot!==state.libraryRootId||!stillSelected())
+           throw Error('บัญชีหรือโฟลเดอร์ FX เปลี่ยนระหว่างโหลด');
          const response=await privateFile(file.id,state.token);
          const blob=await response.blob();
          if(blob.size!==Number(file.size)||total+blob.size>48*1048576)
@@ -734,8 +736,8 @@ function stageEffects(){
          total+=blob.size;
          prepared.push({label:String(file.name).slice(0,90),url:URL.createObjectURL(blob)});
        }
-       if(originalSub!==state.accountSub||originalRoot!==state.libraryRootId)
-         throw Error('บัญชีหรือคลังเพลงเปลี่ยนระหว่างโหลด FX');
+       if(originalSub!==state.accountSub||originalRoot!==state.libraryRootId||!stillSelected())
+         throw Error('บัญชีหรือโฟลเดอร์ FX เปลี่ยนระหว่างโหลด');
        clearStageFx();
        prepared.forEach((entry,i)=>{effects.set(i,entry.url);fxLabels.set(i,entry.label);});
        renderFx();
