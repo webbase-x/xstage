@@ -128,6 +128,23 @@ class VirtualBusMixer:
             raise ValueError("Unknown bus")
         self.peak_holds[bus] = (0., 0.)
 
+    def reset_diagnostics(self, bus=None):
+        """Clear meter history at an explicit song/session boundary.
+
+        Does not change routing, strip controls, limiter settings or presets.
+        Validation happens before any diagnostic state is changed.
+        """
+        if bus is not None and (type(bus) is not int or bus not in self.strips):
+            raise ValueError("Unknown bus")
+        targets = self.strips if bus is None else (bus,)
+        for index in targets:
+            self.meters[index] = (0., 0.)
+            self.rms_meters[index] = (0., 0.)
+            self.pre_limit_peaks[index] = (0., 0.)
+            self.peak_holds[index] = (0., 0.)
+            self.clipped_samples[index] = 0
+            self.total_clipped_samples[index] = 0
+
     def process(self, bus, pcm):
         if type(bus) is not int or bus not in self.strips:
             raise ValueError("Unknown bus")
