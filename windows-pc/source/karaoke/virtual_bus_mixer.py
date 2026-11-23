@@ -93,6 +93,21 @@ class VirtualBusMixer:
             candidate[bus] = BusStrip(**row)
         self.strips = candidate
 
+    def diagnostics_snapshot(self):
+        """Return detached per-bus diagnostics for UI polling and QA.
+
+        Diagnostics are deliberately excluded from persistent mixer presets.
+        Callers may mutate the returned dictionaries without changing meters.
+        """
+        return {
+            "meters": self.meters.copy(),
+            "rms_meters": self.rms_meters.copy(),
+            "pre_limit_peaks": self.pre_limit_peaks.copy(),
+            "peak_holds": self.peak_holds.copy(),
+            "clipped_samples": self.clipped_samples.copy(),
+            "total_clipped_samples": self.total_clipped_samples.copy(),
+        }
+
     def reset_clipping_totals(self, bus=None):
         """Clear lifetime clipping diagnostics without changing audio or presets."""
         if bus is None:
