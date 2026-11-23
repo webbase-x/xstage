@@ -293,7 +293,8 @@ class VirtualBusMixerTests(unittest.TestCase):
         self.assertEqual(set(before), {
             "meters", "rms_meters", "pre_limit_peaks", "peak_holds",
             "pre_limit_peak_holds",
-            "clipped_samples", "invalid_samples", "total_clipped_samples",
+            "clipped_samples", "invalid_samples", "total_invalid_samples",
+            "total_clipped_samples",
         })
         for field in before:
             before[field][0] = None
@@ -426,6 +427,30 @@ class VirtualBusMixerTests(unittest.TestCase):
         self.assertEqual(mixer.invalid_samples, {0: 0, 1: 1})
         mixer.reset_diagnostics(1)
         self.assertEqual(mixer.invalid_samples, {0: 0, 1: 0})
+
+    def test_cumulative_invalid_pcm_survives_silence_and_isolated_reset(self):
+        mixer = VirtualBusMixer(2)
+        preset = mixer.snapshot()
+        mixer.process(0, pcm(float("nan"), float("inf")))
+        mixer.process(0, pcm(float("-inf"), .25))
+        mixer.process(1, pcm(float("nan"), .5))
+        self.assertEqual(mixer.diagnostics_snapshot()["total_invalid_samples"],
+                         {0: 3, 1: 1})
+        mixer.process(0, b"")
+        self.assertEqual(mixer.invalid_samples[0], 0)
+        self.assertEqual(mixer.total_invalid_samples[0], 3)
+        detached = mixer.diagnostics_snapshot()
+        detached["total_invalid_samples"][0] = 999
+        self.assertEqual(mixer.total_invalid_samples[0], 3)
+        for bad in (-1, True, "0"):
+            with self.assertRaises(ValueError):
+                mixer.reset_diagnostics(bad)
+            self.assertEqual(mixer.total_invalid_samples, {0: 3, 1: 1})
+        mixer.reset_diagnostics(0)
+        self.assertEqual(mixer.total_invalid_samples, {0: 0, 1: 1})
+        mixer.reset_diagnostics()
+        self.assertEqual(mixer.total_invalid_samples, {0: 0, 1: 0})
+        self.assertEqual(mixer.snapshot(), preset)
 
     def test_rejects_invalid_config_and_pcm(self):
         mixer = VirtualBusMixer(2)
