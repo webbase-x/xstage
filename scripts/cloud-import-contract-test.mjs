@@ -150,6 +150,10 @@ assert.ok(importerText.includes('sameMidiBytes(byMidi,midiHash,midiSize)') &&
 assert.ok(importerText.includes('const CATALOG_BATCH_SIZE=200')&&
   importerText.includes('if(revisions.length>=CATALOG_BATCH_SIZE)await publish();'),
   'Large imports should publish a verified SQLite snapshot in batches, not after every song');
+assert.ok(importerText.includes("const sidecars=await Promise.allSettled([") &&
+  importerText.includes("sourcePart(item.lyr,'LYR','lyr')") &&
+  importerText.includes("sourcePart(item.cur,'CUR','cur')"),
+  'NCN lyric and cursor uploads should run concurrently and verify both before publication');
 assert.ok(importerText.includes('originalRelativePath:item.relative||item.file.name')&&
   importerText.includes('originalRelativePath:item.midi?.relative||midiFile.name'),
   'All MIDI import paths must preserve the local source filename and relative directory');
