@@ -72,7 +72,9 @@ public sealed class TransferSlotQueue
         if (string.IsNullOrWhiteSpace(host))
             throw new ArgumentException("Host is required", nameof(host));
         // Treat equivalent host spellings as the same per-host capacity bucket.
-        host = host.Trim();
+        host = host.Trim().TrimEnd('.');
+        if (host.Length == 0)
+            throw new ArgumentException("Host is required", nameof(host));
         if (priority is < 0 or > 2)
             throw new ArgumentOutOfRangeException(nameof(priority));
         var waiter = new Waiter
