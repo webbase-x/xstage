@@ -714,6 +714,31 @@ try
             AdaptiveSegmentPlanner.Recommend(parts, 1L << 40, double.NaN, false) != parts)
             throw new Exception("Adaptive planner changed user cap or persisted geometry.");
     }
+    // Boundary-focused throughput and file-size tests: adaptive limits must
+    // never exceed the requested connections or create undersized ranges.
+    foreach (var (length, speed, expected) in new (long, double, int)[]
+    {
+        (2L * 1024 * 1024 - 1, 64d * 1024 * 1024, 1),
+        (2L * 1024 * 1024, 64d * 1024 * 1024, 2),
+        (8L * 1024 * 1024 - 1, 64d * 1024 * 1024, 2),
+        (8L * 1024 * 1024, 64d * 1024 * 1024, 4),
+        (512L * 1024 * 1024, 64d * 1024 * 1024, 32),
+        (1L << 40, 256d * 1024 - 1, 1),
+        (1L << 40, 256d * 1024, 2),
+        (1L << 40, 1024d * 1024, 4),
+        (1L << 40, 4d * 1024 * 1024, 8),
+        (1L << 40, 12d * 1024 * 1024, 16),
+        (1L << 40, 32d * 1024 * 1024, 32)
+    })
+    {
+        var actual = AdaptiveSegmentPlanner.Recommend(32, length, speed, false);
+        if (actual != expected)
+            throw new Exception($"Adaptive boundary mismatch: {length} bytes, {speed} B/s: {actual} != {expected}.");
+        if (AdaptiveSegmentPlanner.Recommend(8, length, speed, false) != Math.Min(8, expected))
+            throw new Exception("Adaptive boundary exceeded requested connection count.");
+        if (AdaptiveSegmentPlanner.Recommend(32, length, speed, true) != 32)
+            throw new Exception("Adaptive boundary changed persisted resume segments.");
+    }
     // Invalid telemetry and unknown content lengths must not repartition a
     // transfer. In particular, an infinite EWMA sample is not high bandwidth.
     foreach (var parts in DownloadEngine.AllowedParts)
