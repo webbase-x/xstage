@@ -51,8 +51,12 @@ public static class SocialVideoDownloader
     // cap when several native/video jobs run simultaneously.
     public static int VideoRateLimitKib(int globalLimitKib, int fileLimitKib)
     {
-        if (globalLimitKib < 0 || fileLimitKib < 0)
-            throw new ArgumentOutOfRangeException(nameof(globalLimitKib));
+        // Keep subprocess limits within the same validated range as native
+        // HTTP. Corrupt legacy settings must not launch an unbounded process.
+        if ((globalLimitKib != 0 && globalLimitKib is < 64 or > 1_048_576) ||
+            (fileLimitKib != 0 && fileLimitKib is < 64 or > 1_048_576))
+            throw new ArgumentOutOfRangeException(nameof(globalLimitKib),
+                "Video speed limits must be 0 or 64–1048576 KiB/s.");
         if (globalLimitKib == 0) return fileLimitKib;
         if (fileLimitKib == 0) return globalLimitKib;
         return Math.Min(globalLimitKib, fileLimitKib);
