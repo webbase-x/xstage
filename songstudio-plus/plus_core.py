@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import ncn_reader
+from import_directory_index import ImportDirectoryIndex
 
 MEDIA_EXT = {".mid", ".midi", ".kar", ".mp3", ".m4a", ".wav", ".flac",
              ".mp4", ".mkv", ".webm", ".mov"}
@@ -34,6 +35,9 @@ MAGIC = b"XSTGPLS1"
 FORMAT_VERSION = 1
 HEADER = struct.Struct("<8sIQQ32s32s")
 SIZE_LIMIT = 2 * 1024 * 1024 * 1024 * 1024
+IMPORT_COMMIT_FILES = 128
+IMPORT_COMMIT_MIN_FILES = 16
+IMPORT_COMMIT_MAX_SECONDS = 6.0
 WRITE_LOCK = threading.RLock()
 _INIT_LOCK = threading.RLock()
 _INITIALIZED = set()
@@ -338,7 +342,7 @@ def _sidecar_folders(root):
     except OSError:
         return {}
 
-def _cloud_layout_companions(media):
+def _cloud_layout_companions(media, directory_index=None):
     """Resolve current XStageKaraoke sidecars by code, not file-content hashes.
 
     Every uploaded source/lyric may carry a different -<hash16> suffix.
@@ -360,6 +364,8 @@ def _cloud_layout_companions(media):
     if not code or len(code)>160:
         return {}
     def one(folder,ext):
+        if directory_index is not None:
+            return directory_index.cloud_code(folder,code,ext)
         if not folder.is_dir() or folder.is_symlink():
             return None
         matched=[]
@@ -419,7 +425,7 @@ def _cloud_json_document(source):
     return doc
 
 
-def companion_candidates(media):
+def companion_candidates(media, directory_index=None):
     """Exact-code sidecar matching: no backup, hashing or recursive per-song scan.
 
     Directory layouts are cached by root revision so 100k MIDI files do not
@@ -429,6 +435,8 @@ def companion_candidates(media):
     p=Path(media)
     result={".lyr":None,".cur":None,".lrc":None,".json":None}
     def probe(folder,ext):
+        if directory_index is not None:
+            return directory_index.exact(folder,p.stem,ext)
         for suffix in (ext,ext.upper()):
             candidate=folder/(p.stem+suffix)
             if candidate.is_file() and not candidate.is_symlink():
@@ -473,7 +481,7 @@ def companion_candidates(media):
                     break
         if all(result[e] for e in eligible):
             break
-    for ext,sidecar in _cloud_layout_companions(p).items():
+    for ext,sidecar in _cloud_layout_companions(p,directory_index).items():
         if not result.get(ext) and sidecar:
             result[ext]=sidecar
     return result
@@ -644,15 +652,21 @@ def insert_version(db,song,media,doc,source_signature,origin="NCN"):
       (id,song_id,content_sha256,source_sha256,origin,timing_status,title,artist,created_at,is_current)
       VALUES (?,?,?,?,?,?,?,?,?,0)""",
       (version,song["id"],signature,source_signature,origin,status,title,artist,now()))
-    for index,(text,start,end,cues,line_status) in enumerate(lines):
-        cur=db.execute("""INSERT INTO xstage_lyric_lines
-            (version_id,position,text,normalized_text,start_time,end_time,timing_status)
-            VALUES (?,?,?,?,?,?,?)""",
-            (version,index,text,norm(text),start,end,line_status))
-        for ci,(glyph,at,duration) in enumerate(cues):
-            db.execute("""INSERT INTO xstage_lyric_cues
-             (line_id,position,text,start_time,duration) VALUES (?,?,?,?,?)""",
-             (cur.lastrowid,ci,glyph,at,duration))
+    # Insert all lyric lines and CUR cues in bounded SQLite batches.
+    # Use the (version_id,position) index for exact parent IDs, never
+    # assume AUTOINCREMENT IDs are consecutive.
+    db.executemany("""INSERT INTO xstage_lyric_lines
+        (version_id,position,text,normalized_text,start_time,end_time,timing_status)
+        VALUES (?,?,?,?,?,?,?)""",
+        ((version,index,text,norm(text),start,end,line_status)
+         for index,(text,start,end,cues,line_status) in enumerate(lines)))
+    indexed_lines=db.execute("""SELECT id,position FROM xstage_lyric_lines
+        WHERE version_id=? ORDER BY position""",(version,)).fetchall()
+    db.executemany("""INSERT INTO xstage_lyric_cues
+        (line_id,position,text,start_time,duration) VALUES (?,?,?,?,?)""",
+        ((row["id"],ci,glyph,at,duration)
+         for row in indexed_lines
+         for ci,(glyph,at,duration) in enumerate(lines[row["position"]][3])))
     _prefer_version(db,song["id"],version)
     return version,True
 
@@ -770,7 +784,10 @@ def import_folder(workspace,source,progress=None,cancel=None,selected_file=None)
     totals={"files_seen":0,"files_new":0,"media_duplicates":0,
             "lyrics_new":0,"partial_lyrics":0,"draft_lyrics":0,
             "skipped_ncn":0,"failures":0,"hash_cache_hits":0,"bytes_hashed":0}
+    directory_index=ImportDirectoryIndex()
     with WRITE_LOCK,connect(target) as db:
+        db.execute("PRAGMA cache_size=-32768")
+        db.execute("PRAGMA temp_store=MEMORY")
         prior=db.execute("""SELECT * FROM xstage_import_resume_state
             WHERE source_root=? AND status IN ('interrupted','cancelled','running')
             ORDER BY updated_at DESC LIMIT 1""",(str(root),)).fetchone()
@@ -821,15 +838,27 @@ def import_folder(workspace,source,progress=None,cancel=None,selected_file=None)
                  stamp,outcome,json.dumps(delta,separators=(",",":"))))
         last_progress=0.0
         resumed_count=0
+        last_commit=time.monotonic()
+        pending_commit=0
+        def commit_if_due():
+            nonlocal last_commit,pending_commit
+            pending_commit+=1
+            if (pending_commit>=IMPORT_COMMIT_FILES or
+                    (pending_commit>=IMPORT_COMMIT_MIN_FILES and
+                     time.monotonic()-last_commit>=IMPORT_COMMIT_MAX_SECONDS)):
+                store_resume("running")
+                pending_commit=0
+                last_commit=time.monotonic()
         for path in ([one] if one is not None else iter_source(root)):
             if cancel and cancel.is_set():
                 break
-            original_path=str(path.resolve())
+            # Root and selected files are resolved once, before this loop.
+            original_path=str(path)
             # Resume is a metadata checkpoint, never a blind skip by filename.
             # Changing the media file or any accompanying LYR/CUR/LRC re-opens it.
             try:
                 source_stat=path.stat()
-                comps=companion_candidates(path)
+                comps=companion_candidates(path,directory_index)
                 stamp=companion_stamp(comps)
             except OSError:
                 source_stat=None
@@ -876,7 +905,7 @@ def import_folder(workspace,source,progress=None,cancel=None,selected_file=None)
                          (batch,original_path,path.name,None,None,outcome,message,now()))
                         checkpoint(path,original_path,source_stat,stamp,
                                    "skipped-ncn-incomplete",previous_totals)
-                        if totals["files_seen"]%16==0: store_resume("running")
+                        commit_if_due()
                         if progress and time.monotonic()-last_progress>.25:
                             progress({**totals,"resumed_files":resumed_count,"resume":resumed},
                                      path.name)
@@ -1050,7 +1079,7 @@ def import_folder(workspace,source,progress=None,cancel=None,selected_file=None)
                  VALUES (?,?,?,?,?,?,?,?)""",
                  (batch,original_path,path.name,h,None,"error",message,now()))
             checkpoint(path,original_path,source_stat,stamp,outcome,previous_totals)
-            if totals["files_seen"]%16==0:store_resume("running")
+            commit_if_due()
             if progress and time.monotonic()-last_progress>.25:
                 progress({**totals,"resumed_files":resumed_count,"resume":resumed},
                          path.name)
