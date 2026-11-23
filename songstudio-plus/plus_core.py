@@ -1363,15 +1363,21 @@ def suspicious_lyric_text(value):
     This is display/edit eligibility only; source SQLite stays untouched.
     """
     text=str(value or "").strip()
-    if len(text)<64 or any(ch.isspace() for ch in text):
+    # Short Base64-like blobs (24-63 chars) were missed by the old
+    # 64-character cutoff. Do not classify whitespace-separated lyrics,
+    # Thai text, or decorated human-readable credits as binary payloads.
+    if len(text)<24 or any(ch.isspace() for ch in text):
         return False
     if not re.fullmatch(r"[A-Za-z0-9+/=_-]+",text):
         return False
     letters=sum(ch.isalpha() for ch in text)
     digits=sum(ch.isdigit() for ch in text)
-    return (letters>=24 and digits>=4 and
-            any(ch.islower() for ch in text) and
-            any(ch.isupper() for ch in text))
+    upper=sum(ch.isupper() for ch in text)
+    lower=sum(ch.islower() for ch in text)
+    # Require substantial mixed-case complexity and embedded digits.
+    # Long ordinary English words and natural language remain visible.
+    return (letters>=16 and digits>=2 and upper>=4 and lower>=4 and
+            (digits>=4 or any(ch in "+/=_-" for ch in text)))
 
 
 def groups(workspace,query,limit=100,offset=0):
