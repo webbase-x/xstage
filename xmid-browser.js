@@ -43,9 +43,20 @@ function metadata(bytes){
   scope.XStageImportCore?.validLyricsJson(document,code);
   if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(code))fail('รหัสเพลงไม่ปลอดภัย');
   const identity=scope.XStageImportCore?.songIdentity(document,code);
-  if(!identity?.identityComplete)fail('ชื่อเพลงหรือศิลปินไม่ครบ');
+  if(!identity)fail('ไม่พบระบบตรวจสอบชื่อเพลง');
+  // Some intact XMID packages contain playable MIDI but do not contain
+  // a real artist or timed lyrics. Preserve the original package bytes and
+  // mark missing metadata explicitly instead of treating MIDI as corrupt.
+  const placeholderLyrics=lines.length===1&&
+    /^x-stage karaoke$/i.test(String(lines[0].text||'').trim());
   document.title=identity.title;document.artist=identity.artist;
-  return {code,document};
+  document.metadataComplete=Boolean(identity.identityComplete);
+  if(placeholderLyrics){
+    document.lines=[];
+    document.lyricsMode='unavailable';
+  }
+  return {code,document,identityComplete:Boolean(identity.identityComplete),
+    lyricsAvailable:!placeholderLyrics};
 }
 async function openPackage(file,{metadataOnly=false}={}){
   if(!(file instanceof Blob))fail('ไม่พบไฟล์');
