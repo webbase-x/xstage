@@ -680,13 +680,15 @@ try
     }
     if (fqdnHosts.ActiveCount != 0 || fqdnHosts.WaitingCount != 0)
         throw new Exception("FQDN normalization leaked scheduler slots.");
+    var rejectedEmptyHost = false;
     try
     {
         using var unexpected = await fqdnHosts.EnterAsync(
             "invalid-host", " ... ", 1, CancellationToken.None);
-        throw new Exception("Empty normalized hostname was accepted.");
     }
-    catch (ArgumentException) { }
+    catch (ArgumentException) { rejectedEmptyHost = true; }
+    if (!rejectedEmptyHost)
+        throw new Exception("Empty normalized hostname was accepted.");
 
     // A cancelled waiter from a saturated host must not reserve global capacity
     // after that host releases its active lease. A different host can proceed.
