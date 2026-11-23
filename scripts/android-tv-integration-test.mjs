@@ -215,5 +215,5 @@ assert.ok(parityFix.includes('position:static!important')&&parityFix.includes('d
 assert.ok(parityFix.includes('#lyrics')&&parityFix.includes('z-index:90!important'),
   'TV lyrics must overlay visual elements just like the Web stage');
 assert.ok(nativeMeter.includes("document.getElementById('stage-viz-right')")&&
-  nativeMeter.includes('view.mirror?LEVELS-1-i:i'),
+  nativeMeter.includes('view.mirror?LEVELS-1-index:index'),
   'TV must paint both visual meters from live media-capture FFT levels');
