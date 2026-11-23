@@ -27,6 +27,15 @@
   const appIds=()=>Array.from(document.querySelectorAll(".app-card[data-app]")).map(c=>c.dataset.app);
   let client=null,user=null,isAdmin=false,activeApp=null,latestReviews=[],backendReady=false;
   let accountView="overview",accountLastFocus=null;
+  // Storefront-only visibility rule; download files hosted publicly are not protected by this UI.
+  const downloadOwnerEmail="teacher.phairat@gmail.com";
+  function publishDownloadAccess(){
+    const googleIdentity=user?.app_metadata?.provider==="google"||
+      user?.identities?.some(identity=>identity?.provider==="google");
+    const canDownload=!!(googleIdentity&&typeof user?.email==="string"&&
+      user.email.trim().toLowerCase()===downloadOwnerEmail);
+    window.dispatchEvent(new CustomEvent("xstage:portal-auth",{detail:{canDownload}}));
+  }
   const safeText=value=>String(value==null?"":value);
   function message(node,value){if(node)node.textContent=value;}
   function currentApp(){const id=new URLSearchParams(location.search).get("app");return id&&appIds().includes(id)?id:null;}
@@ -167,6 +176,7 @@
     }
     if(!user)closeAccountScreen();
     reviewForm.hidden=!user||!activeApp||!canUsePortal();
+    publishDownloadAccess();
   }
   avatarImage?.addEventListener("load",()=>{
     if(!user || avatarImage.src!==googleAvatarUrl(user))return;
