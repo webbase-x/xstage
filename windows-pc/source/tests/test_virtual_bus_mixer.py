@@ -293,7 +293,7 @@ class VirtualBusMixerTests(unittest.TestCase):
         self.assertEqual(set(before), {
             "meters", "rms_meters", "pre_limit_peaks", "peak_holds",
             "pre_limit_peak_holds",
-            "clipped_samples", "total_clipped_samples",
+            "clipped_samples", "invalid_samples", "total_clipped_samples",
         })
         for field in before:
             before[field][0] = None
@@ -413,6 +413,19 @@ class VirtualBusMixerTests(unittest.TestCase):
         mixer.process(0, pcm(.00001, .00001))
         self.assertEqual(mixer.levels_dbfs_snapshot(floor_db=-60)["peak_dbfs"][0],
                          (-60., -60.))
+
+    def test_nonfinite_pcm_is_silenced_counted_and_reset_per_bus(self):
+        mixer = VirtualBusMixer(2)
+        output = samples(mixer.process(0, pcm(float("nan"), float("inf"),
+                                               float("-inf"), .25)))
+        self.assertEqual(output[:3], [0., 0., 0.])
+        self.assertAlmostEqual(output[3], .25, places=6)
+        self.assertEqual(mixer.diagnostics_snapshot()["invalid_samples"], {0: 3, 1: 0})
+        mixer.process(1, pcm(float("nan"), .5))
+        mixer.process(0, b"")
+        self.assertEqual(mixer.invalid_samples, {0: 0, 1: 1})
+        mixer.reset_diagnostics(1)
+        self.assertEqual(mixer.invalid_samples, {0: 0, 1: 0})
 
     def test_rejects_invalid_config_and_pcm(self):
         mixer = VirtualBusMixer(2)
