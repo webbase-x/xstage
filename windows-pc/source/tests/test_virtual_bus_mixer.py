@@ -293,6 +293,42 @@ class VirtualBusMixerTests(unittest.TestCase):
                 self.assertEqual(value, 0 if "samples" in field else (0., 0.))
         self.assertEqual(mixer.snapshot(), preset)
 
+    def test_dbfs_snapshot_is_finite_isolated_and_does_not_change_audio(self):
+        mixer = VirtualBusMixer(2, ceiling=.8)
+        mixer.process(0, pcm(.5, -.5))
+        before = mixer.snapshot()
+        levels = mixer.levels_dbfs_snapshot()
+        self.assertAlmostEqual(levels["peak_dbfs"][0][0],
+                               20 * math.log10(.5), places=5)
+        self.assertAlmostEqual(levels["rms_dbfs"][0][1],
+                               20 * math.log10(.5), places=5)
+        self.assertEqual(levels["peak_dbfs"][1], (-120., -120.))
+        self.assertTrue(all(math.isfinite(v) for group in levels.values()
+                            for pair in group.values() for v in pair))
+        levels["peak_dbfs"][0] = (999., 999.)
+        self.assertNotEqual(mixer.levels_dbfs_snapshot()["peak_dbfs"][0],
+                            (999., 999.))
+        self.assertEqual(mixer.snapshot(), before)
+        mixer.process(0, b"")
+        self.assertEqual(mixer.levels_dbfs_snapshot()["peak_dbfs"][0],
+                         (-120., -120.))
+        self.assertAlmostEqual(mixer.levels_dbfs_snapshot()["peak_hold_dbfs"][0][0],
+                               20 * math.log10(.5), places=5)
+        mixer.reset_diagnostics(0)
+        self.assertEqual(mixer.levels_dbfs_snapshot()["peak_hold_dbfs"][0],
+                         (-120., -120.))
+
+    def test_dbfs_floor_validation_and_custom_floor(self):
+        mixer = VirtualBusMixer(2)
+        for invalid in (float("nan"), float("inf"), True, "minus 60", -301, 1):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                mixer.levels_dbfs_snapshot(floor_db=invalid)
+        self.assertEqual(mixer.levels_dbfs_snapshot(floor_db=-60)["rms_dbfs"][0],
+                         (-60., -60.))
+        mixer.process(0, pcm(.00001, .00001))
+        self.assertEqual(mixer.levels_dbfs_snapshot(floor_db=-60)["peak_dbfs"][0],
+                         (-60., -60.))
+
     def test_rejects_invalid_config_and_pcm(self):
         mixer = VirtualBusMixer(2)
         with self.assertRaises(ValueError):
