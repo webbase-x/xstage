@@ -42,7 +42,7 @@ const parents=new Map([
   [music,root],[font,root],[fx,root]
 ]);
 const names=new Map([[music,'XMID'],[font,'SOUNDFONT'],[fx,'FX']]);
-let denied=false,uploads=0,reads=0,published=0,lastRows=null;
+let denied=false,cancelOnList=false,uploads=0,reads=0,published=0,lastRows=null;
 class FakeDrive {
   async folderMetadata(id){
     if(!parents.has(id))throw Error('Not permitted');
@@ -51,6 +51,7 @@ class FakeDrive {
   }
   async listChildren(id){
     if(denied)throw Error('HTTP 403: folder contents unavailable');
+    if(id===music&&cancelOnList){cancelOnList=false;workflow.cancel();}
     if(id===music)return records;
     return [];
   }
@@ -120,6 +121,14 @@ assert.ok(lastRows.every(x=>x.lyricsMode==='unavailable'),'Placeholder lyrics ar
 assert.notEqual(lastRows[0].code,lastRows[1].code,
   'Distinct MIDI with colliding embedded song code must receive an alias');
 assert.equal(uploads,0,'Rebuilding must not upload any source file');
+cancelOnList=true;
+await workflow.rebuild();
+assert.equal(published,1,'Cancelled scan must never publish a partial SQLite catalog');
+assert.match(element('xstage-drive-folder-status').textContent,/ยกเลิกการสร้างฐาน/);
+denied=true;
+await workflow.rebuild();
+assert.equal(published,1,'Folder permission failures must keep the last published DB unchanged');
+denied=false;
 assert.equal(reads,3,'File contents must be read only for candidate XMID assets');
 assert.match(element('xstage-drive-folder-status').textContent,/MIDI ซ้ำ 1/);
 assert.match(element('xstage-drive-folder-status').textContent,/รูปแบบอื่นที่ยังไม่ได้ทำดัชนี 1/);
