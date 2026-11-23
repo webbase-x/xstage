@@ -10,6 +10,7 @@ on:
       - "browser-midi.js"
       - "scripts/cloud-drive-folders-test.mjs"
       - "scripts/karaoke-drive-media-sources-test.mjs"
+      - "scripts/google-picker-dialog-layer-test.mjs"
       - "pc-extensions.js"
       - "browser-midi.js"
       - "karaoke.html"
@@ -46,3 +47,4 @@ jobs:
           node scripts/cloud-import-contract-test.mjs
           node scripts/cloud-drive-folders-test.mjs
           node scripts/karaoke-drive-media-sources-test.mjs
+          node scripts/google-picker-dialog-layer-test.mjs
