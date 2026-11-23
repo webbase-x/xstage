@@ -10,6 +10,6 @@ window.XSTAGE_CONFIG = {
 window.XSTAGE_RETIRED_DRIVE_ROOT_IDS=Object.freeze(['1RYekUHCC3qs661cUrbxkNauUz_SuqZvy']);
 window.XSTAGE_DRIVE_LAYOUT=Object.freeze({
   root:'XStageKaraoke',songs:'SONGS',db:'DB',
-  soundfont:'SOUNDFONT',backup:'BACKUP',cache:'CACHE',logs:'LOGS'
+  soundfont:'SOUNDFONT',fx:'FX',backup:'BACKUP',cache:'CACHE',logs:'LOGS'
 });
 window.XSTAGE_RELEASE = { version: '1.0.144', build: 1144 };
