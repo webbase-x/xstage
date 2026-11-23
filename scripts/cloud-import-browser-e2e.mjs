@@ -60,6 +60,25 @@ async function routeDrive(route){
     if(meta.parents[0]==='root')rootCreated++;
     return send(200,item);
   }
+  if(url.pathname==='/upload/drive/v3/files'&&method==='POST'&&
+     url.searchParams.get('uploadType')==='multipart'){
+    const boundary=req.headers()['content-type']?.match(/boundary=([^;]+)/)?.[1];
+    assert.ok(boundary,'Multipart upload requires a boundary');
+    const buffer=req.postDataBuffer(),marker=Buffer.from('\r\n--'+boundary);
+    const metaStart=buffer.indexOf(Buffer.from('\r\n\r\n'))+4;
+    const metaEnd=buffer.indexOf(marker,metaStart);
+    assert.ok(metaStart>=4&&metaEnd>metaStart,'Multipart metadata section missing');
+    const meta=JSON.parse(buffer.subarray(metaStart,metaEnd).toString('utf8'));
+    const mediaStart=buffer.indexOf(Buffer.from('\r\n\r\n'),metaEnd)+4;
+    const mediaEnd=buffer.indexOf(marker,mediaStart);
+    assert.ok(mediaStart>metaEnd&&mediaEnd>mediaStart,'Multipart media section missing');
+    const data=buffer.subarray(mediaStart,mediaEnd);
+    const record={...meta,id:id(),ownedByMe:true,
+      md5Checksum:createHash('md5').update(data).digest('hex'),size:String(data.length)};
+    group(meta.parents[0]).push(record);
+    records.set(record.id,{...record,data});payloadUploads++;
+    return send(200,record);
+  }
   if(url.pathname==='/upload/drive/v3/files'&&method==='POST'){
     const meta=JSON.parse(req.postData());
     const uploadId='upload'+(++sessionIndex);
