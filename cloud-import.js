@@ -15,7 +15,8 @@ const MIME_FOLDER='application/vnd.google-apps.folder';
 const API='https://www.googleapis.com/drive/v3/files';
 const UPLOAD='https://www.googleapis.com/upload/drive/v3/files';
 const MiB=1024*1024,CHUNK=8*MiB,MAX_CHUNK=32*MiB,MAX_LRC=2*MiB,MAX_JSON=128*MiB;
-const CATALOG_BATCH_SIZE=200; // Large verified batches avoid O(n²) SQLite republishing.
+const CATALOG_BATCH_SIZE=500; // Fewer verified SQLite snapshots for large initial imports.
+const FAST_XMID_CONCURRENCY=6; // Bounded parallelism; reduce if Drive throttles.
 // Larger acknowledged resumable chunks reduce request overhead on fast links.
 // Every non-final Drive chunk remains a multiple of 256 KiB, and only one
 // chunk per resumable session is in flight so Range checkpoints stay reliable.
@@ -96,7 +97,7 @@ async function checkpoint(account,value){
   finally{try{database?.close();}catch{}}
 }
 class Drive {
-  constructor(getToken,assertLive){this.getToken=getToken;this.assertLive=assertLive;this.children=new Map();this.childNames=new Map();}
+  constructor(getToken,assertLive){this.getToken=getToken;this.assertLive=assertLive;this.children=new Map();this.childNames=new Map();this.pendingChildren=new Map();this.pendingFolders=new Map();}
   headers(extra={}){const token=this.getToken();if(!token)fail('Google Login หมดอายุ กรุณาเข้าสู่ระบบใหม่');return {Authorization:'Bearer '+token,...extra};}
   async signedFetch(url,options={}){
     this.assertLive();
@@ -160,13 +161,20 @@ class Drive {
   }
   async listChildren(id){
     if(this.children.has(id))return this.children.get(id);
-    const query="'"+(id==='root'?'root':driveId(id))+"' in parents and trashed=false";
-    const files=await this.list(query);
-    const names=new Map();
-    this.children.set(id,files);
-    this.childNames.set(id,names);
-    for(const entry of files)this.indexChild(id,entry);
-    return files;
+    if(this.pendingChildren.has(id))return this.pendingChildren.get(id);
+    // Share one Drive listing across concurrent import workers.
+    const task=(async()=>{
+      const query="'"+(id==='root'?'root':driveId(id))+"' in parents and trashed=false";
+      const files=await this.list(query);
+      const names=new Map();
+      this.children.set(id,files);
+      this.childNames.set(id,names);
+      for(const entry of files)this.indexChild(id,entry);
+      return files;
+    })();
+    this.pendingChildren.set(id,task);
+    try{return await task;}
+    finally{if(this.pendingChildren.get(id)===task)this.pendingChildren.delete(id);}
   }
   async namedChildren(parent,name){
     await this.listChildren(parent);
@@ -178,6 +186,14 @@ class Drive {
     this.indexChild(parent,entry);
   }
   async folder(parent,name){
+    const key=parent+'\\0'+name;
+    if(this.pendingFolders.has(key))return this.pendingFolders.get(key);
+    const task=this.createOrReuseFolder(parent,name);
+    this.pendingFolders.set(key,task);
+    try{return await task;}
+    finally{if(this.pendingFolders.get(key)===task)this.pendingFolders.delete(key);}
+  }
+  async createOrReuseFolder(parent,name){
     const files=await this.namedChildren(parent,name);
     if(files.length>1){
       // Google Drive permits duplicate names under one parent. Reuse the only
@@ -290,6 +306,31 @@ class Drive {
       return {id:old.id,md5Checksum:md5,size:file.size,reused:true};
     }
     const meta={name,mimeType:mime,parents:[parent]};
+    if(file.size<=5*MiB){
+      // Small binary files use one metadata+content request, avoiding the
+      // resumable session handshake on tens of thousands of XMID songs.
+      const boundary='xstage_'+md5.slice(0,24)+'_'+Math.random().toString(16).slice(2);
+      const body=new Blob([
+        '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n',
+        JSON.stringify(meta),
+        '\r\n--'+boundary+'\r\nContent-Type: '+mime+'\r\n\r\n',
+        file,'\r\n--'+boundary+'--\r\n'
+      ],{type:'multipart/related; boundary='+boundary});
+      // Never automatically replay an ambiguous POST: it may have created a
+      // remote file even if the browser lost its response.
+      const response=await this.fetch(UPLOAD+'?uploadType=multipart&fields=id,name,mimeType,md5Checksum,size',{
+        method:'POST',headers:{'Content-Type':body.type},body,signal:this.signal?.()
+      });
+      const answer=await response.json();
+      if(!answer?.id)fail('Google Drive ไม่คืน File ID หลังอัปโหลดแบบ Multipart');
+      const verified=answer.md5Checksum?answer:await this.metadata(answer.id);
+      if(String(verified.md5Checksum||'').toLowerCase()!==md5.toLowerCase()||
+         Number(verified.size)!==file.size)
+        fail('Multipart: MD5/ขนาดไฟล์ที่ Google Drive คืนมาไม่ตรงต้นฉบับ');
+      this.rememberChild(parent,{...verified,id:answer.id,name,md5Checksum:md5,size:file.size});
+      if(onBytes)onBytes(file.size,file.size);
+      return {id:answer.id,md5Checksum:md5,size:file.size,reused:false};
+    }
     const initiate=await this.fetch(UPLOAD+'?uploadType=resumable&fields=id,name,mimeType,md5Checksum,size',{
       method:'POST',headers:{'Content-Type':'application/json; charset=UTF-8',
         'X-Upload-Content-Type':mime,'X-Upload-Content-Length':String(file.size)},
