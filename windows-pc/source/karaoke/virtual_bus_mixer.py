@@ -250,12 +250,14 @@ class VirtualBusMixer:
             right = values[i + 1] if math.isfinite(values[i + 1]) else 0.
             left *= left_gain
             right *= right_gain
-            # Finite float32 input can overflow during gain multiplication.
-            # Saturate safely before assigning to the float32 output array.
+            # Keep finite float64 pre-limiter peaks even when a float32
+            # source is amplified beyond the float32 range. Clamping below
+            # still guarantees a representable float32 output sample.
+            # Only non-finite arithmetic results require a safety fallback.
             if not math.isfinite(left):
-                left = math.copysign(self.ceiling, left)
+                left = math.copysign(sys.float_info.max, left)
             if not math.isfinite(right):
-                right = math.copysign(self.ceiling, right)
+                right = math.copysign(sys.float_info.max, right)
             pre_left_peak = max(pre_left_peak, abs(left))
             pre_right_peak = max(pre_right_peak, abs(right))
             clipped += int(abs(left) > self.ceiling) + int(abs(right) > self.ceiling)
