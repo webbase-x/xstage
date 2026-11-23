@@ -112,6 +112,31 @@ class VirtualBusMixerTests(unittest.TestCase):
         self.assertTrue(all(abs(value) <= .981 for value in out))
         self.assertTrue(all(value == value for value in out))
 
+    def test_clipping_diagnostics_are_per_bus_and_reset_each_block(self):
+        mixer = VirtualBusMixer(2, ceiling=.8)
+        mixer.configure(0, gain=2.)
+        output = samples(mixer.process(0, pcm(.6, -.6, .1, -.1)))
+        self.assertEqual(mixer.clipped_samples[0], 2)
+        self.assertEqual(mixer.clipped_samples[1], 0)
+        self.assertAlmostEqual(output[0], .8, places=6)
+        self.assertAlmostEqual(output[1], -.8, places=6)
+        self.assertEqual(mixer.meters[0], (output[0], abs(output[1])))
+        mixer.process(0, pcm(.1, .1))
+        self.assertEqual(mixer.clipped_samples[0], 0)
+        mixer.process(1, pcm(2., 2.))
+        self.assertEqual(mixer.clipped_samples[1], 2)
+        mixer.process(1, b"")
+        self.assertEqual(mixer.clipped_samples[1], 0)
+
+    def test_muted_and_nonfinite_input_do_not_report_false_clipping(self):
+        mixer = VirtualBusMixer(2)
+        mixer.configure(0, mute=True)
+        mixer.process(0, pcm(3., -3.))
+        self.assertEqual(mixer.clipped_samples[0], 0)
+        mixer.configure(0, mute=False)
+        mixer.process(0, pcm(float("inf"), float("nan")))
+        self.assertEqual(mixer.clipped_samples[0], 0)
+
     def test_rejects_invalid_config_and_pcm(self):
         mixer = VirtualBusMixer(2)
         with self.assertRaises(ValueError):
