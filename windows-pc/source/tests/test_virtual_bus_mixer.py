@@ -282,6 +282,13 @@ class VirtualBusMixerTests(unittest.TestCase):
         self.assertEqual(mixer.clipped_samples[0], 2)
         self.assertTrue(all(math.isfinite(x) for x in output))
         self.assertTrue(all(math.isfinite(x) for x in mixer.pre_limit_peaks[0]))
+        # The diagnostic must report the actual overload, not the limiter
+        # ceiling, even when float32 samples approach their maximum value.
+        self.assertGreater(mixer.pre_limit_peaks[0][0], extreme)
+        self.assertGreater(mixer.pre_limit_peak_holds[0][1], extreme)
+        self.assertGreater(mixer.levels_dbfs_snapshot()["pre_limit_peak_dbfs"][0][0], 700.)
+        self.assertEqual(mixer.invalid_samples[0], 0)
+        self.assertEqual(mixer.total_clipped_samples[0], 2)
 
     def test_diagnostics_snapshot_is_detached_and_presets_stay_clean(self):
         mixer = VirtualBusMixer(2, ceiling=.8)
