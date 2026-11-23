@@ -232,7 +232,7 @@ public sealed partial class MainForm
         {
             Minimum = 0, Maximum = 1_048_576,
             ThousandsSeparator = true, Left = 20, Top = 77, Width = 360,
-            Value = job.FileSpeedLimitKib
+            Value = Math.Clamp(job.FileSpeedLimitKib, 0, 1_048_576)
         };
         var save = new Button
         {
