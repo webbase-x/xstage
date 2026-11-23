@@ -752,6 +752,7 @@ class Importer {
       'source','total','ready','fonts','blocked','examples','progress','progress-label',
       'status','detail'])this.dom[key]=$('cloud-import-'+key);
     this.dom.pickFallback=$('cloud-import-pick-fallback');
+    this.dom.uploadOnly=$('cloud-import-upload-only');
     this.dom.selection=$('cloud-import-selection');
     this.dom.selectionList=$('cloud-import-selection-list');
     this.dom.selectionCount=$('cloud-import-selection-count');
@@ -1388,6 +1389,10 @@ class Importer {
           .map(x=>({...x,isFont:false,isMidi:true})),
         ...this.plan.xsks.filter(x=>selectedObjects.has(x))
           .map(x=>({...x,isFont:false,isMidi:false,isXsk:true}))];
+      const uploadOnly=!!this.dom.uploadOnly?.checked;
+      if(uploadOnly&&work.some(item=>!item.isFont&&
+        !(item.isXsk&&(item.kind==='XMID'||item.kind==='XSK'))))
+        fail('โหมดอัปโหลดอย่างเดียวรองรับ XMID/XSK และ SoundFont เท่านั้น · รูปแบบอื่นต้องใช้การนำเข้าและสร้าง DB ตามปกติ');
       const pendingVideos=this.videoEditor?.pendingCount()||0;
       if(pendingVideos)this.dom.detail.textContent='ข้ามวิดีโอรอตรวจ '+pendingVideos+
         ' รายการ · กรอกข้อมูล/เนื้อร้องและบันทึกก่อนนำเข้ารอบถัดไป';
@@ -1443,6 +1448,9 @@ class Importer {
       };
       let normalizePending=!!(olderDuplicates||olderHashes);
       const publish=async()=>{
+        // Upload-only mode creates no DB, backups, locks or partially visible songs.
+        // The separate Drive folder scan can publish a verified catalog later.
+        if(uploadOnly)return;
         if(!revisions.length&&!normalizePending)return;
         for(let attempt=0;attempt<3;attempt++){
           try{
@@ -1949,11 +1957,16 @@ class Importer {
       this.completed=true;
       this.progress(1,1);
       this.refreshButtons();
-      this.status('เสร็จสิ้น · เพลงใหม่ '+this.stats.newSongs+' · แก้เนื้อร้อง '+this.stats.updated+
-        ' · ข้ามซ้ำ '+this.stats.duplicates+' · รหัสชน '+this.stats.conflicts+
-        ' · SoundFont '+this.stats.fonts+' · รอตรวจชื่อ/ศิลปิน '+this.stats.metadataPending+
-        ' · ข้ามผิดพลาด '+this.stats.errors);
-      try{await this.options.refresh();}catch(error){console.warn('Catalog refresh deferred:',error?.message||error);}
+      this.status(uploadOnly
+        ?'อัปโหลดไฟล์สำเร็จ '+this.stats.newSongs+' เพลง · ข้าม MIDI ซ้ำ '+
+          this.stats.duplicates+' · ยังไม่สร้างฐานเพลง · เลือกโฟลเดอร์ SONGS บน Drive แล้วกดสร้าง DB'
+        :'เสร็จสิ้น · เพลงใหม่ '+this.stats.newSongs+' · แก้เนื้อร้อง '+this.stats.updated+
+          ' · ข้ามซ้ำ '+this.stats.duplicates+' · รหัสชน '+this.stats.conflicts+
+          ' · SoundFont '+this.stats.fonts+' · รอตรวจชื่อ/ศิลปิน '+this.stats.metadataPending+
+          ' · ข้ามผิดพลาด '+this.stats.errors);
+      if(!uploadOnly){
+        try{await this.options.refresh();}catch(error){console.warn('Catalog refresh deferred:',error?.message||error);}
+      }
     }catch(error){
       this.authRequired=error?.code==='XSTAGE_AUTH_REQUIRED'||
         /Google Login หมดอายุ|Google ต้องการการยืนยัน|Google ไม่ยืนยันสิทธิ์/.test(
