@@ -16,6 +16,14 @@ const background = readFileSync(join(root, 'LiveBackgroundMonitor.cs'), 'utf8');
 const testProject = readFileSync(join(root, 'tests/DownloadEngine.Tests.csproj'), 'utf8');
 
 const contracts = [
+  ['official streaming services menu', /Menu\("รับชมสตรีมมิง \(เว็บไซต์ทางการ\)"/, workspace],
+  ['Netflix official playback link', /OpenOfficialStreamingSite\("https:\/\/www\.netflix\.com\/"\)/, workspace],
+  ['Disney official playback link', /OpenOfficialStreamingSite\("https:\/\/www\.disneyplus\.com\/"\)/, workspace],
+  ['Prime Video official playback link', /OpenOfficialStreamingSite\("https:\/\/www\.primevideo\.com\/"\)/, workspace],
+  ['Twitch official playback link', /OpenOfficialStreamingSite\("https:\/\/www\.twitch\.tv\/"\)/, workspace],
+  ['streaming uses external system browser', /Process\.Start\(new ProcessStartInfo\(uri\.AbsoluteUri\) \{ UseShellExecute = true \}\)/, workspace],
+  ['streaming requires HTTPS and no credentials', /uri\.Scheme != Uri\.UriSchemeHttps[\s\S]*?uri\.UserInfo\.Length != 0/, workspace],
+  ['streaming does not enqueue DRM media', /Never pass[\s\S]*?DRM playback URLs to yt-dlp/, workspace],
   ['global speed save button cannot implicitly close dialog before validation', /Text = "บันทึก", Width = 112, Height = 35,\s*DialogResult = DialogResult\.None/, performance],
   ['file speed save button cannot implicitly close dialog before validation', /Width = 110, Height = 30, DialogResult = DialogResult\.None/, performance],
   ['global speed validation keeps dialog open', /ok\.Click \+= \(_, _\) =>[\s\S]*?dialog\.DialogResult = DialogResult\.None;/, performance],
