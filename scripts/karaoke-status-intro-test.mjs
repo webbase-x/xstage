@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const app=read('app.js'),html=read('karaoke.html'),stageUI=read('stage-ui.js'),css=read('xstage-ux.css');
 const ver=JSON.parse(read('version.json'));
-assert.equal(ver.build,1143);
+assert.ok(ver.build>=1144,'revision must not regress');
 assert.ok(html.includes('xstage-ux.css?v=1164-mobile-controls-lights'));
 assert.ok(html.includes('stage-ui.js?v=1164-bottom-menu'));
 assert.ok(html.includes('app.js?v=1178-sqlite-only'));

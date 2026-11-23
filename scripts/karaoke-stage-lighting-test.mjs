@@ -101,8 +101,8 @@ const webEq=read('pc-extensions.js');
 const nativeEq=read('native-audio-meter.js');
 assert.match(webEq,/XStageStageLiveSpectrum/, 'Web analyser must publish actual frequency bands');
 assert.match(nativeEq,/XStageStageLiveSpectrum/, 'Android analyser must publish actual frequency bands');
-assert.match(html,/pc-extensions\.js\?v=1136-unfiltered-output-visual-only/, 'Unfiltered Web speaker graph cache must refresh');
-assert.match(html,/native-audio-meter\.js\?v=1136-live-stage-eq/, 'Android meter cache must refresh');
+assert.match(html,/pc-extensions\.js\?v=1137-unfiltered-output-visual-only/, 'Unfiltered Web speaker graph cache must refresh');
+assert.match(html,/native-audio-meter\.js\?v=1137-live-stage-eq/, 'Android meter cache must refresh');
 assert.match(html,/stage-lighting\.js\?v=1164-midi-eq-bars-1165-live-spectrum/,
   'Concert light script cache must refresh');
 assert.match(css,/1\.0\.137: reserve usable EQ meter widths/,
