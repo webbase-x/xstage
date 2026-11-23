@@ -35,7 +35,7 @@ public static class SocialVideoDownloader
     public static string Platform(string url)
     {
         if (!IsVideoUrl(url)) return "";
-        string host = new Uri(url).IdnHost.ToLowerInvariant();
+        string host = new Uri(url).IdnHost.TrimEnd('.').ToLowerInvariant();
         if (Matches(host, "youtube.com") || Matches(host, "youtu.be") || Matches(host, "youtube-nocookie.com")) return "YouTube";
         if (Matches(host, "tiktok.com")) return "TikTok";
         if (Matches(host, "instagram.com")) return "Instagram Reels";
