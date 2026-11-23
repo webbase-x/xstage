@@ -329,6 +329,23 @@ class PlusTests(unittest.TestCase):
         self.assertIn('api("/api/groups',js)
         self.assertIn('syncSettingsUpdate()',js)
 
+    def test_remove_song_from_active_catalog_preserves_sqlite_and_source(self):
+        media=self.put("remove-safe.mp3",b"SAFE-ORIGINAL"*500)
+        plus.import_folder(self.workspace,self.src)
+        before=plus.songs(self.workspace)
+        self.assertEqual(len(before),1)
+        item=before[0]
+        result=plus.hide_song(self.workspace,item["id"])
+        self.assertTrue(result["removed"])
+        self.assertTrue(media.is_file())
+        self.assertEqual(plus.songs(self.workspace),[])
+        self.assertEqual(plus.catalog_song_count(self.workspace),0)
+        self.assertEqual(list(plus.catalog_song_ids(self.workspace)),[])
+        with plus.connect(self.workspace) as db:
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM xstage_songs WHERE id=?",
+                (item["id"],)).fetchone()[0],1)
+
     def test_encoded_looking_lyric_groups_are_hidden_but_source_preserved(self):
         plain=self.put("encoded.mp3",b"ENCODED-MEDIA"*500)
         token=("bw3woQ5X2H2lgLFMsIMNVxkmG9iXBN4p"
