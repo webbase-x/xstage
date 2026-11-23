@@ -9,7 +9,6 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const workspace = readFileSync(join(root, 'MainForm.IdmLayout.cs'), 'utf8');
 const main = readFileSync(join(root, 'MainForm.cs'), 'utf8');
 const engine = readFileSync(join(root, 'DownloadEngine.cs'), 'utf8');
-const engine = readFileSync(join(root, 'DownloadEngine.cs'), 'utf8');
 const performance = readFileSync(join(root, 'MainForm.Performance.cs'), 'utf8');
 const preview = readFileSync(join(root, 'MainForm.XStagePreview.cs'), 'utf8');
 const live = readFileSync(join(root, 'LiveStreamCapture.cs'), 'utf8');
