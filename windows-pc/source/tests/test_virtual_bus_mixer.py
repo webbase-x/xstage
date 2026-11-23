@@ -155,6 +155,27 @@ class VirtualBusMixerTests(unittest.TestCase):
         mixer.process(0, b"")
         self.assertEqual(mixer.rms_meters[0], (0., 0.))
 
+    def test_pre_limiter_peak_distinguishes_overdrive_from_output_ceiling(self):
+        mixer = VirtualBusMixer(2, ceiling=.8)
+        mixer.configure(0, gain=2.)
+        mixer.process(0, pcm(.6, -.3, .1, -.1))
+        self.assertAlmostEqual(mixer.pre_limit_peaks[0][0], 1.2, places=6)
+        self.assertAlmostEqual(mixer.pre_limit_peaks[0][1], .6, places=6)
+        self.assertAlmostEqual(mixer.meters[0][0], .8, places=6)
+        self.assertEqual(mixer.clipped_samples[0], 1)
+        self.assertEqual(mixer.pre_limit_peaks[1], (0., 0.))
+        mixer.configure(0, mute=True)
+        mixer.process(0, pcm(.9, .9))
+        self.assertEqual(mixer.pre_limit_peaks[0], (0., 0.))
+        mixer.process(0, b"")
+        self.assertEqual(mixer.pre_limit_peaks[0], (0., 0.))
+
+    def test_pre_limiter_peak_sanitizes_nonfinite_inputs(self):
+        mixer = VirtualBusMixer(2)
+        mixer.process(0, pcm(float("nan"), float("inf"), .5, -.25))
+        self.assertAlmostEqual(mixer.pre_limit_peaks[0][0], .5)
+        self.assertAlmostEqual(mixer.pre_limit_peaks[0][1], .25)
+
     def test_rejects_invalid_config_and_pcm(self):
         mixer = VirtualBusMixer(2)
         with self.assertRaises(ValueError):
