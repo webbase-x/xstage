@@ -10,7 +10,8 @@ assert.ok(version.build>=1144,'revision must not regress');
 assert.ok(html.includes('browser-midi.js?v=1139-soundfont-extension'));
 assert.ok(html.includes('app.js?v=1178-sqlite-only'));
 assert.ok(app.includes('window.XStageBrowserMidi.prefersCompactGm?.()'));
-assert.ok(app.includes('},12000);'),'Slow chosen SoundFont cannot hold first note for 45 seconds');
+assert.ok(app.includes('setTimeout(()=>resolve({expired:true}),12000)'),
+  'Slow chosen SoundFont must have a bounded 12-second startup wait');
 
 const large='large-font-243mb',bank=new Uint8Array(120000);
 bank.set([82,73,70,70],0);

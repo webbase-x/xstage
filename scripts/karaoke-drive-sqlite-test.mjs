@@ -31,7 +31,8 @@ assert.ok(app.includes("activeDriveCatalog(state.catalogDbDirId,token)"));
 assert.ok(importer.includes("moveToFolder"));
 assert.ok(!importer.includes("catalog-base-'+generation+'.json"));
 assert.ok(app.includes("pointer?.layoutVersion!==6"));
-assert.ok(importer.includes("![5,6].includes(pointer.layoutVersion)"));
+assert.ok(importer.includes("layoutVersion:6,format:'xstage-sqlite3-v1'"),
+  'SQLite writer must publish canonical v6 direct-file pointers');
 assert.ok(app.includes("pointer?.directFile!==true"));
 
 const SQL=await initSqlJs();
