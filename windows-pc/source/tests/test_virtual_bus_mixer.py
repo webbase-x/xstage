@@ -204,6 +204,38 @@ class VirtualBusMixerTests(unittest.TestCase):
         mixer.process(0, pcm(float("inf"), float("nan")))
         self.assertEqual(mixer.total_clipped_samples[0], 0)
 
+    def test_peak_holds_survive_silence_and_reset_independently(self):
+        mixer = VirtualBusMixer(2, ceiling=.8)
+        mixer.process(0, pcm(.7, -.4))
+        mixer.process(0, pcm(.2, -.1))
+        self.assertAlmostEqual(mixer.peak_holds[0][0], .7, places=6)
+        self.assertAlmostEqual(mixer.peak_holds[0][1], .4, places=6)
+        mixer.process(0, b"")
+        self.assertEqual(mixer.meters[0], (0., 0.))
+        self.assertAlmostEqual(mixer.peak_holds[0][0], .7, places=6)
+        mixer.process(1, pcm(1., -1.))
+        self.assertEqual(mixer.total_clipped_samples[1], 2)
+        mixer.reset_peak_holds(0)
+        self.assertEqual(mixer.peak_holds[0], (0., 0.))
+        self.assertAlmostEqual(mixer.peak_holds[1][0], .8, places=6)
+        self.assertEqual(mixer.total_clipped_samples[1], 2)
+        before = mixer.peak_holds.copy()
+        for invalid in (-1, 2, True, "0"):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                mixer.reset_peak_holds(invalid)
+            self.assertEqual(mixer.peak_holds, before)
+        mixer.reset_peak_holds()
+        self.assertEqual(mixer.peak_holds, {0: (0., 0.), 1: (0., 0.)})
+
+    def test_peak_hold_respects_mute_and_solo(self):
+        mixer = VirtualBusMixer(2)
+        mixer.configure(1, solo=True)
+        mixer.process(0, pcm(.9, .9))
+        self.assertEqual(mixer.peak_holds[0], (0., 0.))
+        mixer.configure(1, mute=True)
+        mixer.process(1, pcm(.9, .9))
+        self.assertEqual(mixer.peak_holds[1], (0., 0.))
+
     def test_rejects_invalid_config_and_pcm(self):
         mixer = VirtualBusMixer(2)
         with self.assertRaises(ValueError):
