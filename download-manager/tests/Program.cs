@@ -1432,7 +1432,14 @@ try
             SocialVideoDownloader.VideoRateLimitKib(global, file);
             throw new Exception("Invalid yt-dlp speed cap accepted: " + global + "/" + file);
         }
-        catch (ArgumentOutOfRangeException) { }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            var expectedParameter = global != 0 && (global < 64 || global > 1_048_576)
+                ? "globalLimitKib" : "fileLimitKib";
+            if (ex.ParamName != expectedParameter)
+                throw new Exception("Incorrect yt-dlp speed setting diagnostic: " +
+                    ex.ParamName + " instead of " + expectedParameter);
+        }
     }
     if (SocialVideoDownloader.VideoRateLimitKib(64, 1_048_576) != 64 ||
         SocialVideoDownloader.VideoRateLimitKib(1_048_576, 64) != 64)
