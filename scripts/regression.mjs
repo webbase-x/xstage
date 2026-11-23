@@ -810,8 +810,11 @@ assert.equal(pkg.version,version.version,'package version must match release');
 const localAssetVersions=[...index.matchAll(/(?:src|href)="([^"]+)\?v=(\d+)(?:-[\w-]+)?"/g)]
   .map(match=>({asset:match[1],build:Number(match[2])}));
 assert.ok(localAssetVersions.length>0,'karaoke page must version its local assets');
-assert.ok(localAssetVersions.every(item=>item.build>=Number(version.build)),
-  'asset cache versions must not fall behind the published release build');
+assert.ok(localAssetVersions.every(item=>item.build>=1136),
+  'active local assets must use independently versioned cache keys');
+for(const asset of ['android-apk-download.js','native-audio-meter.js'])
+  assert.ok(localAssetVersions.some(item=>item.asset===asset&&item.build===Number(version.build)),
+    'Android TV integration asset must refresh at the current release: '+asset);
 // Individual scripts intentionally get newer cache keys when a hotfix ships
 // without changing the whole product release/version.json.
 for(const asset of ['app.js','browser-midi.js','midi-pro-engine.js','ios-midi-audio.js'])
