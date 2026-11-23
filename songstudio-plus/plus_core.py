@@ -1271,7 +1271,7 @@ def stats(workspace):
         counts={}
         for label,table in (("songs","xstage_songs"),("media","xstage_media"),
                             ("lyrics","xstage_lyric_versions"),("exports","xstage_exports")):
-            counts[label]=db.execute("SELECT count(*) FROM "+table).fetchone()[0]
+            counts[label]=db.execute("SELECT count(*) FROM "+table+\n                (" WHERE id NOT IN (SELECT song_id FROM xstage_hidden_songs)" if label=="songs" else "")).fetchone()[0]
         counts["songs_with_lyrics"]=db.execute(
             "SELECT COUNT(*) FROM xstage_lyric_versions WHERE is_current=1 AND timing_status!='incomplete'").fetchone()[0]
         counts["songs_partial_lyrics"]=db.execute(
@@ -1314,7 +1314,7 @@ def catalog_song_count(workspace):
     """Count ALL registered tracks, including missing lyrics and exported files."""
     init(workspace)
     with connect(workspace) as db:
-        return int(db.execute("SELECT COUNT(*) FROM xstage_songs").fetchone()[0])
+        return int(db.execute("SELECT COUNT(*) FROM xstage_songs WHERE id NOT IN (SELECT song_id FROM xstage_hidden_songs)").fetchone()[0])
 
 
 def catalog_song_ids(workspace,batch_size=256):
@@ -1329,7 +1329,7 @@ def catalog_song_ids(workspace,batch_size=256):
     while True:
         with connect(workspace) as db:
             batch=db.execute("""SELECT id,code FROM xstage_songs
-                WHERE code>? ORDER BY code LIMIT ?""",
+                WHERE code>? AND id NOT IN (SELECT song_id FROM xstage_hidden_songs) ORDER BY code LIMIT ?""",
                 (after_code,batch_size)).fetchall()
         if not batch:
             return
