@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - "cloud-import*.js"
+      - "cloud-drive-folders.js"
+      - "scripts/cloud-drive-folders-test.mjs"
       - "xsk-browser.js"
       - "xmid-browser.js"
       - "scripts/xmid-missing-metadata-test.mjs"
@@ -53,6 +55,7 @@ jobs:
         run: |
           node scripts/cloud-import-test.mjs
           node scripts/cloud-import-contract-test.mjs
+          node scripts/cloud-drive-folders-test.mjs
           node scripts/xmid-missing-metadata-test.mjs
           node scripts/xsk-browser-test.mjs
           node scripts/xsk-queue-test.mjs
@@ -63,6 +66,7 @@ jobs:
           node --check xsk-browser.js
           node --check xmid-browser.js
           node --check cloud-import.js
+          node --check cloud-drive-folders.js
       - name: Prepare headless Chromium on CI only
         run: |
           npm install --no-save --ignore-scripts playwright@1.56.0 sql.js@1.13.0
