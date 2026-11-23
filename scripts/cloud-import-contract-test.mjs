@@ -104,9 +104,10 @@ assert.throws(()=>sameMidiBytes(fingerprints,md5ContentA,exampleSize+1),/ขน�
 const xmidCode=read('cloud-import.js');
 assert.ok(xmidCode.includes("const sourceCode=opened.code")&&
   xmidCode.includes("const name=isXmid?sourceXmidName(item.file.name)")&&
-  xmidCode.includes("if(isXmid)path.push(rawMidiHash)")&&
+  !xmidCode.includes("if(isXmid)path.push(rawMidiHash)")&&
+  xmidCode.includes("const path=pathFor(sourceCode,isXmid?'xmid':'xsk','',name).slice(0,-1)")&&
   xmidCode.includes("midiSize:rawMidiSize,originalFilename:item.file.name"),
-  'Every 00001.XMID batch must preserve the source basename but isolate distinct MIDI content');
+  'Every 00001.XMID batch must preserve filename without creating hash subdirectories');
 const indexed=await buildMidiIndex(legacyRecords,{getSqlite:async()=>{throw Error('unexpected fetch');}},()=>{});
 assert.equal(indexed.duplicates,1,'Repeated MIDI must collapse even if codes differ');
 assert.equal(legacyRecords.size,2,'A different MIDI must remain available');
