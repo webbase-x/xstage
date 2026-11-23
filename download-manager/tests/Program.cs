@@ -1018,6 +1018,26 @@ try
     if (cancelledBehindHost.ActiveCount != 0 || cancelledBehindHost.WaitingCount != 0)
         throw new Exception("Canceling queued transfers leaked active or waiting slots.");
 
+    // Measured global backpressure at 1/8/32 simultaneous HTTP ranges.
+    // A shared gate must constrain the aggregate rather than allowing each
+    // segment its own full-speed budget. This uses only synthetic byte permits
+    // and never touches user files, the network or persisted checkpoints.
+    foreach (var ranges in new[] { 1, 8, 32 })
+    {
+        var aggregate = new TransferRateGate(64);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var permits = Enumerable.Range(0, ranges)
+            .Select(async _ =>
+            {
+                // Every segment requests the same total share of 64 KiB.
+                // Small read reservations mirror the bounded socket reader.
+                for (var chunk = 0; chunk < 64 / ranges; chunk++)
+                    await aggregate.WaitForBytesAsync(1024, CancellationToken.None);
+            }).ToArray();
+        await Task.WhenAll(permits).WaitAsync(TimeSpan.FromSeconds(5));
+        if (clock.ElapsedMilliseconds < 750 || clock.ElapsedMilliseconds > 4500)
+            throw new Exception($"Global bandwidth backpressure failed with {ranges} ranges: {clock.ElapsedMilliseconds}ms.");
+    }
     var limit = new TransferRateGate(128);
     var gateClock = System.Diagnostics.Stopwatch.StartNew();
     await limit.WaitForBytesAsync(64 * 1024, CancellationToken.None);
