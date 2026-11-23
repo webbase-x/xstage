@@ -40,6 +40,8 @@ class VirtualBusMixer:
         self.rms_meters = {i: (0., 0.) for i in range(bus_count)}
         # Per-block samples exceeding the output ceiling, for clipping QA.
         self.clipped_samples = {i: 0 for i in range(bus_count)}
+        # Lifetime diagnostics: unlike per-block counters, these survive silence.
+        self.total_clipped_samples = {i: 0 for i in range(bus_count)}
         # Input to the safety limiter, after fader/pan/mute, before clipping.
         self.pre_limit_peaks = {i: (0., 0.) for i in range(bus_count)}
 
@@ -89,6 +91,16 @@ class VirtualBusMixer:
             candidate[bus] = BusStrip(**row)
         self.strips = candidate
 
+    def reset_clipping_totals(self, bus=None):
+        """Clear lifetime clipping diagnostics without changing audio or presets."""
+        if bus is None:
+            for index in self.total_clipped_samples:
+                self.total_clipped_samples[index] = 0
+            return
+        if type(bus) is not int or bus not in self.strips:
+            raise ValueError("Unknown bus")
+        self.total_clipped_samples[bus] = 0
+
     def process(self, bus, pcm):
         if type(bus) is not int or bus not in self.strips:
             raise ValueError("Unknown bus")
@@ -132,6 +144,7 @@ class VirtualBusMixer:
         self.rms_meters[bus] = (math.sqrt(left_energy / frame_count),
                                 math.sqrt(right_energy / frame_count))
         self.clipped_samples[bus] = clipped
+        self.total_clipped_samples[bus] += clipped
         self.pre_limit_peaks[bus] = (pre_left_peak, pre_right_peak)
         if sys.byteorder != "little":
             values.byteswap()
