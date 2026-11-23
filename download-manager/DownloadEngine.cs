@@ -349,6 +349,15 @@ public sealed class DownloadEngine
     {
         if (!TryParseUrl(url, out var uri) || uri is null)
             throw new ArgumentException("รองรับลิงก์ HTTP/HTTPS ที่ถูกต้องเท่านั้น");
+        // Protected subscription player pages are not downloadable files.
+        // Reject before inserting a job or writing SQLite; the Media menu
+        // opens the provider's official browser player instead.
+        var host = uri.IdnHost.TrimEnd('.');
+        if (new[] { "netflix.com", "disneyplus.com", "primevideo.com" }
+            .Any(domain => host.Equals(domain, StringComparison.OrdinalIgnoreCase) ||
+                           host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException(
+                "บริการสตรีมมิงนี้ต้องรับชมผ่านเว็บไซต์หรือแอปทางการ ไม่สามารถดาวน์โหลดเนื้อหาที่ป้องกัน DRM ได้");
         var selectedParts = parts ?? DefaultParts;
         ValidateParts(selectedParts);
         var video = SocialVideoDownloader.IsVideoUrl(uri.ToString());
