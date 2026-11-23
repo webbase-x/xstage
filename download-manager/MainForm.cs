@@ -509,7 +509,10 @@ public sealed partial class MainForm : Form
             if (!UpdateChecker.IsNewer(release.Version, release.Build))
             {
                 _updateStatus.Text = $"รุ่นที่ติดตั้ง v{UpdateChecker.CurrentVersion} · Build {UpdateChecker.CurrentBuild} — ไม่มีรุ่นใหม่กว่า";
-                if (manual) MessageBox.Show(this, "โปรแกรมเป็นรุ่นล่าสุด หรือใหม่กว่ารุ่นที่เผยแพร่แล้ว",
+                if (manual) MessageBox.Show(this,
+                    $"รุ่นที่ติดตั้ง: v{UpdateChecker.CurrentVersion} · Build {UpdateChecker.CurrentBuild}\n" +
+                    $"รุ่นล่าสุดที่ตรวจสอบได้: v{release.Version} · Build {release.Build}\n\n" +
+                    "ยังไม่มีตัวติดตั้งรุ่นใหม่กว่าที่ผ่านการตรวจสอบและเผยแพร่แล้ว",
                     "ตรวจสอบอัปเดต", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
