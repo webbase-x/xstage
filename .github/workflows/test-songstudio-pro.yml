@@ -12,6 +12,7 @@ on:
       - "scripts/test_songstudio_pro_ui_matrix.py"
       - "scripts/test-songstudio-pro-portal.mjs"
       - ".github/workflows/test-songstudio-pro.yml"
+      - ".github/workflows/publish-songstudio-pro-v0141.yml"
   push:
     branches: [main]
     paths:
@@ -23,6 +24,7 @@ on:
       - "scripts/test_songstudio_pro_popup_smoke.py"
       - "scripts/test_songstudio_pro_ui_matrix.py"
       - ".github/workflows/test-songstudio-pro.yml"
+      - ".github/workflows/publish-songstudio-pro-v0141.yml"
   workflow_dispatch:
 
 permissions:
