@@ -44,6 +44,20 @@ class VirtualBusMixerTests(unittest.TestCase):
         self.assertEqual(mixer.snapshot(), preset)
         self.assertEqual(mixer.process_many({}), {})
 
+    def test_limiter_reduction_db_is_per_channel_and_clears_on_silence(self):
+        mixer = VirtualBusMixer(2, ceiling=.5)
+        mixer.process(0, pcm(1., .25))
+        reduction = mixer.limiter_reduction_db_snapshot()
+        self.assertAlmostEqual(reduction[0][0], 20 * math.log10(.5), places=5)
+        self.assertEqual(reduction[0][1], 0.)
+        self.assertEqual(reduction[1], (0., 0.))
+        reduction[0] = (100., 100.)
+        self.assertLess(mixer.limiter_reduction_db_snapshot()[0][0], 0.)
+        preset = mixer.snapshot()
+        mixer.process(0, b"")
+        self.assertEqual(mixer.limiter_reduction_db_snapshot()[0], (0., 0.))
+        self.assertEqual(mixer.snapshot(), preset)
+
     def test_bus_counts_and_isolated_meters(self):
         for count in (2, 4, 8, 16):
             with self.subTest(count=count):
