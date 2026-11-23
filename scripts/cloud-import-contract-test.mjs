@@ -490,7 +490,7 @@ assert.ok(style.includes('.cloud-import-body{')&&
   style.includes('flex:0 0 auto'),
   'Import Start and status must be anchored outside scrollable contents');
 assert.ok(page.includes('cloud-import.js?v=1188-drive-upload-only')&&
-  page.includes('cloud-import.css?v=1188-folder-source-controls')&&
+  page.includes('cloud-import.css?v=1189-folder-cancel-controls')&&
   page.includes('video-metadata-editor.js?v=1138-verified-video-selection'),
   'Updated scripts and styles must bypass stale browser caches');
 const oldDoc=ctx.document,oldAdd=ctx.addEventListener,oldScan=ctx.XStageImportCore.scan;
