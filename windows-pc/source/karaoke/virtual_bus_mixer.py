@@ -36,6 +36,8 @@ class VirtualBusMixer:
         self.strips = {i: BusStrip() for i in range(bus_count)}
         self.ceiling = float(ceiling)
         self.meters = {i: (0., 0.) for i in range(bus_count)}
+        # Post-fader RMS levels, independent of peak meters and preset state.
+        self.rms_meters = {i: (0., 0.) for i in range(bus_count)}
         # Per-block samples exceeding the output ceiling, for clipping QA.
         self.clipped_samples = {i: 0 for i in range(bus_count)}
 
@@ -92,6 +94,7 @@ class VirtualBusMixer:
             raise ValueError("Expected interleaved stereo float32 PCM")
         if not pcm:
             self.meters[bus] = (0., 0.)
+            self.rms_meters[bus] = (0., 0.)
             self.clipped_samples[bus] = 0
             return b""
         values = array("f")
@@ -104,6 +107,7 @@ class VirtualBusMixer:
         right_gain = strip.gain * min(1., 1. + strip.pan) if audible else 0.
         left_peak = right_peak = 0.
         clipped = 0
+        left_energy = right_energy = 0.
         for i in range(0, len(values), 2):
             left = values[i] if math.isfinite(values[i]) else 0.
             right = values[i + 1] if math.isfinite(values[i + 1]) else 0.
@@ -113,9 +117,14 @@ class VirtualBusMixer:
             left = max(-self.ceiling, min(self.ceiling, left))
             right = max(-self.ceiling, min(self.ceiling, right))
             values[i], values[i + 1] = left, right
+            left_energy += left * left
+            right_energy += right * right
             left_peak = max(left_peak, abs(left))
             right_peak = max(right_peak, abs(right))
         self.meters[bus] = (left_peak, right_peak)
+        frame_count = len(values) // 2
+        self.rms_meters[bus] = (math.sqrt(left_energy / frame_count),
+                                math.sqrt(right_energy / frame_count))
         self.clipped_samples[bus] = clipped
         if sys.byteorder != "little":
             values.byteswap()
