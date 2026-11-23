@@ -264,9 +264,11 @@ of long scrollbars. Use Ctrl+Plus / Ctrl+Minus / Ctrl+0 for zoom.
 The app no longer assumes that `%USERPROFILE%\\Documents` exists.
 Existing workspaces in the real Windows Documents location (including
 OneDrive redirects) or the old `~/Documents/XStageSongPlus` are preferred
-and are never moved or replaced. A new installation uses the writable
-`%LOCALAPPDATA%\\XStageSongPlus` workspace, with roaming profile and home
-directory alternatives if needed. Windows Unicode (including Thai profile
+and are never moved or replaced. New Windows libraries default to the user's
+registered Music folder (`Music\\XStageSongPlus`, including OneDrive redirects).
+Settings > ตำแหน่งจัดเก็บเพลงและ XMID allows choosing another existing
+folder; save and relaunch to apply. The choice is saved outside the library;
+existing SQLite and XMID files are not silently moved or deleted. Windows Unicode (including Thai profile
 names) is supported without legacy ANSI path encoding.
 
 Use `--workspace "D:\\XStageSongPlus"` only to select an explicit existing or
