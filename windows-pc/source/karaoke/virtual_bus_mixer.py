@@ -40,6 +40,8 @@ class VirtualBusMixer:
         self.rms_meters = {i: (0., 0.) for i in range(bus_count)}
         # Per-block samples exceeding the output ceiling, for clipping QA.
         self.clipped_samples = {i: 0 for i in range(bus_count)}
+        # Non-finite source samples replaced with silence, tracked per block.
+        self.invalid_samples = {i: 0 for i in range(bus_count)}
         # Lifetime diagnostics: unlike per-block counters, these survive silence.
         self.total_clipped_samples = {i: 0 for i in range(bus_count)}
         # Input to the safety limiter, after fader/pan/mute, before clipping.
@@ -129,6 +131,7 @@ class VirtualBusMixer:
             "peak_holds": self.peak_holds.copy(),
             "pre_limit_peak_holds": self.pre_limit_peak_holds.copy(),
             "clipped_samples": self.clipped_samples.copy(),
+            "invalid_samples": self.invalid_samples.copy(),
             "total_clipped_samples": self.total_clipped_samples.copy(),
         }
 
@@ -198,6 +201,7 @@ class VirtualBusMixer:
             self.peak_holds[index] = (0., 0.)
             self.pre_limit_peak_holds[index] = (0., 0.)
             self.clipped_samples[index] = 0
+            self.invalid_samples[index] = 0
             self.total_clipped_samples[index] = 0
 
     def process(self, bus, pcm):
@@ -209,6 +213,7 @@ class VirtualBusMixer:
             self.meters[bus] = (0., 0.)
             self.rms_meters[bus] = (0., 0.)
             self.clipped_samples[bus] = 0
+            self.invalid_samples[bus] = 0
             self.pre_limit_peaks[bus] = (0., 0.)
             return b""
         values = array("f")
@@ -221,9 +226,11 @@ class VirtualBusMixer:
         right_gain = strip.gain * min(1., 1. + strip.pan) if audible else 0.
         left_peak = right_peak = 0.
         clipped = 0
+        invalid = 0
         pre_left_peak = pre_right_peak = 0.
         left_energy = right_energy = 0.
         for i in range(0, len(values), 2):
+            invalid += int(not math.isfinite(values[i])) + int(not math.isfinite(values[i + 1]))
             left = values[i] if math.isfinite(values[i]) else 0.
             right = values[i + 1] if math.isfinite(values[i + 1]) else 0.
             left *= left_gain
@@ -251,6 +258,7 @@ class VirtualBusMixer:
         self.rms_meters[bus] = (math.sqrt(left_energy / frame_count),
                                 math.sqrt(right_energy / frame_count))
         self.clipped_samples[bus] = clipped
+        self.invalid_samples[bus] = invalid
         self.total_clipped_samples[bus] += clipped
         self.pre_limit_peaks[bus] = (pre_left_peak, pre_right_peak)
         held_pre_left, held_pre_right = self.pre_limit_peak_holds[bus]
