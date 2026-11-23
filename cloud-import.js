@@ -1532,10 +1532,22 @@ class Importer {
                 return uploadMedia(source.file,code,[driveLayout.songs,'MIDI','NCN',role,bucket],
                   sourceName,'application/octet-stream',hash);
               };
-              const nativeMidi=media.path?.startsWith(driveLayout.songs+'/MIDI/NCN/SONG/')
-                ? media : await sourcePart(item.midi,'SONG',core.ext(midiFile.name));
-              const sourceLyrics=await sourcePart(item.lyr,'LYR','lyr');
-              const sourceCursor=await sourcePart(item.cur,'CUR','cur');
+              // These immutable NCN sidecars live in separate Drive folders.
+              // Upload in parallel; catalog rows remain serialized and commit
+              // only after every source has been verified successfully.
+              const [nativeMidi,sourceLyrics,sourceCursor]=await uploadPair(
+                ()=>media.path?.startsWith(driveLayout.songs+'/MIDI/NCN/SONG/')
+                  ? media : sourcePart(item.midi,'SONG',core.ext(midiFile.name)),
+                async()=> {
+                  const sidecars=await Promise.allSettled([
+                    sourcePart(item.lyr,'LYR','lyr'),
+                    sourcePart(item.cur,'CUR','cur')
+                  ]);
+                  const failed=sidecars.find(result=>result.status==='rejected');
+                  if(failed)throw failed.reason;
+                  return sidecars.map(result=>result.value);
+                }
+              ).then(([midi,sides])=>[midi,...sides]);
               ncnSource={midi:nativeMidi,lyr:sourceLyrics,cur:sourceCursor};
             }
             const ident=same?.webSongId||('browser/midi/'+midiHash);
