@@ -1420,6 +1420,23 @@ try
         SocialVideoDownloader.VideoRateLimitKib(0, 128) != 128 ||
         SocialVideoDownloader.VideoRateLimitKib(256, 128) != 128)
         throw new Exception("yt-dlp speed caps must honor the strictest configured limit.");
+    // Invalid persisted limits must fail before starting yt-dlp. This mirrors
+    // TransferRateGate and protects against corrupt or out-of-range settings.
+    foreach (var (global, file) in new[] {
+        (-1, 0), (0, -1), (63, 0), (0, 63),
+        (1_048_577, 0), (0, 1_048_577)
+    })
+    {
+        try
+        {
+            SocialVideoDownloader.VideoRateLimitKib(global, file);
+            throw new Exception("Invalid yt-dlp speed cap accepted: " + global + "/" + file);
+        }
+        catch (ArgumentOutOfRangeException) { }
+    }
+    if (SocialVideoDownloader.VideoRateLimitKib(64, 1_048_576) != 64 ||
+        SocialVideoDownloader.VideoRateLimitKib(1_048_576, 64) != 64)
+        throw new Exception("yt-dlp speed cap boundary validation regressed.");
     // Legacy SQLite imports may have short IDs; a separate-copy request
     // must not throw from an unchecked [..8] slice before yt-dlp starts.
     var shortIdCopy = new DownloadJob { Id = "old1", Url = videoHosts[0],
