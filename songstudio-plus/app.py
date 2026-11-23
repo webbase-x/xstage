@@ -611,7 +611,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.state.diagnostic("log.opened",source="api")
                 result={"opened":True,"path":str(self.state.log_path)}
             elif path=="/api/workspace/select":
-                if self.state.active_job_ids():
+                if any(job.get("status") in ("running", "queued") for job in self.state.jobs_snapshot()):
                     raise ValueError("มีงานกำลังทำงานอยู่ กรุณารอให้เสร็จก่อนเปลี่ยนคลัง")
                 supplied=body.get("folder")
                 if not isinstance(supplied,str) or not supplied.strip():
