@@ -1,5 +1,6 @@
 import ctypes as C
 import socket,struct,threading,unittest
+from unittest.mock import patch
 from types import SimpleNamespace as NS
 from karaoke.wifi_network import DWORD,Interface,ConnectionPrefix,IPRow,WifiState,WifiMonitor,select_network,usable_ipv4,_windows_wifi
 from karaoke.remote_ui import sync_wifi_invite
@@ -57,7 +58,8 @@ class WifiTests(unittest.TestCase):
         def reader():ids.append(threading.get_ident());event.set();return WifiState('connected','Stage','10.0.0.2')
         m=WifiMonitor(reader);self.assertTrue(event.wait(1));m.close();m.thread.join(1)
         self.assertNotEqual(ids[0],threading.get_ident());self.assertFalse(m.thread.is_alive());self.assertTrue(m.snapshot().ready)
-    def test_invite_disconnect_and_change_even_when_window_closed(self):
+    @patch('karaoke.remote_boot.lan_address', side_effect=lambda state: state.address if state and state.ready else None)
+    def test_invite_disconnect_and_change_even_when_window_closed(self, _lan_address):
         state=[WifiState('connected','Stage','192.168.1.20')]
         app=NS(_wifi_monitor=NS(snapshot=lambda:state[0]),remote=NS(port=8080,request_key='123456',policy={},capacity_stats=lambda:(0,0),configure=lambda **kw:None),settings={},remote_invite=None)
         sync_wifi_invite(app);old=app.remote_invite;self.assertEqual(old['wifi'],'Stage')
