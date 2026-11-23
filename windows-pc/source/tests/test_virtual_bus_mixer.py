@@ -248,6 +248,27 @@ class VirtualBusMixerTests(unittest.TestCase):
         self.assertTrue(all(math.isfinite(x) for x in output))
         self.assertTrue(all(math.isfinite(x) for x in mixer.pre_limit_peaks[0]))
 
+    def test_diagnostics_snapshot_is_detached_and_presets_stay_clean(self):
+        mixer = VirtualBusMixer(2, ceiling=.8)
+        mixer.process(0, pcm(1., -.5))
+        before = mixer.diagnostics_snapshot()
+        self.assertEqual(before["clipped_samples"][0], 1)
+        self.assertEqual(before["total_clipped_samples"][0], 1)
+        self.assertEqual(before["meters"][1], (0., 0.))
+        self.assertEqual(set(before), {
+            "meters", "rms_meters", "pre_limit_peaks", "peak_holds",
+            "clipped_samples", "total_clipped_samples",
+        })
+        for field in before:
+            before[field][0] = None
+        after = mixer.diagnostics_snapshot()
+        self.assertEqual(after["clipped_samples"][0], 1)
+        self.assertEqual(after["total_clipped_samples"][0], 1)
+        self.assertNotEqual(after["meters"][0], None)
+        self.assertEqual(set(mixer.snapshot()), {"version", "bus_count", "strips"})
+        mixer.reset_clipping_totals(0)
+        self.assertEqual(mixer.diagnostics_snapshot()["total_clipped_samples"][0], 0)
+
     def test_rejects_invalid_config_and_pcm(self):
         mixer = VirtualBusMixer(2)
         with self.assertRaises(ValueError):
