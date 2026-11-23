@@ -40,6 +40,7 @@ BASE = """
  LEFT JOIN xstage_manual_reviews r ON r.song_id=s.id
   AND COALESCE(r.version_id,'')=COALESCE(v.id,'')
  LEFT JOIN xstage_exports e ON e.song_id=s.id
+ LEFT JOIN xstage_song_export_codes xc ON xc.song_id=s.id
 """
 
 def _status_expr():
@@ -62,7 +63,7 @@ def queue(workspace, query="", filter="pending", offset=0, limit=6):
     offset=max(0,int(offset))
     term="%"+str(query).strip()[:100]+"%"
     status=_status_expr()
-    select="""SELECT s.id,s.code,s.title,s.artist,s.original_code,
+    select="""SELECT s.id,s.code,xc.export_code,s.title,s.artist,s.original_code,
        m.extension,v.id AS version_id,v.timing_status,d.reason AS draft_reason,
        COALESCE(r.decision,'') AS decision,e.output_path,
        """+status+" AS review_status "+BASE
@@ -362,10 +363,11 @@ def detail(workspace,song_id):
     """Return all source lines, including untimed draft tail, for manual repair."""
     init(workspace)
     with core.connect(workspace) as db:
-        song=db.execute("""SELECT s.id,s.code,s.title,s.artist,
+        song=db.execute("""SELECT s.id,s.code,xc.export_code,s.title,s.artist,
                   v.id AS version_id,v.timing_status,
                   COALESCE(r.decision,'') AS decision
              FROM xstage_songs s
+             LEFT JOIN xstage_song_export_codes xc ON xc.song_id=s.id
              LEFT JOIN xstage_lyric_versions v ON v.song_id=s.id AND v.is_current=1
              LEFT JOIN xstage_manual_reviews r ON r.song_id=s.id
               AND COALESCE(r.version_id,'')=COALESCE(v.id,'')
@@ -491,7 +493,7 @@ def build_catalog(workspace, status="ready", offset=0, limit=40, query=""):
     converted="(e.version_id=v.id AND COALESCE(e.output_path,'')!='')"
     condition=("("+expr+")!='ready'" if status=="attention" else
         "("+expr+")='ready' AND "+(converted if status=="converted" else "NOT "+converted))
-    sql="""SELECT s.id,s.code,s.title,s.artist,s.original_code,
+    sql="""SELECT s.id,s.code,xc.export_code,s.title,s.artist,s.original_code,
        m.extension,v.id AS version_id,v.timing_status,
        d.reason AS draft_reason,e.output_path,
        COALESCE(r.decision,'') AS manual_decision,
