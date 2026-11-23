@@ -84,7 +84,7 @@ class ContextMenuTests(unittest.TestCase):
         app.engine=SimpleNamespace(playing=True)
         app.song_queue.items=[object()]
         populate_context_menu(app,menu,Menu,[])
-        playback=menu.find('ตัวควบคุม')['menu']
+        playback=menu.find('10. ตัวควบคุม')['menu']
         self.assertEqual(playback.find('ยกเลิกเพลง')['state'],'normal')
         playback.find('เพลงถัดไป')['command']()
         app.next_song.assert_called_once()
@@ -95,7 +95,7 @@ class ContextMenuTests(unittest.TestCase):
         app,menu=self.app(),Menu()
         screens=[(0,0,1920,1080),(-1280,0,1280,720)]
         for _ in range(4): populate_context_menu(app,menu,Menu,screens)
-        self.assertEqual(len(menu.children),7)
+        self.assertEqual(len(menu.children),9)
         display=menu.find('11. ระบบ 2')['menu']
         self.assertEqual(len([e for e in display.entries if e['type']=='radio']),2)
         self.assertEqual(display.find('จอร้องเต็ม')['state'],'disabled')
