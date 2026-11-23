@@ -1004,6 +1004,23 @@ try
     if (resizedQueue.ActiveCount != 0 || resizedQueue.WaitingCount != 0)
         throw new Exception("Reconfigured scheduler leaked a lease.");
 
+    // Saving an unchanged global speed limit must not reset outstanding
+    // bandwidth debt or let concurrent transfers briefly exceed the cap.
+    var unchangedGate = new TransferRateGate(64);
+    using (var firstStop = new CancellationTokenSource())
+    using (var secondStop = new CancellationTokenSource())
+    {
+        var firstPermit = unchangedGate.WaitForBytesAsync(256 * 1024, firstStop.Token);
+        unchangedGate.Configure(64);
+        var secondPermit = unchangedGate.WaitForBytesAsync(8 * 1024, secondStop.Token);
+        if (await Task.WhenAny(secondPermit, Task.Delay(400)) == secondPermit)
+            throw new Exception("Unchanged speed setting erased pending bandwidth debt.");
+        secondStop.Cancel();
+        firstStop.Cancel();
+        try { await secondPermit; } catch (OperationCanceledException) { }
+        try { await firstPermit; } catch (OperationCanceledException) { }
+    }
+
     // Canceling the last reservation must preserve the earlier reader's debt.
     var sharedGate = new TransferRateGate(64);
     using (var earlierStop = new CancellationTokenSource())
