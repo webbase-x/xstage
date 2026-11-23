@@ -293,6 +293,8 @@ function xstageTvVisible(element){
 }
 function xstageTvActiveScope(){
   const nativeTv=document.body.classList.contains('xstage-native-tv');
+  const searchPanel=document.getElementById('xstage-tv-search-panel');
+  if(nativeTv&&xstageTvVisible(searchPanel))return searchPanel;
   const quickMenu=document.getElementById('xstage-tv-quick-menu');
   if(nativeTv&&xstageTvVisible(quickMenu))return quickMenu;
   const selectors=[
@@ -349,6 +351,8 @@ function xstageTvRefreshQuickMenu(panel){
   }
   const login=panel.querySelector('#xstage-tv-quick-login');
   if(login)login.hidden=!!state.token;
+  const search=panel.querySelector('#xstage-tv-quick-search');
+  if(search)search.disabled=!state.token;
   for(const [quickId,controlId] of [
     ['xstage-tv-quick-play','play-pause'],
     ['xstage-tv-quick-next','next'],
@@ -369,6 +373,89 @@ function xstageTvRefreshQuickMenu(panel){
     const control=document.getElementById(controlId);
     if(quick)quick.disabled=!midiReady||!control||control.disabled;
   }
+}
+
+/* Android TV searches the SAME private catalog and starts/queues through the
+ * SAME Karaoke Online action as a mouse/touch song selection. No second DB. */
+function xstageTvRenderSearch(panel){
+  const input=panel.querySelector('#xstage-tv-search-input');
+  const results=panel.querySelector('#xstage-tv-search-results');
+  const status=panel.querySelector('#xstage-tv-search-status');
+  if(!input||!results||!status)return;
+  results.replaceChildren();
+  const term=normalizeSearchText(input.value.trim());
+  if(!state.token){
+    status.textContent='กรุณาเข้าสู่ Google Drive ก่อนค้นหาเพลง';
+    return;
+  }
+  if(!term){
+    status.textContent='พิมพ์ชื่อเพลง ศิลปิน หรือรหัสเพลง';
+    return;
+  }
+  const ranked=rankedSearchEntries(state.songs,term,8);
+  status.textContent=ranked.total
+    ?'พบ '+num(ranked.total)+' เพลง · แสดง '+ranked.results.length+' รายการที่ตรงที่สุด'
+    :'ไม่พบเพลงที่ตรงกับคำค้น';
+  for(const {song} of ranked.results){
+    const button=document.createElement('button');
+    button.type='button';
+    button.className='xstage-tv-search-song';
+    const title=document.createElement('strong');
+    const artist=document.createElement('span');
+    title.textContent=String(song.title||song.code||'ไม่ระบุชื่อเพลง');
+    artist.textContent=[song.code,song.artist].filter(Boolean).map(String).join(' · ');
+    button.append(title,artist);
+    button.addEventListener('click',()=>{
+      if(!state.token||!playable(song))return;
+      xstageTvCloseSearch(false);
+      chooseSearchSong(song);
+    });
+    results.append(button);
+  }
+}
+function xstageTvSearchPanel(){
+  let panel=document.getElementById('xstage-tv-search-panel');
+  if(panel)return panel;
+  panel=document.createElement('section');
+  panel.id='xstage-tv-search-panel';
+  panel.className='xstage-tv-search-panel';
+  panel.hidden=true;
+  panel.setAttribute('role','dialog');
+  panel.setAttribute('aria-modal','true');
+  panel.setAttribute('aria-label','ค้นหาเพลงบนทีวี');
+  panel.innerHTML='<div class="xstage-tv-search-box">'+
+    '<h2>ค้นหาเพลง · X-Stage Karaoke</h2>'+
+    '<p>ค้นจากคลัง XStageKaraoke เดียวกับ Karaoke Online · กด OK เพื่อเลือกเพลง</p>'+
+    '<input id="xstage-tv-search-input" type="search" autocomplete="off" placeholder="ชื่อเพลง / ศิลปิน / รหัสเพลง" aria-label="ค้นหาเพลงบนทีวี">'+
+    '<div id="xstage-tv-search-status" role="status" aria-live="polite"></div>'+
+    '<div id="xstage-tv-search-results" class="xstage-tv-search-results"></div>'+
+    '<button id="xstage-tv-search-close" class="xstage-tv-search-close" type="button">กลับสู่เมนูทีวี</button>'+
+    '</div>';
+  document.body.append(panel);
+  panel.querySelector('#xstage-tv-search-input').addEventListener('input',()=>xstageTvRenderSearch(panel));
+  panel.querySelector('#xstage-tv-search-input').addEventListener('keydown',event=>{
+    if(event.key==='Escape'){event.preventDefault();xstageTvCloseSearch(true);}
+  });
+  panel.querySelector('#xstage-tv-search-close').addEventListener('click',()=>xstageTvCloseSearch(true));
+  return panel;
+}
+function xstageTvCloseSearch(returnToMenu=false){
+  const panel=document.getElementById('xstage-tv-search-panel');
+  if(!panel||panel.hidden)return;
+  // Blurring the text field also releases native Android's D-pad editing mode.
+  panel.contains(document.activeElement)&&document.activeElement?.blur?.();
+  panel.hidden=true;
+  if(returnToMenu)window.XStageTvOpenMenu?.();
+}
+function xstageTvOpenSearch(){
+  if(!document.body.classList.contains('xstage-native-tv'))return false;
+  const panel=xstageTvSearchPanel();
+  document.getElementById('xstage-tv-quick-menu')?.setAttribute('hidden','');
+  panel.hidden=false;
+  xstageTvRenderSearch(panel);
+  const input=panel.querySelector('#xstage-tv-search-input');
+  input?.focus?.({preventScroll:true});
+  return true;
 }
 function xstageTvQuickMenu(){
   let panel=document.getElementById('xstage-tv-quick-menu');
@@ -391,6 +478,7 @@ function xstageTvQuickMenu(){
     '</div>'+
     '<div class="xstage-tv-quick-actions">'+
     '<button type="button" id="xstage-tv-quick-login">เข้าสู่ระบบ Google Drive</button>'+
+    '<button type="button" id="xstage-tv-quick-search">ค้นหาเพลงบนทีวี</button>'+
     '<button type="button" id="xstage-tv-quick-qr">แสดง QR รีโมทมือถือ</button>'+
     '<button type="button" id="xstage-tv-quick-new-qr">สร้าง QR ใหม่</button>'+
     '<button type="button" id="xstage-tv-quick-play">เล่น / พักเพลง</button>'+
@@ -409,6 +497,7 @@ function xstageTvQuickMenu(){
     panel.hidden=true;
     if(!state.token)startAndroidTvDeviceLogin(false);
   });
+  panel.querySelector('#xstage-tv-quick-search').addEventListener('click',()=>xstageTvOpenSearch());
   panel.querySelector('#xstage-tv-quick-qr').addEventListener('click',()=>{
     window.XStageRemoteQr?.show(true);
     panel.hidden=true;
@@ -456,6 +545,8 @@ window.XStageTvOpenMenu=()=>{
   return true;
 };
 window.XStageTvHandleBack=()=>{
+  const search=document.getElementById('xstage-tv-search-panel');
+  if(search&&!search.hidden){xstageTvCloseSearch(true);return true;}
   const menu=document.getElementById('xstage-tv-quick-menu');
   if(menu&&!menu.hidden){menu.hidden=true;return true;}
   const update=document.getElementById('android-tv-update-panel');
@@ -525,6 +616,11 @@ window.XStageTvActivateFocused=()=>{
     try{active.focus({preventScroll:true});}catch{active.focus();}
   }
   if(active.matches?.('input:not([type]),input[type="text"],input[type="search"],textarea')){
+    if(scope.id==='xstage-tv-search-panel'){
+      const first=scope.querySelector('#xstage-tv-search-results button:not([disabled])');
+      if(first){active.blur?.();first.focus({preventScroll:true});}
+      return true;
+    }
     active.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));
     return true;
   }
@@ -536,6 +632,9 @@ document.addEventListener('keydown',event=>{
   const nativeTv=androidTvNativeBridgeReady()||/Android TV|XStageAndroidTV/i.test(navigator.userAgent||'');
   if(!nativeTv)return;
   const map={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'};
+  // Native WebView lets a focused TV search input edit its caret normally.
+  if((event.key==='ArrowLeft'||event.key==='ArrowRight')&&
+     event.target?.matches?.('input,textarea,[contenteditable="true"]'))return;
   if(map[event.key]){
     event.preventDefault();event.stopPropagation();
     window.XStageTvMoveFocus(map[event.key]);
