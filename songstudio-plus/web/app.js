@@ -1192,7 +1192,7 @@
       if(job.kind==="import"){
         text("import-resume-status",(p.resume?"ทำต่อจาก Checkpoint เดิม":
           "นำเข้าใหม่")+
-          " · บันทึกเป็นช่วงทุก 16 ไฟล์ · ข้ามไฟล์เดิมที่ไม่เปลี่ยน "+
+          " · SQLite บันทึกทุก 16–128 ไฟล์ · ไม่คัดลอก MID · ข้ามไฟล์เดิมที่ไม่เปลี่ยน "+
           number(p.resumed_files)+" เพลง");
       }
       const progressBar=$("progress-fill");

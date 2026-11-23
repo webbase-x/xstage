@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.42
+# X-Stage Song Studio Pro — Technical Preview v0.1.43
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -8,6 +8,23 @@ modify the older X-Stage Song Studio application.
 the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
+
+## v0.1.43 — No-copy high-speed import and SQLite batch improvements
+
+- Import original MID/MIDI/KAR and LYR/CUR **without copying or moving source files**.
+- New bounded, import-scoped directory index caches sidecar file listings,
+  including XStageKaraoke hash-suffixed cloud names. Directory changes invalidate
+  cache; ambiguous same-code lyrics are refused instead of guessed.
+- Batch-insert lyric lines and measured CUR cues using SQLite executemany.
+  Preserve original cue positions and version history through exact line IDs.
+- Reduce checkpoint commit overhead: batches of up to 128 processed files,
+  or a timed flush after at least 16 files. Cancel/restart always commits
+  the remaining checkpoints for safe resume.
+- Reuse existing verified SHA-256 for unchanged source files; never skip a
+  required first-time hash. Set the import writer's SQLite cache to 32 MiB.
+- Add regression tests for cache invalidation, ambiguous cloud matches,
+  no-copy registration, cue integrity and existing resume protection.
+  Performance gains are workload- and disk-dependent, not guaranteed.
 
 ## v0.1.42 — Reliable auto-update shutdown
 
