@@ -70,6 +70,13 @@ public static class SocialVideoDownloader
 
     public static string ExplainFailure(string details, int exitCode)
     {
+        // Explain protected playback rather than suggesting retries or
+        // unauthorized workarounds for DRM-encrypted subscription media.
+        if (details.Contains("DRM protected", StringComparison.OrdinalIgnoreCase) ||
+            details.Contains("DRM-protected", StringComparison.OrdinalIgnoreCase) ||
+            details.Contains("This video is DRM", StringComparison.OrdinalIgnoreCase) ||
+            details.Contains("encrypted with DRM", StringComparison.OrdinalIgnoreCase))
+            return "สตรีมนี้มีการป้องกัน DRM โปรดรับชมผ่านเว็บไซต์หรือแอปทางการ";
         if (details.Contains("Requested format is not available", StringComparison.OrdinalIgnoreCase))
             return "ไม่พบรูปแบบหรือความละเอียดที่เลือก โปรดเลือกคุณภาพดีที่สุดหรือต่ำลง";
         if (details.Contains("HTTP Error 429", StringComparison.OrdinalIgnoreCase) ||
