@@ -581,7 +581,9 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
   check();
   const dbRoot=await drive.ensurePath(rootId,['DB']);
   const cacheRoot=await drive.ensurePath(rootId,['CACHE']);
-  const backupRoot=await drive.ensurePath(rootId,['BACKUP']);
+  // On the first publication there is no prior DB to back up.
+  // Do not leave an empty BACKUP directory in a brand-new library.
+  let backupRoot=null;
   const lease=await acquireCatalogLease(drive,cacheRoot,check,status);
   try{
   const codec=scope.XStageDriveSQLite;
@@ -624,6 +626,7 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
   // Backup only the previous canonical SQLite before publishing a new one.
   const older=(await drive.listChildren(dbRoot)).filter(x=>
     x.name==='songs.sqlite3'&&x.mimeType!==MIME_FOLDER);
+  if(older.length)backupRoot=await drive.ensurePath(rootId,['BACKUP']);
   for(let i=0;i<older.length;i++){
     check();
     status?.('สำรองฐานก่อนหน้า '+(i+1)+'/'+older.length);
@@ -643,6 +646,7 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
     // Restore the same known-good DB File ID if an in-place switch fails.
     if(pointer?.directFile){
       try{
+        backupRoot ||= await drive.ensurePath(rootId,['BACKUP']);
         const suspect=await drive.list("'"+driveId(dbRoot)+
           "' in parents and name='songs.sqlite3' and trashed=false");
         for(const file of suspect){
