@@ -1140,14 +1140,16 @@ try
     using (var oldRequest = new CancellationTokenSource())
     {
         var obsolete = reconfiguredGate.WaitForBytesAsync(256 * 1024, oldRequest.Token);
-        reconfiguredGate.Configure(64);
+        // A real rate change creates a new generation. Reapplying the
+        // same limit intentionally preserves outstanding reservations.
+        reconfiguredGate.Configure(128);
         var current = reconfiguredGate.WaitForBytesAsync(64 * 1024, CancellationToken.None);
         oldRequest.Cancel();
         try { await obsolete; throw new Exception("Old reservation must cancel."); }
         catch (OperationCanceledException) { }
         gateClock.Restart();
         await current.WaitAsync(TimeSpan.FromSeconds(3));
-        if (gateClock.ElapsedMilliseconds < 650)
+        if (gateClock.ElapsedMilliseconds < 300)
             throw new Exception("Old canceled reservation must not refund a new configuration.");
     }
     using (var alreadyCanceled = new CancellationTokenSource())
