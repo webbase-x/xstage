@@ -336,6 +336,10 @@ class PlusTests(unittest.TestCase):
         self.lrc(plain,f"[00:01.00]{token}\n[00:05.00]GMM Grammy\n")
         plus.import_folder(self.workspace,self.src)
         self.assertTrue(plus.suspicious_lyric_text(token))
+        self.assertTrue(plus.suspicious_lyric_text("84EYeOdPWRChjjIB+pgMmA8o"))
+        self.assertTrue(plus.suspicious_lyric_text(
+            "5ozaQcAG9CnEtIQsYn8vnBDjGGP")) 
+        self.assertFalse(plus.suspicious_lyric_text("*****GMM Grammy*****"))
         self.assertFalse(plus.suspicious_lyric_text("รักเธอเสมอ"))
         self.assertFalse(plus.suspicious_lyric_text("Long lyric line with spaces 2026"))
         self.assertEqual(plus.groups(self.workspace,"bw3wo"),[])
