@@ -236,6 +236,17 @@ class VirtualBusMixerTests(unittest.TestCase):
         mixer.process(1, pcm(.9, .9))
         self.assertEqual(mixer.peak_holds[1], (0., 0.))
 
+    def test_extreme_finite_float32_input_is_safely_limited(self):
+        mixer = VirtualBusMixer(2, ceiling=.8)
+        mixer.configure(0, gain=2.)
+        extreme = 3.4028234663852886e38
+        output = samples(mixer.process(0, pcm(extreme, -extreme)))
+        self.assertAlmostEqual(output[0], .8, places=6)
+        self.assertAlmostEqual(output[1], -.8, places=6)
+        self.assertEqual(mixer.clipped_samples[0], 2)
+        self.assertTrue(all(__import__("math").isfinite(x) for x in output))
+        self.assertTrue(all(__import__("math").isfinite(x) for x in mixer.pre_limit_peaks[0]))
+
     def test_rejects_invalid_config_and_pcm(self):
         mixer = VirtualBusMixer(2)
         with self.assertRaises(ValueError):
