@@ -176,6 +176,24 @@ class RemoteMobileTests(unittest.TestCase):
         self.assertIsNone(stage_invite(self.app));self.app.settings['remote_idle_only']=False
         self.assertIs(stage_invite(self.app),invite)
         self.assertNotIn(self.remote.operator_key,invite['url'])
+    @patch('karaoke.remote_boot.lan_address', return_value='192.168.1.3')
+    @patch('karaoke.remote_ui.make_invite')
+    def test_invite_sync_tracks_real_server_port_and_reuses_unchanged_invite(self, make, _lan):
+        from karaoke.remote_ui import sync_wifi_invite
+        self.app.settings['remote_capacity_auto'] = False
+        make.side_effect = lambda ip, port, code, wifi: dict(
+            url=f'http://{ip}:{port}/', code=code, wifi=wifi, qr=object())
+        sync_wifi_invite(self.app)
+        first = self.app.remote_invite
+        self.assertEqual(first['url'], f'http://192.168.1.3:{self.remote.port}/')
+        sync_wifi_invite(self.app)
+        self.assertIs(self.app.remote_invite, first)
+        self.assertEqual(make.call_count, 1)
+        self.remote.rotate_codes()
+        sync_wifi_invite(self.app)
+        self.assertEqual(make.call_count, 2)
+        self.assertEqual(self.app.remote_invite['code'], self.remote.request_key)
+
     def test_failed_queue_save_rolls_back_before_retry(self):
         token=self.login()
         original=self.app.song_queue.save
