@@ -102,7 +102,7 @@ class ContextMenuTests(unittest.TestCase):
         app.stage=SimpleNamespace(winfo_exists=lambda:True)
         populate_context_menu(app,menu,Menu,screens)
         self.assertTrue(app.stage_enabled_var.get())
-        self.assertEqual(menu.find('ระบบ 2')['menu'].find('จอร้องเต็ม')['state'],'normal')
+        self.assertEqual(menu.find('11. ระบบ 2')['menu'].find('จอร้องเต็ม')['state'],'normal')
 
 
     def test_all_enabled_context_actions_dispatch_without_inert_buttons(self):
