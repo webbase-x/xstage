@@ -6,6 +6,9 @@ on:
       - "app.js"
       - "config.js"
       - "cloud-import.js"
+      - "cloud-drive-folders.js"
+      - "browser-midi.js"
+      - "scripts/cloud-drive-folders-test.mjs"
       - "browser-midi.js"
       - "karaoke.html"
       - "version.json"
@@ -31,6 +34,7 @@ jobs:
         run: |
           node --check app.js
           node --check cloud-import.js
+          node --check cloud-drive-folders.js
           node --check browser-midi.js
       - name: Verify canonical new root, file formats, DB pointer and upload safety
         run: |
@@ -38,3 +42,4 @@ jobs:
           node scripts/drive-list-pagination-test.mjs
           node scripts/cloud-import-test.mjs
           node scripts/cloud-import-contract-test.mjs
+          node scripts/cloud-drive-folders-test.mjs
