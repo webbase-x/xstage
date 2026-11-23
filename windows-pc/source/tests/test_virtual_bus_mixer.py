@@ -318,6 +318,29 @@ class VirtualBusMixerTests(unittest.TestCase):
         self.assertEqual(mixer.levels_dbfs_snapshot()["peak_hold_dbfs"][0],
                          (-120., -120.))
 
+    def test_pre_limiter_dbfs_exposes_overdrive_without_changing_output(self):
+        mixer = VirtualBusMixer(2, ceiling=.8)
+        mixer.configure(0, gain=2.)
+        mixer.process(0, pcm(.6, -.25))
+        levels = mixer.levels_dbfs_snapshot()
+        self.assertAlmostEqual(levels["pre_limit_peak_dbfs"][0][0],
+                               20 * math.log10(1.2), places=5)
+        self.assertAlmostEqual(levels["pre_limit_peak_dbfs"][0][1],
+                               20 * math.log10(.5), places=5)
+        self.assertAlmostEqual(levels["peak_dbfs"][0][0],
+                               20 * math.log10(.8), places=5)
+        self.assertEqual(levels["pre_limit_peak_dbfs"][1], (-120., -120.))
+        levels["pre_limit_peak_dbfs"][0] = (999., 999.)
+        self.assertNotEqual(mixer.levels_dbfs_snapshot()["pre_limit_peak_dbfs"][0],
+                            (999., 999.))
+        mixer.process(0, b"")
+        self.assertEqual(mixer.levels_dbfs_snapshot()["pre_limit_peak_dbfs"][0],
+                         (-120., -120.))
+        mixer.process(0, pcm(.6, -.25))
+        mixer.reset_diagnostics(0)
+        self.assertEqual(mixer.levels_dbfs_snapshot()["pre_limit_peak_dbfs"][0],
+                         (-120., -120.))
+
     def test_dbfs_floor_validation_and_custom_floor(self):
         mixer = VirtualBusMixer(2)
         for invalid in (float("nan"), float("inf"), True, "minus 60", -301, 1):
