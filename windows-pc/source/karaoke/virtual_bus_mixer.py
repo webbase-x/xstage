@@ -166,6 +166,14 @@ class VirtualBusMixer:
                                          for bus, pair in self.pre_limit_peak_holds.items()},
         }
 
+    def overload_snapshot(self):
+        """Detached per-bus limiter overload flags for a live mixer UI.
+
+        Flags reflect the most recent processed block, not cumulative clipping.
+        A silent block clears its flag; no audio or preset state is changed.
+        """
+        return {bus: self.clipped_samples[bus] > 0 for bus in self.strips}
+
     def reset_clipping_totals(self, bus=None):
         """Clear lifetime clipping diagnostics without changing audio or presets."""
         if bus is None:
