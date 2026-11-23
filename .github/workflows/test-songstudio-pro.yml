@@ -12,7 +12,7 @@ on:
       - "scripts/test_songstudio_pro_ui_matrix.py"
       - "scripts/test-songstudio-pro-portal.mjs"
       - ".github/workflows/test-songstudio-pro.yml"
-      - ".github/workflows/publish-songstudio-pro-v0144.yml"
+      - ".github/workflows/publish-songstudio-pro-v0145.yml"
   push:
     branches: [main]
     paths:
@@ -24,7 +24,7 @@ on:
       - "scripts/test_songstudio_pro_popup_smoke.py"
       - "scripts/test_songstudio_pro_ui_matrix.py"
       - ".github/workflows/test-songstudio-pro.yml"
-      - ".github/workflows/publish-songstudio-pro-v0144.yml"
+      - ".github/workflows/publish-songstudio-pro-v0145.yml"
   workflow_dispatch:
 
 permissions:
@@ -46,7 +46,7 @@ jobs:
           python-version: "3.13"
       - name: Compile standalone app
         run: python -m compileall -q songstudio-plus
-      - name: Verify v0.1.44 updater and installer agree
+      - name: Verify v0.1.45 updater and installer agree
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -56,7 +56,7 @@ jobs:
           version=pro_updater.VERSION
           installer=Path("songstudio-plus/installer/XStageSongStudioPro.iss").read_text(encoding="utf-8")
           workflow=Path(".github/workflows/test-songstudio-pro.yml").read_text(encoding="utf-8")
-          assert version=="0.1.44"
+          assert version=="0.1.45"
           assert f'#define MyAppVersion "{version}"' in installer
           assert f"X-Stage-Song-Studio-Pro-v{version}-win-x64-Setup.exe" in workflow
           source=Path("songstudio-plus/pro_updater.py").read_text(encoding="utf-8")
@@ -192,25 +192,25 @@ jobs:
           if (!(Test-Path $compiler)) { throw "ISCC.exe missing" }
           & $compiler 'songstudio-plus/installer/XStageSongStudioPro.iss'
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
-          if (!(Test-Path "songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.44-win-x64-Setup.exe")) { throw "Setup EXE missing" }
+          if (!(Test-Path "songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.45-win-x64-Setup.exe")) { throw "Setup EXE missing" }
       - name: Verify Setup SHA-256 and create evidence
         shell: pwsh
         run: |
-          $setup="songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.44-win-x64-Setup.exe"
+          $setup="songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.45-win-x64-Setup.exe"
           $hash=(Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
-          "X-Stage Song Studio Pro v0.1.44 Windows x64 Program Files Setup" | Out-File "dist/README-Setup.txt" -Encoding UTF8
+          "X-Stage Song Studio Pro v0.1.45 Windows x64 Program Files Setup" | Out-File "dist/README-Setup.txt" -Encoding UTF8
           "SHA-256: $hash" | Out-File "dist/README-Setup.txt" -Encoding UTF8 -Append
           "Inno Setup (unsigned); requires Windows UAC, retains user SQLite workspace." | Out-File "dist/README-Setup.txt" -Encoding UTF8 -Append
           Write-Host "SETUP SHA-256 $hash"
       - uses: actions/upload-artifact@v6
         with:
-          name: X-Stage-Song-Studio-Pro-v0.1.44-Windows-Setup
-          path: songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.44-win-x64-Setup.exe
+          name: X-Stage-Song-Studio-Pro-v0.1.45-Windows-Setup
+          path: songstudio-plus/installer/output/X-Stage-Song-Studio-Pro-v0.1.45-win-x64-Setup.exe
           retention-days: 14
           if-no-files-found: error
       - uses: actions/upload-artifact@v6
         with:
-          name: X-Stage-Song-Studio-Pro-v0.1.44-Windows-Setup-Metadata
+          name: X-Stage-Song-Studio-Pro-v0.1.45-Windows-Setup-Metadata
           path: dist/README-Setup.txt
           retention-days: 14
           if-no-files-found: error

@@ -1,4 +1,4 @@
-name: Publish X-Stage Song Studio Pro v0.1.44 Windows Setup
+name: Publish X-Stage Song Studio Pro v0.1.45 Windows Setup
 
 on:
   workflow_run:
@@ -10,7 +10,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: publish-songstudio-pro-v0144
+  group: publish-songstudio-pro-v0145
   cancel-in-progress: false
 
 jobs:
@@ -23,7 +23,7 @@ jobs:
         with:
           ref: main
           persist-credentials: true
-      - name: Confirm source build contains v0.1.44 Setup artifacts
+      - name: Confirm source build contains v0.1.45 Setup artifacts
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -32,20 +32,20 @@ jobs:
           set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN}/artifacts?per_page=100" \
             --jq '.artifacts[] | select(.expired == false) | .name' > /tmp/pro-artifacts.txt
-          grep -Fx 'X-Stage-Song-Studio-Pro-v0.1.44-Windows-Setup' /tmp/pro-artifacts.txt
-          grep -Fx 'X-Stage-Song-Studio-Pro-v0.1.44-Windows-Setup-Metadata' /tmp/pro-artifacts.txt
-          echo 'PASS: source run includes both required v0.1.44 artifacts'
+          grep -Fx 'X-Stage-Song-Studio-Pro-v0.1.45-Windows-Setup' /tmp/pro-artifacts.txt
+          grep -Fx 'X-Stage-Song-Studio-Pro-v0.1.45-Windows-Setup-Metadata' /tmp/pro-artifacts.txt
+          echo 'PASS: source run includes both required v0.1.45 artifacts'
       - name: Download verified Windows Setup from successful Pro Build
         uses: actions/download-artifact@v4
         with:
-          name: X-Stage-Song-Studio-Pro-v0.1.44-Windows-Setup
+          name: X-Stage-Song-Studio-Pro-v0.1.45-Windows-Setup
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: dist
       - name: Download independent SHA-256 build evidence
         uses: actions/download-artifact@v4
         with:
-          name: X-Stage-Song-Studio-Pro-v0.1.44-Windows-Setup-Metadata
+          name: X-Stage-Song-Studio-Pro-v0.1.45-Windows-Setup-Metadata
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: dist
@@ -57,7 +57,7 @@ jobs:
           from pathlib import Path
           import hashlib
           import re
-          path=Path("dist/X-Stage-Song-Studio-Pro-v0.1.44-win-x64-Setup.exe")
+          path=Path("dist/X-Stage-Song-Studio-Pro-v0.1.45-win-x64-Setup.exe")
           if not path.is_file() or path.stat().st_size<1024*1024:
               raise SystemExit("Pro Setup is missing or unexpectedly small")
           with path.open("rb") as stream:
@@ -66,7 +66,7 @@ jobs:
           expected=re.search(r"SHA-256:\s*([a-fA-F0-9]{64})",notes)
           if not expected or expected.group(1).lower()!=digest:
               raise SystemExit("EXE SHA-256 differs from Windows Build metadata")
-          Path("dist/X-Stage-Song-Studio-Pro-v0.1.44-win-x64-Setup.exe.sha256").write_text(
+          Path("dist/X-Stage-Song-Studio-Pro-v0.1.45-win-x64-Setup.exe.sha256").write_text(
               digest+"  "+path.name+"\n",encoding="utf-8")
           Path("dist/release-sha256.txt").write_text(digest+"\n",encoding="ascii")
           print("PASS: Pro Setup verified",path.stat().st_size,digest)
@@ -76,16 +76,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag="song-studio-pro-v0.1.44-preview"
-          exe="dist/X-Stage-Song-Studio-Pro-v0.1.44-win-x64-Setup.exe"
+          tag="song-studio-pro-v0.1.45-preview"
+          exe="dist/X-Stage-Song-Studio-Pro-v0.1.45-win-x64-Setup.exe"
           checksum="$exe.sha256"
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "$exe" "$checksum" --clobber
           else
             gh release create "$tag" "$exe" "$checksum" \
-              --title "X-Stage Song Studio Pro v0.1.44 Windows Setup" \
+              --title "X-Stage Song Studio Pro v0.1.45 Windows Setup" \
               --prerelease --target "${{ github.event.workflow_run.head_sha }}" \
-              --notes "Windows x64 five-digit XMID song-code export preview with five-digit XMID codes matching filenames and embedded metadata, from verified GitHub Actions Build ${{ github.event.workflow_run.id }}. Windows x64 Setup installs in Program Files/X-Stage/Song Studio Pro with UAC, Start Menu shortcut and uninstall support. SQLite data and source media stay in the existing workspace. Old portable v0.1.30 and earlier editions need one-time manual Setup installation. Not code-signed."
+              --notes "Windows x64 six-character letter-prefixed XMID code preview with five-digit XMID codes matching filenames and embedded metadata, from verified GitHub Actions Build ${{ github.event.workflow_run.id }}. Windows x64 Setup installs in Program Files/X-Stage/Song Studio Pro with UAC, Start Menu shortcut and uninstall support. SQLite data and source media stay in the existing workspace. Old portable v0.1.30 and earlier editions need one-time manual Setup installation. Not code-signed."
           fi
       - name: Publish verified public manifest for X-Stage Apps
         shell: bash
@@ -97,19 +97,19 @@ jobs:
           feed=Path("downloads/song-studio-pro-latest.json")
           data=json.loads(feed.read_text(encoding="utf-8"))
           assert data["name"]=="X-Stage Song Studio Pro"
-          name="X-Stage-Song-Studio-Pro-v0.1.44-win-x64-Setup.exe"
+          name="X-Stage-Song-Studio-Pro-v0.1.45-win-x64-Setup.exe"
           sha=Path("dist/release-sha256.txt").read_text().strip()
           data.update({
-              "version":"0.1.44",
+              "version":"0.1.45",
               "available":True,
               "channel":"preview",
               "windows_artifact_build":False,
               "code_signed":False,
               "file":name,
               "sha256":sha,
-              "download_url":"https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.44-preview/"+name,
-              "release_url":"https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.44-preview",
-              "status":"Verified Song Studio Pro v0.1.44 high-speed import Windows Setup: installs in Program Files with UAC, Start Menu shortcut and uninstall support, preserving existing SQLite and original media. Unsigned Preview.",
+              "download_url":"https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.45-preview/"+name,
+              "release_url":"https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.45-preview",
+              "status":"Verified Song Studio Pro v0.1.45 high-speed import Windows Setup: installs in Program Files with UAC, Start Menu shortcut and uninstall support, preserving existing SQLite and original media. Unsigned Preview.",
           })
           feed.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
           print("PASS: published verified Pro feed",sha)
@@ -118,7 +118,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add downloads/song-studio-pro-latest.json
           if ! git diff --cached --quiet; then
-            git commit -m "release(songstudio-pro): publish verified v0.1.44 Program Files Setup manifest"
+            git commit -m "release(songstudio-pro): publish verified v0.1.45 Program Files Setup manifest"
             git pull --rebase origin main
             git push origin HEAD:main
           fi

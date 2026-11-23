@@ -1,4 +1,4 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.44
+# X-Stage Song Studio Pro — Technical Preview v0.1.45
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
@@ -8,6 +8,21 @@ modify the older X-Stage Song Studio application.
 the preview on the only copy of a valuable music library. The Karaoke PC,
 Web and Android players do not yet decode the new binary format.
 
+
+## v0.1.45 — Six-character letter-prefixed XMID codes
+
+- Numeric codes remain five digits: `00001.xmid`, `00002.xmid`.
+- Original MIDI source codes with one letter and five digits, such as
+  `a00001.mid`, generate `a00001.xmid`; the filename, visible Song Code
+  and embedded XMID metadata all match exactly.
+- A separate `xstage_song_export_codes` SQLite table preserves each code
+  with case-insensitive uniqueness, while the integer song sequence, media
+  registry and original audio/lyrics are untouched. An ambiguous duplicate
+  original code uses a unique numeric fallback instead of overwriting.
+- A one-time migration registers existing imported MIDI songs without
+  renaming legacy verified XMID files or invalidating skip/dedup semantics.
+- Additional tests cover letter codes, invalid ranges and source-code
+  collisions across Windows-insensitive filenames.
 
 ## v0.1.44 — Five-digit XMID names match song codes
 

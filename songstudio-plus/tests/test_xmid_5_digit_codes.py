@@ -32,9 +32,44 @@ class XmidFiveDigitCodeTests(unittest.TestCase):
             dest=core.destination_for(self.workspace,{"code":code},".mid")
             self.assertEqual(dest.name,expected+".xmid")
             self.assertEqual(dest.parent.name,expected[0])
-        for invalid in (0,-1,100000,None,"bad"):
+        for code in ("a00001","b99999","Z00042"):
+            self.assertEqual(core.xmid_song_code(code),code)
+        for invalid in (0,-1,100000,None,"bad","a00000","ab0001"):
             with self.assertRaises(ValueError):
                 core.xmid_song_code(invalid)
+
+    def test_letter_code_matches_filename_sqlite_and_embedded_metadata(self):
+        source=self.source/"a00001.mid"
+        source.write_bytes(midi())
+        (self.source/"a00001.lrc").write_text(
+            "[00:01.00]Hello\\n[00:03.00]World\\n",encoding="utf-8")
+        imported=core.import_folder(self.workspace,self.source)
+        self.assertEqual(imported["files_new"],1)
+        row=core.songs(self.workspace)[0]
+        self.assertEqual(row["export_code"],"a00001")
+        output=Path(core.build_song(self.workspace,row["id"])["path"])
+        self.assertEqual(output.name,"a00001.xmid")
+        self.assertEqual(core.read_xfile(output,verify_media=True)["code"],"a00001")
+        self.assertTrue(core.build_song(self.workspace,row["id"])["skipped"])
+        with core.connect(self.workspace) as db:
+            self.assertEqual(db.execute(
+                "SELECT export_code FROM xstage_song_export_codes").fetchone()[0],"a00001")
+
+    def test_duplicate_letter_code_case_insensitive_falls_back(self):
+        for folder,stem,data in (("X","a00001",midi()),("Y","A00001",midi()+b"extra")):
+            source=self.source/folder/(stem+".mid")
+            source.parent.mkdir(parents=True,exist_ok=True)
+            source.write_bytes(data)
+            (source.parent/(stem+".lrc")).write_text(
+                "[00:01.00]Hello\\n[00:03.00]World\\n",encoding="utf-8")
+        imported=core.import_folder(self.workspace,self.source)
+        self.assertEqual(imported["files_new"],2)
+        records=core.songs(self.workspace)
+        self.assertEqual(len({r["export_code"].casefold() for r in records}),2)
+        for row in records:
+            path=Path(core.build_song(self.workspace,row["id"])["path"])
+            self.assertEqual(path.stem,row["export_code"])
+            self.assertEqual(core.read_xfile(path)["code"],row["export_code"])
 
     def test_first_export_name_equals_embedded_code_and_database_code(self):
         source=self.source/"A023327.mid"
