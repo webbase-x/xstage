@@ -472,6 +472,27 @@ try
 
     // Scheduler: high-priority jobs overtake low priority without changing
     // persistence order; live reprioritization and cancellation release slots.
+    // Invalid per-host limits must identify the correct settings field and
+    // leave the active scheduler configuration untouched.
+    var validationQueue = new TransferSlotQueue(2, 2);
+    foreach (var invalidHostLimit in new[] { 0, 9 })
+    {
+        try
+        {
+            validationQueue.Configure(2, invalidHostLimit);
+            throw new Exception("Invalid per-host concurrency was accepted.");
+        }
+        catch (ArgumentOutOfRangeException error) when (error.ParamName == "maxPerHost") { }
+    }
+    if (validationQueue.MaxConcurrent != 2 || validationQueue.MaxPerHost != 2)
+        throw new Exception("Rejected per-host setting mutated the live scheduler.");
+    try
+    {
+        validationQueue.Configure(0, 2);
+        throw new Exception("Invalid global concurrency was accepted.");
+    }
+    catch (ArgumentOutOfRangeException error) when (error.ParamName == "maxConcurrent") { }
+
     var scheduler = new TransferSlotQueue(1, 1);
     using (var blocker = await scheduler.EnterAsync("block", "example.test", 1, CancellationToken.None))
     {
