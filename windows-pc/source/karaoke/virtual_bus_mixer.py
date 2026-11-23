@@ -42,6 +42,8 @@ class VirtualBusMixer:
         self.clipped_samples = {i: 0 for i in range(bus_count)}
         # Non-finite source samples replaced with silence, tracked per block.
         self.invalid_samples = {i: 0 for i in range(bus_count)}
+        # Lifetime count survives empty blocks and normal PCM until reset.
+        self.total_invalid_samples = {i: 0 for i in range(bus_count)}
         # Lifetime diagnostics: unlike per-block counters, these survive silence.
         self.total_clipped_samples = {i: 0 for i in range(bus_count)}
         # Input to the safety limiter, after fader/pan/mute, before clipping.
@@ -132,6 +134,7 @@ class VirtualBusMixer:
             "pre_limit_peak_holds": self.pre_limit_peak_holds.copy(),
             "clipped_samples": self.clipped_samples.copy(),
             "invalid_samples": self.invalid_samples.copy(),
+            "total_invalid_samples": self.total_invalid_samples.copy(),
             "total_clipped_samples": self.total_clipped_samples.copy(),
         }
 
@@ -202,6 +205,7 @@ class VirtualBusMixer:
             self.pre_limit_peak_holds[index] = (0., 0.)
             self.clipped_samples[index] = 0
             self.invalid_samples[index] = 0
+            self.total_invalid_samples[index] = 0
             self.total_clipped_samples[index] = 0
 
     def process(self, bus, pcm):
@@ -259,6 +263,7 @@ class VirtualBusMixer:
                                 math.sqrt(right_energy / frame_count))
         self.clipped_samples[bus] = clipped
         self.invalid_samples[bus] = invalid
+        self.total_invalid_samples[bus] += invalid
         self.total_clipped_samples[bus] += clipped
         self.pre_limit_peaks[bus] = (pre_left_peak, pre_right_peak)
         held_pre_left, held_pre_right = self.pre_limit_peak_holds[bus]
