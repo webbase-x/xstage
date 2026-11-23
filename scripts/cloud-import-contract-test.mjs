@@ -84,7 +84,16 @@ const legacyRecords=new Map([
   ['another_mid_same_code', {webSongId:'another_mid_same_code',
     code:'100',midi:{md5Checksum:digestB}}]
 ]);
-const {sourceXmidName,sameMidiBytes}=ctx.XStageCloudImport;
+const {sourceXmidName,sameMidiBytes,pathFor}=ctx.XStageCloudImport;
+assert.equal(pathFor('1','xmid','',sourceXmidName('00001.XMID')).join('/'),
+  'SONGS/MIDI/XMID/0/00001.XMID',
+  'XMID bucket must use the filename first character, never the embedded song code');
+assert.equal(pathFor('9','xmid','',sourceXmidName('A00001.XMID')).join('/'),
+  'SONGS/MIDI/XMID/A/A00001.XMID');
+assert.equal(pathFor('0','xmid','',sourceXmidName('10001.XMID')).join('/'),
+  'SONGS/MIDI/XMID/1/10001.XMID');
+assert.equal(pathFor('5','xmid','',sourceXmidName('00002.xmid')).join('/'),
+  'SONGS/MIDI/XMID/0/00002.XMID');
 assert.equal(sourceXmidName('00001.XMID'),'00001.XMID');
 assert.equal(sourceXmidName('00000001.xmid'),'00001.XMID');
 assert.equal(sourceXmidName('00002.xmid'),'00002.XMID');
@@ -416,7 +425,7 @@ assert.ok(style.includes('.cloud-import-body{')&&
   style.includes('.cloud-import-footer-buttons{')&&
   style.includes('flex:0 0 auto'),
   'Import Start and status must be anchored outside scrollable contents');
-assert.ok(page.includes('cloud-import.js?v=1178-sqlite-only')&&
+assert.ok(page.includes('cloud-import.js?v=1181-xmid-filename-bucket')&&
   page.includes('cloud-import.css?v=1172-direct-db-layout')&&
   page.includes('video-metadata-editor.js?v=1138-verified-video-selection'),
   'Updated scripts and styles must bypass stale browser caches');
