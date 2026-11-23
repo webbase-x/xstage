@@ -166,6 +166,23 @@ class VirtualBusMixer:
                                          for bus, pair in self.pre_limit_peak_holds.items()},
         }
 
+    def limiter_reduction_db_snapshot(self):
+        """Per-channel gain reduction inferred from the latest PCM block.
+
+        Zero means no limiting; negative values indicate peak attenuation.
+        This is a read-only UI diagnostic, not a compressor or gain control.
+        """
+        result = {}
+        for bus in self.strips:
+            before = self.pre_limit_peaks[bus]
+            after = self.meters[bus]
+            result[bus] = tuple(
+                20.0 * math.log10(output / source)
+                if source > 0 and output > 0 and source > output else 0.0
+                for source, output in zip(before, after)
+            )
+        return result
+
     def overload_snapshot(self):
         """Detached per-bus limiter overload flags for a live mixer UI.
 
