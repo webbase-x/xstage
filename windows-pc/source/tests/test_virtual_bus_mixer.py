@@ -452,6 +452,29 @@ class VirtualBusMixerTests(unittest.TestCase):
         self.assertEqual(mixer.total_invalid_samples, {0: 0, 1: 0})
         self.assertEqual(mixer.snapshot(), preset)
 
+    def test_reset_invalid_totals_preserves_live_meters_and_other_bus(self):
+        mixer = VirtualBusMixer(2)
+        mixer.configure(0, gain=1.5)
+        mixer.process(0, pcm(float("nan"), .5))
+        mixer.process(1, pcm(float("inf"), -.25))
+        preset = mixer.snapshot()
+        before = mixer.diagnostics_snapshot()
+        self.assertEqual(before["total_invalid_samples"], {0: 1, 1: 1})
+        for invalid in (-1, 2, True, "0"):
+            with self.subTest(bus=invalid), self.assertRaises(ValueError):
+                mixer.reset_invalid_totals(invalid)
+            self.assertEqual(mixer.diagnostics_snapshot(), before)
+        mixer.reset_invalid_totals(0)
+        after = mixer.diagnostics_snapshot()
+        self.assertEqual(after["total_invalid_samples"], {0: 0, 1: 1})
+        for field in before:
+            if field != "total_invalid_samples":
+                self.assertEqual(after[field], before[field])
+        self.assertEqual(mixer.snapshot(), preset)
+        mixer.reset_invalid_totals()
+        self.assertEqual(mixer.total_invalid_samples, {0: 0, 1: 0})
+        self.assertEqual(mixer.invalid_samples, before["invalid_samples"])
+
     def test_rejects_invalid_config_and_pcm(self):
         mixer = VirtualBusMixer(2)
         with self.assertRaises(ValueError):
