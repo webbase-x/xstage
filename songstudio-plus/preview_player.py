@@ -29,10 +29,11 @@ def source_info(workspace, song_id):
     # The app initializes schema once at startup. Range media requests
     # must NOT execute SQLite DDL on each seek/scrub of a large video.
     with core.connect(workspace) as db:
-        row=db.execute("""SELECT s.id AS song_id,s.code,s.title,s.artist,
+        row=db.execute("""SELECT s.id AS song_id,s.code,xc.export_code,s.title,s.artist,
                 m.id AS media_id,m.sha256,m.extension,m.bytes,m.stored_path,
                 v.id AS version_id,v.timing_status
              FROM xstage_songs s JOIN xstage_media m ON m.id=s.media_id
+             LEFT JOIN xstage_song_export_codes xc ON xc.song_id=s.id
              LEFT JOIN xstage_lyric_versions v ON v.song_id=s.id AND v.is_current=1
              WHERE s.id=?""",(song_id,)).fetchone()
         if not row:
