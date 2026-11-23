@@ -173,6 +173,9 @@ CREATE TABLE IF NOT EXISTS xstage_exports(
  REFERENCES xstage_lyric_versions(id), output_path TEXT NOT NULL,
  sha256 TEXT NOT NULL, created_at TEXT NOT NULL);
 -- Persistent content identity for created XMIDs; protects across runs.
+CREATE TABLE IF NOT EXISTS xstage_song_export_codes(
+ song_id TEXT PRIMARY KEY REFERENCES xstage_songs(id),
+ export_code TEXT NOT NULL COLLATE NOCASE UNIQUE, assigned_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS xstage_midi_export_registry(
  midi_sha256 TEXT PRIMARY KEY,
  song_id TEXT NOT NULL REFERENCES xstage_songs(id),
@@ -274,6 +277,7 @@ def init(workspace):
                     with db:
                         db.executescript(SCHEMA)
                         _repair_historical_lyrics(db)
+                        _migrate_xmid_export_codes(db)
                 finally:
                     db.close()
                 _INITIALIZED.add(key)
@@ -283,6 +287,7 @@ def init(workspace):
     # older incomplete current lyric pointer if the migration marker is absent.
     with connect(workspace) as db:
         _repair_historical_lyrics(db)
+        _migrate_xmid_export_codes(db)
     return path
 
 def source_for_build(workspace, db, media):
@@ -956,6 +961,8 @@ def import_folder(workspace,source,progress=None,cancel=None,selected_file=None)
                 if not song:
                     raise ValueError("ทะเบียนเพลงที่ตรงกับสื่อนี้ไม่สมบูรณ์")
                 song_id=song["id"]
+                if path.suffix.lower() in MIDI_EXT:
+                    _assign_xmid_export_code(db,song)
                 # The same path may be reused for a different song after
                 # replacement: keep the latest verified media relationship.
                 # A verified unchanged source must not be rewritten on every
@@ -1372,13 +1379,14 @@ def songs(workspace,query="",limit=80,offset=0):
     init(workspace)
     term="%"+str(query)[:100].strip()+"%"
     with connect(workspace) as db:
-        items=db.execute("""SELECT s.id,s.code,s.title,s.artist,s.original_code,m.extension,
+        items=db.execute("""SELECT s.id,s.code,xc.export_code,s.title,s.artist,s.original_code,m.extension,
             m.sha256,v.id AS version_id,v.timing_status,
             d.reason AS draft_reason,e.output_path
             FROM xstage_songs s JOIN xstage_media m ON m.id=s.media_id
             LEFT JOIN xstage_lyric_versions v ON v.song_id=s.id AND v.is_current=1
             LEFT JOIN xstage_lyric_drafts d ON d.song_id=s.id
             LEFT JOIN xstage_exports e ON e.song_id=s.id
+            LEFT JOIN xstage_song_export_codes xc ON xc.song_id=s.id
             WHERE s.id NOT IN (SELECT song_id FROM xstage_hidden_songs)\n              AND (s.title LIKE ? OR s.artist LIKE ? OR s.original_code LIKE ?)
             ORDER BY s.code DESC LIMIT ? OFFSET ?""",
             (term,term,term,max(1,min(int(limit),200)),max(0,int(offset)))).fetchall()
@@ -1757,14 +1765,72 @@ def packed_text(text):
     return struct.pack("<I",len(raw))+raw
 
 def xmid_song_code(code):
-    """Canonical five-digit song code, identical to the .xmid filename stem."""
+    """Five digits (00001) or letter plus five digits (a00001)."""
+    if isinstance(code,str):
+        if re.fullmatch(r"[A-Za-z][0-9]{5}",code):
+            if int(code[1:])==0:
+                raise ValueError("รหัสเพลงอักษรต้องเริ่มด้วยเลข 00001")
+            return code
+        if not re.fullmatch(r"[0-9]{1,5}",code):
+            raise ValueError("XMID รองรับ 00001–99999 หรือ a00001–z99999")
+    if isinstance(code,bool):
+        raise ValueError("รหัสเพลงต้องเป็นตัวเลขหรืออักษรกับตัวเลข")
     try:
         value=int(code)
-    except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError("รหัสเพลง XMID ต้องเป็นเลข 5 หลัก") from exc
-    if value<1 or value>99999 or (isinstance(code,str) and not code.isdecimal()):
-        raise ValueError("XMID รองรับรหัสเพลง 00001–99999 เท่านั้น")
+    except (TypeError,ValueError,OverflowError) as exc:
+        raise ValueError("XMID รองรับเลข 5 หลักหรืออักษรนำหน้า") from exc
+    if not 1<=value<=99999:
+        raise ValueError("XMID รองรับ 00001–99999 หรือ a00001–z99999")
     return f"{value:05d}"
+
+
+def _assign_xmid_export_code(db,song):
+    """Case-insensitive, persistent XMID code; never alter primary song IDs."""
+    existing=db.execute("""SELECT export_code FROM xstage_song_export_codes
+        WHERE song_id=?""",(song["id"],)).fetchone()
+    if existing:
+        return existing["export_code"]
+    original=str(song["original_code"]).strip()
+    letter_code=(re.fullmatch(r"[A-Za-z][0-9]{5}",original) is not None
+                 and int(original[1:])!=0)
+    candidate=xmid_song_code(original if letter_code else song["code"])
+    try:
+        db.execute("""INSERT INTO xstage_song_export_codes
+            (song_id,export_code,assigned_at) VALUES (?,?,?)""",
+            (song["id"],candidate,now()))
+    except sqlite3.IntegrityError:
+        if not letter_code:
+            raise ValueError("รหัสเพลง XMID ซ้ำในทะเบียน")
+        # Two different MIDI files may share the same original code.
+        # Use the unique five-digit catalog ID instead of overwriting.
+        candidate=xmid_song_code(song["code"])
+        db.execute("""INSERT INTO xstage_song_export_codes
+            (song_id,export_code,assigned_at) VALUES (?,?,?)""",
+            (song["id"],candidate,now()))
+    return candidate
+
+
+def _migrate_xmid_export_codes(db):
+    """Non-destructive one-time mapping for existing imported MIDI songs."""
+    marker="xmid-letter-code-v1"
+    if db.execute("SELECT 1 FROM xstage_migrations WHERE key=?",(marker,)).fetchone():
+        return
+    cursor=db.execute("""SELECT s.id,s.code,s.original_code FROM xstage_songs s
+        JOIN xstage_media m ON m.id=s.media_id
+        WHERE lower(m.extension) IN ('.mid','.midi','.kar')
+        ORDER BY s.code""")
+    while True:
+        batch=cursor.fetchmany(512)
+        if not batch:
+            break
+        for song in batch:
+            try:
+                _assign_xmid_export_code(db,song)
+            except ValueError:
+                # Keep all legacy entries intact even beyond 99999.
+                pass
+    db.execute("INSERT INTO xstage_migrations(key,applied_at) VALUES (?,?)",
+               (marker,now()))
 
 
 def metadata_bytes(song,version,lines,code_text=None):
@@ -1787,10 +1853,10 @@ def metadata_bytes(song,version,lines,code_text=None):
             stream.extend(packed_text(c["text"] if i<visible_count else ""))
     return bytes(stream)
 
-def destination_for(workspace,song,ext):
+def destination_for(workspace,song,ext,export_code=None):
     kind=ext.lstrip(".").lower()
     if kind in ("mid","midi","kar"):
-        name=xmid_song_code(song["code"])
+        name=xmid_song_code(export_code if export_code is not None else song["code"])
         return root_folder(workspace)/"MIDI"/"MID"/"XMID"/name[0]/(name+".xmid")
     name=f'{song["code"]:08d}'
     bucket=name[0]
@@ -1867,10 +1933,8 @@ def build_song(workspace,song_id):
           (song_id,)).fetchone()
         if not pair: raise ValueError("ไม่พบเพลง")
         is_midi=pair["extension"].lower() in MIDI_EXT
-        # Validate the 5-digit code before looking up an older legacy export.
-        # Never create an ambiguous six-digit XMID with a mismatched filename.
-        if is_midi:
-            xmid_song_code(pair["code"])
+        # Preserve the alphanumeric or numeric code in the SQLite registry.
+        export_code=_assign_xmid_export_code(db,pair) if is_midi else None
         version=db.execute("""SELECT * FROM xstage_lyric_versions
           WHERE song_id=? AND is_current=1""",(song_id,)).fetchone()
         if is_midi:
@@ -1882,9 +1946,8 @@ def build_song(workspace,song_id):
         if version["timing_status"]=="incomplete":
             raise ValueError("เพลงนี้มีเนื้อร้องบางส่วนแต่ CUR ยังไม่ครบ · ตรวจสอบเวลาปาดสีก่อนสร้าง XMID")
         lines=get_version_lines(db,version["id"])
-        meta=metadata_bytes(pair,version,lines,
-                            code_text=xmid_song_code(pair["code"]) if is_midi else None)
-        dest=destination_for(workspace,pair,pair["extension"])
+        meta=metadata_bytes(pair,version,lines,code_text=export_code)
+        dest=destination_for(workspace,pair,pair["extension"],export_code=export_code)
         previous=db.execute("SELECT * FROM xstage_exports WHERE song_id=?",(song_id,)).fetchone()
         if previous and previous["version_id"]==version["id"] and dest.is_file():
             if digest(dest)==previous["sha256"]:
