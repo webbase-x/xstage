@@ -267,7 +267,7 @@
         ready? song.timing_status:
         song.timing_status==="incomplete"?"เนื้อร้องบางส่วน · CUR ไม่ครบ":
         song.draft_reason?"เก็บเนื้อร้องแล้ว · รอ Timing":"ยังไม่พบเนื้อร้องพร้อมเวลา";
-      const columns=[String(song.code).padStart(8,"0"),song.title||song.original_code,
+      const columns=[String(song.code).padStart(5,"0"),song.title||song.original_code,
           format,timingLabel,
           song.output_path?"สร้างแล้ว":"—"];
       columns.forEach((value,index)=>{
@@ -299,7 +299,7 @@
           if(state.activeJob)return toast("มีงานกำลังทำงานอยู่",true);
           const confirmed=await confirmTask("ลบรายการเพลงจากคลัง",
             "เพลง: "+(song.title||song.original_code)+"\\n"+
-            "รหัส: "+String(song.code).padStart(8,"0")+"\\n\\n"+
+            "รหัส: "+String(song.code).padStart(5,"0")+"\\n\\n"+
             "รายการนี้จะถูกซ่อนจากคลัง โดยไม่ลบไฟล์ต้นฉบับ XMID หรือข้อมูลเพลงใน SQLite");
           if(!confirmed)return;
           remove.disabled=true;
@@ -313,7 +313,7 @@
         action.append(remove);
       }
       row.append(action);list.append(row);
-      const option=new Option(String(song.code).padStart(8,"0")+" · "+song.title,song.id);
+      const option=new Option(String(song.code).padStart(5,"0")+" · "+song.title,song.id);
       select.append(option);
       const label=document.createElement("label");
       label.className="build-row";
@@ -363,7 +363,7 @@
       const div=document.createElement("div");div.className="song-text";
       div.textContent=song.title||song.original_code;
       const small=document.createElement("small");
-      small.textContent=String(song.code).padStart(8,"0")+" · "+
+      small.textContent=String(song.code).padStart(5,"0")+" · "+
         format+" · "+timingLabel;
       div.append(small);label.append(check,div);build.append(label);
     }
@@ -497,7 +497,7 @@
         const name=document.createElement("div");name.className="song-text";
         name.textContent=song.title||song.original_code;
         const detail=document.createElement("small");
-        detail.textContent=String(song.code).padStart(8,"0")+" · "+
+        detail.textContent=String(song.code).padStart(5,"0")+" · "+
           String(song.extension||"").toUpperCase()+" · "+
           (converted?"แปลงแล้ว ✓ · ไม่สร้างซ้ำ":ready?"ยังไม่แปลง":
             review?"รอยืนยันก่อนแปลง":
@@ -1455,7 +1455,7 @@
       const card=riskElement("article","risk-record");
       const main=riskElement("div","risk-record-main");
       const identity=riskElement("strong","risk-song-name",
-        String(entry.code).padStart(8,"0")+" · "+entry.title);
+        String(entry.code).padStart(5,"0")+" · "+entry.title);
       const desc=riskElement("p","risk-song-meta",
         (entry.artist||"ไม่ระบุศิลปิน")+" · "+entry.extension.toUpperCase()+
         " · "+(reviewNames[entry.review_status]||"ยังไม่ได้ทดลองฟัง"));
@@ -1495,7 +1495,7 @@
         const box=riskElement("div","risk-record-main");
         box.append(
           riskElement("strong","risk-song-name",
-            String(review.code).padStart(8,"0")+" · "+review.title),
+            String(review.code).padStart(5,"0")+" · "+review.title),
           riskElement("p","risk-song-meta",
             (reviewNames[review.action]||review.action)+" · "+entry.when),
           riskElement("p","risk-proof",review.note||"ไม่ได้ระบุหมายเหตุ")
@@ -1507,7 +1507,7 @@
   }
   function openRiskDialog(item){
     state.riskSelected=item;state.riskEvidenceIndex=0;
-    text("risk-modal-title",String(item.code).padStart(8,"0")+" · "+item.title);
+    text("risk-modal-title",String(item.code).padStart(5,"0")+" · "+item.title);
     text("risk-modal-description",
       "Lyrics Version "+item.version_id+" · "+riskCategories[item.category]+
       " · ผลการฟัง: "+(reviewNames[item.review_status]||"ยังไม่ได้ทดลองฟัง"));
@@ -1593,7 +1593,7 @@
       button.type="button";button.className="preview-track";
       button.classList.toggle("chosen",state.previewSelected?.song_id===song.id);
       const title=document.createElement("strong");
-      title.textContent=String(song.code).padStart(8,"0")+" · "+song.title;
+      title.textContent=String(song.code).padStart(5,"0")+" · "+song.title;
       const small=document.createElement("small");
       small.textContent=(song.artist||"ไม่ระบุศิลปิน")+
         " · "+song.extension.toUpperCase()+" · "+
@@ -1631,7 +1631,7 @@
       state.previewTime=0;
       state.previewMidiSample=0;
       state.previewMidiAt=performance.now();
-      text("preview-song-title",String(details.code).padStart(8,"0")+" · "+details.title);
+      text("preview-song-title",String(details.code).padStart(5,"0")+" · "+details.title);
       text("preview-song-artist",details.artist||"ไม่ระบุศิลปิน");
       text("preview-media-mode",details.mode==="midi"?"MIDI / Windows Synth":
         details.mode==="video"?"VIDEO / Original":"AUDIO / Original");
@@ -2083,7 +2083,7 @@
         button.type="button";button.className="preview-track";
         button.classList.toggle("chosen",state.manualSelected?.song?.id===song.id);
         const title=document.createElement("strong");
-        title.textContent=String(song.code).padStart(8,"0")+" · "+song.title;
+        title.textContent=String(song.code).padStart(5,"0")+" · "+song.title;
         const label=document.createElement("small");
         const statuses={missing:"ยังไม่มีเนื้อร้อง",untimed:"มีข้อความ / ไม่มีเวลา",
           incomplete:"เนื้อร้องหรือเวลาปาดไม่ครบ",review:"รอการยืนยัน",
@@ -2292,7 +2292,7 @@
       $("manual-only-issues").setAttribute("aria-pressed","false");
       $("manual-only-issues").textContent="แสดงเฉพาะบรรทัดที่ต้องตรวจ";
       $("manual-line-index").value="0";
-      text("manual-song-title",String(details.song.code).padStart(8,"0")+
+      text("manual-song-title",String(details.song.code).padStart(5,"0")+
         " · "+details.song.title);
       text("manual-edit-status",details.song.timing_status||"ยังไม่มีเวลา");
       text("manual-feedback",details.draft_reason||"พร้อมตรวจและแก้ไข");

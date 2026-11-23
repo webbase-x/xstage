@@ -1756,9 +1756,21 @@ def packed_text(text):
     if len(raw)>2**20: raise ValueError("ข้อความเกินขนาด")
     return struct.pack("<I",len(raw))+raw
 
-def metadata_bytes(song,version,lines):
+def xmid_song_code(code):
+    """Canonical five-digit song code, identical to the .xmid filename stem."""
+    try:
+        value=int(code)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("รหัสเพลง XMID ต้องเป็นเลข 5 หลัก") from exc
+    if value<1 or value>99999 or (isinstance(code,str) and not code.isdecimal()):
+        raise ValueError("XMID รองรับรหัสเพลง 00001–99999 เท่านั้น")
+    return f"{value:05d}"
+
+
+def metadata_bytes(song,version,lines,code_text=None):
     stream=bytearray()
-    for val in (song["id"],str(song["code"]),version["id"],
+    code_value=str(song["code"]) if code_text is None else code_text
+    for val in (song["id"],code_value,version["id"],
                 version["title"],version["artist"],version["timing_status"]):
         stream.extend(packed_text(val))
     stream.extend(struct.pack("<I",len(lines)))
@@ -1777,10 +1789,11 @@ def metadata_bytes(song,version,lines):
 
 def destination_for(workspace,song,ext):
     kind=ext.lstrip(".").lower()
+    if kind in ("mid","midi","kar"):
+        name=xmid_song_code(song["code"])
+        return root_folder(workspace)/"MIDI"/"MID"/"XMID"/name[0]/(name+".xmid")
     name=f'{song["code"]:08d}'
     bucket=name[0]
-    if kind in ("mid","midi","kar"):
-        return root_folder(workspace)/"MIDI"/"MID"/"XMID"/bucket/(name+".xmid")
     if kind in ("mp4","mkv","webm","mov"):
         return root_folder(workspace)/"VDO"/("X"+kind.upper())/bucket/(name+".x"+kind)
     return root_folder(workspace)/"AUDIO"/("X"+kind.upper())/bucket/(name+".x"+kind)
@@ -1854,6 +1867,10 @@ def build_song(workspace,song_id):
           (song_id,)).fetchone()
         if not pair: raise ValueError("ไม่พบเพลง")
         is_midi=pair["extension"].lower() in MIDI_EXT
+        # Validate the 5-digit code before looking up an older legacy export.
+        # Never create an ambiguous six-digit XMID with a mismatched filename.
+        if is_midi:
+            xmid_song_code(pair["code"])
         version=db.execute("""SELECT * FROM xstage_lyric_versions
           WHERE song_id=? AND is_current=1""",(song_id,)).fetchone()
         if is_midi:
@@ -1865,7 +1882,8 @@ def build_song(workspace,song_id):
         if version["timing_status"]=="incomplete":
             raise ValueError("เพลงนี้มีเนื้อร้องบางส่วนแต่ CUR ยังไม่ครบ · ตรวจสอบเวลาปาดสีก่อนสร้าง XMID")
         lines=get_version_lines(db,version["id"])
-        meta=metadata_bytes(pair,version,lines)
+        meta=metadata_bytes(pair,version,lines,
+                            code_text=xmid_song_code(pair["code"]) if is_midi else None)
         dest=destination_for(workspace,pair,pair["extension"])
         previous=db.execute("SELECT * FROM xstage_exports WHERE song_id=?",(song_id,)).fetchone()
         if previous and previous["version_id"]==version["id"] and dest.is_file():

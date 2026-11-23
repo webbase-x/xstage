@@ -142,6 +142,8 @@ class PlusTests(unittest.TestCase):
         self.assertFalse(first["skipped"])
         output=Path(first["path"])
         self.assertEqual(output.suffix,".xmid")
+        self.assertEqual(output.name,"00001.xmid")
+        self.assertEqual(plus.read_xfile(output)["code"],"00001")
         initial_mtime=output.stat().st_mtime_ns
         with plus.connect(self.workspace) as db:
             row=db.execute("""SELECT * FROM xstage_midi_export_registry""").fetchone()
@@ -568,7 +570,8 @@ class PlusTests(unittest.TestCase):
         self.assertEqual(rows[0]["artist"],"ศิลปินทดสอบ")
         self.assertEqual(len(plus.groups(self.workspace,"Nick")),1)
         built=plus.build_song(self.workspace,rows[0]["id"])
-        self.assertEqual(Path(built["path"]).suffix,".xmid")
+        self.assertEqual(Path(built["path"]).name,"00001.xmid")
+        self.assertEqual(plus.read_xfile(built["path"])["code"],"00001")
         self.assertEqual(plus.inspect_xfile(built["path"],True)["media_sha256"],plus.digest(p))
 
     def test_only_media_file_is_sha256_hashed_and_ncns_can_recover(self):
