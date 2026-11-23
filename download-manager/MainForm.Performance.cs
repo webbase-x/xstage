@@ -66,6 +66,15 @@ public sealed partial class MainForm
             Text = "ยกเลิก", Width = 92, Height = 35,
             DialogResult = DialogResult.Cancel
         };
+        ok.Click += (_, _) =>
+        {
+            if (speed.Value is > 0 and < 64)
+            {
+                MessageBox.Show(dialog, "ความเร็วจำกัดต้องเป็น 0 หรืออย่างน้อย 64 KiB/s",
+                    "ค่าความเร็วไม่ถูกต้อง", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                dialog.DialogResult = DialogResult.None;
+            }
+        };
         controls.Controls.Add(ok);
         controls.Controls.Add(cancel);
         table.Controls.Add(controls, 0, 5);
@@ -243,6 +252,15 @@ public sealed partial class MainForm
         {
             Text = "ยกเลิก", Left = 155, Top = 123,
             Width = 105, Height = 30, DialogResult = DialogResult.Cancel
+        };
+        save.Click += (_, _) =>
+        {
+            if (speed.Value is > 0 and < 64)
+            {
+                MessageBox.Show(dialog, "ความเร็วจำกัดรายไฟล์ต้องเป็น 0 หรืออย่างน้อย 64 KiB/s",
+                    "ค่าความเร็วไม่ถูกต้อง", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                dialog.DialogResult = DialogResult.None;
+            }
         };
         dialog.Controls.AddRange(new Control[] { label, speed, save, cancel });
         dialog.AcceptButton = save;
