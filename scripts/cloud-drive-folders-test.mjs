@@ -121,6 +121,9 @@ assert.ok(lastRows.every(x=>x.lyricsMode==='unavailable'),'Placeholder lyrics ar
 assert.notEqual(lastRows[0].code,lastRows[1].code,
   'Distinct MIDI with colliding embedded song code must receive an alias');
 assert.equal(uploads,0,'Rebuilding must not upload any source file');
+assert.equal(reads,3,'File contents must be read only for candidate XMID assets');
+assert.match(element('xstage-drive-folder-status').textContent,/MIDI ซ้ำ 1/);
+assert.match(element('xstage-drive-folder-status').textContent,/รูปแบบอื่นที่ยังไม่ได้ทำดัชนี 1/);
 cancelOnList=true;
 await workflow.rebuild();
 assert.equal(published,1,'Cancelled scan must never publish a partial SQLite catalog');
@@ -129,9 +132,6 @@ denied=true;
 await workflow.rebuild();
 assert.equal(published,1,'Folder permission failures must keep the last published DB unchanged');
 denied=false;
-assert.equal(reads,3,'File contents must be read only for candidate XMID assets');
-assert.match(element('xstage-drive-folder-status').textContent,/MIDI ซ้ำ 1/);
-assert.match(element('xstage-drive-folder-status').textContent,/รูปแบบอื่นที่ยังไม่ได้ทำดัชนี 1/);
 
 pick={id:retiredId,name:'retired'};await workflow.choose('music');
 assert.equal(workflow.getFolderId('account1',root,'music'),music,
