@@ -189,7 +189,17 @@ public sealed partial class MainForm
             Action("ตั้งค่าความเร็วรวมและจำนวนงาน...",
                 (_, _) => ConfigurePerformance())));
 
+        // Subscription services use their official protected players. Never pass
+        // DRM playback URLs to yt-dlp, FFmpeg, or the download queue.
+        var streamingServices = Menu("รับชมสตรีมมิง (เว็บไซต์ทางการ)",
+            Action("Netflix", (_, _) => OpenOfficialStreamingSite("https://www.netflix.com/")),
+            Action("Disney+", (_, _) => OpenOfficialStreamingSite("https://www.disneyplus.com/")),
+            Action("Prime Video", (_, _) => OpenOfficialStreamingSite("https://www.primevideo.com/")),
+            Action("YouTube", (_, _) => OpenOfficialStreamingSite("https://www.youtube.com/")),
+            Action("Twitch", (_, _) => OpenOfficialStreamingSite("https://www.twitch.tv/")));
         menu.Items.Add(Menu("สื่อ",
+            streamingServices,
+            new ToolStripSeparator(),
             Action("บันทึกไลฟ์สด · ตัดคลิปตามช่วงหยุดพูด...",
                 (_, _) => OpenLiveCapture()),
             new ToolStripSeparator(),
@@ -326,6 +336,30 @@ public sealed partial class MainForm
             (_, _) => ShowInputPanel(true, true), "โฟลเดอร์และจำนวนส่วน");
         _toolbar = bar;
         return bar;
+    }
+
+    private void OpenOfficialStreamingSite(string url)
+    {
+        // Only hard-coded HTTPS home pages are accepted; user-supplied
+        // playback URLs and account tokens never enter the download engine.
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            uri.Scheme != Uri.UriSchemeHttps ||
+            uri.UserInfo.Length != 0 ||
+            !new[] { "www.netflix.com", "www.disneyplus.com",
+                     "www.primevideo.com", "www.youtube.com", "www.twitch.tv" }
+                .Contains(uri.IdnHost, StringComparer.OrdinalIgnoreCase) ||
+            uri.AbsolutePath != "/" || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+            throw new ArgumentException("Unsupported streaming site.", nameof(url));
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception
+                                   or InvalidOperationException)
+        {
+            MessageBox.Show(this, "ไม่สามารถเปิดเบราว์เซอร์ได้: " + ex.Message,
+                "X-Stage Streaming", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void OpenLiveCapture()
