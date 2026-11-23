@@ -143,7 +143,7 @@ for(const id of ['xstage-tv-quick-play','xstage-tv-quick-previous',
 assert.ok(app.includes('xstageTvRefreshQuickMenu(panel);')&&
   app.includes("panel.querySelector('button:not([hidden]):not([disabled])')"),
   'TV menu must refresh and focus an enabled visible button');
-assert.ok(app.includes("'android-tv-update-panel:not([hidden]):not(.during-playback)'"),
+assert.ok(app.includes("'.android-tv-update-panel:not([hidden]):not(.during-playback)'"),
   'nonblocking APK notification cannot steal D-pad menu focus');
 assert.ok(main.includes('if (event.getRepeatCount() == 0) activateWebFocus();')&&
   main.includes('if (event != null && event.getRepeatCount() > 0)'),
