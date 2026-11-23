@@ -55,9 +55,12 @@ public sealed class TransferSlotQueue
 
     public void Configure(int maxConcurrent, int maxPerHost)
     {
-        if (maxConcurrent is < 1 or > 8 || maxPerHost is < 1 or > 8)
+        if (maxConcurrent is < 1 or > 8)
             throw new ArgumentOutOfRangeException(nameof(maxConcurrent),
                 "จำนวนงานพร้อมกันต้องอยู่ระหว่าง 1 ถึง 8");
+        if (maxPerHost is < 1 or > 8)
+            throw new ArgumentOutOfRangeException(nameof(maxPerHost),
+                "จำนวนงานต่อโฮสต์ต้องอยู่ระหว่าง 1 ถึง 8");
         lock (_mutex)
         {
             _globalMax = maxConcurrent;
