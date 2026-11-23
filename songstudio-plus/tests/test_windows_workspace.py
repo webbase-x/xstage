@@ -89,6 +89,16 @@ class WindowsWorkspaceTests(unittest.TestCase):
         self.assertEqual(plus_core.destination_for(paths[0], {"code": 1}, ".mid"),
                          old / "MIDI" / "MID" / "XMID" / "0" / "00000001.xmid")
 
+    def test_workspace_preference_persists_outside_song_database(self):
+        chosen=self.base / "Music collection"
+        chosen.mkdir()
+        with patch.object(app, "workspace_preference_path",
+                          return_value=self.local / "XStageSongStudioPro" / "settings.json"):
+            saved=app.save_workspace_preference(chosen)
+            self.assertEqual(saved,chosen.resolve())
+            self.assertEqual(app.chosen_workspace(),chosen.resolve())
+        self.assertFalse((chosen / "DB").exists())
+
     def test_explicit_failed_workspace_shows_error_not_unhandled_exception(self):
         invalid = self.base / "invalid" / "XStageSongPlus"
         with patch.object(app, "State", side_effect=FileNotFoundError(
