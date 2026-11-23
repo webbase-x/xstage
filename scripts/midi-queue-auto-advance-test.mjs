@@ -31,11 +31,11 @@ let now=1000,tick=null,ended=0,queue=['song B','song C'];
 const state={
   liveMidiPlayback:null,loading:false,userStopped:false,userPaused:false
 };
-const make=new Function('ui','state','performance','setInterval','clearInterval','Event',
+const make=new Function('ui','state','performance','setInterval','clearInterval','Event','window',
   app.slice(start,end)+'\nreturn {player,midiTransport,attachProfessionalMidiEngine};');
 const {player,midiTransport,attachProfessionalMidiEngine}=make(
   {player:original},state,{now:()=>now},fn=>(tick=fn,1),
-  ()=>{tick=null;},Event
+  ()=>{tick=null;},Event,{}
 );
 const played=[];
 player.addEventListener('ended',()=>{

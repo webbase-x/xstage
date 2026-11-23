@@ -18,7 +18,7 @@ assert.equal(cue({duration:30,notes:[]},{lines:[]}),0,
 assert.equal(cue({duration:5,notes},{lines:[]}),0,
   'Very short sound effects do not auto-trim');
 const transportSrc=app.slice(end,app.indexOf('const karaokeVideo =',end));
-const create=new Function('ui','state','performance','setInterval','clearInterval','Event',
+const create=new Function('ui','state','performance','setInterval','clearInterval','Event','window',
   transportSrc+'\nreturn {midiTransport,player};');
 function session({ready=false,medley=false}={}){
   let clock=0,ended=0,interval=null;
@@ -38,7 +38,7 @@ function session({ready=false,medley=false}={}){
     medleyUpcoming:next,medleyCache:ready?{song:next}:null,
     queuePreparedCache:new Map(ready?[[next,{song:next}]]:[])};
   const {midiTransport,player}=create({player:native},state,
-    {now:()=>clock},fn=>{interval=fn;return 1;},()=>{interval=null;},Event);
+    {now:()=>clock},fn=>{interval=fn;return 1;},()=>{interval=null;},Event,{});
   native.addEventListener('ended',()=>ended++);
   return {midiTransport,player,state,
     advance(ms){clock=ms;interval?.();},
