@@ -172,7 +172,24 @@ class Drive {
   }
   async folder(parent,name){
     const files=await this.namedChildren(parent,name);
-    if(files.length>1)fail('โฟลเดอร์บน Drive ซ้ำกัน: '+name);
+    if(files.length>1){
+      // Google Drive permits duplicate names under one parent. Reuse the only
+      // populated folder, or a stable empty folder, without moving/trashing data.
+      // Two populated folders may contain distinct songs: never guess or merge.
+      if(files.some(file=>file.mimeType!==MIME_FOLDER))
+        fail('พบชื่อชนกับไฟล์ใน Drive: '+name);
+      const inspected=await Promise.all(files.map(async file=>({
+        file,children:await this.listChildren(file.id)
+      })));
+      const populated=inspected.filter(item=>item.children.length>0);
+      if(populated.length>1)
+        fail('โฟลเดอร์บน Drive ซ้ำกันและมีข้อมูลมากกว่าหนึ่งแห่ง: '+name+
+          ' · Folder ID: '+populated.map(item=>item.file.id).join(', ')+
+          ' · กรุณาระบุคลังที่ถูกต้องก่อนนำเข้า (ไม่มีการลบหรือย้ายไฟล์)');
+      const selected=(populated[0]||inspected.slice().sort((a,b)=>
+        String(a.file.id).localeCompare(String(b.file.id)))[0]).file;
+      return selected.id;
+    }
     if(files.length===1){
       if(files[0].mimeType!==MIME_FOLDER)fail('พบชื่อชนกับไฟล์ใน Drive: '+name);
       return files[0].id;
