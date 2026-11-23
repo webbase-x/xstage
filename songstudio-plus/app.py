@@ -753,18 +753,36 @@ def _registered_windows_documents():
         return None
 
 
-def workspace_candidates(*, home=None, env=None, platform=None, documents=None):
-    """Prefer a previously used workspace; otherwise choose a real user folder.
+def _registered_windows_music():
+    """Resolve the Windows Music known folder, including OneDrive redirection."""
+    if sys.platform != "win32":
+        return None
+    try:
+        import winreg
+        key = (r"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer"
+               r"\\User Shell Folders")
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as entry:
+            location, _ = winreg.QueryValueEx(entry, "My Music")
+        return Path(os.path.expandvars(location)).expanduser()
+    except (OSError, ValueError, ImportError, TypeError):
+        return None
 
-    Never assume the literal Documents subdirectory exists. Windows permits
-    Unicode paths; the failure is often a stale or redirected user profile.
-    No source media, existing database, or old workspace is moved.
+
+def workspace_candidates(*, home=None, env=None, platform=None, documents=None,
+                         music=None):
+    """Use Music/XStageSongPlus for new Windows libraries, retaining old DBs.
+
+    The user can override this default with --workspace. Existing SQLite
+    libraries take priority over a fresh Music directory so no songs vanish
+    after upgrading. Never move or delete the old workspace automatically.
     """
     home = Path.home() if home is None else Path(home)
     env = os.environ if env is None else env
     platform = sys.platform if platform is None else platform
     if documents is None and platform == "win32":
         documents = _registered_windows_documents()
+    if music is None and platform == "win32":
+        music = _registered_windows_music()
     candidates = []
     def add(path):
         if path is None:
@@ -773,24 +791,35 @@ def workspace_candidates(*, home=None, env=None, platform=None, documents=None):
         if path not in candidates:
             candidates.append(path)
 
-    previous = []
+    legacy = []
     for parent in (documents, home / "Documents"):
-        if parent is None:
-            continue
-        original = Path(parent) / "XStageSongPlus"
-        if original.is_dir():
-            previous.append(original)
-    for path in previous:
-        add(path)
+        if parent is not None:
+            legacy.append(Path(parent) / "XStageSongPlus")
     if platform == "win32":
         for key in ("LOCALAPPDATA", "APPDATA"):
             base = env.get(key)
             if base and Path(base).is_dir():
-                add(Path(base) / "XStageSongPlus")
+                legacy.append(Path(base) / "XStageSongPlus")
         if home.is_dir():
-            add(home / "XStageSongPlus")
+            legacy.append(home / "XStageSongPlus")
     else:
-        add(home / "Documents" / "XStageSongPlus")
+        legacy.append(home / "Documents" / "XStageSongPlus")
+
+    # Respect an existing catalog wherever it was previously created.
+    for old in legacy:
+        if (old / "DB" / "xstage_plus.sqlite3").is_file():
+            add(old)
+
+    if platform == "win32":
+        music_folder = Path(music) if music is not None else home / "Music"
+        add(music_folder / "XStageSongPlus")
+    else:
+        add(home / "Music" / "XStageSongPlus")
+
+    # A legacy non-database directory is only a last-resort fallback.
+    for old in legacy:
+        if old.parent.is_dir():
+            add(old)
     return candidates
 
 
