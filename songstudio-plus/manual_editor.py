@@ -95,7 +95,8 @@ def approved_build_ids(workspace,exclude=None):
         raise ValueError("รายการยกเว้นไม่ถูกต้อง")
     with core.connect(workspace) as db:
         rows=db.execute("""SELECT s.id """+BASE+"""
-            WHERE v.id IS NOT NULL AND v.timing_status!='incomplete'
+            WHERE s.id NOT IN (SELECT song_id FROM xstage_hidden_songs)
+            AND v.id IS NOT NULL AND v.timing_status!='incomplete'
               AND """+_status_expr()+"""='ready'
               AND (e.version_id IS NULL OR e.version_id!=v.id
                    OR COALESCE(e.output_path,'')='') ORDER BY s.code""").fetchall()
@@ -497,6 +498,7 @@ def build_catalog(workspace, status="ready", offset=0, limit=40, query=""):
        """+expr+""" AS manual_status """+BASE+"""
        WHERE (s.title LIKE ? ESCAPE '\\' OR s.artist LIKE ? ESCAPE '\\'
            OR s.original_code LIKE ? ESCAPE '\\')
+       AND s.id NOT IN (SELECT song_id FROM xstage_hidden_songs)
        AND """+condition+"""
        ORDER BY s.code DESC LIMIT ? OFFSET ?"""
     with core.connect(workspace) as db:
