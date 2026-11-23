@@ -36,6 +36,8 @@ class VirtualBusMixer:
         self.strips = {i: BusStrip() for i in range(bus_count)}
         self.ceiling = float(ceiling)
         self.meters = {i: (0., 0.) for i in range(bus_count)}
+        # Per-block samples exceeding the output ceiling, for clipping QA.
+        self.clipped_samples = {i: 0 for i in range(bus_count)}
 
     def configure(self, bus, *, gain=None, pan=None, mute=None, solo=None):
         if type(bus) is not int or bus not in self.strips:
@@ -90,6 +92,7 @@ class VirtualBusMixer:
             raise ValueError("Expected interleaved stereo float32 PCM")
         if not pcm:
             self.meters[bus] = (0., 0.)
+            self.clipped_samples[bus] = 0
             return b""
         values = array("f")
         values.frombytes(pcm)
@@ -100,15 +103,20 @@ class VirtualBusMixer:
         left_gain = strip.gain * min(1., 1. - strip.pan) if audible else 0.
         right_gain = strip.gain * min(1., 1. + strip.pan) if audible else 0.
         left_peak = right_peak = 0.
+        clipped = 0
         for i in range(0, len(values), 2):
             left = values[i] if math.isfinite(values[i]) else 0.
             right = values[i + 1] if math.isfinite(values[i + 1]) else 0.
-            left = max(-self.ceiling, min(self.ceiling, left * left_gain))
-            right = max(-self.ceiling, min(self.ceiling, right * right_gain))
+            left *= left_gain
+            right *= right_gain
+            clipped += int(abs(left) > self.ceiling) + int(abs(right) > self.ceiling)
+            left = max(-self.ceiling, min(self.ceiling, left))
+            right = max(-self.ceiling, min(self.ceiling, right))
             values[i], values[i + 1] = left, right
             left_peak = max(left_peak, abs(left))
             right_peak = max(right_peak, abs(right))
         self.meters[bus] = (left_peak, right_peak)
+        self.clipped_samples[bus] = clipped
         if sys.byteorder != "little":
             values.byteswap()
         return values.tobytes()
