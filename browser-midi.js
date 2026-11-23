@@ -536,12 +536,15 @@ async function listFolder(parent,token){
 async function refreshFonts(auth){
   const sequence=++fontRefreshSequence;
   const select=$('xstage-soundfont-select');if(!select)return;
-  const sameLibrary=context?.sub===auth?.sub&&context?.rootId===auth?.rootId;
-  context=auth;
+  const sub=auth?.sub||'',rootId=auth?.rootId||'';
+  const chosenFolder=scope.XStageDriveFolders?.readSelections?.(sub,rootId)
+    ?.soundfont?.id||'';
+  const sameLibrary=context?.sub===sub&&context?.rootId===rootId&&
+    context?.fontFolderId===chosenFolder;
+  context={...auth,fontFolderId:chosenFolder};
   if(!sameLibrary){selected=BUILTIN_GM_ID;fontCache=null;fontLoadPromise=null;fontStatusChanged();}
   select.replaceChildren(new Option('กำลังตรวจสอบ SoundFont…',''));
   const pending=(async()=>{
-    const sub=auth?.sub||'',rootId=auth?.rootId||'';
     const choices=[
       new Option('เสียงเครื่องดนตรี GM · TimGM6mb (6 MB)',BUILTIN_GM_ID)
     ];
@@ -550,27 +553,37 @@ async function refreshFonts(auth){
       return;
     }
     try{
-      const categories=await listFolder(rootId,auth.token);
-      const soundFolders=categories.filter(x=>
-        x.name==='SOUNDFONT'&&x.mimeType==='application/vnd.google-apps.folder');
-      if(soundFolders.length>1)fail('พบ SOUNDFONT ซ้ำใน XStageKaraoke');
-      if(soundFolders.length){
-        const formatDirs=(await listFolder(soundFolders[0].id,auth.token)).filter(x=>
-          x.mimeType==='application/vnd.google-apps.folder'&&
-          ['SF2','SF3'].includes(x.name.toUpperCase()));
+      // Selected source may contain .sf2/.sf3 files directly, or in
+      // SF2/SF3 subfolders. Without a custom choice, retain the old layout.
+      let sourceId=chosenFolder;
+      if(!sourceId){
+        const categories=await listFolder(rootId,auth.token);
+        const soundFolders=categories.filter(x=>
+          x.name==='SOUNDFONT'&&x.mimeType==='application/vnd.google-apps.folder');
+        if(soundFolders.length>1)fail('พบ SOUNDFONT ซ้ำใน XStageKaraoke');
+        sourceId=soundFolders[0]?.id||'';
+      }
+      if(sourceId){
+        const direct=await listFolder(sourceId,auth.token);
+        const folders=direct.filter(x=>x.mimeType==='application/vnd.google-apps.folder'&&
+          ['SF2','SF3'].includes(String(x.name||'').toUpperCase()));
         for(const format of ['SF2','SF3'])
-          if(formatDirs.filter(dir=>dir.name.toUpperCase()===format).length>1)
-            fail('พบ '+format+' ซ้ำใน SOUNDFONT');
-        for(const dir of formatDirs)
-          for(const f of (await listFolder(dir.id,auth.token)).filter(x=>
-            /\.sf[23]$/i.test(x.name)&&x.mimeType!=='application/vnd.google-apps.folder')){
-            const option=new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id);
-            option.dataset.size=String(Number(f.size)||0);
-            choices.push(option);
-          }
+          if(folders.filter(x=>x.name.toUpperCase()===format).length>1)
+            fail('พบโฟลเดอร์ '+format+' ชื่อซ้ำใน SoundFont');
+        const all=[...direct.filter(x=>x.mimeType!=='application/vnd.google-apps.folder')];
+        for(const dir of folders)all.push(...(await listFolder(dir.id,auth.token))
+          .filter(x=>x.mimeType!=='application/vnd.google-apps.folder'));
+        const seenIds=new Set();
+        for(const f of all.filter(x=>/\.sf[23]$/i.test(x.name))){
+          if(seenIds.has(f.id))continue;
+          seenIds.add(f.id);
+          const option=new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id);
+          option.dataset.size=String(Number(f.size)||0);
+          choices.push(option);
+        }
       }
       if(sequence!==fontRefreshSequence)return;
-      const storageKey='xstage-font-pref:'+sub+':'+rootId;
+      const storageKey='xstage-font-pref:'+sub+':'+rootId+':'+(chosenFolder||'default');
       let saved='';
       try{saved=localStorage.getItem(storageKey)||'';}catch{}
       select.replaceChildren(...choices);
