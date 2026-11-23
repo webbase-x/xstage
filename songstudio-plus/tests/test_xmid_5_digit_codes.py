@@ -42,7 +42,7 @@ class XmidFiveDigitCodeTests(unittest.TestCase):
         source=self.source/"a00001.mid"
         source.write_bytes(midi())
         (self.source/"a00001.lrc").write_text(
-            "[00:01.00]Hello\\n[00:03.00]World\\n",encoding="utf-8")
+            "[00:01.00]Hello\n[00:03.00]World\n",encoding="utf-8")
         imported=core.import_folder(self.workspace,self.source)
         self.assertEqual(imported["files_new"],1)
         row=core.songs(self.workspace)[0]
@@ -61,7 +61,7 @@ class XmidFiveDigitCodeTests(unittest.TestCase):
             source.parent.mkdir(parents=True,exist_ok=True)
             source.write_bytes(data)
             (source.parent/(stem+".lrc")).write_text(
-                "[00:01.00]Hello\\n[00:03.00]World\\n",encoding="utf-8")
+                "[00:01.00]Hello\n[00:03.00]World\n",encoding="utf-8")
         imported=core.import_folder(self.workspace,self.source)
         self.assertEqual(imported["files_new"],2)
         records=core.songs(self.workspace)
