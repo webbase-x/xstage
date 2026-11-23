@@ -293,6 +293,8 @@ function xstageTvVisible(element){
 }
 function xstageTvActiveScope(){
   const nativeTv=document.body.classList.contains('xstage-native-tv');
+  const queuePanel=document.getElementById('xstage-tv-queue-panel');
+  if(nativeTv&&xstageTvVisible(queuePanel))return queuePanel;
   const searchPanel=document.getElementById('xstage-tv-search-panel');
   if(nativeTv&&xstageTvVisible(searchPanel))return searchPanel;
   const quickMenu=document.getElementById('xstage-tv-quick-menu');
@@ -457,6 +459,97 @@ function xstageTvOpenSearch(){
   input?.focus?.({preventScroll:true});
   return true;
 }
+
+/* The TV queue is a remote-friendly view of state.queue. All edits go through
+ * the same queue mutation/preloading methods as Karaoke Online. */
+function xstageTvRenderQueue(panel){
+  const list=panel.querySelector('#xstage-tv-queue-items');
+  const status=panel.querySelector('#xstage-tv-queue-status');
+  if(!list||!status)return;
+  list.replaceChildren();
+  status.textContent=state.queue.length
+    ?'คิวถัดไป '+num(state.queue.length)+' เพลง'+(state.queue.length>25?' · แสดง 25 รายการแรก':'')
+    :'ยังไม่มีเพลงรอในคิว';
+  state.queue.slice(0,25).forEach((song,index)=>{
+    const row=document.createElement('div');
+    row.className='xstage-tv-queue-row';
+    const info=document.createElement('div');
+    info.className='xstage-tv-queue-info';
+    const name=document.createElement('strong');
+    const detail=document.createElement('span');
+    name.textContent=(index+1)+'. '+String(song.title||song.code||'ไม่ระบุชื่อเพลง');
+    detail.textContent=[song.code,song.artist].filter(Boolean).map(String).join(' · ');
+    info.append(name,detail);
+    const controls=document.createElement('div');
+    controls.className='xstage-tv-queue-actions';
+    const action=(label,run,disabled=false)=>{
+      const button=document.createElement('button');
+      button.type='button';button.textContent=label;button.disabled=disabled;
+      button.addEventListener('click',()=>{
+        // A phone may have edited the shared queue while the TV menu was open.
+        if(state.queue[index]!==song){xstageTvRenderQueue(panel);return;}
+        run();
+      });
+      controls.append(button);
+      return button;
+    };
+    action('เล่นเลย',()=>{
+      state.queue.splice(index,1);renderQueue();
+      xstageTvCloseQueue(false);void playSong(song);
+    },!state.token);
+    action('↑',()=>{
+      moveQueue(index,-1);xstageTvRenderQueue(panel);
+      panel.querySelectorAll('.xstage-tv-queue-row')[index-1]
+        ?.querySelectorAll('button')[1]?.focus?.({preventScroll:true});
+    },index===0);
+    action('↓',()=>{
+      moveQueue(index,1);xstageTvRenderQueue(panel);
+      panel.querySelectorAll('.xstage-tv-queue-row')[index+1]
+        ?.querySelectorAll('button')[2]?.focus?.({preventScroll:true});
+    },index===state.queue.length-1);
+    action('ลบ',()=>{
+      state.queue.splice(index,1);renderQueue();xstageTvRenderQueue(panel);
+      const rows=panel.querySelectorAll('.xstage-tv-queue-row');
+      rows[Math.min(index,rows.length-1)]?.querySelector('button')?.focus?.({preventScroll:true});
+      if(!rows.length)panel.querySelector('#xstage-tv-queue-close')?.focus?.({preventScroll:true});
+    });
+    row.append(info,controls);list.append(row);
+  });
+}
+function xstageTvQueuePanel(){
+  let panel=document.getElementById('xstage-tv-queue-panel');
+  if(panel)return panel;
+  panel=document.createElement('section');
+  panel.id='xstage-tv-queue-panel';panel.className='xstage-tv-queue-panel';
+  panel.hidden=true;
+  panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');
+  panel.setAttribute('aria-label','จัดการคิวเพลงบนทีวี');
+  panel.innerHTML='<div class="xstage-tv-queue-box">'+
+    '<h2>คิวเพลง · X-Stage Karaoke</h2>'+
+    '<div id="xstage-tv-queue-status" role="status" aria-live="polite"></div>'+
+    '<div id="xstage-tv-queue-items" class="xstage-tv-queue-items"></div>'+
+    '<button type="button" id="xstage-tv-queue-close">กลับสู่เมนูทีวี</button>'+
+    '</div>';
+  document.body.append(panel);
+  panel.querySelector('#xstage-tv-queue-close').addEventListener('click',()=>xstageTvCloseQueue(true));
+  return panel;
+}
+function xstageTvCloseQueue(returnToMenu=false){
+  const panel=document.getElementById('xstage-tv-queue-panel');
+  if(!panel||panel.hidden)return;
+  panel.hidden=true;
+  if(returnToMenu)window.XStageTvOpenMenu?.();
+}
+function xstageTvOpenQueue(){
+  if(!document.body.classList.contains('xstage-native-tv'))return false;
+  const panel=xstageTvQueuePanel();
+  document.getElementById('xstage-tv-quick-menu')?.setAttribute('hidden','');
+  xstageTvRenderQueue(panel);
+  panel.hidden=false;
+  panel.querySelector('#xstage-tv-queue-items button:not([disabled]),#xstage-tv-queue-close')
+    ?.focus?.({preventScroll:true});
+  return true;
+}
 function xstageTvQuickMenu(){
   let panel=document.getElementById('xstage-tv-quick-menu');
   if(panel)return panel;
@@ -479,6 +572,7 @@ function xstageTvQuickMenu(){
     '<div class="xstage-tv-quick-actions">'+
     '<button type="button" id="xstage-tv-quick-login">เข้าสู่ระบบ Google Drive</button>'+
     '<button type="button" id="xstage-tv-quick-search">ค้นหาเพลงบนทีวี</button>'+
+    '<button type="button" id="xstage-tv-quick-queue">จัดการคิวเพลง</button>'+
     '<button type="button" id="xstage-tv-quick-qr">แสดง QR รีโมทมือถือ</button>'+
     '<button type="button" id="xstage-tv-quick-new-qr">สร้าง QR ใหม่</button>'+
     '<button type="button" id="xstage-tv-quick-play">เล่น / พักเพลง</button>'+
@@ -498,6 +592,7 @@ function xstageTvQuickMenu(){
     if(!state.token)startAndroidTvDeviceLogin(false);
   });
   panel.querySelector('#xstage-tv-quick-search').addEventListener('click',()=>xstageTvOpenSearch());
+  panel.querySelector('#xstage-tv-quick-queue').addEventListener('click',()=>xstageTvOpenQueue());
   panel.querySelector('#xstage-tv-quick-qr').addEventListener('click',()=>{
     window.XStageRemoteQr?.show(true);
     panel.hidden=true;
@@ -545,6 +640,8 @@ window.XStageTvOpenMenu=()=>{
   return true;
 };
 window.XStageTvHandleBack=()=>{
+  const queue=document.getElementById('xstage-tv-queue-panel');
+  if(queue&&!queue.hidden){xstageTvCloseQueue(true);return true;}
   const search=document.getElementById('xstage-tv-search-panel');
   if(search&&!search.hidden){xstageTvCloseSearch(true);return true;}
   const menu=document.getElementById('xstage-tv-quick-menu');
