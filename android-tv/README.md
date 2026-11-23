@@ -15,6 +15,34 @@ upcoming queue. Play/Pause, Previous, Next, Restart and MIDI transposition
 delegate to the **existing** Karaoke Online controls. Unavailable commands
 are disabled. Holding OK or a transport key cannot trigger repeated actions.
 
+## TV/APK parity with Karaoke Online — remote search and queue
+
+The installed Android TV APK continues to load the hosted Karaoke Online
+player. TV-only panels now provide **song search** (D-pad + Android keyboard)
+and **full queue management** (play now, move up/down, remove), while the
+standard stage remains uncluttered. Search results use the Online ranking
+engine and the verified `state.songs` catalog; selection calls the Online
+`chooseSearchSong` action. Queue operations reuse `state.queue`,
+`renderQueue`, `moveQueue`, and `playSong`, including the existing
+preload/medley behavior. Nothing creates a second Drive library or song DB.
+
+- **MENU / SEARCH / OK:** open the TV quick menu, then choose Search or Queue.
+- **Search:** type a title, artist or song code; press Down / OK to focus
+  results, then OK to play (if idle) or add to queue (if already playing).
+  Left/right continue to move the caret while editing search text.
+- **Queue:** inspect up to 25 queued songs at once; move, play or remove
+  through the same Online queue functions. Back restores the quick menu.
+- **Privacy:** when Google authorization is lost, both private song panels
+  close and the signed-in stage is locked again.
+- **TV layout:** readable, scrollable 720p/1080p panels with visible D-pad
+  focus; tablet and desktop Online layouts remain unchanged.
+
+Automated source and mocked player integration checks do **not** substitute
+for a physical Android TV test. Confirm focus/IME behavior, remote keys,
+Google session recovery, playback audio, QR pairing and on-device update
+before marking any signed APK hardware-verified. This revision changes
+hosted JavaScript/CSS and tests, not the native Java bridge or APK version.
+
 Hosted web changes require no native APK rebuild. Java bridge changes do.
 An Android/TrueID TV hardware test is still necessary for WebView playback,
 Google device login, pairing, audio metering and update installation.
