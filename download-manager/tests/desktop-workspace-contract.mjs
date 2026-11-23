@@ -95,6 +95,7 @@ const contracts = [
   ['download engine entrypoint preserved', /private readonly DownloadEngine _engine = new\(\)/, main],
   ['queue functionality exists', /private void RenameJobQueue\(DownloadJob job\)/, performance],
   ['speed configuration exists', /private void ConfigureFileSpeed\(DownloadJob job\)/, performance],
+  ['priority SQLite failures are reported without terminating the UI', /private void SetPriority\(DownloadJob job, int priority\)[\s\S]*?catch \(Exception ex\) when \(ex is ArgumentOutOfRangeException or IOException or\s+Microsoft\.Data\.Sqlite\.SqliteException\)/, performance],
   ['file speed rejects invalid 1–63 KiB/s before changing engine state', /if \(speed\.Value is > 0 and < 64\)/, performance],
   ['file speed dialog has explicit cancellation', /dialog\.CancelButton = cancel;/, performance],
   ['performance dialog keeps input when SQLite save fails', /ok\.Click[\s\S]*?dialog\.DialogResult = DialogResult\.None;[\s\S]*?_engine\.ConfigurePerformance\([\s\S]*?catch \(Exception ex\)[\s\S]*?MessageBox\.Show\(dialog, ex\.Message/, performance],
