@@ -3,8 +3,9 @@
 (function(){
   const REPO="https://github.com/webbase-x/xstage";
   const SHA256=/^[a-f0-9]{64}$/i;
-  // Temporary public storefront switch. This does not delete GitHub release assets.
-  const DOWNLOADS_ENABLED=false;
+  // Fail closed until the existing Google portal confirms the allowed account.
+  // This gates storefront controls only: public release URLs still need private hosting for real access control.
+  let DOWNLOADS_ENABLED=false;
   const deviceGuide=window.XStageDeviceGuide;
   const currentDevice=deviceGuide?deviceGuide.detect(navigator):{kind:"unknown",label:"อุปกรณ์นี้"};
   function suitability(id){return deviceGuide?deviceGuide.forApp(currentDevice,id):{level:"unknown",text:"โปรดตรวจสอบระบบที่รองรับ",target:"ตรวจสอบรายละเอียดอุปกรณ์ที่รองรับ",fallback:[]};}
@@ -351,7 +352,7 @@
     const state=states[id];
     const release=(state.version&&Number.isSafeInteger(state.build))
       ?' · v'+state.version+' · Build '+state.build : '';
-    el.textContent=!DOWNLOADS_ENABLED&&appInfo[id].type!=="web"?"ปิดการดาวน์โหลดชั่วคราว":state.status+release;
+    el.textContent=!DOWNLOADS_ENABLED&&appInfo[id].type!=="web"?"ปุ่มดาวน์โหลดเฉพาะบัญชีที่ได้รับอนุญาต":state.status+release;
     el.classList.toggle("ready",(DOWNLOADS_ENABLED||appInfo[id].type==="web")&&states[id].available);
     el.classList.toggle("pending",(!DOWNLOADS_ENABLED&&appInfo[id].type!=="web")||!states[id].available);
     const quick=document.querySelector('[data-download-app="'+id+'"]');
@@ -457,7 +458,7 @@
       const disabled=document.createElement("span");
       disabled.className="detail-action disabled";
       disabled.setAttribute("aria-disabled","true");
-      disabled.textContent="ปิดการดาวน์โหลดชั่วคราว";
+      disabled.textContent="ปุ่มดาวน์โหลดเฉพาะบัญชีที่ได้รับอนุญาต";
       container.appendChild(disabled);
     }else if(state.available && isInstallableDownload(state.url)){
       const label=id==="download-manager"?"ดาวน์โหลด Setup EXE v"+state.version+" (Build "+state.build+") ↗":
@@ -495,12 +496,12 @@
     detailElements.category.textContent=info.category;
     detailElements.title.textContent=info.title;
     detailElements.subtitle.textContent=info.subtitle;
-    detailElements.status.textContent=!DOWNLOADS_ENABLED&&info.type!=="web"?"ปิดการดาวน์โหลดชั่วคราว":state.status+
+    detailElements.status.textContent=!DOWNLOADS_ENABLED&&info.type!=="web"?"ปุ่มดาวน์โหลดเฉพาะบัญชีที่ได้รับอนุญาต":state.status+
       (state.version&&Number.isSafeInteger(state.build)?' · v'+state.version+' · Build '+state.build:'');
     detailElements.description.textContent=info.description;
     detailElements.showcaseTitle.textContent=info.hero;
     detailElements.showcaseCopy.textContent=info.blurb;
-    detailElements.note.textContent=(!DOWNLOADS_ENABLED&&info.type!=="web")?"หน้าเว็บไซต์หยุดให้ดาวน์โหลดไฟล์ติดตั้ง EXE/APK ชั่วคราว สามารถดูข้อมูลแอปได้ตามปกติ":info.note+(id==="download-manager"&&(!state.available||state.version!=="0.2.0"||state.build!==3)?" · ขณะนี้ลิงก์ดาวน์โหลดยังเป็นรุ่นเก่า v"+(state.version||"0.1.1")+" Build "+(state.build||2)+" ที่ยังไม่มีโหมดดาวน์โหลดวิดีโอ · รุ่น v0.2.0 Build 3 ผ่านการสร้างแล้วแต่ยังรอสิทธิ์เผยแพร่ EXE บน GitHub":"")+(state.kind==="pending"?" · "+state.status:"")+
+    detailElements.note.textContent=(!DOWNLOADS_ENABLED&&info.type!=="web")?"ปุ่มดาวน์โหลด EXE/APK แสดงเฉพาะผู้ดูแลที่ลงชื่อเข้าใช้ด้วย Google เท่านั้น ผู้เยี่ยมชมยังดูข้อมูลแอปได้ตามปกติ":info.note+(id==="download-manager"&&(!state.available||state.version!=="0.2.0"||state.build!==3)?" · ขณะนี้ลิงก์ดาวน์โหลดยังเป็นรุ่นเก่า v"+(state.version||"0.1.1")+" Build "+(state.build||2)+" ที่ยังไม่มีโหมดดาวน์โหลดวิดีโอ · รุ่น v0.2.0 Build 3 ผ่านการสร้างแล้วแต่ยังรอสิทธิ์เผยแพร่ EXE บน GitHub":"")+(state.kind==="pending"?" · "+state.status:"")+
       (state.test?" · Mirror TV รุ่นทดสอบลงนามด้วยกุญแจ Debug ของ CI; การติดตั้งทับรุ่นก่อนหรือการอัปเดตอัตโนมัติอาจใช้ไม่ได้ ต้องถอนการติดตั้งก่อนหากลายเซ็นไม่ตรงกัน":"")+
       (state.preview?" · Karaoke PC EXE เป็นรุ่นทดลองที่ผ่าน CI แต่ยังไม่มีลายเซ็นผู้เผยแพร่ที่เชื่อถือได้ และยังไม่ได้ทดสอบติดตั้งด้วยตนเองครบทุกเครื่อง Windows SmartScreen อาจเตือน และไม่ควรใช้เป็นการอัปเดตอัตโนมัติของรุ่นทางการ":"");
     renderDeviceInfo(id);
@@ -563,6 +564,19 @@
     document.getElementById("catalog").scrollIntoView({block:"start"});
   });
   window.addEventListener("popstate",routeToCurrent);
+  // Supabase portal reports identity changes on login, logout and session restore.
+  // Never reveal installer actions before a positive owner identity event.
+  window.addEventListener("xstage:portal-auth",event=>{
+    const allowed=event.detail?.canDownload===true;
+    if(DOWNLOADS_ENABLED===allowed)return;
+    DOWNLOADS_ENABLED=allowed;
+    for(const id of Object.keys(appInfo))updateCardStatus(id);
+    if(allowed){
+      for(const [id,info] of Object.entries(appInfo)){
+        if(info.manifest)void loadLatest(id,info.manifest);
+      }
+    }
+  });
   const filterButtons=Array.from(document.querySelectorAll("[data-filter]"));
   const platformButtons=Array.from(document.querySelectorAll("[data-platform-filter]"));
   const search=document.getElementById("app-search");
