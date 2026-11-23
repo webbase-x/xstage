@@ -102,8 +102,7 @@ CREATE TABLE IF NOT EXISTS xstage_media_sources(
  verified_sha256 TEXT NOT NULL, last_seen TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS xstage_media_source_lookup
  ON xstage_media_sources(media_id,last_seen);
-CREATE TABLE IF NOT EXISTS xstage_songs(
- id TEXT PRIMARY KEY, code INTEGER NOT NULL UNIQUE, media_id TEXT NOT NULL UNIQUE
+CREATE TABLE IF NOT EXISTS xstage_hidden_songs(\n song_id TEXT PRIMARY KEY, removed_at TEXT NOT NULL);\nCREATE TABLE IF NOT EXISTS xstage_songs(\n id TEXT PRIMARY KEY, code INTEGER NOT NULL UNIQUE, media_id TEXT NOT NULL UNIQUE
  REFERENCES xstage_media(id), title TEXT NOT NULL, artist TEXT NOT NULL,
  original_code TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS xstage_import_batches(
@@ -1350,10 +1349,24 @@ def songs(workspace,query="",limit=80,offset=0):
             LEFT JOIN xstage_lyric_versions v ON v.song_id=s.id AND v.is_current=1
             LEFT JOIN xstage_lyric_drafts d ON d.song_id=s.id
             LEFT JOIN xstage_exports e ON e.song_id=s.id
-            WHERE s.title LIKE ? OR s.artist LIKE ? OR s.original_code LIKE ?
+            WHERE s.id NOT IN (SELECT song_id FROM xstage_hidden_songs)\n              AND (s.title LIKE ? OR s.artist LIKE ? OR s.original_code LIKE ?)
             ORDER BY s.code DESC LIMIT ? OFFSET ?""",
             (term,term,term,max(1,min(int(limit),200)),max(0,int(offset)))).fetchall()
         return [dict(x) for x in items]
+
+def hide_song(workspace, song_id):
+    """Remove one catalog entry from active lists without deleting source or SQLite."""
+    init(workspace)
+    with WRITE_LOCK, connect(workspace) as db:
+        song=db.execute("SELECT id,code,title FROM xstage_songs WHERE id=?",
+                        (str(song_id),)).fetchone()
+        if not song:
+            raise ValueError("ไม่พบรายการเพลงที่เลือก")
+        db.execute("""INSERT OR REPLACE INTO xstage_hidden_songs(song_id,removed_at)
+                      VALUES(?,?)""",(song["id"],now()))
+        return {"removed":True,"song_id":song["id"],"code":song["code"],
+                "title":song["title"],"preserved_files":True}
+
 
 def suspicious_lyric_text(value):
     """Identify encoded-looking machine payloads, not normal long lyric lines.
