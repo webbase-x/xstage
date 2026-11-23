@@ -2537,6 +2537,36 @@
       syncSettingsUpdate();
       if(showStableModal("settings-dialog"))void diagnostic("ui.settings.open");
     });
+    $("settings-workspace-browse").addEventListener("click",async()=>{
+      const input=$("settings-workspace-path");
+      const button=$("settings-workspace-browse");
+      button.disabled=true;
+      text("settings-workspace-status","กำลังเลือกโฟลเดอร์...");
+      try{
+        const chosen=await api("/api/pick",{kind:"folder",current:input.value.trim()},0);
+        if(chosen.path){
+          input.value=chosen.path;
+          text("settings-workspace-status","เลือกแล้ว · กดบันทึกเพื่อใช้เมื่อเปิดโปรแกรมครั้งถัดไป");
+        }else text("settings-workspace-status","ยกเลิกการเลือกโฟลเดอร์");
+      }catch(error){text("settings-workspace-status",error.message);toast(error.message,true);}
+      finally{button.disabled=false;}
+    });
+    $("settings-workspace-save").addEventListener("click",async()=>{
+      const button=$("settings-workspace-save");
+      const folder=$("settings-workspace-path").value.trim();
+      if(!folder)return toast("กรุณาเลือกโฟลเดอร์คลังเพลง",true);
+      if(state.activeJob)return toast("มีงานกำลังทำงานอยู่ ไม่สามารถเปลี่ยนคลังตอนนี้",true);
+      button.disabled=true;
+      try{
+        const saved=await api("/api/workspace/select",{folder});
+        const notice=saved.has_database
+          ?"บันทึกแล้ว · พบ SQLite ในโฟลเดอร์ที่เลือก · ปิดและเปิดโปรแกรมใหม่เพื่อใช้คลังนี้"
+          :"บันทึกแล้ว · ยังไม่มี SQLite ในโฟลเดอร์ใหม่ โปรแกรมจะสร้างฐานข้อมูลใหม่เมื่อเปิดครั้งถัดไป (ฐานข้อมูลเดิมไม่ถูกย้าย)";
+        text("settings-workspace-status",notice);
+        toast("บันทึกตำแหน่งคลังเพลงแล้ว · กรุณาเปิดโปรแกรมใหม่");
+      }catch(error){text("settings-workspace-status",error.message);toast(error.message,true);}
+      finally{button.disabled=false;}
+    });
     $("settings-update-check").addEventListener("click",()=>void checkProUpdate());
     $("settings-update-install").addEventListener("click",()=>void beginProUpdate());
     $("settings-update-direct").addEventListener("click",openLatestExe);
@@ -3057,6 +3087,7 @@
       showRunningVersion(session);
       setReady(true);
       text("workspace-chip","คลัง: "+session.workspace.split(/[\\/]/).pop());
+      $("settings-workspace-path").value=session.workspace;
       void diagnostic("ui.session.ready",{version:session.version});
       // Update check is independent from SQLite summary work. Start it early
       // so a new release is visible immediately after the desktop connects.
