@@ -368,9 +368,19 @@ def download(workspace,info,progress=None,cancel=None):
                 ConnectionError,http.client.IncompleteRead) as exc:
             last_error=exc
             if isinstance(exc,urllib.error.HTTPError):
+                # A stale partial may cause GitHub/CDN to reject a Range
+                # request even when the published full asset still exists.
+                # Retry from byte zero once; the final executable still must
+                # match the SHA-256 supplied by the verified release.
+                if exc.code in (404,416) and offset and attempt<DOWNLOAD_RETRIES:
+                    partial.unlink(missing_ok=True)
+                    _emit(progress,0,0,
+                          "ลิงก์ดาวน์โหลดต่อใช้ไม่ได้ · เริ่มดาวน์โหลดใหม่จาก Release",
+                          attempt)
+                    continue
                 if exc.code in (400,401,403,404,410):
                     raise OSError("GitHub ตอบ HTTP "+str(exc.code)+
-                                  " · ลองดาวน์โหลด EXE โดยตรงจากหน้า Release") from exc
+                                  " · กรุณาเปิดหน้า Release และดาวน์โหลด EXE โดยตรง") from exc
             if attempt==DOWNLOAD_RETRIES:
                 break
             _emit(progress,partial.stat().st_size if partial.is_file() else 0,
