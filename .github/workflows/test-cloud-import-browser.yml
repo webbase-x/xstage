@@ -5,6 +5,8 @@ on:
     paths:
       - "cloud-import*.js"
       - "xsk-browser.js"
+      - "xmid-browser.js"
+      - "scripts/xmid-missing-metadata-test.mjs"
       - "scripts/xsk-browser-test.mjs"
       - "scripts/xsk-queue-test.mjs"
       - "scripts/memory-queue-test.mjs"
@@ -51,6 +53,7 @@ jobs:
         run: |
           node scripts/cloud-import-test.mjs
           node scripts/cloud-import-contract-test.mjs
+          node scripts/xmid-missing-metadata-test.mjs
           node scripts/xsk-browser-test.mjs
           node scripts/xsk-queue-test.mjs
           node scripts/memory-queue-test.mjs
@@ -58,6 +61,7 @@ jobs:
           node --check memory-budget.js
           node --check browser-midi.js
           node --check xsk-browser.js
+          node --check xmid-browser.js
           node --check cloud-import.js
       - name: Prepare headless Chromium on CI only
         run: |
