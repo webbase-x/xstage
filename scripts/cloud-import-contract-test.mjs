@@ -145,6 +145,17 @@ assert.equal(crossResult.backfilled,2);
 assert.equal(crossFormat.size,1);
 assert.equal(crossResult.hashes.get(rawMd5).webSongId,'raw');
 const importerText=read('cloud-import.js');
+assert.ok(importerText.includes("const CATALOG_BATCH_SIZE=500") &&
+  importerText.includes("const FAST_XMID_CONCURRENCY=6") &&
+  importerText.includes("const uploadXmidBatch=async group=>") &&
+  importerText.includes("const reservedMidi=new Set()") &&
+  importerText.includes("const outcomes=await Promise.allSettled(tasks.map(entry=>entry.upload))") &&
+  importerText.includes("byMidi.set(entry.rawMidiHash,record)") &&
+  importerText.includes("const uploadNameLocks=new Map()"),
+  'Parallel XMID worker queue must deduplicate before uploading and commit rows serially');
+assert.ok(importerText.includes("uploadType=multipart&fields=") &&
+  importerText.includes("multipart/related; boundary=") &&
+  importerText.includes("file.size<=5*MiB"),'Small files must use Drive multipart upload');
 assert.ok(!importerText.includes("for(const folder of ['SONGS','DB','SOUNDFONT','BACKUP','CACHE','LOGS'])"),
   'Import scan must not eagerly create empty Drive folders');
 assert.ok(importerText.includes("const name=safeName(midiFile.name)") &&
@@ -157,7 +168,7 @@ assert.ok(importerText.includes('core.hashBlob(opened.midi,()=>this.check())'),
 assert.ok(importerText.includes('sameMidiBytes(byMidi,midiHash,midiSize)') &&
   importerText.includes('byMidi.set(midiHash,record)'),
   'Every import must compare MIDI byte length and MD5 before uploading media');
-assert.ok(importerText.includes('const CATALOG_BATCH_SIZE=200')&&
+assert.ok(importerText.includes('const CATALOG_BATCH_SIZE=500')&&
   importerText.includes('if(revisions.length>=CATALOG_BATCH_SIZE)await publish();'),
   'Large imports should publish a verified SQLite snapshot in batches, not after every song');
 assert.ok(importerText.includes("const sidecars=await Promise.allSettled([") &&
@@ -195,7 +206,7 @@ await lease.release();
 assert.equal(releasedLockId,'lock-file-001');
 assert.equal(leases.size,0,'Writer lease must not linger after publication');
 const uploaded=new Map(),children=new Map(),sessions=new Map();
-let serial=0,sessionNumber=0,putRequests=0;
+let serial=0,sessionNumber=0,putRequests=0,multipartUploads=0;
 const id=()=>('item'+String(++serial).padStart(7,'0'));
 const ensure=parent=>{if(!children.has(parent))children.set(parent,[]);return children.get(parent);};
 function reply(status,json,headers={}){
@@ -219,6 +230,27 @@ ctx.fetch=async(raw,options={})=>{
     ensure(meta.parents[0]).push(created);
     ensure(created.id);
     return reply(200,created);
+  }
+  if(url.pathname==='/upload/drive/v3/files'&&method==='POST'&&
+     url.searchParams.get('uploadType')==='multipart'){
+    assert.match(options.headers['Content-Type'],/^multipart\/related; boundary=/);
+    const boundary=options.headers['Content-Type'].split('boundary=')[1];
+    const body=Buffer.from(await options.body.arrayBuffer());
+    const marker=Buffer.from('\r\n--'+boundary);
+    const metaStart=body.indexOf(Buffer.from('\r\n\r\n'))+4;
+    const metaEnd=body.indexOf(marker,metaStart);
+    assert.ok(metaStart>=4&&metaEnd>metaStart);
+    const meta=JSON.parse(body.subarray(metaStart,metaEnd).toString('utf8'));
+    const mediaStart=body.indexOf(Buffer.from('\r\n\r\n'),metaEnd)+4;
+    const mediaEnd=body.indexOf(marker,mediaStart);
+    assert.ok(mediaStart>metaEnd&&mediaEnd>mediaStart);
+    const data=body.subarray(mediaStart,mediaEnd);
+    const record={...meta,id:id(),size:String(data.length),
+      md5Checksum:createHash('md5').update(data).digest('hex')};
+    ensure(meta.parents[0]).push(record);
+    uploaded.set(record.id,{meta:record,data});
+    multipartUploads++;
+    return reply(200,record);
   }
   if(url.pathname==='/upload/drive/v3/files'&&method==='POST'){
     const meta=JSON.parse(options.body);
@@ -272,6 +304,26 @@ const again=await drive.upload(target,payload,'111-'+digest.slice(0,16)+'.mp3','
 assert.equal(again.id,result.id);
 assert.equal(again.reused,true);
 assert.equal(putRequests,2,'MD5 duplicate must skip sending the same asset again');
+const smallBytes=Buffer.from('XMID small file multipart test');
+const smallPayload=new Blob([smallBytes]);
+const smallMd5=createHash('md5').update(smallBytes).digest('hex');
+const small=await drive.upload(target,smallPayload,'00001.XMID',
+  'application/octet-stream',smallMd5);
+assert.equal(small.reused,false);
+assert.equal(multipartUploads,1,'Small XMID must require only one Drive POST');
+assert.equal(sessionNumber,1,'Small XMID must not create a resumable session');
+const smallAgain=await drive.upload(target,smallPayload,'00001.XMID',
+  'application/octet-stream',smallMd5);
+assert.equal(smallAgain.id,small.id);
+assert.equal(multipartUploads,1,'Repeated small XMID must be reused');
+const emptyConcurrentParent=id();
+ensure(emptyConcurrentParent);
+const concurrentDrive=new Drive(()=> 'token_TEST',()=>{});
+const folderIds=await Promise.all(Array.from({length:8},
+  ()=>concurrentDrive.folder(emptyConcurrentParent,'XMID')));
+assert.equal(new Set(folderIds).size,1);
+assert.equal(ensure(emptyConcurrentParent).filter(x=>x.name==='XMID').length,1,
+  'Parallel workers must not create duplicate XMID folders');
 await assert.rejects(drive.upload(target,payload,'111-'+digest.slice(0,16)+'.mp3','audio/mpeg',
   'f'.repeat(32)),/MD5/);
 // Fast exact-name index: loading a 30,000-file folder builds the index once.
