@@ -1,5 +1,6 @@
 """P2 virtual mixer contracts, independent of ASIO hardware."""
 from array import array
+import math
 import sys
 import unittest
 from karaoke.virtual_bus_mixer import VirtualBusMixer
@@ -244,8 +245,8 @@ class VirtualBusMixerTests(unittest.TestCase):
         self.assertAlmostEqual(output[0], .8, places=6)
         self.assertAlmostEqual(output[1], -.8, places=6)
         self.assertEqual(mixer.clipped_samples[0], 2)
-        self.assertTrue(all(__import__("math").isfinite(x) for x in output))
-        self.assertTrue(all(__import__("math").isfinite(x) for x in mixer.pre_limit_peaks[0]))
+        self.assertTrue(all(math.isfinite(x) for x in output))
+        self.assertTrue(all(math.isfinite(x) for x in mixer.pre_limit_peaks[0]))
 
     def test_rejects_invalid_config_and_pcm(self):
         mixer = VirtualBusMixer(2)
