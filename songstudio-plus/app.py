@@ -610,6 +610,17 @@ class Handler(BaseHTTPRequestHandler):
                     close_fds=True)
                 self.state.diagnostic("log.opened",source="api")
                 result={"opened":True,"path":str(self.state.log_path)}
+            elif path=="/api/workspace/select":
+                if self.state.active_job_ids():
+                    raise ValueError("มีงานกำลังทำงานอยู่ กรุณารอให้เสร็จก่อนเปลี่ยนคลัง")
+                supplied=body.get("folder")
+                if not isinstance(supplied,str) or not supplied.strip():
+                    raise ValueError("กรุณาเลือกโฟลเดอร์คลังเพลง")
+                target=save_workspace_preference(supplied.strip())
+                self.state.diagnostic("workspace.preference.saved",
+                                      new_workspace=str(target))
+                result={"workspace":str(target),"restart_required":True,
+                        "has_database":(target/"DB"/"xstage_plus.sqlite3").is_file()}
             elif path=="/api/open-folder":
                 scope=body.get("scope")
                 if scope=="workspace":
@@ -823,6 +834,44 @@ def workspace_candidates(*, home=None, env=None, platform=None, documents=None,
     return candidates
 
 
+def workspace_preference_path(*, home=None, env=None):
+    """User-specific launcher setting, independent of song workspace."""
+    home = Path.home() if home is None else Path(home)
+    env = os.environ if env is None else env
+    root = Path(env.get("LOCALAPPDATA") or home / ".config")
+    return root / "XStageSongStudioPro" / "settings.json"
+
+
+def chosen_workspace(*, home=None, env=None):
+    path = workspace_preference_path(home=home, env=env)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        value = data.get("workspace")
+        if isinstance(value, str) and value.strip():
+            return Path(value).expanduser()
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    return None
+
+
+def save_workspace_preference(folder):
+    target = Path(folder).expanduser().resolve(strict=True)
+    if not target.is_dir():
+        raise ValueError("กรุณาเลือกโฟลเดอร์ที่มีอยู่จริง")
+    # Do not create an empty database now. Changing workspace takes effect
+    # after restart, when the engine opens the selected existing/new catalog.
+    pref = workspace_preference_path()
+    pref.parent.mkdir(parents=True, exist_ok=True)
+    temp = pref.with_suffix(".tmp")
+    try:
+        temp.write_text(json.dumps({"workspace": str(target)},
+                                   ensure_ascii=False), encoding="utf-8")
+        temp.replace(pref)
+    finally:
+        temp.unlink(missing_ok=True)
+    return target
+
+
 def _startup_failure(message):
     """A GUI error instead of a PyInstaller 'Unhandled exception in script'."""
     if sys.platform == "win32":
@@ -848,7 +897,8 @@ def main(argv=None):
                         help="troubleshooting only: open UI in the Windows default browser")
     options=parser.parse_args(argv)
     choices = ([Path(options.workspace)] if options.workspace is not None
-               else workspace_candidates())
+               else ([chosen_workspace()] if chosen_workspace() is not None
+                     else workspace_candidates()))
     state = None
     failures = []
     for choice in choices:
