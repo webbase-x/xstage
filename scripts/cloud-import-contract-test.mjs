@@ -276,7 +276,27 @@ const duplicateParent=id();
 ensure(duplicateParent).push(
   {id:'dupA',name:'duplicate',mimeType:'application/vnd.google-apps.folder'},
   {id:'dupB',name:'duplicate',mimeType:'application/vnd.google-apps.folder'});
-await assert.rejects(indexedDrive.folder(duplicateParent,'duplicate'),/ซ้ำ/);
+assert.equal(await indexedDrive.folder(duplicateParent,'duplicate'),'dupA',
+  'Multiple empty same-name folders must reuse a stable existing ID without creating more');
+const populatedParent=id();
+ensure(populatedParent).push(
+  {id:'popA',name:'MIDI',mimeType:'application/vnd.google-apps.folder'},
+  {id:'popB',name:'MIDI',mimeType:'application/vnd.google-apps.folder'});
+ensure('popB').push({id:'song-existing',name:'001.mid',mimeType:'audio/midi'});
+assert.equal(await indexedDrive.folder(populatedParent,'MIDI'),'popB',
+  'Reuse the only populated MIDI folder without modifying songs');
+ensure('popA').push({id:'song-other',name:'002.mid',mimeType:'audio/midi'});
+// Use a fresh Drive to avoid stale cached parent listings.
+const conflictDrive=new Drive(()=> 'token_TEST',()=>{});
+await assert.rejects(conflictDrive.folder(populatedParent,'MIDI'),
+  error=>/มีข้อมูลมากกว่าหนึ่งแห่ง/.test(error.message)&&
+    error.message.includes('popA')&&error.message.includes('popB'),
+  'Two populated MIDI folders must report both IDs rather than silently losing songs');
+const collidingParent=id();
+ensure(collidingParent).push(
+  {id:'folder-one',name:'MIDI',mimeType:'application/vnd.google-apps.folder'},
+  {id:'file-one',name:'MIDI',mimeType:'application/octet-stream'});
+await assert.rejects(indexedDrive.folder(collidingParent,'MIDI'),/ชื่อชนกับไฟล์/);
 const newParent=id();
 ensure(newParent);
 const created=await indexedDrive.folder(newParent,'new-folder');
