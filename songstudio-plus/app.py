@@ -610,6 +610,13 @@ class Handler(BaseHTTPRequestHandler):
                     close_fds=True)
                 self.state.diagnostic("log.opened",source="api")
                 result={"opened":True,"path":str(self.state.log_path)}
+            elif path=="/api/songs/remove":
+                if any(job.get("status") in ("running","queued")
+                       for job in self.state.jobs_snapshot()):
+                    raise ValueError("มีงานกำลังประมวลผล ไม่สามารถลบรายการขณะนี้")
+                result=core.hide_song(self.state.workspace,body.get("song_id",""))
+                self.state.diagnostic("library.song.hidden",
+                                      song_id=result["song_id"],code=result["code"])
             elif path=="/api/workspace/select":
                 if any(job.get("status") in ("running", "queued") for job in self.state.jobs_snapshot()):
                     raise ValueError("มีงานกำลังทำงานอยู่ กรุณารอให้เสร็จก่อนเปลี่ยนคลัง")
