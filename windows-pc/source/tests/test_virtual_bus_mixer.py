@@ -257,6 +257,7 @@ class VirtualBusMixerTests(unittest.TestCase):
         self.assertEqual(before["meters"][1], (0., 0.))
         self.assertEqual(set(before), {
             "meters", "rms_meters", "pre_limit_peaks", "peak_holds",
+            "pre_limit_peak_holds",
             "clipped_samples", "total_clipped_samples",
         })
         for field in before:
@@ -340,6 +341,32 @@ class VirtualBusMixerTests(unittest.TestCase):
         mixer.reset_diagnostics(0)
         self.assertEqual(mixer.levels_dbfs_snapshot()["pre_limit_peak_dbfs"][0],
                          (-120., -120.))
+
+    def test_pre_limit_peak_hold_survives_silence_and_resets_per_bus(self):
+        mixer = VirtualBusMixer(2, ceiling=.8)
+        mixer.configure(0, gain=2.)
+        mixer.process(0, pcm(.75, -.5))
+        mixer.process(0, pcm(.1, -.1))
+        self.assertAlmostEqual(mixer.pre_limit_peak_holds[0][0], 1.5, places=5)
+        self.assertAlmostEqual(mixer.pre_limit_peak_holds[0][1], 1., places=5)
+        self.assertAlmostEqual(
+            mixer.levels_dbfs_snapshot()["pre_limit_peak_hold_dbfs"][0][0],
+            20 * math.log10(1.5), places=5)
+        mixer.process(0, b"")
+        self.assertEqual(mixer.pre_limit_peaks[0], (0., 0.))
+        self.assertGreater(mixer.pre_limit_peak_holds[0][0], 1.)
+        mixer.process(1, pcm(.5, .5))
+        other = mixer.pre_limit_peak_holds[1]
+        preset = mixer.snapshot()
+        mixer.reset_peak_holds(0)
+        self.assertEqual(mixer.pre_limit_peak_holds[0], (0., 0.))
+        self.assertEqual(mixer.pre_limit_peak_holds[1], other)
+        self.assertEqual(mixer.snapshot(), preset)
+        mixer.process(0, pcm(.75, -.5))
+        mixer.reset_diagnostics()
+        self.assertEqual(mixer.pre_limit_peak_holds,
+                         {0: (0., 0.), 1: (0., 0.)})
+        self.assertEqual(mixer.snapshot(), preset)
 
     def test_dbfs_floor_validation_and_custom_floor(self):
         mixer = VirtualBusMixer(2)
