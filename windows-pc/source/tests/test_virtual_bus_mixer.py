@@ -60,6 +60,45 @@ class VirtualBusMixerTests(unittest.TestCase):
             mixer.configure(0, solo=True, gain=float("nan"))
         self.assertEqual(mixer.strips[0], before)
 
+    def test_preset_round_trip_and_independent_snapshot(self):
+        mixer = VirtualBusMixer(4)
+        mixer.configure(0, gain=.25, pan=-.5, solo=True)
+        mixer.configure(3, gain=1.5, mute=True)
+        preset = mixer.snapshot()
+        preset["strips"][0]["gain"] = .75
+        self.assertEqual(mixer.strips[0].gain, .25)
+        restored = VirtualBusMixer(4)
+        restored.apply_snapshot(preset)
+        self.assertEqual(restored.strips[0].gain, .75)
+        self.assertEqual(restored.strips[0].pan, -.5)
+        self.assertTrue(restored.strips[0].solo)
+        self.assertTrue(restored.strips[3].mute)
+        self.assertEqual(restored.snapshot(), preset)
+
+    def test_invalid_presets_are_rejected_atomically(self):
+        mixer = VirtualBusMixer(2)
+        mixer.configure(0, gain=.6, pan=.2)
+        original = mixer.snapshot()
+        import copy
+        invalid = []
+        for field, value in (("version", 2), ("bus_count", 4), ("strips", [])):
+            preset = copy.deepcopy(original)
+            preset[field] = value
+            invalid.append(preset)
+        for bus, field, value in ((0, "gain", float("nan")),
+                                  (1, "mute", 1), (1, "pan", 2)):
+            preset = copy.deepcopy(original)
+            preset["strips"][bus][field] = value
+            invalid.append(preset)
+        preset = copy.deepcopy(original)
+        preset["strips"][1]["unexpected"] = True
+        invalid.append(preset)
+        for preset in invalid:
+            with self.subTest(preset=preset):
+                with self.assertRaises(ValueError):
+                    mixer.apply_snapshot(preset)
+                self.assertEqual(mixer.snapshot(), original)
+
     def test_solo_silences_other_buses(self):
         mixer = VirtualBusMixer(4)
         mixer.configure(2, solo=True)
