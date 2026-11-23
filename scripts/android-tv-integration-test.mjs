@@ -232,6 +232,49 @@ const tvSearchSource=segment(app,'function xstageTvRenderSearch(panel){','functi
   assert.equal(results.children.length,0,'sign-out removes all results');
   assert.equal(called.length,1,'sign-out blocks catalog search');
 }
+
+// TV queue actions mutate only the hosted Karaoke Online queue.
+const tvQueueSource=segment(app,'function xstageTvRenderQueue(panel){','function xstageTvQueuePanel(){');
+{
+  const song={code:'Q1',title:'เพลงคิว',artist:'ศิลปิน'};
+  const queue=[song],plays=[],closes=[];
+  const makeNode=()=>{
+    const listeners={};
+    return {textContent:'',disabled:false,children:[],
+      replaceChildren(){this.children=[];},
+      append(...items){this.children.push(...items);},
+      addEventListener(type,fn){listeners[type]=fn;},
+      click(){listeners.click?.();}};
+  };
+  const list=makeNode(),status=makeNode();
+  const panel={querySelector(id){return ({
+    '#xstage-tv-queue-items':list,
+    '#xstage-tv-queue-status':status
+  })[id]||null;}};
+  const state={queue,token:'private-user'};
+  let onlineRenders=0;
+  const render=new Function('state','document','num','renderQueue','moveQueue',
+    'xstageTvCloseQueue','playSong',
+    tvQueueSource+'\nreturn xstageTvRenderQueue;')(
+    state,{createElement:makeNode},String,()=>{onlineRenders++;},
+    ()=>{},v=>closes.push(v),song=>plays.push(song));
+  render(panel);
+  assert.equal(list.children.length,1,'TV queue reads Online queue');
+  assert.equal(list.children[0].children[1].children.length,4,'TV queue offers play, up, down, remove');
+  list.children[0].children[1].children[0].click();
+  assert.equal(queue.length,0,'playing queued song removes it from Online queue');
+  assert.deepEqual(plays,[song],'TV queue uses Online playSong');
+  assert.equal(onlineRenders,1,'TV queue re-renders Online controls');
+  assert.deepEqual(closes,[false],'TV returns directly to stage');
+}
+assert.ok(app.includes('xstage-tv-quick-queue')&&
+  app.includes('xstageTvCloseSearch(false);xstageTvCloseQueue(false);')&&
+  app.includes("const queue=document.getElementById('xstage-tv-queue-panel');"),
+  'TV queue must support Back and clear on Google sign-out');
+assert.ok(read('xstage-ux.css').includes('.xstage-tv-queue-panel[hidden]')&&
+  read('xstage-ux.css').includes('.xstage-tv-queue-actions button'),
+  'TV queue controls need visible D-pad focus');
+
 assert.ok(app.includes('xstage-tv-quick-search')&&
   app.includes("const search=document.getElementById('xstage-tv-search-panel');")&&
   app.includes('xstageTvCloseSearch(true);return true;'),
