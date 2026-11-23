@@ -61,6 +61,41 @@ class VirtualBusMixerTests(unittest.TestCase):
             mixer.configure(0, solo=True, gain=float("nan"))
         self.assertEqual(mixer.strips[0], before)
 
+    def test_atomic_multi_strip_scene_preserves_unmodified_controls_and_meters(self):
+        mixer = VirtualBusMixer(4)
+        mixer.configure(0, gain=.5, pan=-.25)
+        mixer.process(0, pcm(.5, .5))
+        diagnostics = mixer.diagnostics_snapshot()
+        mixer.configure_many({0: {"mute": True}, 2: {"gain": 1.5, "solo": True}})
+        self.assertEqual(mixer.strips[0].gain, .5)
+        self.assertEqual(mixer.strips[0].pan, -.25)
+        self.assertTrue(mixer.strips[0].mute)
+        self.assertEqual(mixer.strips[2].gain, 1.5)
+        self.assertTrue(mixer.strips[2].solo)
+        self.assertEqual(mixer.strips[1].gain, 1.)
+        self.assertEqual(mixer.diagnostics_snapshot(), diagnostics)
+
+    def test_atomic_multi_strip_scene_rejects_all_invalid_changes_without_partial_write(self):
+        mixer = VirtualBusMixer(2)
+        mixer.configure(0, gain=.7)
+        before = mixer.snapshot()
+        invalid = [
+            {0: {"mute": True}, 1: {"gain": float("nan")}},
+            {0: {"mute": True}, 2: {"gain": .5}},
+            {0: {"mute": True}, True: {"solo": True}},
+            {0: {"mute": True}, 1: {"unknown": 1}},
+            {0: {"mute": True}, 1: {}},
+            {0: {"mute": True}, 1: {"solo": 1}},
+            [(0, {"gain": .5})],
+            None,
+        ]
+        for changes in invalid:
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                mixer.configure_many(changes)
+            self.assertEqual(mixer.snapshot(), before)
+        mixer.configure_many({})
+        self.assertEqual(mixer.snapshot(), before)
+
     def test_preset_round_trip_and_independent_snapshot(self):
         mixer = VirtualBusMixer(4)
         mixer.configure(0, gain=.25, pan=-.5, solo=True)
