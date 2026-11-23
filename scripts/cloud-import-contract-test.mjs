@@ -9,6 +9,12 @@ const ids=['cloud-import-open','cloud-import-dialog','cloud-import-pick','cloud-
   'cloud-import-ready','cloud-import-fonts','cloud-import-blocked','cloud-import-start',
   'cloud-import-done','cloud-import-progress','cloud-import-allow-create'];
 for(const id of ids)assert.ok(page.includes('id="'+id+'"'),'Missing cloud importer control: '+id);
+assert.ok(page.includes('id="xstage-drive-folder-music"')&&
+  page.includes('id="xstage-drive-folder-soundfont"')&&
+  page.includes('id="xstage-drive-folder-fx"')&&
+  page.includes('id="xstage-drive-build-db"')&&
+  page.includes('cloud-drive-folders.js?v='),
+  'Separate Google Drive media folder choice and deferred DB build must be exposed');
 assert.ok(page.includes('cloud-import-core.js?v=')&&page.includes('cloud-import.js?v=')&&
   page.includes('cloud-import.css?v='),'Browser importer must be loaded with the main WEB shell');
 assert.ok(style.includes('.cloud-import-dialog')&&style.includes('@media(max-width:700px)'));
@@ -479,7 +485,7 @@ assert.ok(style.includes('.cloud-import-body{')&&
   style.includes('.cloud-import-footer-buttons{')&&
   style.includes('flex:0 0 auto'),
   'Import Start and status must be anchored outside scrollable contents');
-assert.ok(page.includes('cloud-import.js?v=1186-midi-metadata-pending')&&
+assert.ok(page.includes('cloud-import.js?v=1187-drive-folder-scan')&&
   page.includes('cloud-import.css?v=1172-direct-db-layout')&&
   page.includes('video-metadata-editor.js?v=1138-verified-video-selection'),
   'Updated scripts and styles must bypass stale browser caches');
