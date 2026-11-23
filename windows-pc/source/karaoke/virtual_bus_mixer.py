@@ -44,6 +44,8 @@ class VirtualBusMixer:
         self.total_clipped_samples = {i: 0 for i in range(bus_count)}
         # Input to the safety limiter, after fader/pan/mute, before clipping.
         self.pre_limit_peaks = {i: (0., 0.) for i in range(bus_count)}
+        # Explicitly resettable post-limiter peak holds for live diagnostics.
+        self.peak_holds = {i: (0., 0.) for i in range(bus_count)}
 
     def configure(self, bus, *, gain=None, pan=None, mute=None, solo=None):
         if type(bus) is not int or bus not in self.strips:
@@ -101,6 +103,16 @@ class VirtualBusMixer:
             raise ValueError("Unknown bus")
         self.total_clipped_samples[bus] = 0
 
+    def reset_peak_holds(self, bus=None):
+        """Clear peak holds without changing audio, strips or clipping totals."""
+        if bus is None:
+            for index in self.peak_holds:
+                self.peak_holds[index] = (0., 0.)
+            return
+        if type(bus) is not int or bus not in self.strips:
+            raise ValueError("Unknown bus")
+        self.peak_holds[bus] = (0., 0.)
+
     def process(self, bus, pcm):
         if type(bus) is not int or bus not in self.strips:
             raise ValueError("Unknown bus")
@@ -140,6 +152,8 @@ class VirtualBusMixer:
             left_peak = max(left_peak, abs(left))
             right_peak = max(right_peak, abs(right))
         self.meters[bus] = (left_peak, right_peak)
+        held_left, held_right = self.peak_holds[bus]
+        self.peak_holds[bus] = (max(held_left, left_peak), max(held_right, right_peak))
         frame_count = len(values) // 2
         self.rms_meters[bus] = (math.sqrt(left_energy / frame_count),
                                 math.sqrt(right_energy / frame_count))
