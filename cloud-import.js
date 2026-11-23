@@ -293,6 +293,13 @@ class Drive {
     const r=await this.fetch(API+'/'+driveId(id)+'?fields=id,name,mimeType,md5Checksum,size');
     return await r.json();
   }
+  async folderMetadata(id){
+    const response=await this.fetch(API+'/'+driveId(id)+
+      '?fields=id,name,mimeType,parents,trashed,ownedByMe');
+    const meta=await response.json();
+    if(meta?.id!==id)fail('Google Drive คืน Folder ID ไม่ตรงกับรายการที่เลือก');
+    return meta;
+  }
   async upload(parent,file,name,mime,md5,onBytes){
     this.assertLive();
     const matches=await this.namedChildren(parent,name);
@@ -1965,5 +1972,6 @@ class Importer {
   }
 }
 scope.XStageCloudImport={init:(options)=>new Importer(options),Drive,loadCatalog,
-  buildMidiIndex,distinctImportCode,sourceXmidName,pathFor,sameMidiBytes,acquireCatalogLease};
+  buildMidiIndex,distinctImportCode,sourceXmidName,pathFor,sameMidiBytes,
+  acquireCatalogLease,publishSingleCatalog};
 })(window);
