@@ -161,6 +161,33 @@ class LatestUpdateTests(unittest.TestCase):
         self.assertEqual(updater.ready_file(self.workspace)["version"],"0.1.99")
         self.assertEqual(progress[-1][0]["downloaded_bytes"],len(content))
 
+    def test_http_404_on_stale_range_restarts_full_verified_download(self):
+        import json
+        import urllib.error
+        content=b"MZ"+b"r"*(2*1024*1024)
+        verified=updater.validate(manifest("0.1.99",content))
+        root=self.workspace/"UPDATES"
+        root.mkdir(parents=True,exist_ok=True)
+        partial=root/(verified["filename"]+".partial")
+        partial.write_bytes(content[:1024*1024])
+        marker=root/(verified["filename"]+".partial.json")
+        marker.write_text(json.dumps({
+            "url":verified["url"],"sha256":verified["sha256"],
+            "version":verified["version"]}),encoding="utf-8")
+        calls=[]
+        def urlopen(req,timeout=None):
+            calls.append(req.get_header("Range"))
+            if len(calls)==1:
+                raise urllib.error.HTTPError(req.full_url,404,"Not Found",{},None)
+            return Response(content)
+        with patch.object(updater.sys,"platform","win32"), \\
+             patch.object(updater.sys,"frozen",True,create=True), \\
+             patch.object(updater.urllib.request,"urlopen",side_effect=urlopen), \\
+             patch.object(updater.time,"sleep",return_value=None):
+            result=updater.download(self.workspace,manifest("0.1.99",content))
+        self.assertEqual(calls,["bytes=1048576-",None])
+        self.assertEqual(Path(result["path"]).read_bytes(),content)
+
     def test_mismatched_range_cannot_corrupt_resume(self):
         content=b"MZ"+b"x"*(2*1024*1024)
         partial=self.workspace/"UPDATES"/"X-Stage-Song-Studio-Pro-v0.1.99-win-x64-Setup.exe.partial"
