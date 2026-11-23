@@ -9,6 +9,10 @@ const ids=['cloud-import-open','cloud-import-dialog','cloud-import-pick','cloud-
   'cloud-import-ready','cloud-import-fonts','cloud-import-blocked','cloud-import-start',
   'cloud-import-done','cloud-import-progress','cloud-import-allow-create'];
 for(const id of ids)assert.ok(page.includes('id="'+id+'"'),'Missing cloud importer control: '+id);
+assert.ok(page.includes('id="cloud-import-upload-only"')&&
+  read('cloud-import.js').includes("if(uploadOnly)return;")&&
+  read('cloud-import.js').includes("const uploadOnly=!!this.dom.uploadOnly?.checked"),
+  'Upload-only must never publish SQLite before explicit folder scan');
 assert.ok(page.includes('id="xstage-drive-folder-music"')&&
   page.includes('id="xstage-drive-folder-soundfont"')&&
   page.includes('id="xstage-drive-folder-fx"')&&
@@ -485,8 +489,8 @@ assert.ok(style.includes('.cloud-import-body{')&&
   style.includes('.cloud-import-footer-buttons{')&&
   style.includes('flex:0 0 auto'),
   'Import Start and status must be anchored outside scrollable contents');
-assert.ok(page.includes('cloud-import.js?v=1187-drive-folder-scan')&&
-  page.includes('cloud-import.css?v=1172-direct-db-layout')&&
+assert.ok(page.includes('cloud-import.js?v=1188-drive-upload-only')&&
+  page.includes('cloud-import.css?v=1188-folder-source-controls')&&
   page.includes('video-metadata-editor.js?v=1138-verified-video-selection'),
   'Updated scripts and styles must bypass stale browser caches');
 const oldDoc=ctx.document,oldAdd=ctx.addEventListener,oldScan=ctx.XStageImportCore.scan;
