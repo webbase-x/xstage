@@ -187,6 +187,63 @@ const refreshCode=segment(app,'function xstageTvRefreshQuickMenu(panel){','funct
   assert.equal(list.items[0].textContent,'ยังไม่มีเพลงรอในคิว');
 }
 
+
+// Android TV song search is a bounded view of the hosted Online catalog.
+const tvSearchSource=segment(app,'function xstageTvRenderSearch(panel){','function xstageTvSearchPanel(){');
+{
+  const song={code:'A01',title:'เพลงทดสอบ',artist:'นักร้อง'};
+  const called=[],selected=[],closed=[];
+  const makeNode=()=>{
+    const handlers={};
+    return {value:'',textContent:'',children:[],
+      replaceChildren(){this.children=[];},
+      append(...items){this.children.push(...items);},
+      addEventListener(type,fn){handlers[type]=fn;},
+      click(){handlers.click?.();}};
+  };
+  const input=makeNode(),status=makeNode(),results=makeNode();
+  const panel={querySelector(id){return ({
+    '#xstage-tv-search-input':input,
+    '#xstage-tv-search-results':results,
+    '#xstage-tv-search-status':status
+  })[id];}};
+  const state={token:'private-user',songs:[song]};
+  const render=new Function('state','document','normalizeSearchText',
+    'rankedSearchEntries','num','playable','chooseSearchSong','xstageTvCloseSearch',
+    tvSearchSource+'\nreturn xstageTvRenderSearch;')(
+    state,{createElement:makeNode},s=>s.trim().toLowerCase(),
+    (songs,term,limit)=>{
+      called.push({songs,term,limit});
+      return {total:1,results:[{song}]};
+    },String,()=>true,s=>selected.push(s),v=>closed.push(v));
+  render(panel);
+  assert.equal(results.children.length,0,'no blank-search catalog exposure');
+  assert.equal(called.length,0);
+  input.value='เพลง';
+  render(panel);
+  assert.equal(called[0].songs,state.songs,'uses exactly Online catalog');
+  assert.equal(called[0].limit,8,'bounded TV results');
+  assert.equal(results.children[0].children[0].textContent,song.title);
+  results.children[0].click();
+  assert.deepEqual(selected,[song],'TV songs invoke Online playback/queue');
+  assert.deepEqual(closed,[false],'chosen song returns to the stage');
+  state.token='';
+  render(panel);
+  assert.equal(results.children.length,0,'sign-out removes all results');
+  assert.equal(called.length,1,'sign-out blocks catalog search');
+}
+assert.ok(app.includes('xstage-tv-quick-search')&&
+  app.includes("const search=document.getElementById('xstage-tv-search-panel');")&&
+  app.includes('xstageTvCloseSearch(true);return true;'),
+  'TV search command and Back should work');
+assert.ok(app.includes("event.target?.matches?.('input,textarea,[contenteditable=\"true\"]')"),
+  'TV remote arrows should not steal the search caret');
+const tvSearchCss=read('xstage-ux.css');
+assert.ok(tvSearchCss.includes('.xstage-tv-search-panel[hidden]')&&
+  tvSearchCss.includes('.xstage-tv-search-song')&&
+  tvSearchCss.includes('max-height:94dvh'),
+  'TV search must stay readable and keyboard-focusable at 720p/1080p');
+
 console.log('Android TV integration: update detection, nonintrusive toast, login refresh, remote & native safety passed');
 
 assert.ok(app.includes("function setAndroidTvStageAccess(granted,accountSub='')"),'native stage access gate must exist');
