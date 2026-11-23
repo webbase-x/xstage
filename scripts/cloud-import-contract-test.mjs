@@ -135,6 +135,13 @@ assert.equal(crossResult.backfilled,2);
 assert.equal(crossFormat.size,1);
 assert.equal(crossResult.hashes.get(rawMd5).webSongId,'raw');
 const importerText=read('cloud-import.js');
+assert.ok(!importerText.includes("for(const folder of ['SONGS','DB','SOUNDFONT','BACKUP','CACHE','LOGS'])"),
+  'Import scan must not eagerly create empty Drive folders');
+assert.ok(importerText.includes("const name=safeName(midiFile.name)") &&
+  importerText.includes("const sourceName=safeName(source.file.name)") &&
+  importerText.includes("let chosenName=safeName(name)") &&
+  importerText.includes("chosenName=safeName(stem).slice(0,80)+'-'+hash.slice(0,16)+extension"),
+  'Preserve input filenames unless another file with different content already uses the name');
 assert.ok(importerText.includes('core.hashBlob(opened.midi,()=>this.check())'),
   'Wrapped XMID/XSK input must hash the internal MIDI content');
 assert.ok(importerText.includes('sameMidiBytes(byMidi,midiHash,midiSize)') &&
