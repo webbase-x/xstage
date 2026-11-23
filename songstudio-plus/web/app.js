@@ -290,6 +290,28 @@
         button.addEventListener("click",()=>void openLyrics(song));
         action.append(button);
       }else action.textContent="—";
+      if(state.view==="library"){
+        const remove=document.createElement("button");
+        remove.type="button";remove.className="quiet-btn";
+        remove.textContent="ลบรายการ";
+        remove.title="นำรายการออกจากคลังที่แสดง โดยเก็บไฟล์ต้นฉบับและข้อมูล SQLite ไว้";
+        remove.addEventListener("click",async()=>{
+          if(state.activeJob)return toast("มีงานกำลังทำงานอยู่",true);
+          const confirmed=await confirmTask("ลบรายการเพลงจากคลัง",
+            "เพลง: "+(song.title||song.original_code)+"\\n"+
+            "รหัส: "+String(song.code).padStart(8,"0")+"\\n\\n"+
+            "รายการนี้จะถูกซ่อนจากคลัง โดยไม่ลบไฟล์ต้นฉบับ XMID หรือข้อมูลเพลงใน SQLite");
+          if(!confirmed)return;
+          remove.disabled=true;
+          try{
+            await api("/api/songs/remove",{song_id:song.id});
+            state.selectedSongs.delete(song.id);
+            await refreshSongs();await refreshStatus();
+            toast("นำรายการออกจากคลังแล้ว · ไม่ลบไฟล์เพลงเดิม");
+          }catch(error){remove.disabled=false;toast("ลบรายการไม่สำเร็จ: "+error.message,true);}
+        });
+        action.append(remove);
+      }
       row.append(action);list.append(row);
       const option=new Option(String(song.code).padStart(8,"0")+" · "+song.title,song.id);
       select.append(option);
@@ -2473,6 +2495,26 @@
       $("confirm-dialog").returnValue="cancel";
     });
     $("source-browse").addEventListener("click",()=>void openPicker("folder","source-folder"));
+    $("import-destination-browse").addEventListener("click",async()=>{
+      const button=$("import-destination-browse");
+      button.disabled=true;
+      try{
+        const found=await api("/api/pick",{kind:"folder",current:$("import-destination").value.trim()},0);
+        if(found.path)$("import-destination").value=found.path;
+      }catch(error){toast("เลือกปลายทางไม่สำเร็จ: "+error.message,true);}
+      finally{button.disabled=false;}
+    });
+    $("import-destination-save").addEventListener("click",async()=>{
+      if(state.activeJob)return toast("โปรดรอให้งานปัจจุบันเสร็จก่อน",true);
+      try{
+        const folder=$("import-destination").value.trim();
+        const saved=await api("/api/workspace/select",{folder});
+        $("settings-workspace-path").value=saved.workspace;
+        text("import-destination-status","บันทึกแล้ว · ปิดเปิดโปรแกรมใหม่เพื่อใช้ปลายทางนี้ · ไม่ย้าย SQLite เดิม");
+        toast("บันทึกปลายทางแล้ว มีผลหลังเปิดโปรแกรมใหม่");
+      }catch(error){toast("บันทึกปลายทางไม่สำเร็จ: "+error.message,true);}
+    });
+
     $("drive-browse").addEventListener("click",()=>void openPicker("folder","drive-folder"));
     $("drive-check").addEventListener("click",async()=>{
       if(!state.ready||state.activeJob)return;
@@ -3088,6 +3130,7 @@
       setReady(true);
       text("workspace-chip","คลัง: "+session.workspace.split(/[\\/]/).pop());
       $("settings-workspace-path").value=session.workspace;
+      $("import-destination").value=session.workspace;
       void diagnostic("ui.session.ready",{version:session.version});
       // Update check is independent from SQLite summary work. Start it early
       // so a new release is visible immediately after the desktop connects.
