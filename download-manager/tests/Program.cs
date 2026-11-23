@@ -1411,6 +1411,18 @@ try
     foreach (var uri in videoHosts)
         if (!SocialVideoDownloader.IsVideoUrl(uri))
             throw new Exception("Social video domain not recognized: " + uri);
+    // A DNS-equivalent trailing-dot host must keep the correct platform label.
+    foreach (var (url, expected) in new[]
+    {
+        ("https://www.youtube.com./watch?v=abc", "YouTube"),
+        ("https://www.tiktok.com./video/123", "TikTok"),
+        ("https://www.instagram.com./reel/abc", "Instagram Reels"),
+        ("https://www.facebook.com./watch/123", "Facebook Reels")
+    })
+    {
+        if (!SocialVideoDownloader.IsVideoUrl(url) || SocialVideoDownloader.Platform(url) != expected)
+            throw new Exception("Trailing-dot video host lost its platform label: " + url);
+    }
     // Ordinary download links must NOT expose video-quality/container options.
     if (SocialVideoDownloader.InputContainsVideo("") ||
         SocialVideoDownloader.InputContainsVideo("https://example.com/file.zip") ||
