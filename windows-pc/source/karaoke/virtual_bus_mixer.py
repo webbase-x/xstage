@@ -46,6 +46,8 @@ class VirtualBusMixer:
         self.pre_limit_peaks = {i: (0., 0.) for i in range(bus_count)}
         # Explicitly resettable post-limiter peak holds for live diagnostics.
         self.peak_holds = {i: (0., 0.) for i in range(bus_count)}
+        # Retain pre-limiter overload peaks across blocks until explicit reset.
+        self.pre_limit_peak_holds = {i: (0., 0.) for i in range(bus_count)}
 
     def configure(self, bus, *, gain=None, pan=None, mute=None, solo=None):
         if type(bus) is not int or bus not in self.strips:
@@ -104,6 +106,7 @@ class VirtualBusMixer:
             "rms_meters": self.rms_meters.copy(),
             "pre_limit_peaks": self.pre_limit_peaks.copy(),
             "peak_holds": self.peak_holds.copy(),
+            "pre_limit_peak_holds": self.pre_limit_peak_holds.copy(),
             "clipped_samples": self.clipped_samples.copy(),
             "total_clipped_samples": self.total_clipped_samples.copy(),
         }
@@ -132,6 +135,8 @@ class VirtualBusMixer:
                                for bus, pair in self.peak_holds.items()},
             "pre_limit_peak_dbfs": {bus: tuple(dbfs(v) for v in pair)
                                     for bus, pair in self.pre_limit_peaks.items()},
+            "pre_limit_peak_hold_dbfs": {bus: tuple(dbfs(v) for v in pair)
+                                         for bus, pair in self.pre_limit_peak_holds.items()},
         }
 
     def reset_clipping_totals(self, bus=None):
@@ -149,10 +154,12 @@ class VirtualBusMixer:
         if bus is None:
             for index in self.peak_holds:
                 self.peak_holds[index] = (0., 0.)
+                self.pre_limit_peak_holds[index] = (0., 0.)
             return
         if type(bus) is not int or bus not in self.strips:
             raise ValueError("Unknown bus")
         self.peak_holds[bus] = (0., 0.)
+        self.pre_limit_peak_holds[bus] = (0., 0.)
 
     def reset_diagnostics(self, bus=None):
         """Clear meter history at an explicit song/session boundary.
@@ -168,6 +175,7 @@ class VirtualBusMixer:
             self.rms_meters[index] = (0., 0.)
             self.pre_limit_peaks[index] = (0., 0.)
             self.peak_holds[index] = (0., 0.)
+            self.pre_limit_peak_holds[index] = (0., 0.)
             self.clipped_samples[index] = 0
             self.total_clipped_samples[index] = 0
 
@@ -224,6 +232,9 @@ class VirtualBusMixer:
         self.clipped_samples[bus] = clipped
         self.total_clipped_samples[bus] += clipped
         self.pre_limit_peaks[bus] = (pre_left_peak, pre_right_peak)
+        held_pre_left, held_pre_right = self.pre_limit_peak_holds[bus]
+        self.pre_limit_peak_holds[bus] = (max(held_pre_left, pre_left_peak),
+                                          max(held_pre_right, pre_right_peak))
         if sys.byteorder != "little":
             values.byteswap()
         return values.tobytes()
