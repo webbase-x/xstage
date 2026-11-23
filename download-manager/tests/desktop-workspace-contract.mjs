@@ -93,6 +93,7 @@ const contracts = [
   ['speed configuration exists', /private void ConfigureFileSpeed\(DownloadJob job\)/, performance],
   ['file speed rejects invalid 1–63 KiB/s before changing engine state', /if \(speed\.Value is > 0 and < 64\)/, performance],
   ['file speed dialog has explicit cancellation', /dialog\.CancelButton = cancel;/, performance],
+  ['legacy out-of-range speed does not crash settings dialog', /Value = Math\.Clamp\(job\.FileSpeedLimitKib, 0, 1_048_576\)/, performance],
   ['tabbed details, chart and diagnostics', /new TabControl/, preview],
   ['real speed samples', /_speedSamples\.Add\(_latestTransferRate\)/, preview],
   ['real elapsed-time sampling', /var elapsedMs = _lastSpeedMeasurementTick == 0/, main],
