@@ -174,6 +174,20 @@ class VirtualBusMixer:
         """
         return {bus: self.clipped_samples[bus] > 0 for bus in self.strips}
 
+    def health_flags_snapshot(self):
+        """Detached live per-bus fault flags for the mixer status display.
+
+        Only the latest PCM block is considered. Historical totals remain
+        available separately; polling this method never mutates mixer state.
+        """
+        return {
+            bus: {
+                "overload": self.clipped_samples[bus] > 0,
+                "invalid_pcm": self.invalid_samples[bus] > 0,
+            }
+            for bus in self.strips
+        }
+
     def reset_clipping_totals(self, bus=None):
         """Clear lifetime clipping diagnostics without changing audio or presets."""
         if bus is None:
