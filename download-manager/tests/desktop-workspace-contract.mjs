@@ -16,8 +16,8 @@ const background = readFileSync(join(root, 'LiveBackgroundMonitor.cs'), 'utf8');
 const testProject = readFileSync(join(root, 'tests/DownloadEngine.Tests.csproj'), 'utf8');
 
 const contracts = [
-  ['global speed validation keeps dialog open', /ok\\.Click \\+= \\(_, _\\) =>[\\s\\S]*?dialog\\.DialogResult = DialogResult\\.None;/, performance],
-  ['per-file speed validation keeps dialog open', /save\\.Click \\+= \\(_, _\\) =>[\\s\\S]*?dialog\\.DialogResult = DialogResult\\.None;/, performance],
+  ['global speed validation keeps dialog open', /ok\.Click \+= \(_, _\) =>[\s\S]*?dialog\.DialogResult = DialogResult\.None;/, performance],
+  ['per-file speed validation keeps dialog open', /save\.Click \+= \(_, _\) =>[\s\S]*?dialog\.DialogResult = DialogResult\.None;/, performance],
   ['branded header', /CreateBrandHeader\(\)/, workspace],
   ['live command bar', /Button\("บันทึกไลฟ์สด", "video"/, workspace],
   ['live media command', /Action\("บันทึกไลฟ์สด · ตัดคลิปตามช่วงหยุดพูด/, workspace],
