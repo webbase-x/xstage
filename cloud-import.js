@@ -1372,26 +1372,40 @@ class Importer {
         peakPart=Math.max(peakPart,Math.min(1,Math.max(0,part)));
         this.status(text);this.progress(finished,work.length,peakPart);
       };
+      const uploadNameLocks=new Map();
+      const withNameLock=async(key,action)=>{
+        const previous=uploadNameLocks.get(key);
+        let release;
+        const current=new Promise(resolve=>{release=resolve;});
+        uploadNameLocks.set(key,current);
+        if(previous)await previous;
+        try{return await action();}
+        finally{
+          release();
+          if(uploadNameLocks.get(key)===current)uploadNameLocks.delete(key);
+        }
+      };
       const uploadMedia=async(file,code,parts,name,mime,hash,from=0,span=1)=>{
         this.check();
         const parent=await drive.ensurePath(rootId,parts);
-        // Preserve the source filename when available. Different content with
-        // an identical name receives a deterministic hash suffix instead.
-        let chosenName=safeName(name);
-        const colliding=await drive.namedChildren(parent,chosenName);
-        if(colliding.length && !colliding.some(entry=>
-          String(entry.md5Checksum||'').toLowerCase()===hash.toLowerCase() &&
-          Number(entry.size)===file.size)){
-          const dot=chosenName.lastIndexOf('.');
-          const stem=dot>0?chosenName.slice(0,dot):chosenName;
-          const extension=dot>0?chosenName.slice(dot):'';
-          chosenName=safeName(stem).slice(0,80)+'-'+hash.slice(0,16)+extension;
-        }
-        const item=await drive.upload(parent,file,chosenName,mime,hash,
-          (done,total,bytesPerSecond=0)=>show('อัปโหลด '+(file.name||chosenName)+' · '+(done/MiB).toFixed(1)+' / '+(total/MiB).toFixed(1)+' MB'+
-            (bytesPerSecond>0?' · '+(bytesPerSecond/MiB).toFixed(1)+' MB/s':''),
-            Math.min(.99,from+(done/Math.max(1,total))*span)));
-        return {fileId:item.id,path:[...parts,chosenName].join('/'),md5Checksum:hash,size:file.size};
+        // Concurrent same-name uploads must not create duplicate Drive files.
+        return withNameLock(parent+'\\0'+safeName(name),async()=>{
+          let chosenName=safeName(name);
+          const colliding=await drive.namedChildren(parent,chosenName);
+          if(colliding.length && !colliding.some(entry=>
+            String(entry.md5Checksum||'').toLowerCase()===hash.toLowerCase() &&
+            Number(entry.size)===file.size)){
+            const dot=chosenName.lastIndexOf('.');
+            const stem=dot>0?chosenName.slice(0,dot):chosenName;
+            const extension=dot>0?chosenName.slice(dot):'';
+            chosenName=safeName(stem).slice(0,80)+'-'+hash.slice(0,16)+extension;
+          }
+          const item=await drive.upload(parent,file,chosenName,mime,hash,
+            (done,total,bytesPerSecond=0)=>show('อัปโหลด '+(file.name||chosenName)+' · '+(done/MiB).toFixed(1)+' / '+(total/MiB).toFixed(1)+' MB'+
+              (bytesPerSecond>0?' · '+(bytesPerSecond/MiB).toFixed(1)+' MB/s':''),
+              Math.min(.99,from+(done/Math.max(1,total))*span)));
+          return {fileId:item.id,path:[...parts,chosenName].join('/'),md5Checksum:hash,size:file.size};
+        });
       };
       // Independent immutable song+lyrics files may upload simultaneously.
       // Await BOTH completions before updating catalog rows or publishing DB.
@@ -1464,7 +1478,94 @@ class Importer {
           }
         }
       };
-      for(const originalItem of work){
+      // Prepare bounded XMID batches concurrently, deduplicate their raw MIDI
+      // bytes before ANY Drive upload, then commit catalog rows sequentially.
+      // This preserves one SQLite writer and avoids duplicate remote media.
+      let lastSaved=0;
+      const uploadXmidBatch=async group=>{
+        const prepared=await Promise.allSettled(group.map(async item=>{
+          this.check();
+          const opened=await scope.XStageXmid.openPackage(item.file);
+          const sourceCode=opened.code;
+          const rawMidiSize=opened.midi.size;
+          const rawMidiHash=await core.hashBlob(opened.midi,()=>this.check());
+          const identity=core.songIdentity(opened.document,sourceCode);
+          if(!identity.identityComplete)throw Error('XMID: ชื่อเพลงหรือศิลปินจริงไม่ครบ');
+          const xmidHash=await core.hashBlob(item.file,()=>this.check());
+          return {item,sourceCode,rawMidiSize,rawMidiHash,identity,xmidHash,
+            ident:'browser/xmid/'+xmidHash,name:sourceXmidName(item.file.name)};
+        }));
+        const reservedMidi=new Set(),reservedCodes=new Set(),tasks=[];
+        for(let index=0;index<prepared.length;index++){
+          this.check();
+          const outcome=prepared[index];
+          if(outcome.status==='rejected'){
+            const error=outcome.reason;
+            if(!/^XMID:/.test(String(error?.message||error)))throw error;
+            this.stats.errors++;finished++;
+            show('ข้าม XMID ที่ไม่สมบูรณ์: '+group[index].file.name);
+            continue;
+          }
+          const entry=outcome.value;
+          if(sameMidiBytes(byMidi,entry.rawMidiHash,entry.rawMidiSize)||
+             reservedMidi.has(entry.rawMidiHash)||
+             rows.has(entry.ident)){
+            this.stats.duplicates++;finished++;
+            show('ข้าม MIDI ซ้ำ (เนื้อหาเดียวกัน): '+entry.name);
+            continue;
+          }
+          const getCodes={get:key=>reservedCodes.has(key)?[true]:byCode.get(key)};
+          const code=distinctImportCode(entry.sourceCode,entry.rawMidiHash,getCodes);
+          reservedMidi.add(entry.rawMidiHash);reservedCodes.add(code.toLowerCase());
+          const path=pathFor(entry.sourceCode,'xmid','',entry.name).slice(0,-1);
+          tasks.push({...entry,code,upload:uploadMedia(entry.item.file,code,path,
+            entry.name,'application/octet-stream',entry.xmidHash,0,1)});
+        }
+        // Each upload settles independently. Successful remote files remain
+        // reusable even if another worker fails; never publish an unverified ID.
+        const outcomes=await Promise.allSettled(tasks.map(entry=>entry.upload));
+        let firstFailure=null;
+        for(let index=0;index<outcomes.length;index++){
+          const outcome=outcomes[index],entry=tasks[index];
+          if(outcome.status==='rejected'){
+            firstFailure ||= outcome.reason;
+            continue;
+          }
+          this.check();
+          const record={webSongId:entry.ident,code:entry.code,
+            sourceCode:entry.sourceCode,midiHash:entry.rawMidiHash,
+            midiSize:entry.rawMidiSize,originalFilename:entry.item.file.name,
+            originalRelativePath:entry.item.relative||entry.item.file.name,
+            originalFileSize:entry.item.file.size,
+            title:entry.identity.title,artist:entry.identity.artist,
+            sourceFormat:'XMID',lyricsMode:'timed',xmid:outcome.value};
+          rows.set(entry.ident,record);addMaps(record);
+          byMidi.set(entry.rawMidiHash,record);
+          revisions.push(record);this.stats.newSongs++;finished++;
+          show('นำเข้า XMID '+finished+' / '+work.length+' · ใหม่ '+this.stats.newSongs+
+            ' · ซ้ำ '+this.stats.duplicates);
+          if(revisions.length>=CATALOG_BATCH_SIZE)await publish();
+        }
+        if(finished-lastSaved>=50){
+          lastSaved=finished;
+          await this.save({status:'uploading',done:finished,total:work.length});
+        }
+        if(firstFailure){
+          // Publish completed rows before stopping so the next run can skip them.
+          await publish();
+          throw firstFailure;
+        }
+      };
+      for(let workIndex=0;workIndex<work.length;workIndex++){
+        const originalItem=work[workIndex];
+        if(originalItem.isXsk&&originalItem.kind==='XMID'){
+          const group=[originalItem];
+          while(group.length<FAST_XMID_CONCURRENCY&&
+                work[workIndex+1]?.isXsk&&work[workIndex+1].kind==='XMID')
+            group.push(work[++workIndex]);
+          await uploadXmidBatch(group);
+          continue;
+        }
         this.check();
         let item=originalItem;
         try{
@@ -1798,7 +1899,10 @@ class Importer {
           ' · ใหม่ '+this.stats.newSongs+' · อัปเดต '+this.stats.updated+
           ' · ซ้ำ '+this.stats.duplicates+' · SoundFont '+this.stats.fonts+
           ' · ผิดพลาด '+this.stats.errors);
-        if(finished%5===0)await this.save({status:'uploading',done:finished,total:work.length});
+        if(finished-lastSaved>=50){
+          lastSaved=finished;
+          await this.save({status:'uploading',done:finished,total:work.length});
+        }
       }
       await publish();
       await checkpoint(this.account,null);this.saved=null;
