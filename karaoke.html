@@ -400,7 +400,10 @@
             <button id="xstage-drive-folder-fx" type="button" disabled>เลือกโฟลเดอร์ FX</button>
           </div>
         </div>
-        <button id="xstage-drive-build-db" type="button" disabled>ตรวจไฟล์บน Drive และสร้าง DB/songs.sqlite3</button>
+        <div class="xstage-drive-build-controls">
+          <button id="xstage-drive-build-db" type="button" disabled>ตรวจไฟล์บน Drive และสร้าง DB/songs.sqlite3</button>
+          <button id="xstage-drive-cancel-db" type="button" disabled>ยกเลิกการสร้างฐาน</button>
+        </div>
         <p class="xstage-drive-warning">ตัวสร้าง DB จะอ่าน XMID/XSK ที่แอปเข้าถึงได้และข้าม MIDI ที่เนื้อหาเหมือนกัน · ไฟล์ชนิดอื่นยังไม่รวมในโหมดสร้างฐานภายหลัง · ต้องอนุญาตสิทธิ์อ่านไฟล์ภายในโฟลเดอร์ด้วย</p>
         <p id="xstage-drive-folder-status" role="status" aria-live="polite">เลือกโฟลเดอร์จาก Google Drive เพื่อสร้างฐานเพลงภายหลัง</p>
       </section>
