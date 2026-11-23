@@ -638,7 +638,8 @@ async function buildMidiIndex(rows,drive,check){
 }
 // Song Studio can restart filename numbering at 00001.XMID on EVERY export.
 // Use the source filename only as a display/Drive basename, never as identity.
-// Store files in a content-hash subfolder to avoid cross-batch name collisions.
+// Preserve the source filename in its format/bucket folder; a different
+// file with the same name receives a hash suffix, not another directory.
 function sourceXmidName(filename){
   const source=String(filename||'').split(/[\\/]/).pop();
   const match=/^(\d{1,8})\.xmid$/i.exec(source);
@@ -1447,12 +1448,12 @@ class Importer {
               this.stats.duplicates++;finished++;
               show('ข้าม XSK ซ้ำ MD5: '+code);continue;
             }
-            // All export batches may contain 00001.XMID. Keep the original
-            // five-digit basename but isolate distinct recordings by MIDI hash.
+            // Multiple export batches may contain 00001.XMID. Store songs
+            // directly in their format/bucket folder; uploadMedia resolves
+            // filename conflicts by adding a content hash to the filename.
             const name=isXmid?sourceXmidName(item.file.name):
               safeName(item.file.name);
             const path=pathFor(sourceCode,isXmid?'xmid':'xsk','',name).slice(0,-1);
-            if(isXmid)path.push(rawMidiHash);
             const packed=await uploadMedia(item.file,code,path,name,
               'application/octet-stream',xskHash,0,1);
             const record={webSongId:ident,code,sourceCode,midiHash:rawMidiHash,
