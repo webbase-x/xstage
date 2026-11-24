@@ -409,7 +409,7 @@
     <div class="windows-volume-modal">
       <h2 id="windows-volume-title">เชื่อมระดับเสียงหลัก Windows</h2>
       <p>Chrome ควบคุมระดับเสียงระบบ Windows โดยตรงไม่ได้ ต้องเปิด <strong>XStageWindowsVolumeBridge.exe</strong> บนเครื่องนี้ก่อน การเชื่อมต้องกรอกรหัสที่โปรแกรมแสดง และสามารถยกเลิกได้ตลอดเวลา</p>
-      <p><a href="https://github.com/webbase-x/xstage/actions/workflows/build-web-volume-bridge.yml" target="_blank" rel="noopener noreferrer">รับโปรแกรมช่วย Windows จาก GitHub Actions</a> · ดาวน์โหลด Artifact และเปิด EXE โดยผู้ใช้เอง</p>
+      <p><a id="windows-volume-download" href="https://github.com/webbase-x/xstage/releases/download/windows-volume-bridge/XStageWindowsVolumeBridge.exe" download="XStageWindowsVolumeBridge.exe">ดาวน์โหลดโปรแกรม Windows (.exe) โดยตรง</a> · เปิดไฟล์ที่ดาวน์โหลดแล้วเพื่อรับรหัสเชื่อมต่อ</p>
       <label for="windows-volume-code">รหัสเชื่อมต่อจากโปรแกรมช่วย (10 หลัก)</label>
       <input id="windows-volume-code" type="text" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" autocomplete="off" placeholder="รหัส 10 หลัก">
       <p id="windows-volume-status" role="status" aria-live="polite">ยังไม่เชื่อม · ขณะนี้แถบเสียงปรับเฉพาะเว็บ</p>
