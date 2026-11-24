@@ -2000,22 +2000,15 @@ async function openSharedLibraryPicker(){
         if(!sameSession())throw Error('บัญชีหรือคลังเปลี่ยนระหว่างตั้งค่า');
       });
       drive.ensureAuth=force=>ensureImporterGoogleAuth(force);
-      const children=await drive.listChildren(actual.id);
-      const dirs=['SONGS','DB','SOUNDFONT','FX','BACKUP','CACHE','LOGS'];
-      const missing=dirs.filter(name=>!children.some(x=>x.name===name&&
-        x.mimeType==='application/vnd.google-apps.folder'));
-      if(missing.length){
-        if(actual.ownedByMe===false)
-          throw Error('คลังที่แชร์ขาดโครงสร้าง '+missing.join(', ')+' · ให้เจ้าของตั้งค่าก่อน');
-        if(!window.confirm('คลัง "'+actual.name+'" ยังขาด '+missing.join(', ')+
-          '\nสร้างเฉพาะโฟลเดอร์ที่ขาดใน Folder ID นี้หรือไม่? (ไม่ลบไฟล์เดิม)'))
-          return;
-        for(const part of missing)await drive.ensurePath(actual.id,[part]);
-      }
+      if(!hasFullDriveRead()&&actual.ownedByMe!==false)
+        await ensureImporterGoogleAuth(true,true,true);
+      await window.XStageDriveFolders.ensureLibraryLayout(drive,actual.id,{
+        allowCreate:hasFullDriveRead()&&actual.ownedByMe!==false
+      });
       if(!sameSession())throw Error('บัญชี Google เปลี่ยนแล้ว');
       savePreferredLibraryRoot(account,actual.id);
       finish();
-      if(actual.id===previousRoot)return;
+      if(actual.id===previousRoot){await xstageDriveFolders?.discoverDefaults();return;}
       clearPlaybackResumeState();
       if(previousRoot){location.reload();return;}
       try{await openDrive(state.token,++state.authId,state.tokenExpiresAt,account,false);}
@@ -2291,6 +2284,9 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       state.manifest=null;state.songs=[];state.shown=[];renderSongs();
     }
     state.libraryRootId=root.id;
+    // Validate/repair the fixed layout before using any previously saved source.
+    try{await xstageDriveFolders?.discoverDefaults();}catch(error){console.warn('Standard Drive layout:',error.message);}
+    if(authId!==state.authId)return;
     void window.XStageBrowserMidi?.refreshFonts({token,rootId:root.id,sub:account.sub,ownedByMe:!!root.ownedByMe})
       .catch(error=>console.warn('SoundFont selector:',error.message));
     state.libraryRootOwnedByMe=!!root.ownedByMe;
@@ -5526,7 +5522,6 @@ const xstageDriveFolders=window.XStageDriveFolders?.init({
   session:()=>({token:state.token,sub:state.accountSub,
     rootId:state.libraryRootId}),
   hasFullRead:hasFullDriveRead,
-  chooseFolder:chooseUserDriveFolder,
   ensureAuth:ensureImporterGoogleAuth,
   onSoundfontChange:()=>{
     if(!state.token||!state.accountSub||!state.libraryRootId)return;
