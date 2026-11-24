@@ -18,6 +18,7 @@ public sealed partial class MainForm
     private TableLayoutPanel? _workspaceRoot;
     private Panel? _entryShell;
     private bool _inputVisible;
+    private SmartSyncForm? _smartSyncWindow;
     private bool _videoEntryRequested;
     private string _categoryFilter = "all";
     private List<DownloadJob> _visibleJobs = new();
@@ -237,6 +238,7 @@ public sealed partial class MainForm
         menu.Items.Add(Menu("ตั้งค่า",
             Action("ประสิทธิภาพ / การเชื่อมต่อ...", (_, _) => ConfigurePerformance()),
             Action("จำนวนครั้งลองใหม่...", (_, _) => ConfigureNetworkRetry()),
+            Action("Smart Sync — Google Drive...", (_, _) => ToggleSmartSync()),
             Action("Smart Sync — เมื่อเปิดโปรแกรม...", (_, _) => ConfigureSmartSyncStartup()),
             Action("รับดาวน์โหลดจาก Chrome / Edge...", (_, _) => SetupBrowserIntegration()),
             new ToolStripSeparator(),
@@ -330,6 +332,8 @@ public sealed partial class MainForm
             (_, _) => ConfigurePerformance(), "ตั้งค่าความเร็วและจำนวนงาน", 125);
         Button("ดาวน์โหลดวิดีโอ", "video", Color.FromArgb(175, 130, 246),
             (_, _) => ToggleQuickEntry(true), "คลิกเปิด/ซ่อนช่องดาวน์โหลดวิดีโอ", 129);
+        Button("Smart Sync", "refresh", Color.FromArgb(59, 228, 137),
+            (_, _) => ToggleSmartSync(), "เปิด/ซ่อน Smart Sync Google Drive", 116);
         Button("บันทึกไลฟ์สด", "video", Color.FromArgb(236, 130, 207),
             (_, _) => OpenLiveCapture(), "เปิดโหมดบันทึกไลฟ์และตัดคลิปตามช่วงเงียบ", 118);
         Button("วิเคราะห์ปัญหา", "alert", Color.FromArgb(148, 176, 252),
@@ -1281,6 +1285,14 @@ public sealed partial class MainForm
             MessageBox.Show(this, ex.Message, "บันทึกค่าลองใหม่ไม่สำเร็จ",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    private void ToggleSmartSync()
+    {
+        if (_smartSyncWindow is null || _smartSyncWindow.IsDisposed)
+            _smartSyncWindow = new SmartSyncForm();
+        if (_smartSyncWindow.Visible) _smartSyncWindow.Hide();
+        else { _smartSyncWindow.Show(this); _smartSyncWindow.Activate(); }
     }
 
     private void ToggleQuickEntry(bool video)

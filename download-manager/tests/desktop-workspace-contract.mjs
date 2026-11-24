@@ -29,6 +29,12 @@ assert.match(workspace, /Button\("เพิ่มงาน"[\s\S]*?ToggleQuickEn
 assert.match(workspace, /Button\("ดาวน์โหลดวิดีโอ"[\s\S]*?ToggleQuickEntry\(true\)/);
 assert.match(workspace, /if \(_inputVisible && _videoEntryRequested == video\)[\s\S]*?ShowInputPanel\(false\)/);
 assert.ok(testProject.includes('../UpdateTransitionForm.cs'));
+const smartSyncUi = readFileSync(join(root, 'SmartSyncForm.cs'), 'utf8');
+assert.match(workspace, /Button\("Smart Sync", "refresh"[\s\S]*?ToggleSmartSync\(\)/);
+assert.match(workspace, /_smartSyncWindow\.Visible\) _smartSyncWindow\.Hide\(\)/);
+assert.match(smartSyncUi, /SmartSyncFolders\.ExecuteAsync\(plan, 4/);
+assert.match(smartSyncUi, /Task\.Delay\(TimeSpan\.FromSeconds\(60\), token\)/);
+assert.ok(testProject.includes('../SmartSyncFolders.cs'));
 const contracts = [
   ['changed source clears stale adaptive throughput', /if \(sourceChanged\)[\s\S]*?job\.PreviousBytes = 0;\s*job\.SpeedBytesPerSecond = 0;\s*job\.SmoothedSpeedBytesPerSecond = 0;/, engine],
   ['protected subscription domains rejected before job creation', /host\.EndsWith\("\." \+ domain, StringComparison\.OrdinalIgnoreCase\)/, engine],

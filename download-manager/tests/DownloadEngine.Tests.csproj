@@ -13,6 +13,8 @@
     <Compile Include="../SmartSyncBackgroundWorker.cs" Link="SmartSyncBackgroundWorker.cs" />
     <Compile Include="../SmartSyncTransfer.cs" Link="SmartSyncTransfer.cs" />
     <Compile Include="../SmartSyncPlanner.cs" Link="SmartSyncPlanner.cs" />
+    <Compile Include="../SmartSyncFolders.cs" Link="SmartSyncFolders.cs" />
+    <Compile Include="../SmartSyncForm.cs" Link="SmartSyncForm.cs" />
     <Compile Include="../DownloadEngine.cs" Link="DownloadEngine.cs" />
     <Compile Include="../DownloadPerformance.cs" Link="DownloadPerformance.cs" />
     <Compile Include="../DownloadRetryPolicy.cs" Link="DownloadRetryPolicy.cs" />

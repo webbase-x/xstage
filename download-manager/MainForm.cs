@@ -86,6 +86,13 @@ public sealed partial class MainForm : Form
             // Keep the UI process alive until separately recorded livestreams
             // have closed MKV headers or safely cancelled clip generation.
             // Never pause normal downloads for a close attempt we reject.
+            if (_smartSyncWindow?.IsBusy == true)
+            {
+                e.Cancel = true;
+                _smartSyncWindow.RequestStop();
+                _smartSyncWindow.Show();
+                return;
+            }
             var openLive = Application.OpenForms.OfType<LiveStreamCaptureForm>()
                 .Where(window => window.IsBusy).ToArray();
             if (openLive.Length > 0)
@@ -98,6 +105,7 @@ public sealed partial class MainForm : Form
                     MessageBoxIcon.Information);
                 return;
             }
+            _smartSyncWindow?.CloseForShutdown();
             Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             _browserStop.Cancel();
             _timer.Stop();
@@ -542,9 +550,10 @@ public sealed partial class MainForm : Form
             if (IsDisposed) return;
             // Do not start the helper if closing would be vetoed by an active
             // live recording. Keep the verified setup for the next attempt.
-            if (Application.OpenForms.OfType<LiveStreamCaptureForm>().Any(window => window.IsBusy))
+            if (_smartSyncWindow?.IsBusy == true ||
+                Application.OpenForms.OfType<LiveStreamCaptureForm>().Any(window => window.IsBusy))
             {
-                _updateStatus.Text = "ไฟล์อัปเดตพร้อมแล้ว · กรุณาหยุดบันทึกไลฟ์ก่อนติดตั้ง แล้วกดตรวจสอบอัปเดตอีกครั้ง";
+                _updateStatus.Text = "ไฟล์อัปเดตพร้อมแล้ว · กรุณาหยุด Smart Sync/บันทึกไลฟ์ก่อนติดตั้ง แล้วกดตรวจสอบอัปเดตอีกครั้ง";
                 return;
             }
             _updateStatus.Text = "ตรวจสอบ SHA-256 ผ่าน · กำลังส่งต่อไปยังหน้าต่างอัปเดต";
