@@ -660,11 +660,8 @@ class KaraokeApp(tk.Tk):
 
     def rebuild_library(self, force=False):
         if getattr(self, "shared_drive_mode", False):
-            return messagebox.showinfo("ฐานเพลงร่วม Google Drive",
-                "โหมด Google Drive ใช้ DB/songs.sqlite3 ร่วมกับ Karaoke Online\n"
-                "ส่งไฟล์ใหม่เข้า XStageKaraoke/SONGS แล้วกด 'สร้างฐานใหม่สำหรับ PC/Online' "
-                "หรือ 'ตรวจไฟล์และอัปเดตฐานเพลง' ใน Karaoke Online\n"
-                "จากนั้นกลับมากดค้นหา/รีเฟรชบน PC", parent=self)
+            from .shared_catalog_builder_ui import open_builder
+            return open_builder(self)
         from .lister import locations, build_list
         roots = locations(self.settings)
         if roots:
@@ -842,7 +839,8 @@ class KaraokeApp(tk.Tk):
         if getattr(self, "shared_drive_mode", False):
             return messagebox.showinfo("ข้อมูลเพลงจากฐานร่วม",
                 "ชื่อเพลง/ศิลปิน/รหัสเพลงในโหมด Google Drive ใช้ข้อมูลเดียวกับ Karaoke Online\n"
-                "แก้ไฟล์ต้นทางใน Song Studio Pro แล้วส่งกลับ SONGS จากนั้นสร้างฐานใหม่บน Online",parent=self)
+                "แก้ไฟล์ต้นทางใน Song Studio Pro แล้วส่งกลับ SONGS "
+                "จากนั้นสร้างฐานใหม่ได้ทั้งใน Karaoke PC หรือ Karaoke Online",parent=self)
         if getattr(self,'scanning',False):return self.status_var.set('กำลังตรวจรายการเพลง กรุณารอให้งานเสร็จก่อนแก้ข้อมูล')
         selection = self.songs.selection()
         if not selection:
