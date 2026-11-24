@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import json
+import sqlite3
 import os
 import queue
 import threading
