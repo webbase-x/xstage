@@ -20,12 +20,12 @@ def shared_root(value):
     root = Path(value).expanduser()
     if root.name == "DB":
         root = root.parent
-    if not root.is_dir() or root.is_symlink() or root.name != ROOT_NAME:
-        raise ValueError("เลือกโฟลเดอร์ XStageKaraoke ที่ซิงก์กับ Google Drive for desktop")
+    if not root.is_dir() or root.is_symlink() or root.name in ("", ".", ".."):
+        raise ValueError("เลือกโฟลเดอร์หลักที่ใช้งานจริงบน Google Drive for desktop")
     root = root.resolve(strict=True)
     required = ("SONGS", "SOUNDFONT", "DB")
     if any(not (root / item).is_dir() or (root / item).is_symlink() for item in required):
-        raise ValueError("คลัง Google Drive ต้องมี SONGS, SOUNDFONT และ DB")
+        raise ValueError("คลังที่เลือกต้องมีโครงสร้าง SONGS, SOUNDFONT และ DB; ตั้งค่าโฟลเดอร์ก่อน")
     db = root / "DB" / "songs.sqlite3"
     if not db.is_file() or db.is_symlink():
         raise ValueError("ยังไม่มี DB/songs.sqlite3 บน Google Drive PC ห้ามสร้างฐานว่างแทน")
