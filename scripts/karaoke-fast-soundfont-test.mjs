@@ -29,6 +29,7 @@ class CustomEvent{
 const select={
   options:[],value:'',
   replaceChildren(...options){this.options=options;this.value=options[0]?.value||'';},
+  append(option){this.options.push(option);},
   get selectedOptions(){return this.options.filter(x=>x.value===this.value);}
 };
 const permission={hidden:true,style:{display:'none'}},sourceStatus={textContent:''};
