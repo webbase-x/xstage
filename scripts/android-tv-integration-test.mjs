@@ -41,10 +41,11 @@ function updateScenario({playing=true,dismissedBuild=0,manual=false}={}){
   const make=new Function('window','state','androidTvNativeBridgeReady',
     'androidTvUpdatePanel','playbackBusyForUpdate','$','setTimeout','CustomEvent',
     'XSTAGE_RELEASE','nativeUpdateDismissedBuild','nativeUpdateManualCheck',
+    'nativeUpdateInstalling',
     updateCallback+'\nreturn window.XStageAndroidUpdateAvailable;');
   const callback=make(window,state,()=>true,()=>panel,()=>playing,$,()=>{},
     class{constructor(type,options){this.type=type;this.detail=options?.detail;}},
-    {build:1087},dismissedBuild,manual);
+    {build:1087},dismissedBuild,manual,false);
   return {callback,state,panel,nodes,events,installs};
 }
 {
