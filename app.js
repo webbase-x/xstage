@@ -1616,9 +1616,7 @@ async function privateJson(id, token, opts) {
   catch { throw Error('ไฟล์ JSON บน Drive ไม่ถูกต้อง'); }
 }
 
-function sharedLibraryFeatureReady(){
-  return !!(String(cfg.googlePickerApiKey||'').trim()&&String(cfg.googleAppId||'').trim());
-}
+function sharedLibraryFeatureReady(){return true;}
 window.XStageSharedLibraryReady=sharedLibraryFeatureReady;
 function setSharedLibraryGate(active,message=''){
   const button=$('gate-shared-library');
@@ -1635,11 +1633,11 @@ function setSharedLibraryGate(active,message=''){
       button.textContent=ready?'เลือกโฟลเดอร์หลัก XStageKaraoke':'เชื่อม Google ก่อนเลือกคลัง';
     }
     if(copy)copy.textContent=ready
-      ? 'บัญชีนี้ได้รับเชิญให้ใช้คลังเพลงของผู้แชร์ กรุณาอนุญาต X-Stage ให้เปิดโฟลเดอร์นั้นหนึ่งครั้ง'
-      : 'บัญชีนี้ล็อกอินสำเร็จ แต่ระบบใช้คลังเพลงที่แชร์ยังไม่เปิดใช้งานบนเว็บไซต์นี้';
+      ? 'เลือกโฟลเดอร์หลัก XStageKaraoke ของคุณหรือที่ได้รับแชร์หนึ่งครั้ง'
+      : 'เชื่อม Google ก่อนเลือกคลังหลัก';
     if(footnote)footnote.textContent=ready
-      ? 'เล่นจาก Google Drive ของผู้แชร์โดยตรง · ไม่คัดลอกไฟล์ ไม่บันทึกเพลงลง Drive ของผู้รับ'
-      : 'เจ้าของเว็บไซต์ต้องตั้งค่า Google Picker API ก่อน · ไม่มีการคัดลอกเพลงลง Drive ของผู้รับ';
+      ? 'แสดงและใช้งานเฉพาะคลังหลักที่เลือก · ไม่คัดลอกไฟล์'
+      : 'ไม่คัดลอกเพลงและไม่เปิดคลังอื่นอัตโนมัติ';
     if(message)ui.gateStatus.textContent=message;
     else if(!ready)ui.gateStatus.textContent='ฟังก์ชันคลังที่แชร์ยังไม่พร้อมใช้งาน';
   }else{
@@ -5246,7 +5244,7 @@ updateGoogleRenewNotice();
 function updateDriveReadNotice(){
   const main=$('xstage-drive-main-name'),pick=$('xstage-drive-main-select');
   if(main)main.textContent=state.libraryRootId?'XStageKaraoke · …'+state.libraryRootId.slice(-6):'ยังไม่ได้เลือกคลังหลัก';
-  if(pick)pick.disabled=!state.token||!state.accountSub||!!window.XStageDriveBuildBusy;
+  if(pick)pick.disabled=!state.token||!state.accountSub;
   const button=$('xstage-drive-read-all'),status=$('xstage-drive-read-status');
   if(!button||!status)return;
   const full=hasFullDriveRead(),connected=!!state.token&&!!state.accountSub;
