@@ -225,18 +225,31 @@ function createWorkflow(options={}){
         display('กำลังอ่าน DB/songs.sqlite3 ที่ใช้งานอยู่…');
         const existing=await scope.XStageCloudImport.loadCatalog(drive,initial.rootId);
         const rows=existing.rows;
+        const originalCount=rows.size;
+        const baseLabel='ฐานเดิม '+originalCount+' เพลง';
+        display(baseLabel+' · กำลังตรวจดัชนี MIDI เดิม…');
         const indexed=await scope.XStageCloudImport.buildMidiIndex(rows,drive,check);
         const hashes=indexed.hashes;
+        const existingIds=new Set(rows.keys());
+        const retainedCount=rows.size;
+        const existingLabel=baseLabel+(indexed.duplicates?' · ซ้ำในฐานเดิม '+indexed.duplicates:'');
         const codes=new Map();
         for(const row of rows.values()){
           const k=String(row.code||'').toLowerCase();
           if(!codes.has(k))codes.set(k,[]);
           codes.get(k).push(row);
         }
-        const listing=await walkMusic(drive,chosen.id,check,display);
+        const listing=await walkMusic(drive,chosen.id,check,message=>display(existingLabel+' · '+message));
         if(!listing.files.length)
           fail('ไม่พบ XMID/XSK ที่อ่านได้ในโฟลเดอร์นี้ · ยังไม่ได้แก้ไข DB');
-        let added=0,duplicates=0,invalid=0,reused=0;
+        let added=0,duplicates=0,alreadyRegistered=0,duplicateInBatch=0,invalid=0,reused=0;
+        const markDuplicate=row=>{
+          duplicates++;
+          if(existingIds.has(row.webSongId))alreadyRegistered++;
+          else duplicateInBatch++;
+        };
+        const duplicateLabel=()=> 'MIDI ซ้ำ '+duplicates+' (มีในฐานแล้ว '+alreadyRegistered+' · ซ้ำในรอบนี้ '+duplicateInBatch+')';
+        display(existingLabel+' · พบไฟล์ '+listing.files.length+' · เริ่มตรวจไฟล์…');
         const inspect=async file=>{
           check();
           const key=checkpointKey(initial,chosen.id,file);
@@ -278,13 +291,13 @@ function createWorkflow(options={}){
               if(Number(old.midiSize||old.midi?.size||0)>0&&
                  Number(old.midiSize||old.midi?.size)!==item.midiSize)
                 fail('พบ MD5 MIDI ตรงกันแต่ขนาดข้อมูลต่างกัน');
-              duplicates++;continue;
+              markDuplicate(old);continue;
             }
             const code=scope.XStageCloudImport.distinctImportCode(
               item.parsed.code,item.midiHash,codes);
             const kind=item.file.ext;
             const ident='browser/'+kind+'/'+item.packedMd5;
-            if(rows.has(ident)){duplicates++;continue;}
+            if(rows.has(ident)){markDuplicate(rows.get(ident));continue;}
             const media={fileId:item.file.id,md5Checksum:item.packedMd5,
               size:Number(item.file.size),path:chosen.name+'/'+item.file.relative};
             const row={webSongId:ident,code,sourceCode:item.parsed.code,
@@ -301,22 +314,22 @@ function createWorkflow(options={}){
             codes.get(k).push(row);added++;
           }
           if(offset%16===0||offset+4>=listing.files.length)
-            display('ตรวจ '+Math.min(offset+4,listing.files.length)+' / '+listing.files.length+
+            display(existingLabel+' · ตรวจ '+Math.min(offset+4,listing.files.length)+' / '+listing.files.length+
               ' ('+Math.floor(Math.min(offset+4,listing.files.length)*100/listing.files.length)+'%)'+
-              ' · เพิ่ม '+added+' · MIDI ซ้ำ '+duplicates+' · ไฟล์ผิดรูปแบบ '+invalid+
-              ' · ใช้จุดบันทึก '+reused);
+              ' · เพิ่มใหม่ '+added+' · '+duplicateLabel()+' · ไฟล์ผิดรูปแบบ '+invalid+
+              ' · ใช้จุดบันทึก '+reused+' · คาดว่าฐานรวม '+(retainedCount+added)+' เพลง');
         }
         check();
         const needsPublication=Boolean(added||indexed.duplicates||indexed.backfilled);
         if(needsPublication){
-          display('ตรวจเสร็จ · กำลังสร้างและยืนยัน DB/songs.sqlite3 ครั้งเดียว…');
+          display(existingLabel+' · เพิ่มใหม่ '+added+' · '+duplicateLabel()+' · กำลังสร้างและยืนยัน DB/songs.sqlite3 ครั้งเดียว…');
           await scope.XStageCloudImport.publishSingleCatalog({
             drive,rootId:initial.rootId,pointer:existing.pointer,rows,check,status:display
           });
         }
         setPending(initial,'');
         display((needsPublication?'สร้างฐานเสร็จ':'ตรวจเสร็จ · ไม่มีข้อมูลใหม่ให้เผยแพร่')+
-          ' · เพิ่ม '+added+' เพลง · ข้าม MIDI ซ้ำ '+duplicates+
+          ' · '+existingLabel+' · เพิ่มใหม่ '+added+' เพลง · ข้าม '+duplicateLabel()+
           ' · ไฟล์ผิดรูปแบบ '+invalid+
           ' · รูปแบบอื่นที่ยังไม่ได้ทำดัชนี '+listing.otherCount+
           ' · ฐานเพลงรวม '+rows.size+' เพลง');
