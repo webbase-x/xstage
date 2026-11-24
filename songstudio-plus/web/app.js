@@ -1032,6 +1032,8 @@
       text("activity-title",job.kind==="lyrics-edit"?"แทนที่เนื้อร้องเป็นชุด":
           job.kind==="song-download"?"ดาวน์โหลดและนำเข้าเพลง HTTPS":
           job.kind==="drive-import"?"ดาวน์โหลดเพลงจาก XStageKaraoke":
+          job.kind==="drive-push-preview"?"ตรวจไฟล์ก่อนส่ง Google Drive":
+          job.kind==="drive-push"?"ส่งไฟล์ใหม่ขึ้น Google Drive PC":
           job.kind==="update"?"ดาวน์โหลดและตรวจ SHA-256 โปรแกรมใหม่":
           job.kind==="import"?"นำเข้าและตรวจ SHA-256":
           job.kind==="db-audit"?"ตรวจพื้นที่และความสมบูรณ์ของ SQLite":
@@ -1159,6 +1161,12 @@
           "ดาวน์โหลด "+number((p.downloaded_bytes||0)/1048576>>0)+" MB"+
           (p.total?" / "+number((p.total/1048576)>>0)+" MB":"")+
           " · ตรวจ SHA-256 ก่อนติดตั้ง":
+          job.kind==="drive-push-preview"?
+          "ตรวจแล้ว "+number(p.scanned)+" ไฟล์ · ใหม่ "+number(p.new)+
+          " · ซ้ำ "+number(p.duplicate)+" · ชื่อชน "+number(p.conflict):
+          job.kind==="drive-push"?
+          "ส่งสำเร็จ "+number(p.published)+" ไฟล์ · "+
+          number((p.published_bytes||0)/1048576>>0)+" MiB · ไม่เขียนทับ":
           job.kind==="drive-import"?
           (p.phase==="index"?"นำเข้าคลัง SQLite · ":"ดาวน์โหลด Google Drive · ")+
           "ดาวน์โหลดใหม่ "+number(p.downloaded)+" · ข้ามซ้ำ "+number(p.unchanged)+
@@ -1201,6 +1209,8 @@
         job.kind==="lyrics-edit"?
         number(p.done)+" / "+number(p.total)+" เพลง":
         job.kind==="drive-import"?number(p.files_seen||0)+" ไฟล์":
+        job.kind==="drive-push-preview"?number(p.scanned||0)+" ไฟล์":
+        job.kind==="drive-push"?number(p.published||0)+" ไฟล์":
         job.kind==="update"||job.kind==="song-download"?
         number(p.downloaded_bytes||0)+" ไบต์":
         number(p.processed||p.files_seen||p.done||0)+
