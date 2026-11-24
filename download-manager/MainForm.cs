@@ -530,23 +530,21 @@ public sealed partial class MainForm : Form
             var activeNote = activeCount > 0
                 ? $"มีงานดาวน์โหลด {activeCount} รายการ ซึ่งจะหยุดชั่วคราวและเก็บไว้ให้เริ่มต่อหลังอัปเดต\n"
                 : "";
-            if (MessageBox.Show(this,
-                $"พบ X-Stage Download Manager v{release.Version} Build {release.Build}\n" +
-                $"ขนาดไฟล์ประมาณ {release.Size / 1024.0 / 1024.0:0.0} MB\n\n" +
-                "ดาวน์โหลดอัปเดตภายในแอป ตรวจสอบ SHA-256 แล้วติดตั้งทันที\n" +
-                activeNote +
-                "แอปจะปิดและเปิดใหม่อัตโนมัติเมื่อการติดตั้งสำเร็จ ดำเนินการหรือไม่?",
-                "อัปเดต X-Stage", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            string installer;
+            Point handoffCenter;
+            // Stage one owns confirmation and download. Dispose its window
+            // before starting the detached installer, never show both together.
+            using (var download = new UpdateDownloadForm(release, activeNote))
             {
-                _updateStatus.Text = $"มีอัปเดต v{release.Version} · Build {release.Build} — กดตรวจสอบอัปเดตอีกครั้ง";
-                return;
+                if (download.ShowDialog(this) != DialogResult.OK)
+                {
+                    if (download.Error is not null) throw download.Error;
+                    _updateStatus.Text = $"มีอัปเดต v{release.Version} · Build {release.Build} — กดตรวจสอบอัปเดตอีกครั้ง";
+                    return;
+                }
+                installer = download.VerifiedSetup!;
+                handoffCenter = download.HandoffCenter;
             }
-            var progress = new Progress<double>(percent =>
-            {
-                if (!IsDisposed)
-                    _updateStatus.Text = $"กำลังดาวน์โหลดอัปเดต v{release.Version} · {percent:0.0}%";
-            });
-            var installer = await SelfUpdater.DownloadVerifiedAsync(release, progress);
             if (IsDisposed) return;
             // Do not start the helper if closing would be vetoed by an active
             // live recording. Keep the verified setup for the next attempt.
@@ -560,7 +558,7 @@ public sealed partial class MainForm : Form
             // The detached helper is the sole progress window. Do not open
             // another countdown dialog over it. Close only after its readiness
             // handshake; FormClosing still saves interrupted download intent.
-            SelfUpdater.LaunchInstallerHelper(installer, release);
+            SelfUpdater.LaunchInstallerHelper(installer, release, handoffCenter.X, handoffCenter.Y);
             Close();
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or

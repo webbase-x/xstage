@@ -49,6 +49,9 @@ if (args.Contains("--ui-smoke", StringComparer.Ordinal))
                 throw new Exception("Download workspace accent is null.")) !=
                 Color.FromArgb(0, 189, 255))
                 throw new Exception("Reference cyan accent regressed.");
+            var pinnedToolbar = (ToolStrip)(typeof(MainForm).GetField("_toolbar",
+                BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(main)!);
+            var syncButton = pinnedToolbar.Items.OfType<ToolStripButton>().Single(x => x.Text == "Smart Sync");
             foreach (var (width, height) in new[]
             {
                 (880, 590), (1024, 768), (1250, 780), (1366, 768),
@@ -61,6 +64,8 @@ if (args.Contains("--ui-smoke", StringComparer.Ordinal))
                 using var target = new Bitmap(width, height);
                 main.DrawToBitmap(target, new Rectangle(0, 0, width, height));
                 Application.DoEvents();
+                if (syncButton.Placement != ToolStripItemPlacement.Main || !syncButton.Available || syncButton.Image is null)
+                    throw new Exception($"Smart Sync icon hidden at {width}x{height}");
             }
             // Force native ImageList materialization AFTER construction.
             // Disposing bitmaps immediately after Images.Add previously left
@@ -87,7 +92,7 @@ if (args.Contains("--ui-smoke", StringComparer.Ordinal))
             {
                 "add", "play", "pause", "queue", "gauge", "browser",
                 "video", "folder", "refresh", "trash", "check", "alert",
-                "eye", "settings", "info", "file"
+                "eye", "settings", "info", "file", "sync"
             })
             {
                 using var rendered = (Image)(draw.Invoke(null, new object[]
@@ -124,6 +129,23 @@ if (args.Contains("--ui-smoke", StringComparer.Ordinal))
             if (!videoButton.Checked || addButton.Checked || root.RowStyles[2].Height != 268)
                 throw new Exception("Switching mode must reuse the same visible panel.");
             videoButton.PerformClick();
+            // Both real update windows render without initiating network or
+            // install actions. Test shared center and clamping separately.
+            using (var download = new UpdateDownloadForm(
+                new DownloadManagerRelease("0.2.26", 29, "setup.exe", "https://example.test", new string('a',64), 1024), ""))
+            {
+                download.CreateControl();
+                using var snapshot = new Bitmap(download.Width, download.Height);
+                download.DrawToBitmap(snapshot, new Rectangle(0, 0, snapshot.Width, snapshot.Height));
+                if (download.Controls.OfType<ProgressBar>().Count() != 1 ||
+                    !download.Controls.OfType<Button>().Any(x => x.Text == "อัปเดต"))
+                    throw new Exception("First update window missing download/consent controls.");
+                var area = Screen.PrimaryScreen!.WorkingArea;
+                var center = new Point(area.Left + area.Width / 2, area.Top + area.Height / 2);
+                var position = UpdateTransitionForm.CenterOnWorkingArea(center, download.Size);
+                if (position.X != center.X - download.Width / 2 || position.Y != center.Y - download.Height / 2)
+                    throw new Exception("Update window center handoff regressed.");
+            }
             // Instantiate the actual detached updater UI without showing it:
             // painting must not launch installation or signal a real handshake.
             using (var transition = new UpdateTransitionForm(new[] {

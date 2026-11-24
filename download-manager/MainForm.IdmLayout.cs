@@ -311,13 +311,16 @@ public sealed partial class MainForm
                 AutoSize = false, Size = new Size(width, 77),
                 Margin = new Padding(0, 0, 3, 0), Padding = new Padding(4, 2, 4, 2),
                 BackColor = DarkTop, ForeColor = Color.White,
-                ToolTipText = help, AccessibleName = name
+                ToolTipText = help, AccessibleName = name,
+                Overflow = name == "Smart Sync" ? ToolStripItemOverflow.Never : ToolStripItemOverflow.AsNeeded
             };
             item.Click += action;
             bar.Items.Add(item);
         }
         Button("เพิ่มงาน", "add", Color.FromArgb(59, 228, 137),
             (_, _) => ToggleQuickEntry(false), "คลิกเปิด/ซ่อนช่องเพิ่ม URL (Ctrl+N)");
+        Button("Smart Sync", "sync", Color.FromArgb(59, 228, 137),
+            (_, _) => ToggleSmartSync(), "เปิด/ซ่อน Smart Sync Google Drive", 116);
         Button("เริ่ม", "play", Color.FromArgb(98, 166, 255),
             (_, _) => SelectedAction(_engine.Start), "เริ่ม / ต่อรายการที่เลือก");
         Button("พัก", "pause", Color.FromArgb(142, 187, 255),
@@ -332,8 +335,6 @@ public sealed partial class MainForm
             (_, _) => ConfigurePerformance(), "ตั้งค่าความเร็วและจำนวนงาน", 125);
         Button("ดาวน์โหลดวิดีโอ", "video", Color.FromArgb(175, 130, 246),
             (_, _) => ToggleQuickEntry(true), "คลิกเปิด/ซ่อนช่องดาวน์โหลดวิดีโอ", 129);
-        Button("Smart Sync", "refresh", Color.FromArgb(59, 228, 137),
-            (_, _) => ToggleSmartSync(), "เปิด/ซ่อน Smart Sync Google Drive", 116);
         Button("บันทึกไลฟ์สด", "video", Color.FromArgb(236, 130, 207),
             (_, _) => OpenLiveCapture(), "เปิดโหมดบันทึกไลฟ์และตัดคลิปตามช่วงเงียบ", 118);
         Button("วิเคราะห์ปัญหา", "alert", Color.FromArgb(148, 176, 252),
@@ -483,6 +484,12 @@ public sealed partial class MainForm
                     new Point(21, 14), new Point(34, 14), new Point(34, 30),
                     new Point(6, 30), new Point(6, 14)
                 });
+                break;
+            case "sync":
+                graphics.DrawArc(pen, 6, 6, 28, 28, 195, 145);
+                graphics.DrawLines(pen, new[] { new Point(27, 6), new Point(34, 13), new Point(25, 14) });
+                graphics.DrawArc(pen, 6, 6, 28, 28, 15, 145);
+                graphics.DrawLines(pen, new[] { new Point(13, 34), new Point(6, 27), new Point(15, 26) });
                 break;
             case "refresh":
                 graphics.DrawArc(pen, 9, 9, 22, 22, 35, 280);

@@ -19,7 +19,9 @@ const testProject = readFileSync(join(root, 'tests/DownloadEngine.Tests.csproj')
 const updateUi = readFileSync(join(root, 'UpdateTransitionForm.cs'), 'utf8');
 const updater = readFileSync(join(root, 'SelfUpdater.cs'), 'utf8');
 assert.ok(!main.includes('ShowRestartCountdownAsync'), 'Do not show a second countdown popup');
-assert.match(main, /SelfUpdater\.LaunchInstallerHelper\(installer, release\);\s*Close\(\);/);
+assert.match(main, /using \(var download = new UpdateDownloadForm[\s\S]*?handoffCenter = download\.HandoffCenter;\s*\}[\s\S]*?SelfUpdater\.LaunchInstallerHelper\(installer, release, handoffCenter\.X, handoffCenter\.Y\);\s*Close\(\);/);
+assert.match(updateUi, /Location = CenterOnWorkingArea\(new Point\(x, y\), Size\)/);
+assert.match(updater, /centerX\.ToString[\s\S]*?centerY\.ToString/);
 assert.match(main, /OfType<LiveStreamCaptureForm>\(\)\.Any\(window => window\.IsBusy\)[\s\S]*?SelfUpdater\.LaunchInstallerHelper/);
 assert.match(updater, /process\.Kill\(\)[\s\S]*?throw new InvalidOperationException/);
 for (let step = 2; step <= 6; step++) assert.ok(updater.includes('ขั้นที่ '+step+'/6'));
@@ -30,7 +32,9 @@ assert.match(workspace, /Button\("ดาวน์โหลดวิดีโอ"
 assert.match(workspace, /if \(_inputVisible && _videoEntryRequested == video\)[\s\S]*?ShowInputPanel\(false\)/);
 assert.ok(testProject.includes('../UpdateTransitionForm.cs'));
 const smartSyncUi = readFileSync(join(root, 'SmartSyncForm.cs'), 'utf8');
-assert.match(workspace, /Button\("Smart Sync", "refresh"[\s\S]*?ToggleSmartSync\(\)/);
+assert.match(workspace, /Button\("Smart Sync", "sync"[\s\S]*?ToggleSmartSync\(\)/);
+assert.match(workspace, /Overflow = name == "Smart Sync" \? ToolStripItemOverflow\.Never/);
+assert.ok(workspace.indexOf('Button("Smart Sync"') < workspace.indexOf('Button("เริ่ม"'));
 assert.match(workspace, /_smartSyncWindow\.Visible\) _smartSyncWindow\.Hide\(\)/);
 assert.match(smartSyncUi, /SmartSyncFolders\.ExecuteAsync\(plan, 4/);
 assert.match(smartSyncUi, /Task\.Delay\(TimeSpan\.FromSeconds\(60\), token\)/);

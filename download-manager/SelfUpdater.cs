@@ -235,7 +235,7 @@ public static class SelfUpdater
         return Convert.ToHexString(digest).Equals(expectedSha, StringComparison.OrdinalIgnoreCase);
     }
 
-    public static void LaunchInstallerHelper(string verifiedSetup, DownloadManagerRelease release)
+    public static void LaunchInstallerHelper(string verifiedSetup, DownloadManagerRelease release, int centerX, int centerY)
     {
         // Copy the current self-contained EXE to user-local temporary storage.
         // It can run the updater without locking the installed application binary.
@@ -293,7 +293,9 @@ public static class SelfUpdater
                 foreach (var arg in new[] {
                     "--apply-verified-update", Environment.ProcessId.ToString(),
                     verifiedSetup, appExe, release.Sha256, release.Size.ToString(),
-                    release.Version, release.Build.ToString(), readyEventName
+                    release.Version, release.Build.ToString(), readyEventName,
+                    centerX.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    centerY.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 }) info.ArgumentList.Add(arg);
                 using var process = Process.Start(info);
                 if (process is null)
@@ -369,7 +371,7 @@ public static class SelfUpdater
     // Called by Program.Main *before* creating the primary application mutex.
     public static int ApplyUpdateInHelper(string[] args, Action<string>? reportStatus = null)
     {
-        if (args.Length != 9 || !int.TryParse(args[1], out var oldPid) ||
+        if (args.Length is not (9 or 11) || !int.TryParse(args[1], out var oldPid) ||
             !long.TryParse(args[5], out var size) || !int.TryParse(args[7], out var build))
             return 2;
         var setup = args[2];
