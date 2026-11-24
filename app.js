@@ -1640,6 +1640,20 @@ async function driveList(q, token) {
   } while (pageToken);
   return files;
 }
+async function selectedDriveRootById(id, token) {
+  if(!/^[A-Za-z0-9_-]{5,256}$/.test(String(id||''))||isRetiredDriveRoot(id))
+    throw Error('Folder ID ของคลังเพลงไม่ปลอดภัยหรือถูกยกเลิก');
+  const fields='id,name,mimeType,trashed,parents,ownedByMe,createdTime,modifiedTime,capabilities(canShare),owners(displayName,emailAddress)';
+  const response=await googleFetch(
+    'https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+
+    '?fields='+encodeURIComponent(fields),
+    {headers:requestHeaders(token),cache:'no-store'},'โฟลเดอร์หลัก');
+  if(!response.ok)throw driveError(response.status,'โฟลเดอร์หลักที่เลือก');
+  const item=await response.json();
+  if(item.id!==id||item.mimeType!=='application/vnd.google-apps.folder'||item.trashed)
+    throw Error('Folder ID ไม่ใช่โฟลเดอร์หลักที่ใช้งานได้');
+  return item;
+}
 async function privateFile(id, token, opts = {}) {
   const r = await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`, {
     headers: requestHeaders(token), cache:'no-store',signal:opts.signal
@@ -1836,7 +1850,7 @@ function browseAuthorizedDriveFolders({rootId,kind,sameSession,list,allowGrant})
     const title=document.createElement('h3');title.textContent='เลือกโฟลเดอร์ '+labels[kind];
     const path=document.createElement('p'),status=document.createElement('p'),items=document.createElement('div');
     status.setAttribute('role','status');
-    const stack=[{id:rootId,name:'XStageKaraoke'}];
+    const stack=[{id:rootId,name:String(state.availableLibraries.find(x=>x.id===rootId)?.name||'คลังเพลง')}];
     let done=false,sequence=0;
     function button(label,handler,parent=dialog){
       const el=document.createElement('button');el.type='button';el.textContent=label;
@@ -1858,7 +1872,7 @@ function browseAuthorizedDriveFolders({rootId,kind,sameSession,list,allowGrant})
     button('ลองโหลดรายการใหม่',()=>void render());
     if(allowGrant)button('ไม่พบโฟลเดอร์ · ขอสิทธิ์อ่านจาก Google',()=>finish({grant:true}));
     const help=document.createElement('p');
-    help.textContent='แสดงเฉพาะโฟลเดอร์ภายในคลังหลัก XStageKaraoke · ย้อนกลับได้ไม่เกินคลังหลัก';
+    help.textContent='แสดงเฉพาะโฟลเดอร์ภายในคลังหลักที่เลือก · ย้อนกลับได้ไม่เกินคลังหลัก';
     dialog.append(help);
     dialog.addEventListener('cancel',event=>{event.preventDefault();finish(null);});
     dialog.addEventListener('close',()=>finish(null));
@@ -2122,9 +2136,17 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
   }
 
   try{
-    const roots=(await driveList("name='"+driveLayout.root+
+    const defaultRoots=(await driveList("name='"+driveLayout.root+
       "' and mimeType='application/vnd.google-apps.folder' and trashed=false",token))
       .filter(root=>!isRetiredDriveRoot(root.id));
+    let selectedRoot=null;
+    if(preferredRootId){
+      try{selectedRoot=await selectedDriveRootById(preferredRootId,token);}
+      catch(error){console.warn('Selected Google Drive library is not accessible:',error?.message||error);}
+    }
+    // Any custom name must have been explicitly selected by its Folder ID.
+    const roots=[...defaultRoots];
+    if(selectedRoot&&!roots.some(item=>item.id===selectedRoot.id))roots.push(selectedRoot);
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','พบคลังเพลง · กำลังตรวจ DB/songs.sqlite3…',24);
     if(authId!==state.authId)return;
     if(!roots.length){
@@ -2182,7 +2204,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     savePreferredLibraryRoot(account.sub,root.id);
     if(ui.libraryDriveLink){
       ui.libraryDriveLink.href='https://drive.google.com/drive/folders/'+encodeURIComponent(String(root.id));
-      ui.libraryDriveLink.title='เปิด '+driveLayout.root+' ที่เป็นแหล่งเพลงจริง';
+      ui.libraryDriveLink.title='เปิด '+String(root.name||driveLayout.root)+' (Folder ID '+root.id+')';
       ui.libraryDriveLink.hidden=false;
     }
     renderLibrarySelector([...ownedRoots,...sharedRoots],root.id);
@@ -2196,7 +2218,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     }
     // DB/songs.sqlite3 is the only permitted catalog; never query JSON pointers.
     const dbDirs=await driveList(`'${root.id}' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
-    if(dbDirs.length>1)throw Error('พบ DB ซ้ำใน '+driveLayout.root);
+    if(dbDirs.length>1)throw Error('พบ DB ซ้ำใน '+String(root.name||'คลังเพลง'));
     const dbId=dbDirs[0]?.id||'';
     const canonical=dbId
       ?await driveList(`'${dbId}' in parents and name='songs.sqlite3' and trashed=false`,token)
@@ -2282,7 +2304,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     if(!instant)showCatalogLoading('พร้อมใช้งาน','ฐานเพลงครั้งแรกพร้อมแล้ว',100);
     hideCatalogLoading();
     void saveCachedCatalog(cacheOwner,pointer,catalog);
-    const duplicateRoots=roots.filter(x=>x.name===driveLayout.root).length;
+    const duplicateRoots=roots.filter(x=>x.name===root.name).length;
     setStatus(`เชื่อมต่อแล้ว · ${num(state.songs.length)} เพลง · ${libraryLabel(root)}${duplicateRoots>1?' · พบ XStageKaraoke ชื่อซ้ำ '+duplicateRoots+' โฟลเดอร์ · เปลี่ยนได้ที่เมนูเลือกคลัง':''}${downloaded?' (อัปเดตฐานล่าสุดแล้ว)':sameAsInstant?' (ฐานในเครื่องเป็นรุ่นล่าสุด)':''}`,'success');
     setAndroidTvStageAccess(true,account.sub);
     void restorePlaybackAfterReload();
@@ -5354,7 +5376,7 @@ updateGoogleRenewNotice();
 
 function updateDriveReadNotice(){
   const main=$('xstage-drive-main-name'),pick=$('xstage-drive-main-select');
-  if(main)main.textContent=state.libraryRootId?'XStageKaraoke · …'+state.libraryRootId.slice(-6):'ยังไม่ได้เลือกคลังหลัก';
+  if(main)main.textContent=state.libraryRootId?String(state.availableLibraries.find(x=>x.id===state.libraryRootId)?.name||'คลังเพลง')+' · …'+state.libraryRootId.slice(-6):'ยังไม่ได้เลือกคลังหลัก';
   if(pick)pick.disabled=!state.token||!state.accountSub;
   const button=$('xstage-drive-read-all'),status=$('xstage-drive-read-status');
   if(!button||!status)return;
