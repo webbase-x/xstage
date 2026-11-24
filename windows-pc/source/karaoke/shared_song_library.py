@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 from pathlib import Path
 
 from .drive_online_catalog import shared_root, _local_media, _open_read_only
@@ -24,7 +24,7 @@ REQUIRED = {
 
 def validate_shared(root):
     root = shared_root(root)
-    with _open_read_only(root) as db:
+    with closing(_open_read_only(root)) as db:
         metadata = dict(db.execute("SELECT key,value FROM catalog_meta"))
         if (metadata.get("format") != "xstage-sqlite3-v1" or
             metadata.get("schemaVersion") != "1" or
@@ -104,7 +104,7 @@ class SharedSongLibrary:
         # titles; the exact media path and filesystem are verified on play.
         parts = raw.split("/")
         safe = len(parts) >= 3 and parts[0] == "SONGS" and all(
-            part not in ("", ".", "..") and ":" not in part and "\\\\" not in part
+            part not in ("", ".", "..") and ":" not in part and chr(92) not in part
             for part in parts)
         if not safe:
             row["path"] = ""
@@ -122,7 +122,7 @@ class SharedSongLibrary:
 
     @contextmanager
     def connect(self):
-        with _open_read_only(self.root) as db:
+        with closing(_open_read_only(self.root)) as db:
             yield db
 
     def open_reader(self):
