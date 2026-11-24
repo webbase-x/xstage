@@ -89,6 +89,14 @@ jobs:
             throw 'Distinct Karaoke PC Windows icon was not created'
           }
 
+      - name: Verify common Online/PC SQLite before building EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PYTHONPATH = (Resolve-Path windows-pc/source).Path
+          python -m unittest discover -s windows-pc/source/tests -p "test_shared_song_library.py" -v
+          if ($LASTEXITCODE -ne 0) { throw "Shared Google Drive SQLite tests failed" }
+
       - name: Compile native ASIO PCM bridge (Windows x64)
         shell: cmd
         run: |
