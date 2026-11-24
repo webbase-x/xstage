@@ -11,6 +11,18 @@ from .dialog_layout import ActionBar, DialogWindow, scrollable_tree
 from .library import SearchReader, normalize
 
 
+def selected_shared_root(source):
+    """Recognize the named shared library or a source inside its SONGS tree."""
+    source = Path(source)
+    for candidate in (source, *source.parents):
+        if candidate.name.casefold() == 'xstagekaraoke':
+            parts = source.relative_to(candidate).parts
+            if not parts or parts[0].casefold() == 'songs':
+                return candidate
+            return None
+    return None
+
+
 PAGE_SIZE = 100
 BG = '#101a2c'
 PANEL = '#16253b'
@@ -124,6 +136,12 @@ class CatalogWindow:
         self.pick_button.grid(row=1, column=1, padx=(0, 6))
         self.songs_button = ttk.Button(source_card, text='ใช้ Songs', command=self._use_managed)
         self.songs_button.grid(row=1, column=2)
+        tk.Label(source_card, text='ฐาน PC ปัจจุบัน: '+str(self.app.library.path),
+                 bg=PANEL, fg=MUTED, wraplength=720, justify='left',
+                 font=('Leelawadee UI', 9)).grid(row=2, column=0, columnspan=3, sticky='w', pady=(8, 0))
+        tk.Label(source_card, text='เลือก XStageKaraoke หรือ SONGS ภายในคลังร่วม เพื่อสร้าง DB สำหรับ PC / Online',
+                 bg=PANEL, fg=MUTED, wraplength=720, justify='left',
+                 font=('Leelawadee UI', 9)).grid(row=3, column=0, columnspan=3, sticky='w')
 
         search_row = tk.Frame(body, bg=BG)
         search_row.grid(row=1, column=0, sticky='ew', pady=(12, 6))
@@ -269,9 +287,19 @@ class CatalogWindow:
             source = self.source.resolve()
             managed = Path(self.app.managed_catalog_root()).resolve()
             copy_external = False
+            shared = selected_shared_root(source)
+            if mode != 'clear' and shared is not None:
+                if messagebox.askyesno('ฐานเพลงร่วม PC / Online',
+                        f'ใช้คลังร่วมนี้และสร้างฐานจาก SONGS ทั้งหมดหรือไม่?\n\n'
+                        f'{shared / "DB" / "songs.sqlite3"}\n\n'
+                        'ระบบจะเปิดตัวสร้างฐานร่วม XMID/XSK2 ไม่บันทึกลงฐาน PC ภายในเครื่อง',
+                        parent=parent, default='yes'):
+                    from .shared_catalog_builder_ui import open_builder
+                    open_builder(self.app, initial_root=shared)
+                return
             if mode == 'clear':
                 if not messagebox.askyesno('ล้างรายการทั้งหมด',
-                        'ล้างรายชื่อเพลงทั้งหมดจากคลังหรือไม่?\nรายการในคิวที่อ้างถึงคลังนี้จะถูกล้างด้วย\n'
+                        f'ล้างรายชื่อเพลงทั้งหมดจากฐาน PC ภายในเครื่องหรือไม่?\n{self.app.library.path}\nรายการในคิวที่อ้างถึงคลังนี้จะถูกล้างด้วย\n'
                         'ไฟล์เพลงต้นฉบับจะยังอยู่ในตำแหน่งเดิม',
                         parent=parent, default='no'):
                     return
