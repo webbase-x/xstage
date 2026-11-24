@@ -281,6 +281,9 @@ try{
   await page.waitForFunction(()=>{const el=document.getElementById('cloud-import-open-gate');return el&&!el.hidden;},null,{timeout:20000});
   await page.click('#cloud-import-open-gate');
   await page.locator('#cloud-import-dialog[open]').waitFor();
+  // Local file import is intentionally an expandable fallback. Expand it
+  // before clicking controls which must not overlay the main Drive-first UI.
+  await page.locator('#cloud-import-local-options summary').click();
   // Chromium may reject sensitive directories with AbortError, even when the
   // user did not intend to cancel. Keep an explicit legacy picker available.
   await page.evaluate(()=>Object.defineProperty(window,'showDirectoryPicker',{
