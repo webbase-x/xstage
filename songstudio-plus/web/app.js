@@ -2542,6 +2542,37 @@
     });
 
     $("drive-browse").addEventListener("click",()=>void openPicker("folder","drive-folder"));
+    $("drive-push-browse").addEventListener("click",()=>void openPicker("folder","drive-push-source"));
+    const resetDrivePush=()=>{
+      state.drivePushReady=false;state.drivePushStats=null;state.drivePushSpec=null;
+      $("drive-push-submit").disabled=true;
+      text("drive-push-status","แหล่งข้อมูลเปลี่ยน · กรุณาตรวจรายการใหม่");
+    };
+    for(const id of ["drive-folder","drive-push-source","drive-push-area"])
+      $(id).addEventListener(id==="drive-push-area"?"change":"input",resetDrivePush);
+    $("drive-push-preview").addEventListener("click",()=>{
+      if(!state.ready||state.activeJob)return;
+      const source=$("drive-push-source").value.trim(),folder=$("drive-folder").value.trim();
+      if(!source||!folder){toast("กรุณาเลือกต้นทางและโฟลเดอร์ XStageKaraoke บน Google Drive",true);return;}
+      resetDrivePush();
+      void startJob("drive-push-preview",{source,folder,area:$("drive-push-area").value});
+    });
+    $("drive-push-submit").addEventListener("click",()=>{
+      if(!state.ready||state.activeJob||!state.drivePushReady||!state.drivePushSpec)return;
+      const selected=state.drivePushSpec,stats=state.drivePushStats||{};
+      const normalized=val=>String(val).replace(/[\\/]+/g,"/").replace(/\/$/,"").toLowerCase();
+      if(normalized($("drive-push-source").value.trim())!==normalized(selected.source)||
+         normalized($("drive-folder").value.trim())!==normalized(selected.folder)||
+         $("drive-push-area").value!==selected.area){
+        resetDrivePush();toast("เส้นทางเปลี่ยน กรุณาตรวจรายการใหม่",true);return;
+      }
+      if(!window.confirm("ยืนยันส่ง "+number(stats.new)+" ไฟล์ ("+
+         number(Math.ceil((stats.bytes||0)/1048576))+" MiB) เข้า "+
+         selected.folder+"/"+selected.area+"?\nไม่ลบหรือเขียนทับไฟล์เดิม และไม่แตะ DB/songs.sqlite3"))return;
+      state.drivePushReady=false;
+      $("drive-push-submit").disabled=true;
+      void startJob("drive-push",selected);
+    });
     $("drive-check").addEventListener("click",async()=>{
       if(!state.ready||state.activeJob)return;
       const button=$("drive-check");button.disabled=true;
