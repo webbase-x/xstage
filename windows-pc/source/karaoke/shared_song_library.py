@@ -75,7 +75,7 @@ class SharedReader(SearchReader):
         # modify a shared cloud music catalog just because PC marked a star.
         fetch_limit = 5000 if favorite else limit
         rows = super().search(text, False, fetch_limit, False, cancelled)
-        rows = (self.library._visible(row) for row in rows)
+        rows = (self.library._visible(row, verify=False) for row in rows)
         rows = (row for row in rows if (not favorite or row["favorite"]) and
                 (not playable_only or row["playable"]))
         return list(row for _, row in zip(range(max(0, min(5000,int(limit)))),rows))
@@ -97,17 +97,25 @@ class SharedSongLibrary:
         stat=self.path.stat()
         return (stat.st_ino,stat.st_size,stat.st_mtime_ns)
 
-    def _visible(self, row):
+    def _visible(self, row, verify=True):
         row = dict(row)
         raw = str(row.get("path") or "")
-        # The database owns a relative path, so changing drive letters is safe.
-        if not raw.startswith("SONGS/"):
+        # Search lists never hydrate 1,000 Drive placeholders just to render
+        # titles; the exact media path and filesystem are verified on play.
+        parts = raw.split("/")
+        safe = len(parts) >= 3 and parts[0] == "SONGS" and all(
+            part not in ("", ".", "..") and ":" not in part and "\\\\" not in part
+            for part in parts)
+        if not safe:
             row["path"] = ""
             row["playable"] = 0
-        else:
+        elif verify:
             absolute = _local_media(self.root, raw)
             row["path"] = absolute or ""
             row["playable"] = int(bool(row.get("playable")) and bool(absolute))
+        else:
+            row["path"] = str(self.root.joinpath(*parts))
+            row["playable"] = int(bool(row.get("playable")))
         favorites = self.settings.get("shared_favorite_song_ids", [])
         row["favorite"] = int(row["id"] in favorites) if isinstance(favorites, list) else 0
         return row
