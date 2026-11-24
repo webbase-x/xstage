@@ -146,8 +146,21 @@ class KaraokeApp(tk.Tk):
             except (TypeError, ValueError):
                 size = 84
             self.settings.update(font_size=max(84, min(120, size)), lyric_layout_version=1)
-        self.library = SongLibrary(self.data_dir / "songs.sqlite3")
-        self.song_queue = SongQueue(self.data_dir / "queue.json")
+        self.shared_drive_mode = self.settings.get("library_mode") == "google-drive"
+        self.shared_drive_error = ""
+        if self.shared_drive_mode:
+            from .shared_song_library import SharedSongLibrary, UnavailableSharedSongLibrary
+            root = str(self.settings.get("shared_drive_root", ""))
+            try:
+                self.library = SharedSongLibrary(root,self.settings,self.save_settings)
+            except (OSError,ValueError,sqlite3.DatabaseError) as error:
+                self.shared_drive_error = str(error)
+                self.library = UnavailableSharedSongLibrary(root,error)
+        else:
+            self.library = SongLibrary(self.data_dir / "songs.sqlite3")
+        # Queues belong to each device; the *song index* comes from the shared
+        # DB in Google Drive, and must never be copied into a local songs.sqlite3.
+        self.song_queue = SongQueue(self.data_dir / ("drive-queue.json" if self.shared_drive_mode else "queue.json"))
         self.queue_warmup = QueueWarmup()
         self._last_memory_report = 0
         self.engine = None
@@ -171,9 +184,13 @@ class KaraokeApp(tk.Tk):
         self._setup_style()
         self._build()
         self._bindings()
-        if not self.library.has_songs():
+        if not self.shared_drive_mode and not self.library.has_songs():
             self.library.add_files(sorted((home / "samples").glob("*")))
         self.refresh_library()
+        if self.shared_drive_mode:
+            self.status_var.set(("Google Drive · ยังอ่านฐานร่วมไม่ได้: "+self.shared_drive_error)
+                if self.shared_drive_error else
+                "Google Drive · ใช้ DB/songs.sqlite3 ร่วมกับ Karaoke Online · เลือกเพลงจากแถบค้นหาได้ทันที")
         self.refresh_queue()
         self.protocol("WM_DELETE_WINDOW", self.close_app)
         self.tick_after = self.after(25, self.tick)
@@ -638,6 +655,12 @@ class KaraokeApp(tk.Tk):
             self.song_queue._commit(pending)
 
     def rebuild_library(self, force=False):
+        if getattr(self, "shared_drive_mode", False):
+            return messagebox.showinfo("ฐานเพลงร่วม Google Drive",
+                "โหมด Google Drive ใช้ DB/songs.sqlite3 ร่วมกับ Karaoke Online\n"
+                "ส่งไฟล์ใหม่เข้า XStageKaraoke/SONGS แล้วกด 'สร้างฐานใหม่สำหรับ PC/Online' "
+                "หรือ 'ตรวจไฟล์และอัปเดตฐานเพลง' ใน Karaoke Online\n"
+                "จากนั้นกลับมากดค้นหา/รีเฟรชบน PC", parent=self)
         from .lister import locations, build_list
         roots = locations(self.settings)
         if roots:
@@ -770,6 +793,9 @@ class KaraokeApp(tk.Tk):
         self._index_thread.start()
 
     def add_folder(self):
+        if getattr(self, "shared_drive_mode", False):
+            from .shared_drive_sync_ui import open_drive_push
+            return open_drive_push(self)
         from .lister import locations
         manager = getattr(self, 'song_manager', None)
         parent = manager if manager is not None and manager.winfo_exists() else self
