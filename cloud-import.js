@@ -759,9 +759,6 @@ class Importer {
     this.dom.actionHint=$('cloud-import-action-hint');
     this.dom.done=$('cloud-import-done');
     this.dom.localOptions=$('cloud-import-local-options');
-    this.dom.localOptions?.addEventListener('toggle',()=>{
-      if(this.running&&!this.dom.localOptions.open)this.dom.localOptions.open=true;
-    });
     // The import footer intentionally has only one Start/Pause toggle and Close.
     // OAuth renewal and checkpoint resume remain internal.
     this.dom.done?.addEventListener('click',()=>this.close());
@@ -1038,7 +1035,9 @@ class Importer {
         String(this.saved?.error||'')));
     for(const input of this.dom.selectionList?.querySelectorAll('input[type="checkbox"]')||[])
       input.disabled=this.running;
-    if(this.running&&this.dom.localOptions)this.dom.localOptions.open=true;
+    const localSummary=this.dom.localOptions?.querySelector?.('summary');
+    if(localSummary)localSummary.textContent=this.running?'นำเข้าจากเครื่อง · กำลังทำงาน':
+      resumable?'นำเข้าจากเครื่อง · มีงานค้าง':this.selected&&!this.completed?'นำเข้าจากเครื่อง · มีไฟล์ที่เลือกไว้':'นำเข้าจากเครื่อง (วิธีสำรอง)';
     this.dom.start.textContent=this.running?'พัก':'เริ่ม';
     if(this.dom.done){
       this.dom.done.textContent='ปิดหน้าต่าง';
@@ -1087,12 +1086,15 @@ class Importer {
       this.status('กรุณารอ Google Login ยืนยันบัญชีให้เสร็จก่อนเปิดงานนำเข้า');return;
     }
     if(!this.dom.dialog.open){
+      // Every fresh opening starts in the compact view. Do not clear selections,
+      // progress or resumable checkpoints; the user can expand them on demand.
+      for(const details of this.dom.dialog.querySelectorAll?.('.xstage-drive-options, #cloud-import-local-options')||[])details.open=false;
+      const body=$('cloud-import-body');if(body)body.scrollTop=0;
       if(this.dom.dialog.showModal)this.dom.dialog.showModal();
       else this.dom.dialog.setAttribute('open','');
     }
     scope.dispatchEvent?.(new CustomEvent('xstage:drive-sources-open'));
     this.saved=await checkpoint(this.session().sub,undefined);
-    if(this.dom.localOptions&&(this.running||this.selected||this.saved&&['uploading','publishing','paused','running'].includes(this.saved.status)))this.dom.localOptions.open=true;
     if(this.saved&&['uploading','publishing','paused','running'].includes(this.saved.status)&&!this.selected){
       this.status('พบงานค้างของบัญชีนี้ · กด “เริ่ม” เพื่อทำต่อ (อาจต้องอนุญาตโฟลเดอร์เดิม)');
       this.dom.source.textContent='งานเดิม: '+String(this.saved.label||'โฟลเดอร์เพลง');
