@@ -152,6 +152,14 @@ await workflow.rebuild();
 assert.equal(published,1,'Folder permission failures must keep the last published DB unchanged');
 denied=false;
 
+const outside='externalFolder123',outsideParent='externalParent123';
+parents.set(outside,outsideParent);parents.set(outsideParent,'root');
+names.set(outside,'Outside');names.set(outsideParent,'Unrelated');
+for(const kind of ['music','soundfont','fx']){
+  await assert.rejects(window.XStageDriveFolders.verifyFolder(new FakeDrive(),outside,root,kind),/ภายในคลังหลัก/);
+}
+pick={id:outside,name:'Outside'};await workflow.choose('music');
+assert.equal(workflow.getFolderId('account1',root,'music'),music);
 pick={id:retiredId,name:'retired'};await workflow.choose('music');
 assert.equal(workflow.getFolderId('account1',root,'music'),music,
   'Retired Drive root must never replace a live source');
