@@ -137,6 +137,25 @@ assert.ok(prefetched.every(url=>url.startsWith('https://webbase-x.github.io/xsta
  'Private Drive API requests must NEVER be prefetched');
 assert.equal(await stage.stageWebUpdateFiles(stageState.updateAvailable),true);
 assert.equal(cacheReloads,3,'Same build must not download its assets repeatedly');
+const failedStage=makeStager(()=>false,{connection:{saveData:false}},mockPage,
+ async()=>({ok:false}),fakeDOMParser,URL,stageState,()=>({
+  notice:mockElements.get('app-update-notice'),text:mockElements.get('app-update-text'),
+  action:mockElements.get('app-update-action'),after:mockElements.get('app-update-after-song')
+ }),()=>false,{warn(){}});
+assert.equal(await failedStage.stageWebUpdateFiles(stageState.updateAvailable),false);
+assert.match(mockElements.get('app-update-text').textContent,/เปิดรุ่นใหม่โดยตรงได้/);
+assert.equal(mockElements.get('app-update-action').disabled,false);
+const reloadStart=app.indexOf('async function performAppUpdateReload(');
+const reloadEnd=app.indexOf('const WEB_AUTO_UPDATE_GUARD=',reloadStart);
+let navigated='',snapshots=0;
+const reload=new Function('window','state','location','URL','webGoogleAuthFlow','XSTAGE_RELEASE','savePlaybackResumeState','renderAppUpdateNotice','setStatus',
+ 'let preserveUpdateResumeOnUnload=false,webUpdateManualMessage="",webUpdateStageController=null;'+app.slice(reloadStart,reloadEnd)+';return performAppUpdateReload;')(
+ {},{authRecovering:true,updateAvailable:{build:1146}},{href:'https://webbase-x.github.io/xstage/karaoke.html?keep=1',replace:url=>{navigated=url;}},URL,null,{build:1145},()=>{snapshots++;},()=>{},()=>{});
+assert.equal(await reload({manual:true}),true,'Manual update works while stored credentials recover');
+assert.match(navigated,/build=1146/);
+assert.match(navigated,/keep=1/);
+assert.equal(snapshots,1);
+assert.ok(html.includes('id="app-update-direct"'),'A direct navigation fallback must be visible');
 
 assert.ok(app.includes('if(!newlyPublished&&!manuallyChecked)return;'),'same Android build must not reopen a dismissed notice during background checks');
 assert.ok(app.includes('nativeUpdateDismissedBuild===next.build'),'Later must suppress repeat dialogs for the same build');

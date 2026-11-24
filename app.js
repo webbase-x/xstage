@@ -97,6 +97,7 @@ function playbackBusyForUpdate(){
   return !!(state.loading||state.current&&player.src&&!player.ended&&(!player.paused||state.queue.length||state.medley));
 }
 let webUpdateStageBuild=0,webUpdateStageReady=false,webUpdateStagePromise=null;
+let webUpdateStageFinished=false,webUpdateManualMessage='',webUpdateStageController=null;
 function renderAppUpdateNotice(){
   const {notice,text,action,after}=appUpdateElements();
   if(!notice||!text||!action)return;
@@ -105,10 +106,12 @@ function renderAppUpdateNotice(){
   notice.hidden=false;
   notice.classList.toggle('during-playback',playbackBusyForUpdate());
   const preparation=webUpdateStageBuild===remote.build
-    ?(webUpdateStageReady?' · เตรียมไฟล์แล้ว':' · กำลังเตรียมไฟล์…'):'';
-  text.textContent='พบ X-Stage v'+remote.version+' · Build '+remote.build+preparation;
+    ?(webUpdateStageReady?' · เตรียมไฟล์แล้ว':webUpdateStageFinished?' · เปิดรุ่นใหม่โดยตรงได้':' · กำลังเตรียมไฟล์…'):'';
+  text.textContent='พบ X-Stage v'+remote.version+' · Build '+remote.build+preparation+(webUpdateManualMessage?' · '+webUpdateManualMessage:'');
   action.textContent='อัปเดตตอนนี้';
   action.disabled=false;
+  const direct=typeof $==='function'?$('app-update-direct'):null;
+  if(direct){const url=new URL('karaoke.html',location.href);url.searchParams.set('build',String(remote.build));url.searchParams.set('xstage_update',String(Date.now()));direct.href=url.href;direct.hidden=!!window.XStageDriveBuildBusy||!!webGoogleAuthFlow;}
   if(after){
     after.hidden=!playbackBusyForUpdate();
     after.textContent=state.updateAfterTrack?'ตั้งค่าแล้ว · หลังจบเพลง':'อัปเดตหลังจบเพลง';
@@ -123,12 +126,16 @@ async function stageWebUpdateFiles(remote){
   if(!build||androidTvNativeBridgeReady())return false;
   if(webUpdateStageBuild===build)
     return webUpdateStagePromise||Promise.resolve(webUpdateStageReady);
-  webUpdateStageBuild=build;webUpdateStageReady=false;
-  const task=(async()=>{
+  webUpdateStageController?.abort();
+  webUpdateStageBuild=build;webUpdateStageReady=false;webUpdateStageFinished=false;
+  const controller=typeof AbortController==='function'?new AbortController():null;
+  webUpdateStageController=controller;
+  let timer;
+  const work=(async()=>{
     if(navigator.connection?.saveData)return false;
     const page=new URL('karaoke.html',location.href);
     page.searchParams.set('xstage_stage',String(build));
-    const html=await fetch(page.href,{cache:'reload'});
+    const html=await fetch(page.href,{cache:'reload',signal:controller?.signal});
     if(!html.ok)throw Error('ยังโหลดหน้าเว็บรุ่นใหม่ไม่ได้');
     const doc=new DOMParser().parseFromString(await html.text(),'text/html');
     const assets=[...doc.querySelectorAll('script[src],link[rel="stylesheet"][href]')]
@@ -139,37 +146,60 @@ async function stageWebUpdateFiles(remote){
     for(let i=0;i<assets.length;i+=2){
       const batch=assets.slice(i,i+2);
       const results=await Promise.allSettled(batch.map(async url=>{
-        const response=await fetch(url.href,{cache:'reload'});
+        const response=await fetch(url.href,{cache:'reload',signal:controller?.signal});
         if(response.ok)await response.arrayBuffer(); // Complete download into browser HTTP cache.
         return response;
       }));
       if(results.some(result=>result.status!=='fulfilled'||!result.value.ok))
         throw Error('ไฟล์อัปเดตบางส่วนยังดาวน์โหลดไม่สำเร็จ');
-      if(webUpdateStageBuild!==build)return false;
+      if(webUpdateStageBuild!==build||controller?.signal.aborted)return false;
     }
-    if(webUpdateStageBuild!==build)return false;
+    if(webUpdateStageBuild!==build||controller?.signal.aborted||webUpdateStageFinished)return false;
     webUpdateStageReady=true;
     renderAppUpdateNotice();
     return true;
-  })().catch(error=>{
+  })();
+  const task=Promise.race([work,new Promise(resolve=>{
+    timer=setTimeout(()=>{controller?.abort();resolve(false);},15000);
+  })]).catch(error=>{
     console.warn('Web update prefetch deferred:',error?.message||error);
-    if(webUpdateStageBuild===build){webUpdateStageReady=false;renderAppUpdateNotice();}
     return false;
+  }).finally(()=>{
+    clearTimeout(timer);
+    if(webUpdateStageBuild===build){webUpdateStageFinished=true;renderAppUpdateNotice();}
   });
   webUpdateStagePromise=task;
   renderAppUpdateNotice();
   return task;
 }
 let preserveUpdateResumeOnUnload=false;
-async function performAppUpdateReload({preserveSnapshot=false}={}){
+async function performAppUpdateReload({preserveSnapshot=false,manual=false}={}){
   if(window.XStageDriveBuildBusy){
-    setStatus('กำลังสร้างฐานเพลง · อัปเดตหลังสร้างฐานเสร็จ');return;
+    webUpdateManualMessage='กำลังสร้างฐานเพลง · ลองใหม่หลังเสร็จ';
+    renderAppUpdateNotice();setStatus(webUpdateManualMessage);return false;
+  }
+  if(manual&&webGoogleAuthFlow){
+    webUpdateManualMessage='Google กำลังยืนยันบัญชี · ลองใหม่หลังยืนยันเสร็จ';
+    renderAppUpdateNotice();setStatus(webUpdateManualMessage);return false;
   }
   preserveUpdateResumeOnUnload=preserveSnapshot;
   if(!preserveSnapshot)try{savePlaybackResumeState();}catch{}
-  const next=new URL(location.href);
+  // Navigation never depends on speculative prefetch or token recovery.
+  // Keep the current origin, storage, query parameters and playback snapshot.
+  const next=new URL('karaoke.html',location.href);
+  const previous=new URL(location.href);
+  next.search=previous.search;
+  next.searchParams.delete('xstage_stage');
   next.searchParams.set('xstage_update',String(Date.now()));
-  location.replace(next.href);
+  next.searchParams.set('build',String(state.updateAvailable?.build||XSTAGE_RELEASE.build));
+  webUpdateManualMessage='กำลังเปิดหน้าเว็บรุ่นใหม่…';renderAppUpdateNotice();
+  webUpdateStageController?.abort();
+  try{location.replace(next.href);return true;}
+  catch(error){
+    webUpdateManualMessage='เปิดอัตโนมัติไม่ได้ · ใช้ลิงก์เปิดรุ่นใหม่';renderAppUpdateNotice();
+    const direct=$('app-update-direct');if(direct){direct.href=next.href;direct.hidden=false;}
+    return false;
+  }
 }
 // Automatic web hotfixes run on entry, never mid-song. Guard repeated
 // redirects if an intermediary cache continues serving the older shell.
@@ -219,7 +249,7 @@ async function checkAppVersion(){
     }else{
       state.updateAvailable=null;
       state.updateAfterTrack=false;
-      webUpdateStageBuild=0;webUpdateStageReady=false;webUpdateStagePromise=null;
+      webUpdateStageController?.abort();webUpdateStageBuild=0;webUpdateStageReady=false;webUpdateStagePromise=null;webUpdateStageFinished=false;webUpdateManualMessage='';
       renderAppUpdateNotice();
       return false;
     }
@@ -243,7 +273,7 @@ async function triggerImmediateVersionUpdate(){
   const found=await checkAppVersion();
   if(found===true){
     // Explicit user request: refresh now and restore the saved song position.
-    await performAppUpdateReload();
+    await performAppUpdateReload({manual:true});
   }else if(found===false)setStatus('X-Stage เป็นเวอร์ชันล่าสุดแล้ว');
   else setStatus('ตรวจสอบเวอร์ชันไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่');
 }
@@ -262,10 +292,7 @@ function setupAppUpdateWatcher(){
   const {action,after}=appUpdateElements();
   action?.addEventListener('click',()=>{
     if(!state.updateAvailable)return;
-    if(webGoogleAuthFlow||state.authRecovering){
-      setStatus('Google กำลังยืนยันบัญชี · อัปเดตหลังยืนยันเสร็จ');return;
-    }
-    void performAppUpdateReload();
+    void performAppUpdateReload({manual:true});
   });
   after?.addEventListener('click',()=>{
     if(!state.updateAvailable)return;

@@ -5505,3 +5505,8 @@ html body.xstage-ui-v2 .stage .mobile-stage-menu .xstage-menu-category>summary{d
 .xstage-menu-category[open]>.xstage-menu-category-body{display:grid;gap:4px;grid-template-columns:minmax(0,1fr)}
 .xstage-menu-category>summary:focus-visible{outline:2px solid #57d9ec;outline-offset:-2px}
 .xstage-menu-category .xstage-font-control{min-width:0;width:100%;box-sizing:border-box}
+
+/* Direct update navigation stays actionable above the login gate. */
+html body.xstage-ui-v2 .stage .app-update-notice{z-index:145;pointer-events:auto}
+.app-update-notice #app-update-direct{font-size:inherit;color:#a9ecff;text-decoration:underline;padding:7px 6px;touch-action:manipulation;pointer-events:auto}
+.app-update-notice #app-update-direct[hidden]{display:none!important}
