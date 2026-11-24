@@ -147,9 +147,18 @@ async function create(kind,songs,removes=[],generation=''){
           row.xmid?.path?.split('/').pop()||
           row.xsk?.path?.split('/').pop()||
           row.midi?.path?.split('/').pop()||'').slice(0,255);
+        // PC can build the same SQLite from Google Drive for desktop. A
+        // freshly copied package has no Drive API file ID yet: the web player
+        // must bind it by verified canonical path, size and package MD5.
+        const pending=row.pendingDriveLink===true &&
+          ['XMID','XSK'].includes(String(row.sourceFormat||'').toUpperCase());
         const sourceMedia=[row.xmid,row.xsk,row.midi,row.audio,row.video]
-          .find(item=>item?.fileId&&item?.path);
-        if(!sourceMedia)fail('เพลงไม่มี Drive File ID และตำแหน่งไฟล์ที่ตรวจสอบได้: '+row.webSongId);
+          .find(item=>item?.path&&(item?.fileId||pending));
+        if(!sourceMedia||(!sourceMedia.fileId&&!pending))
+          fail('เพลงไม่มี Drive File ID และตำแหน่งไฟล์ที่ตรวจสอบได้: '+row.webSongId);
+        if(pending&&(!/^[a-f0-9]{32}$/i.test(String(sourceMedia.md5Checksum||''))||
+          !Number.isSafeInteger(Number(sourceMedia.size))||Number(sourceMedia.size)<1))
+          fail('เพลงที่สร้างจาก PC ไม่มี MD5/ขนาดไฟล์ที่ยืนยันได้: '+row.webSongId);
         const mediaPath=sourceMedia.path;
         const cloudPath=String(mediaPath).replaceAll('\\','/');
         if(!/^SONGS\//i.test(cloudPath))
