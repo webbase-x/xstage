@@ -720,9 +720,12 @@ function stageEffects(){
      try{
        if(!/^[A-Za-z0-9_-]{5,256}$/.test(current.id))
          throw Error('Folder ID ของ FX ไม่ถูกต้อง');
+       const drive=new window.XStageCloudImport.Drive(()=>state.token,()=>{});
+       await window.XStageDriveFolders.verifyFolder(drive,current.id,originalRoot,'fx');
+       if(originalSub!==state.accountSub||originalRoot!==state.libraryRootId||!stillSelected())throw Error('บัญชีหรือคลัง FX เปลี่ยน');
        const children=await driveList("'"+current.id+"' in parents and trashed=false",state.token);
        const candidate=children.filter(f=>
-         f.mimeType!=='application/vnd.google-apps.folder'&&
+         f.mimeType!=='application/vnd.google-apps.folder'&&f.mimeType!=='application/vnd.google-apps.shortcut'&&
          /\.(?:mp3|wav|ogg|m4a)$/i.test(f.name||'')&&
          Number(f.size)>0&&Number(f.size)<=12*1048576).slice(0,10);
        if(!candidate.length)throw Error('ไม่พบไฟล์ FX ที่อ่านได้ในโฟลเดอร์ที่เลือก');
