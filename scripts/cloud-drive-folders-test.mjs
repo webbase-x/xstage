@@ -270,3 +270,23 @@ assert.equal(reads,readsAtPause,'Resume must reuse completed verification from t
 assert.equal(published,beforePausePublications+1);
 assert.equal(lastRows.length,4);
 console.log('PASS: safe pause drains active reads, persists results and resumes without downloading again');
+
+// A new, unified PC/Online DB must ignore legacy rows but preserve media.
+const priorPublished=published;
+const obsolete={webSongId:'obsolete/local-only',code:'OLD',
+  title:'obsolete',artist:'legacy',midiHash:'f'.repeat(32),midiSize:12};
+existingRows=[...lastRows,obsolete];
+names.set(music,'SONGS');
+window.confirm=()=>true;
+await workflow.rebuild({fresh:true});
+assert.equal(published,priorPublished+1,
+  'Explicit full rebuild publishes a new SQLite, even with no new files');
+assert.equal(lastRows.length,4,
+  'Full rebuild includes all distinct XMID MIDI and no legacy-only songs');
+assert.ok(!lastRows.some(row=>row.webSongId==='obsolete/local-only'),
+  'Rebuild must not preserve historical DB-only entries');
+assert.ok(lastRows.every(row=>row.originalRelativePath&&row.xmid?.fileId),
+  'PC and Online must share one SONGS-relative path and cloud media identity');
+assert.match(element('xstage-drive-folder-status').textContent,/สร้างฐานเสร็จ/);
+console.log('PASS: explicit shared PC/Online SQLite rebuild ignores legacy rows without deleting media');
+
