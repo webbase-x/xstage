@@ -19,7 +19,7 @@ assert.ok(importer.includes("await drive.ensurePath(rootId,['DB'])"));
 assert.ok(importer.includes("await drive.ensurePath(rootId,['DB'])")&&importer.includes("await drive.ensurePath(rootId,['CACHE'])"),'DB and CACHE folders are created only when publishing');
 assert.ok(!midi.includes("name==='AUDIO'"),'No SoundFont fallback to legacy AUDIO');
 assert.ok(midi.includes(".toLowerCase()==='soundfont'")&&midi.includes("soundFolders.length>1"),'SoundFont lookup must be case-insensitive and duplicate-safe');
-assert.ok(midi.includes("['SF2','SF3']"));
+assert.ok(midi.includes("/\\.sf[23]$/i")&&midi.includes('pendingFolders=[sourceId]'),'SoundFont must recurse selected folder and accept SF2/SF3 files');
 assert.ok(/cloud-import\.js\?v=/.test(html),'cloud-import.js cache-busted script loads');
 assert.ok(/cloud-import\.css\?v=/.test(html),'cloud-import.css cache-busted stylesheet loads');
 assert.ok(html.includes('id="cloud-import-action-hint"'));
