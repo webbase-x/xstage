@@ -48,9 +48,10 @@ const songA={webSongId:'drive/X100',code:'00001-aaaaaaaa',sourceCode:'00001',
  title:'ทดสอบเสียง',artist:'ศิลปิน ก',sourceFormat:'XMID',
  originalFilename:'00001.XMID',originalRelativePath:'batch-A/00001.XMID',
  originalFileSize:32768,midiSize:11294,midiHash:'a'.repeat(32),
- xmid:{fileId:'file_01',path:'SONGS/MIDI/XMID/X/aaaaaaaa/00001.XMID'}};
+ xmid:{fileId:'file_01',path:'SONGS/batch-A/00001.XMID'}};
 const songB={webSongId:'drive/X200',code:'X200',title:'ความรัก',artist:'ศิลปิน ข',
- sourceFormat:'MP3',audio:{fileId:'file_02',path:'SONGS/AUDIO/MP3/SONG/X/X200.mp3'}};
+ sourceFormat:'MP3',originalRelativePath:'AUDIO/MP3/SONG/X/X200.mp3',
+ audio:{fileId:'file_02',path:'SONGS/AUDIO/MP3/SONG/X/X200.mp3'}};
 const bytes=await codec.create('snapshot',[songA,songB],[],'releaseA');
 assert.equal(Buffer.from(bytes).subarray(0,16).toString('latin1'),'SQLite format 3\0');
 assert.ok(bytes.length>=4096);
