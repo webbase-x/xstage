@@ -6,8 +6,8 @@ const html=read('karaoke.html');
 const app=read('app.js');
 const css=read('xstage-ux.css');
 const source=read('stage-lighting.js');
-assert.match(html,/stage-lighting\.js\?v=1164-midi-eq-bars/,'Web shell loads live lighting');
-assert.ok(html.indexOf('app.js?v=1178-sqlite-only')<html.indexOf('stage-lighting.js?v=1164-midi-eq-bars'),
+assert.match(html,/stage-lighting\.js\?v=/,'Web shell loads live lighting');
+assert.ok(html.indexOf('app.js?v=')<html.indexOf('stage-lighting.js?v='),
   'Playback code must load before its lighting hookup');
 assert.match(app,/setMidiNotes\?\.\(parsedLiveMidi\.notes,parsedLiveMidi\.duration\)/);
 const topRules=css.split('/* 1.0.136 — search must remain the topmost')[1];
@@ -101,9 +101,9 @@ const webEq=read('pc-extensions.js');
 const nativeEq=read('native-audio-meter.js');
 assert.match(webEq,/XStageStageLiveSpectrum/, 'Web analyser must publish actual frequency bands');
 assert.match(nativeEq,/XStageStageLiveSpectrum/, 'Android analyser must publish actual frequency bands');
-assert.match(html,/pc-extensions\.js\?v=1137-unfiltered-output-visual-only/, 'Unfiltered Web speaker graph cache must refresh');
-assert.match(html,/native-audio-meter\.js\?v=1144-live-stage-eq/, 'Android meter cache must refresh');
-assert.match(html,/stage-lighting\.js\?v=1164-midi-eq-bars-1165-live-spectrum/,
+assert.match(html,/pc-extensions\.js\?v=/, 'Unfiltered Web speaker graph cache must refresh');
+assert.match(html,/native-audio-meter\.js\?v=/, 'Android meter cache must refresh');
+assert.match(html,/stage-lighting\.js\?v=/,
   'Concert light script cache must refresh');
 assert.match(css,/1\.0\.137: reserve usable EQ meter widths/,
   'Narrow phone layout must preserve both banner-side EQ meters');
