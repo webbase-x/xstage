@@ -36,7 +36,7 @@ assert.ok(importer.includes("layoutVersion:6,format:'xstage-sqlite3-v1'"),
 assert.ok(app.includes("pointer?.directFile!==true"));
 
 const SQL=await initSqlJs();
-const scope={initSqlJs:()=>Promise.resolve(SQL),Uint8Array,ArrayBuffer,Blob,
+const scope={initSqlJs:()=>Promise.resolve(SQL),Uint8Array,ArrayBuffer,Blob,TextEncoder,
   Promise,Error,Object,Set,Array,JSON,String,Number,console};
 scope.window=scope;
 vm.runInNewContext(source,scope,{filename:'drive-sqlite.js'});
@@ -54,6 +54,19 @@ assert.equal(Buffer.from(bytes).subarray(0,16).toString('latin1'),'SQLite format
 assert.ok(bytes.length>=4096);
 const db=new SQL.Database(bytes);
 assert.deepEqual(db.exec("PRAGMA integrity_check")[0].values,[['ok']]);
+const sharedMetadata=Object.fromEntries(db.exec('SELECT key,value FROM catalog_meta')[0].values);
+assert.equal(sharedMetadata.pcSchema,'shared-v1');
+assert.equal(sharedMetadata.pathBase,'SONGS');
+const pcFields=new Set(db.exec('PRAGMA table_info(songs)')[0].values.map(row=>row[1]));
+for(const name of ['id','path','kind','search','favorite','duplicate_state','key_signature']){
+  assert.ok(pcFields.has(name),'missing Karaoke PC column: '+name);
+}
+const sharedRows=db.exec('SELECT id,web_song_id,path,kind FROM songs ORDER BY web_song_id')[0].values;
+assert.equal(new Set(sharedRows.map(r=>r[0])).size,2,'PC IDs must be unique');
+assert.ok(sharedRows.every(r=>Number.isSafeInteger(r[0])&&r[0]>0&&r[2].startsWith('SONGS/')));
+assert.equal(sharedRows.find(r=>r[1]==='drive/X100')[3],'MIDI');
+assert.equal(sharedRows.find(r=>r[1]==='drive/X200')[3],'AUDIO');
+
 assert.equal(db.exec('SELECT count(*) FROM songs')[0].values[0][0],2);
 const details=db.exec("SELECT original_filename,original_relative_path,original_file_size,source_code,midi_size,midi_md5 FROM songs WHERE web_song_id='drive/X100'")[0].values[0];
 assert.deepEqual(details,['00001.XMID','batch-A/00001.XMID',32768,
@@ -80,7 +93,8 @@ await assert.rejects(codec.create('snapshot',[songA,{
   'Repeated XMID filename with identical MIDI MD5 must be rejected at the database layer');
 const sameSizeDifferentMidi=await codec.create('snapshot',[songA,{
   ...songA,webSongId:'drive/DIFFERENT',code:'00001-bbbbbbbb',
-  originalFilename:'00001.XMID',midiHash:'b'.repeat(32),midiSize:11294
+  originalFilename:'00001.XMID',originalRelativePath:'batch-B/00001.XMID',
+  midiHash:'b'.repeat(32),midiSize:11294
 }],[],'otherBatch');
 assert.equal((await codec.read(sameSizeDifferentMidi)).songs.length,2,
   'Different MIDI recordings sharing a byte size and filename must remain separate');
