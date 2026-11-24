@@ -37,6 +37,12 @@ function saveSelections(sub,root,values){
 async function ensureLibraryLayout(drive,root,{allowCreate=false}={}){
   if(!isId(root)||retired.has(root))fail('คลังหลักไม่ถูกต้อง');
   const children=await drive.listChildren(root),ids={},legacy=[];
+  // Reject ambiguous root categories before making any change.
+  for(const name of ['SONGS','DB','SOUNDFONT','FX']){
+    const matches=children.filter(x=>String(x.name||'').toUpperCase()===name);
+    if(matches.length>1||matches.some(x=>x.mimeType!==FOLDER||!isId(x.id)||retired.has(x.id)))
+      fail('ชื่อโฟลเดอร์ '+name+' ซ้ำหรือชนกับไฟล์ · กรุณาแก้ใน Google Drive ก่อน');
+  }
   async function child(parent,name,entries){
     const matches=entries.filter(x=>String(x.name||'').toUpperCase()===name);
     if(matches.length>1||matches.some(x=>x.mimeType!==FOLDER||!isId(x.id)||retired.has(x.id)))
@@ -427,7 +433,7 @@ function createWorkflow(options={}){
       saveSelections(s.sub,s.rootId,values);layoutReady=true;
       if(prior.soundfont?.id!==values.soundfont.id)options.onSoundfontChange?.(values.soundfont.id);
       if(prior.fx?.id!==values.fx.id)options.onFxChange?.(values.fx.id);
-      if(legacy.length)display('พบ SoundFx เดิม · ระบบใช้ FX เท่านั้น · ไฟล์เดิมไม่ถูกย้ายหรือลบ');
+      if(legacy.length)display('พบ SoundFx เดิม · ระบบใช้ FX เท่านั้น · หากต้องการใช้ไฟล์เดิม ให้ย้ายหรือคัดลอกไป FX ด้วยตนเอง');
       return true;
     })().catch(error=>{if(sameSession(s)&&!busy){display('ตั้งค่าโครงสร้างไม่สำเร็จ · '+String(error.message||error));layoutReady=false;saveSelections(s.sub,s.rootId,{});}return false;}).finally(()=>{if(discoverTask===task)discoverTask=null;render();});
     discoverTask=task;return task.promise;
