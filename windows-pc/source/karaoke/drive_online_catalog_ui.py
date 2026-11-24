@@ -148,9 +148,37 @@ def open_shared_drive_catalog(app):
         except Exception as error:
             messagebox.showerror("เปิดเพลงไม่สำเร็จ", str(error), parent=window)
 
+    def use_shared_as_main():
+        try:
+            from .shared_song_library import validate_shared
+            root = str(validate_shared(selected_root.get().strip()))
+        except (ValueError, OSError) as error:
+            messagebox.showerror("ยังใช้ฐานร่วมไม่ได้", str(error), parent=window)
+            return
+        app.settings["shared_drive_root"] = root
+        app.settings["library_mode"] = "google-drive"
+        app.save_settings()
+        summary.set("บันทึกแล้ว · X-Stage Karaoke PC จะใช้ DB/songs.sqlite3 จาก Google Drive "
+                    "เป็นฐานหลักเมื่อเปิดโปรแกรมใหม่")
+        messagebox.showinfo("เลือกฐาน Google Drive แล้ว",
+            "เลือกฐานเดียวกับ Karaoke Online แล้ว\n"
+            "ปิดและเปิด Karaoke PC ใหม่เพื่อให้ระบบค้นหา คิวเพลง และการเล่น "
+            "ใช้ SQLite ร่วมทุกส่วน โดยไม่สร้างฐานเพลง PC อีกชุด", parent=window)
+
+    def use_local_as_main():
+        if not messagebox.askyesno("กลับไปใช้ฐานภายใน PC",
+            "สลับกลับไปใช้ฐานเพลงภายในเครื่องเมื่อเปิดโปรแกรมใหม่? "
+            "ไม่ลบฐาน Google Drive หรือคิวเพลงเดิม", parent=window):
+            return
+        app.settings["library_mode"] = "local"
+        app.save_settings()
+        summary.set("เลือกฐานภายใน PC แล้ว · มีผลหลังเปิดโปรแกรมใหม่")
+
     refresh = ttk.Button(search_row, text="ตรวจฐาน / ค้นหา", command=load)
     refresh.pack(side="left", padx=(8, 0))
     search_input.bind("<Return>", lambda event: load())
+    ttk.Button(actions, text="ใช้ Google Drive เป็นฐานหลักของ PC", command=use_shared_as_main).pack(side="left", padx=(0,8))
+    ttk.Button(actions, text="กลับใช้ฐานในเครื่อง", command=use_local_as_main).pack(side="left", padx=(0,8))
     ttk.Button(actions, text="เล่นจากฐาน Google Drive ใน PC", command=play_selected).pack(side="left")
     ttk.Button(actions, text="ปิด", command=window.destroy).pack(side="right")
     ttk.Label(body, text="เลือกเล่นเพลงจาก SQLite ของ Google Drive โดยตรง · ไม่เพิ่มแถวเพลงเข้า SQLite ในเครื่องหรือแก้ฐาน Online · ต้องมีไฟล์เพลงซิงก์บนเครื่อง",
