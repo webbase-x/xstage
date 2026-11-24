@@ -501,7 +501,7 @@ function chooseImportRoot(roots,activeRootId){
     fail('ไม่สามารถนำเข้าไปยังโฟลเดอร์ที่ไม่ได้เป็นเจ้าของโดยไม่ได้อนุญาต');
   return selected?.id||'';
 }
-async function loadCatalog(drive,root){
+async function loadCatalog(drive,root,{verifyChecksum=false}={}){
   const children=await drive.listChildren(root);
   const dbDirs=children.filter(x=>x.name===driveLayout.db&&x.mimeType===MIME_FOLDER);
   if(dbDirs.length>1)fail('พบโฟลเดอร์ DB ซ้ำใน XStageKaraoke');
@@ -517,7 +517,14 @@ async function loadCatalog(drive,root){
   if(canonical.length>1)fail('พบ songs.sqlite3 ซ้ำใน DB · ไม่เลือกไฟล์โดยคาดเดา');
   if(canonical.length){
     if(!scope.XStageDriveSQLite)fail('ไม่พบตัวอ่าน SQLite3');
-    const base=await scope.XStageDriveSQLite.read(await drive.getSqlite(canonical[0].id));
+    const bytes=await drive.getSqlite(canonical[0].id);
+    if(verifyChecksum){
+      const expected=String(canonical[0].md5Checksum||'').toLowerCase();
+      if(!/^[a-f0-9]{32}$/.test(expected))fail('Drive ไม่ส่ง MD5 ของฐานเพลง · ยังยืนยันฐานล่าสุดไม่ได้');
+      if(Number(canonical[0].size)!==bytes.byteLength||await core.hashBlob(new Blob([bytes]))!==expected)
+        fail('ขนาดหรือ MD5 ของฐานเพลงไม่ตรงกับ Drive · กรุณาตรวจอีกครั้ง');
+    }
+    const base=await scope.XStageDriveSQLite.read(bytes);
     if(base.schemaVersion!==1||base.kind!=='snapshot'||!Array.isArray(base.songs))
       fail('DB/songs.sqlite3 ไม่ใช่ฐานข้อมูลเพลงที่ถูกต้อง');
     const rows=new Map();
