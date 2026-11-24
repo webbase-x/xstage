@@ -98,16 +98,34 @@ function playbackBusyForUpdate(){
 }
 let webUpdateStageBuild=0,webUpdateStageReady=false,webUpdateStagePromise=null;
 let webUpdateStageFinished=false,webUpdateManualMessage='',webUpdateStageController=null;
+let webUpdatePhase='notice',webUpdateCompletedBuild=0,webUpdateCheckTask=null;
+const WEB_UPDATE_HANDOFF='xstage-web-update-handoff-v1';
 function renderAppUpdateNotice(){
   const {notice,text,action,after}=appUpdateElements();
   if(!notice||!text||!action)return;
   const remote=state.updateAvailable;
-  if(!remote){notice.hidden=true;return;}
+  if(!remote&&webUpdatePhase!=='complete'){notice.hidden=true;return;}
   notice.hidden=false;
+  if(typeof document!=='undefined'){
+    const apk=document.getElementById('xstage-apk-dialog');
+    if(apk?.open)apk.close();
+  }
+  const busy=webUpdatePhase==='applying';
+  const complete=webUpdatePhase==='complete';
+  if(notice.dataset)notice.dataset.updatePhase=webUpdatePhase;
+  if(busy||complete){
+    text.textContent=complete?'ขั้นที่ 2/2 · อัปเดตสำเร็จ · Build '+webUpdateCompletedBuild:
+      'ขั้นที่ 2/2 · '+(webUpdateManualMessage||'กำลังเปิดรุ่นใหม่…');
+    action.hidden=true;action.disabled=true;
+    if(after)after.hidden=true;
+    const link=typeof $==='function'?$('app-update-direct'):null;if(link)link.hidden=true;
+    return;
+  }
+  action.hidden=false;
   notice.classList.toggle('during-playback',playbackBusyForUpdate());
   const preparation=webUpdateStageBuild===remote.build
     ?(webUpdateStageReady?' · เตรียมไฟล์แล้ว':webUpdateStageFinished?' · เปิดรุ่นใหม่โดยตรงได้':' · กำลังเตรียมไฟล์…'):'';
-  text.textContent='พบ X-Stage v'+remote.version+' · Build '+remote.build+preparation+(webUpdateManualMessage?' · '+webUpdateManualMessage:'');
+  text.textContent='ขั้นที่ 1/2 · พบ X-Stage v'+remote.version+' · Build '+remote.build+preparation+(webUpdateManualMessage?' · '+webUpdateManualMessage:'');
   action.textContent='อัปเดตตอนนี้';
   action.disabled=false;
   const direct=typeof $==='function'?$('app-update-direct'):null;
@@ -174,6 +192,7 @@ async function stageWebUpdateFiles(remote){
 }
 let preserveUpdateResumeOnUnload=false;
 async function performAppUpdateReload({preserveSnapshot=false,manual=false}={}){
+  if(webUpdatePhase==='applying')return false;
   if(window.XStageDriveBuildBusy){
     webUpdateManualMessage='กำลังสร้างฐานเพลง · ลองใหม่หลังเสร็จ';
     renderAppUpdateNotice();setStatus(webUpdateManualMessage);return false;
@@ -192,10 +211,15 @@ async function performAppUpdateReload({preserveSnapshot=false,manual=false}={}){
   next.searchParams.delete('xstage_stage');
   next.searchParams.set('xstage_update',String(Date.now()));
   next.searchParams.set('build',String(state.updateAvailable?.build||XSTAGE_RELEASE.build));
-  webUpdateManualMessage='กำลังเปิดหน้าเว็บรุ่นใหม่…';renderAppUpdateNotice();
+  webUpdatePhase='applying';
+  webUpdateManualMessage='กำลังเปิดหน้าเว็บรุ่นใหม่…';
+  try{sessionStorage.setItem(WEB_UPDATE_HANDOFF,JSON.stringify({build:Number(state.updateAvailable?.build||XSTAGE_RELEASE.build),at:Date.now()}));}catch{}
+  renderAppUpdateNotice();
   webUpdateStageController?.abort();
   try{location.replace(next.href);return true;}
   catch(error){
+    webUpdatePhase='notice';webUpdateReloading=false;
+    try{sessionStorage.removeItem(WEB_UPDATE_HANDOFF);}catch{}
     webUpdateManualMessage='เปิดอัตโนมัติไม่ได้ · ใช้ลิงก์เปิดรุ่นใหม่';renderAppUpdateNotice();
     const direct=$('app-update-direct');if(direct){direct.href=next.href;direct.hidden=false;}
     return false;
@@ -221,6 +245,11 @@ function autoApplyWebUpdate(remote){
   return true;
 }
 async function checkAppVersion(){
+  if(webUpdateCheckTask)return webUpdateCheckTask;
+  const task=checkAppVersionOnce();webUpdateCheckTask=task;
+  try{return await task;}finally{if(webUpdateCheckTask===task)webUpdateCheckTask=null;}
+}
+async function checkAppVersionOnce(){
   // Native APK updates must use the native channel, never a web-only reload.
   if(androidTvNativeBridgeReady())return null;
   try{
@@ -235,6 +264,7 @@ async function checkAppVersion(){
     if(remoteBuild>currentBuild){
       const changed=state.updateAvailable?.build!==remoteBuild||
         state.updateAvailable?.version!==String(remote.version||'');
+      if(webUpdatePhase==='complete')webUpdatePhase='notice';
       state.updateAvailable={version:String(remote.version||''),build:remoteBuild};
       renderAppUpdateNotice();
       if(changed){
@@ -244,7 +274,8 @@ async function checkAppVersion(){
         void stageWebUpdateFiles(state.updateAvailable);
       }
       // Never automatically reload during a song, authentication or a popup.
-      autoApplyWebUpdate(state.updateAvailable);
+      if(webUpdateStageFinished)autoApplyWebUpdate(state.updateAvailable);
+      else void Promise.resolve(webUpdateStagePromise).then(()=>{if(state.updateAvailable?.build===remoteBuild)autoApplyWebUpdate(state.updateAvailable);});
       return true;
     }else{
       state.updateAvailable=null;
@@ -257,6 +288,7 @@ async function checkAppVersion(){
 }
 async function triggerImmediateVersionUpdate(){
   if(androidTvNativeBridgeReady()){
+    if(nativeUpdateInstalling)return;
     nativeUpdateManualCheck=true;
     const panel=androidTvUpdatePanel();
     panel.hidden=false;
@@ -283,12 +315,25 @@ async function triggerImmediateVersionUpdate(){
 const XSTAGE_LIVE_UPDATE_CHECK_MS=15_000;
 function checkLiveAppUpdate(){
   if(androidTvNativeBridgeReady()){
+    if(typeof nativeUpdateInstalling!=='undefined'&&nativeUpdateInstalling)return;
     try{window.XStageAndroid.checkForAppUpdate?.();}catch{}
     return;
   }
   void checkAppVersion();
 }
 function setupAppUpdateWatcher(){
+  if(!androidTvNativeBridgeReady()){
+    try{
+      const handoff=JSON.parse(sessionStorage.getItem(WEB_UPDATE_HANDOFF)||'null');
+      if(handoff){
+        sessionStorage.removeItem(WEB_UPDATE_HANDOFF);
+        if(Number(handoff.build)===Number(XSTAGE_RELEASE.build)&&Date.now()-Number(handoff.at)<300000){
+          webUpdatePhase='complete';webUpdateCompletedBuild=Number(handoff.build);renderAppUpdateNotice();
+          setTimeout(()=>{if(webUpdatePhase==='complete'){webUpdatePhase='notice';renderAppUpdateNotice();}},3500);
+        }
+      }
+    }catch{}
+  }
   const {action,after}=appUpdateElements();
   action?.addEventListener('click',()=>{
     if(!state.updateAvailable)return;
@@ -4638,7 +4683,10 @@ function androidTvUpdatePanel(){
     if(hint)hint.textContent='ระบบจะเปิดหน้าแอปใน Google Play ให้ยืนยันการอัปเดต ไม่ติดตั้ง APK ทดสอบทับรุ่น Google Play';
   }
   $('android-tv-update-now')?.addEventListener('click',()=>{
+    if(nativeUpdateInstalling)return;
     nativeUpdateInstalling=true;
+    $('android-tv-update-title').textContent='ขั้นที่ 2/2 · กำลังอัปเดต X-Stage';
+    const later=$('android-tv-update-later');if(later)later.hidden=true;
     const button=$('android-tv-update-now');
     if(button){button.disabled=true;button.textContent='กำลังอัปเดต…';}
     try{window.XStageAndroid?.installAvailableUpdate?.();}
@@ -4658,7 +4706,7 @@ let nativeUpdateDismissedBuild=0;
 let nativeUpdateManualCheck=false;
 let nativeUpdateInstalling=false;
 window.XStageAndroidUpdateAvailable=(version,build)=>{
-  if(!androidTvNativeBridgeReady())return;
+  if(!androidTvNativeBridgeReady()||nativeUpdateInstalling)return;
   const manuallyChecked=nativeUpdateManualCheck;
   nativeUpdateManualCheck=false;
   const next={version:String(version||''),build:Number(build)||0};
@@ -4679,7 +4727,8 @@ window.XStageAndroidUpdateAvailable=(version,build)=>{
   const active=playbackBusyForUpdate();
   panel.classList.toggle('during-playback',active);
   panel.setAttribute('aria-modal',String(!active));
-  $('android-tv-update-title').textContent='พบ X-Stage รุ่นใหม่ · Build '+next.build;
+  $('android-tv-update-title').textContent='ขั้นที่ 1/2 · พบ X-Stage รุ่นใหม่ · Build '+next.build;
+  const later=$('android-tv-update-later');if(later)later.hidden=false;
   $('android-tv-update-version').textContent='ปัจจุบัน '+current+' → ใหม่ v'+next.version+' (Build '+next.build+')';
   $('android-tv-update-status').textContent=active
     ?'เพลงกำลังเล่นต่อเนื่อง · เลือกอัปเดตตอนนี้หรือภายหลัง'
@@ -4712,6 +4761,7 @@ window.XStageAndroidUpdateError=message=>{
   if(!wasUserInitiated&&panel.hidden)return;
   panel.hidden=false;
   $('android-tv-update-status').textContent=state.nativeUpdateStatus;
+  const later=$('android-tv-update-later');if(later)later.hidden=false;
   const button=$('android-tv-update-now');
   if(button){button.disabled=false;button.textContent='ลองอัปเดตอีกครั้ง';}
 };
