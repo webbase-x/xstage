@@ -44,7 +44,8 @@ class BrandingTests(unittest.TestCase):
         from karaoke.context_menu import populate_context_menu
         app, menu = ContextMenuTests().app(), Menu()
         populate_context_menu(app, menu, Menu, [])
-        choices = menu.find('8. พื้นหลัง')['menu'].entries
+        choices = [entry for entry in menu.find('5. เนื้อร้อง')['menu'].entries
+                   if entry.get('label', '').startswith(('ใช้ภาพเวที', 'ไม่มีรูปพื้นหลัง'))]
         self.assertEqual([entry['label'] for entry in choices], ['ใช้ภาพเวที X-STAGE', 'ไม่มีรูปพื้นหลัง'])
         choices[0]['command'](); app.choose_background.assert_called_once()
         choices[1]['command'](); app.clear_background.assert_called_once()
