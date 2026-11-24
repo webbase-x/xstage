@@ -441,7 +441,7 @@ try{
     'A failed silent renewal must stop safely after one 401');
   assert.equal(requests.length,1,'Never loop Google Login on a rejected token');
 }finally{ctx.fetch=beforeRenewFetch;}
-assert.ok(app.includes('async function ensureImporterGoogleAuth(force=false,interactive=false)')&&
+assert.ok(app.includes('async function ensureImporterGoogleAuth(force=false,interactive=false,readAll=false)')&&
   app.includes('state.accountSub!==expectedSub')&&
   app.includes("client.requestAccessToken({")&&app.includes("login_hint:hint.email"),
   'Importer renewal must verify and preserve the same Google account');
