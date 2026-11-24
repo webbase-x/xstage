@@ -462,6 +462,9 @@ class KaraokeApp(tk.Tk):
         # on-disk size, NOT a fabricated estimate of resident native RAM.
 
     def add_files(self):
+        if getattr(self, "shared_drive_mode", False):
+            from .shared_drive_sync_ui import open_drive_push
+            return open_drive_push(self)
         if self.scanning:
             return self.status_var.set('กำลังตรวจรายการเพลง กรุณารอหรือยกเลิกงานเดิม')
         paths = filedialog.askopenfilenames(parent=self, title="เพิ่มเพลง", filetypes=[("เพลงและวิดีโอ", " ".join("*" + ext for ext in sorted(SUPPORTED))), ("ไฟล์ทั้งหมด", "*.*")])
@@ -814,6 +817,8 @@ class KaraokeApp(tk.Tk):
         self.status_var.set('บันทึกที่เก็บเพลงแล้ว — กดเริ่มสร้างรายการเพื่ออัปเดตเพลงใหม่ / ที่เปลี่ยน')
 
     def start_scan(self, folder):
+        if getattr(self, "shared_drive_mode", False):
+            return self.rebuild_library()
         from .lister import build_list
         from .import_ui import options
         policy=options(self,False)
@@ -834,6 +839,10 @@ class KaraokeApp(tk.Tk):
         self.refresh_library()
 
     def edit_song(self):
+        if getattr(self, "shared_drive_mode", False):
+            return messagebox.showinfo("ข้อมูลเพลงจากฐานร่วม",
+                "ชื่อเพลง/ศิลปิน/รหัสเพลงในโหมด Google Drive ใช้ข้อมูลเดียวกับ Karaoke Online\n"
+                "แก้ไฟล์ต้นทางใน Song Studio Pro แล้วส่งกลับ SONGS จากนั้นสร้างฐานใหม่บน Online",parent=self)
         if getattr(self,'scanning',False):return self.status_var.set('กำลังตรวจรายการเพลง กรุณารอให้งานเสร็จก่อนแก้ข้อมูล')
         selection = self.songs.selection()
         if not selection:
