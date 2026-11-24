@@ -221,6 +221,8 @@ def build(root_value, progress=None, cancel=None, publish=True):
     if not songs:
         raise ValueError("ไม่มี XMID/XSK ที่พร้อมสร้างฐานใน XStageKaraoke/SONGS")
     old_file = root / "DB/songs.sqlite3"
+    if old_file.is_symlink() or (old_file.exists() and not old_file.is_file()):
+        raise ValueError("DB/songs.sqlite3 ไม่ใช่ไฟล์ SQLite ปกติ หยุดเพื่อไม่เขียนนอกคลัง")
     original_signature = _hash(old_file) if old_file.exists() else None
     references = _old_refs(old_file)
     rows, midi_hashes, paths, codes, ids = [], set(), set(), set(), set()
@@ -259,12 +261,20 @@ def build(root_value, progress=None, cancel=None, publish=True):
                 "pending_drive_ids": sum(bool(row.get("pendingDriveLink")) for _, row in rows)}
     for directory in ("DB", "CACHE", "BACKUP"):
         (root / directory).mkdir(parents=True, exist_ok=True)
-    lock = root / "CACHE/.xstage-pc-catalog-build.lock"
-    try:
-        with lock.open("x", encoding="utf-8") as handle:
-            handle.write(str(os.getpid()) + "\n")
-    except FileExistsError as exc:
-        raise ValueError("มีงานสร้างฐานจาก PC อยู่แล้ว ตรวจ CACHE ก่อนเริ่มใหม่") from exc
+    # Share the same advisory lock namespace as the browser importer.
+    # Drive Desktop propagation is asynchronous, so also re-check the old
+    # snapshot immediately before committing the new database.
+    cache_root = root / "CACHE"
+    for other in cache_root.glob(".xstage-import-lock-*"):
+        if other.is_symlink():
+            raise ValueError("CACHE มี symlink ของงานสร้างฐาน ไม่ปลอดภัย")
+        if other.is_file() and time.time() - other.stat().st_mtime < 300:
+            raise ValueError("อีกอุปกรณ์กำลังสร้างฐานบน Google Drive กรุณารอให้เสร็จ")
+    lock = cache_root / (".xstage-import-lock-pc-" + secrets.token_hex(12) + ".json")
+    with lock.open("x", encoding="utf-8") as handle:
+        json.dump({"format": "xstage-catalog-import-lock-v1",
+                   "createdBy": "Karaoke PC", "pid": os.getpid(),
+                   "createdAt": time.time()}, handle)
     stage = root / "CACHE" / (".songs-" + secrets.token_hex(10) + ".sqlite3")
     try:
         _stop(cancel)
