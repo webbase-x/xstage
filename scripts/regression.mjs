@@ -560,7 +560,7 @@ assert.ok(app.includes('if(androidTvNativeBridgeReady())return null;'),'native A
 assert.ok(app.includes('id="android-tv-update-now"'),'Android TV update prompt must offer an update-now button');
 assert.ok(app.includes('WEB_AUTO_UPDATE_GUARD'),'web must guard against stale-cache automatic reload loops');
 assert.ok(app.includes('autoApplyWebUpdate(state.updateAvailable)'),'older web shells must automatically apply newer published builds');
-assert.ok(app.includes('if(playbackBusyForUpdate())return false;'),'automatic web upgrades must not interrupt active karaoke playback');
+assert.match(app,/function autoApplyWebUpdate\(remote\)\{[\s\S]*?if\(playbackBusyForUpdate\(\)\|\|window\.XStageDriveBuildBusy\)return false;[\s\S]*?void performAppUpdateReload\(\);/,'automatic web upgrades must not interrupt active karaoke playback or database builds');
 assert.ok(app.includes("window.XStageAndroidUpdateAvailable=(version,build)=>"),'older installed APKs must receive new release notifications through the hosted UI');
 assert.ok(app.includes("android-tv-update-now')?.addEventListener('click'")&&app.includes("installAvailableUpdate"),'native APK upgrades must require the explicit Update Now button');
 assert.ok(!app.includes("button?.click();"),'a new release notification must never auto-tap the installer button');

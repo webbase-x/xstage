@@ -18,15 +18,17 @@ const makeWebUpdate = new Function('androidTvNativeBridgeReady','playbackBusyFor
   'webGoogleAuthFlow','state','window',
   app.slice(start,end)+'\nreturn autoApplyWebUpdate;');
 
-function scenario({busy=false,native=false,oauth=false,recovering=false}={}){
+function scenario({busy=false,native=false,oauth=false,recovering=false,building=false}={}){
+  const flags={busy,building};
   const data=new Map();let reloads=0;
   const storage={
     getItem:key=>data.get(key)||null,
     setItem:(key,value)=>data.set(key,value)
   };
-  const apply=makeWebUpdate(()=>native,()=>busy,storage,()=>{reloads++;},
-    oauth?{id:1,phase:'waiting'}:null,{authRecovering:recovering},{});
-  return {apply,reloads:()=>reloads};
+  const apply=makeWebUpdate(()=>native,()=>flags.busy,storage,()=>{reloads++;},
+    oauth?{id:1,phase:'waiting'}:null,{authRecovering:recovering},
+    {get XStageDriveBuildBusy(){return flags.building;}});
+  return {apply,reloads:()=>reloads,flags};
 }
 {
   const test=scenario();
@@ -54,6 +56,33 @@ function scenario({busy=false,native=false,oauth=false,recovering=false}={}){
   const test=scenario({recovering:true});
   assert.equal(test.apply({version:'1.0.101',build:1101}),false,'stored Google token recovery must block automatic web reload');
   assert.equal(test.reloads(),0);
+}
+// The rejected checks must not consume the update guard; when work ends,
+// the very same published build must still be eligible for one reload.
+for(const flags of [{busy:true},{building:true},{busy:true,building:true}]){
+  const test=scenario(flags),remote={version:'1.0.207',build:1207};
+  assert.equal(test.apply(remote),false,'active playback or database build must defer update');
+  assert.equal(test.reloads(),0);
+  test.flags.busy=false;test.flags.building=false;
+  assert.equal(test.apply(remote),true,'deferred update can proceed once idle');
+  assert.equal(test.apply(remote),false,'only one automatic reload per session');
+  assert.equal(test.reloads(),1);
+}
+// Exercise the real playback predicate, including the live MIDI proxy source.
+const busyStart=app.indexOf('function playbackBusyForUpdate(){');
+const busyEnd=app.indexOf('let webUpdateStageBuild=',busyStart);
+assert.ok(busyStart>=0&&busyEnd>busyStart);
+const realBusy=new Function('state','player',app.slice(busyStart,busyEnd)+'\nreturn playbackBusyForUpdate;');
+for(const [label,state,player,expected] of [
+  ['idle',{loading:false,current:null,queue:[]},{src:'',paused:true,ended:false},false],
+  ['loading',{loading:true,current:null,queue:[]},{src:'',paused:true,ended:false},true],
+  ['audio',{current:{},queue:[]},{src:'blob:audio',paused:false,ended:false},true],
+  ['live MIDI',{current:{},queue:[]},{src:'midi:live',paused:false,ended:false},true],
+  ['queued pause',{current:{},queue:[{}]},{src:'midi:live',paused:true,ended:false},true],
+  ['medley pause',{current:{},queue:[],medley:true},{src:'midi:live',paused:true,ended:false},true],
+  ['finished',{current:{},queue:[]},{src:'midi:live',paused:true,ended:true},false]
+]){
+  assert.equal(realBusy(state,player)(),expected,label+' playback update guard');
 }
 const nativeMain=read('android-tv/app/src/main/java/com/webbasex/xstage/MainActivity.java');
 const remote=read('remote.js');
@@ -199,4 +228,4 @@ if(pro.available){
 }else assert.equal(pro.download_url??null,null,
   'Unavailable Song Studio Pro release must not advertise a download');
 assert.ok(publishedApk.build>0&&/^[a-fA-F0-9]{64}$/.test(publishedApk.sha256),'published APK metadata must identify an actual signed artifact');
-console.log('X-Stage startup updater contract: 4 web behaviors and 12 release/channel safety checks passed');
+console.log('PASS: startup/live update, playback and database-build deferral, idle retry, native release/channel safety');
