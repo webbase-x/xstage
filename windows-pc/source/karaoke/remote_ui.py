@@ -121,6 +121,12 @@ def remote_window(app):
     if existing and existing.winfo_exists(): existing.lift(); return
     window = DialogWindow(app)
     app._remote_window = window
+    keep_visible=tk.BooleanVar(value=bool(app.settings.get('remote_window_topmost',False)))
+    window.attributes('-topmost',keep_visible.get())
+    def set_keep_visible():
+        window.attributes('-topmost',keep_visible.get())
+        app.settings['remote_window_topmost']=keep_visible.get()
+        app.save_settings()
     window.title('รีโมทมือถือ • ค้นหา / คิว / จอร้องสด')
     style = ttk.Style(window)
     style.configure('Remote.TFrame',background='#10192d')
@@ -363,7 +369,16 @@ def remote_window(app):
         if app.remote:app.remote.rotate_codes();update_invite()
     tools=ttk.Frame(pages[2],style='Remote.TFrame',padding=16);tools.pack(fill='x')
     rotate_button=ttk.Button(tools,style='Remote.TButton',text='เปลี่ยนรหัสเชื่อมต่อ',command=rotate)
-    rotate_button.pack(side='left')
+    rotate_button.pack(anchor='w')
+    ready_display=ttk.Frame(pages[2],style='Remote.TFrame',padding=(16,0,16,8))
+    ready_display.pack(fill='x')
+    ttk.Label(ready_display,style='Remote.TLabel',text='การแสดง QR บนจอร้อง').pack(anchor='w',pady=(0,4))
+    for value,label in [('off','ซ่อน QR'),('always','แสดง QR ตลอด'),('idle','แสดง QR เฉพาะช่วงรอเพลง')]:
+        ttk.Radiobutton(ready_display,text=label,variable=qr_mode,value=value,
+                        command=apply_options,style='Remote.TRadiobutton').pack(anchor='w',pady=2)
+    ttk.Checkbutton(ready_display,style='Remote.TCheckbutton',
+                    text='แสดงหน้าต่างรีโมทเหนือหน้าต่างอื่นตลอด',
+                    variable=keep_visible,command=set_keep_visible).pack(anchor='w',pady=(8,2))
     bar=ttk.Frame(window.footer,style='Remote.TFrame',padding=8);bar.pack(fill='x')
     back_button=ttk.Button(bar,style='Remote.TButton',text='← ย้อนกลับ',command=back);back_button.pack(side='left')
     next_button=ttk.Button(bar,style='Remote.Accent.TButton',text='ถัดไป →',command=advance);next_button.pack(side='left')
