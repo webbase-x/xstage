@@ -87,6 +87,46 @@ class CatalogMaintenanceTests(unittest.TestCase):
         self.assertEqual(self.library.count(), 1)
         self.assertIsNotNone(self.library.get(song_id))
 
+    def test_clear_after_stop_releases_engine_and_keeps_media(self):
+        song = self.song(self.songs, 'keep', 'เพลงเดิม')
+        self.library.add_files([song])
+        app = SimpleNamespace(scanning=False, engine=SimpleNamespace(playing=False),
+                              cancel_scan=threading.Event(), catalog_window=Mock(),
+                              library=self.library, song_queue=SimpleNamespace(items=[]),
+                              status_var=Mock(), index_protected_ids=set,
+                              managed_catalog_root=lambda: self.songs, messages=queue.Queue())
+        def release(advance=True):
+            self.assertFalse(advance)
+            app.engine = None
+        app.cancel_current_song = Mock(side_effect=release)
+        self.assertTrue(KaraokeApp.start_catalog_maintenance(app, self.songs, 'clear'))
+        app._index_thread.join(timeout=5)
+        self.assertFalse(app._index_thread.is_alive())
+        kind, payload = app.messages.get_nowait()
+        self.assertEqual(kind, 'catalog_finished')
+        self.assertIsNone(payload[1])
+        app.cancel_current_song.assert_called_once_with(advance=False)
+        self.assertEqual(self.library.count(), 0)
+        self.assertTrue(song.is_file())
+
+    def test_clear_does_not_interrupt_playing_or_write_shared_database(self):
+        app = SimpleNamespace(scanning=False, engine=SimpleNamespace(playing=True),
+                              catalog_window=Mock(), cancel_current_song=Mock())
+        self.assertFalse(KaraokeApp.start_catalog_maintenance(app, self.songs, 'clear'))
+        app.cancel_current_song.assert_not_called()
+        app.shared_drive_mode = True
+        app.engine = None
+        self.assertFalse(KaraokeApp.start_catalog_maintenance(app, self.songs, 'clear'))
+        app.catalog_window.finish.assert_called_with(error='ฐานร่วม PC / Online ต้องจัดการผ่านเมนูสร้างฐานใหม่สำหรับ PC / Online')
+
+    def test_select_named_shared_root_not_unrelated_source(self):
+        from karaoke.catalog_window import selected_shared_root
+        root = self.root / 'XStageKaraoke'
+        self.assertEqual(selected_shared_root(root), root)
+        self.assertEqual(selected_shared_root(root / 'SONGS' / 'MIDI'), root)
+        self.assertIsNone(selected_shared_root(root / 'DB'))
+        self.assertIsNone(selected_shared_root(self.external))
+
     def test_shutdown_cancel_releases_catalog_worker_and_clears_scanning(self):
         window = Mock()
         window.window.winfo_exists.return_value = True
