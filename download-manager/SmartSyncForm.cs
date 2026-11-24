@@ -14,13 +14,10 @@ public sealed class SmartSyncForm : UserControl
     private readonly NumericUpDown _parallel = new() { Minimum = 1, Maximum = 32, Value = 8, Width = 72 };
     private readonly ComboBox _direction = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly CheckBox _background = new() { Text = "ตรวจไฟล์ใหม่ทุก 60 วินาที (ขณะโปรแกรมเปิด)", AutoSize = true };
-    private readonly Button _scan = new() { Text = "ตรวจสอบไฟล์", AutoSize = true };
-    private readonly Button _start = new() { Text = "เริ่ม Sync", AutoSize = true, Enabled = false };
-    private readonly Button _stop = new() { Text = "หยุด", AutoSize = true, Enabled = false };
+    private readonly Button _sync = new() { Text = "Sync", AutoSize = true, MinimumSize = new Size(112, 32) };
     private readonly Label _status = new() { Dock = DockStyle.Fill, AutoSize = false };
     private readonly TextBox _review = new() { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
     private readonly List<Control> _choices = new();
-    private readonly ProgressBar _activity = new() { Dock = DockStyle.Fill, Style = ProgressBarStyle.Blocks };
     private readonly System.Windows.Forms.Timer _scanTicker = new() { Interval = 350 };
     private readonly Stopwatch _scanWatch = new();
     private SmartSyncScanProgress? _latestScan;
@@ -32,19 +29,30 @@ public sealed class SmartSyncForm : UserControl
         public void Report(SmartSyncScanProgress value) => report(value);
     }
     private CancellationTokenSource? _cancel;
-    private SmartSyncFolderPlan? _plan;
     public SmartSyncLaneTracker Lanes { get; } = new();
-    public string StatusText => _status.Text;
+    public string StatusText
+    {
+        get
+        {
+            var (up, down) = Lanes.Snapshot();
+            return up.State == "กำลังรับส่ง" || down.State == "กำลังรับส่ง"
+                ? $"กำลัง Sync · สำเร็จ {up.Done + down.Done:N0}/{up.Total + down.Total:N0} ไฟล์"
+                : _status.Text;
+        }
+    }
     public string ReviewText => _review.Text;
     public string PcPath => _pc.Text;
     public string DrivePath => _drive.Text;
     public event Action? WorkspaceChanged;
+    public event Action? WorkspaceStarted;
     private readonly string _preferencesPath;
+    private readonly string _receiptPath;
     public bool IsBusy => _cancel is not null;
 
-    public SmartSyncForm(string? preferencesPath = null)
+    public SmartSyncForm(string? preferencesPath = null, string? receiptPath = null)
     {
         _preferencesPath = preferencesPath ?? SmartSyncPreferencesStore.DefaultPath;
+        _receiptPath = receiptPath ?? SmartSyncReceiptStore.DefaultPath;
         AccessibleName = "Smart Sync · Google Drive";
         Dock = DockStyle.Fill;
         AutoScroll = true;
@@ -52,11 +60,11 @@ public sealed class SmartSyncForm : UserControl
         BackColor = MainForm.DarkTop;
         ForeColor = Color.White;
         Font = new Font("Segoe UI", 10);
-        var grid = new TableLayoutPanel { Dock = DockStyle.Top, Height = 292, Padding = new Padding(8), ColumnCount = 3, RowCount = 7 };
+        var grid = new TableLayoutPanel { Dock = DockStyle.Top, Height = 218, Padding = new Padding(8), ColumnCount = 3, RowCount = 6 };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
-        foreach (int height in new[] { 32, 32, 32, 32, 32, 62, 50 })
+        foreach (int height in new[] { 32, 32, 32, 32, 32, 42 })
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         void Full(Control control, int row) { grid.Controls.Add(control, 0, row); grid.SetColumnSpan(control, 3); }
         void Folder(string name, TextBox field, int row)
@@ -101,12 +109,13 @@ public sealed class SmartSyncForm : UserControl
         grid.SetColumnSpan(_conflict, 2);
         _choices.Add(_conflict);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true };
-        actions.Controls.AddRange(new Control[] { _scan, _start, _stop, _background });
+        actions.Controls.AddRange(new Control[] { _sync, _background });
         Full(actions, 5);
-        _scan.Click += async (_, _) => await RunAsync(false);
-        _start.Click += async (_, _) => await RunAsync(true);
-        _stop.Click += (_, _) => RequestStop();
-        Full(_status, 6);
+        _sync.Click += async (_, _) =>
+        {
+            if (IsBusy) RequestStop();
+            else await StartFromWorkspaceAsync();
+        };
         _scanTicker.Tick += (_, _) => RenderScanProgress();
         _status.Text = "เลือกคู่โฟลเดอร์ Mirror แล้วตรวจสอบไฟล์ · SQLite ไม่รับส่ง";
         Controls.Add(grid);
@@ -121,7 +130,7 @@ public sealed class SmartSyncForm : UserControl
         _mode.SelectedIndexChanged += (_, _) => { InvalidatePlan(); SavePreferences(); };
         _parallel.ValueChanged += (_, _) => SavePreferences();
         _conflict.SelectedIndexChanged += (_, _) => { InvalidatePlan(); SavePreferences(); };
-        Disposed += (_, _) => { _scanTicker.Dispose(); _review.Dispose(); _activity.Dispose(); };
+        Disposed += (_, _) => { _scanTicker.Dispose(); _review.Dispose(); _status.Dispose(); };
     }
 
     private void ApplyWorkspaceTheme(Control parent)
@@ -151,10 +160,9 @@ public sealed class SmartSyncForm : UserControl
                     button.FlatStyle = FlatStyle.Flat;
                     button.UseVisualStyleBackColor = false;
                     button.BackColor = MainForm.DarkGrid;
-                    button.FlatAppearance.BorderColor = button == _start ? Color.FromArgb(59, 228, 137) : MainForm.Accent;
+                    button.FlatAppearance.BorderColor = button == _sync ? Color.FromArgb(59, 228, 137) : MainForm.Accent;
                     button.FlatAppearance.MouseOverBackColor = Color.FromArgb(31, 79, 91);
-                    button.ForeColor = button == _start ? Color.FromArgb(59, 228, 137) :
-                        button == _stop ? Color.FromArgb(250, 142, 158) : Color.White;
+                    button.ForeColor = button == _sync ? Color.FromArgb(59, 228, 137) : Color.White;
                     button.MinimumSize = new Size(0, 30);
                     break;
                 case Label label:
@@ -184,7 +192,7 @@ public sealed class SmartSyncForm : UserControl
             _parallel.Value = saved.ParallelFiles;
             _conflict.SelectedIndex = (int)saved.ConflictPolicy;
             if (saved.Pc.Length > 0 || saved.Drive.Length > 0)
-                _status.Text = "เรียกคืนค่าที่เลือกครั้งล่าสุดแล้ว · กดตรวจสอบไฟล์ก่อนเริ่ม Sync";
+                _status.Text = "เรียกคืนค่าที่เลือกครั้งล่าสุดแล้ว · กด Sync เพื่อตรวจสอบและรับส่ง";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException)
         {
@@ -207,10 +215,18 @@ public sealed class SmartSyncForm : UserControl
     }
 
     private void InvalidatePlan()
-    { _plan = null; _start.Enabled = false; _activity.Value = 0; _review.Clear(); _status.Text = "กรุณาตรวจสอบไฟล์ใหม่"; Lanes.Reset("ยังไม่ตรวจสอบ"); WorkspaceChanged?.Invoke(); }
+    { _review.Clear(); _status.Text = "กด Sync เพื่อตรวจสอบและรับส่ง"; Lanes.Reset("ยังไม่ตรวจสอบ"); WorkspaceChanged?.Invoke(); }
 
     public void RequestStop()
-    { if (_cancel is not null) { _status.Text = "กำลังหยุดอย่างปลอดภัย"; _cancel.Cancel(); } }
+    {
+        if (_cancel is not null)
+        {
+            _status.Text = "กำลังหยุดอย่างปลอดภัย";
+            _sync.Enabled = false;
+            _cancel.Cancel();
+            WorkspaceChanged?.Invoke();
+        }
+    }
 
     public void CloseForShutdown() => Dispose();
 
@@ -219,8 +235,7 @@ public sealed class SmartSyncForm : UserControl
     public async Task StartFromWorkspaceAsync()
     {
         if (IsBusy) return;
-        if (_plan is null) await RunAsync(false);
-        if (_plan is not null && !IsBusy) await RunAsync(true);
+        await RunAsync();
     }
     public void ClearPreview()
     {
@@ -256,8 +271,6 @@ public sealed class SmartSyncForm : UserControl
         Lanes.Reset("กำลังตรวจสอบ");
         _review.Clear();
         WorkspaceChanged?.Invoke();
-        _activity.Style = ProgressBarStyle.Marquee;
-        _activity.MarqueeAnimationSpeed = 25;
         _scanTicker.Start();
         RenderScanProgress();
         try
@@ -269,9 +282,6 @@ public sealed class SmartSyncForm : UserControl
         {
             _scanTicker.Stop();
             _scanWatch.Stop();
-            _activity.MarqueeAnimationSpeed = 0;
-            _activity.Style = ProgressBarStyle.Blocks;
-            _activity.Value = 0;
         }
     }
 
@@ -297,58 +307,55 @@ public sealed class SmartSyncForm : UserControl
                 plan.DatabaseReviewCount).ToArray();
     }
 
-    private async Task RunAsync(bool transfer)
+    private async Task RunAsync()
     {
-        if (IsBusy || (transfer && _plan is null)) return;
+        if (IsBusy) return;
+        if (string.IsNullOrWhiteSpace(_pc.Text) || string.IsNullOrWhiteSpace(_drive.Text))
+        {
+            _status.Text = "กรุณาเลือกโฟลเดอร์ PC และ Google Drive";
+            WorkspaceChanged?.Invoke();
+            MessageBox.Show(FindForm() ?? (IWin32Window)this, _status.Text, "Smart Sync", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
         var pc = _pc.Text; var drive = _drive.Text;
         var direction = (SmartSyncDirection)_direction.SelectedIndex;
         var mode = (SmartSyncMode)_mode.SelectedIndex;
         var parallel = (int)_parallel.Value;
         var policy = (XmidConflictPolicy)_conflict.SelectedIndex;
-        if (transfer && policy == XmidConflictPolicy.Overwrite &&
+        if (policy == XmidConflictPolicy.Overwrite &&
             MessageBox.Show(this, "ใช้การเขียนทับกับ XMID ที่รหัสชนกันทุกไฟล์ในงานนี้หรือไม่? ระบบสำรองไฟล์เดิมไว้ · สองทางยึด PC · หลายฉบับที่กำกวมจะข้าม",
                 "ยืนยันการเขียนทับทั้งงาน", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
                 MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
-        var repeat = transfer && _background.Checked;
+        var repeat = _background.Checked;
         using var cancellation = new CancellationTokenSource();
         _cancel = cancellation;
         var token = cancellation.Token;
         foreach (var control in _choices) control.Enabled = false;
-        _scan.Enabled = _start.Enabled = _background.Enabled = false;
-        _stop.Enabled = true;
+        _background.Enabled = false;
+        _sync.Text = "หยุด Sync";
+        _sync.ForeColor = Color.FromArgb(250, 142, 158);
+        Lanes.Reset("กำลังตรวจสอบ");
+        _status.Text = "เริ่มตรวจสอบไฟล์";
+        WorkspaceStarted?.Invoke();
         try
         {
             do
             {
                 _status.Text = mode == SmartSyncMode.Fast ? "กำลังตรวจรายชื่อไฟล์ (ไม่อ่านเนื้อหาเดิม)..." : "กำลังตรวจสอบไฟล์และแฮช...";
-                var plan = transfer && _plan is not null ? _plan :
-                    await ScanWithProgressAsync(pc, drive, direction, mode, policy, token);
-                _plan = plan;
+                var plan = await ScanWithProgressAsync(pc, drive, direction, mode, policy, token);
+                token.ThrowIfCancellationRequested();
                 Lanes.Plan(plan);
                 DisplayPlan(plan);
                 WorkspaceChanged?.Invoke();
-                if (!transfer) { _activity.Value = 100; break; }
-                var total = plan.Decisions.Count(d =>
-                    ((d.Action is SyncAction.UploadNew or SyncAction.UploadUpdate) && direction != SmartSyncDirection.ToPc) ||
-                    ((d.Action is SyncAction.DownloadNew or SyncAction.DownloadUpdate) && direction != SmartSyncDirection.ToDrive));
-                _activity.Value = 0;
                 Lanes.Start();
+                _status.Text = "ตรวจสอบเสร็จ · เริ่ม Sync";
                 WorkspaceChanged?.Invoke();
-                var progress = new Progress<int>(n =>
-                {
-                    if (IsDisposed || !IsBusy || token.IsCancellationRequested) return;
-                    // Concurrent file completion events can be posted out of order.
-                    int percent = total == 0 ? 100 : (int)Math.Min(100L, 100L * n / total);
-                    if (percent < _activity.Value) return;
-                    _activity.Value = percent;
-                    _status.Text = $"กำลังซิงค์ไฟล์ · สำเร็จ {n:N0}/{total:N0} รายการ";
-                });
-                var result = await Task.Run(() => SmartSyncFolders.ExecuteAsync(plan, parallel, progress, token, SmartSyncReceiptStore.DefaultPath, Lanes.Complete), token);
+                // Directional counters are updated on the worker, UI polls them.
+                // No queued callback per file when syncing tens of thousands.
+                var result = await Task.Run(() => SmartSyncFolders.ExecuteAsync(plan, parallel, null, token, _receiptPath, Lanes.Complete), token);
                 Lanes.Finish("สำเร็จ");
                 DisplayPlan(plan, result.Copied);
                 WorkspaceChanged?.Invoke();
-                _activity.Value = 100;
-                _plan = null;
                 if (repeat)
                 {
                     _status.Text += " · ตรวจใหม่ใน 60 วินาที";
@@ -357,18 +364,19 @@ public sealed class SmartSyncForm : UserControl
             } while (repeat);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
-        { _plan = null; Lanes.Finish("หยุดชั่วคราว"); _activity.Value = 0; _status.Text = "หยุดแล้ว · ไฟล์ที่ตรวจสอบและบันทึกสำเร็จยังคงอยู่"; }
+        { Lanes.Finish("หยุดชั่วคราว"); _status.Text = "หยุดแล้ว · ไฟล์ที่ตรวจสอบและบันทึกสำเร็จยังคงอยู่"; }
         catch (Exception ex)
-        { _plan = null; Lanes.Finish("เกิดข้อผิดพลาด"); _status.Text = "หยุด: " + ex.Message; }
+        { Lanes.Finish("เกิดข้อผิดพลาด"); _status.Text = "หยุด: " + ex.Message; }
         finally
         {
             _cancel = null;
             if (!IsDisposed)
             {
                 foreach (var control in _choices) control.Enabled = true;
-                _scan.Enabled = _background.Enabled = true;
-                _start.Enabled = _plan is not null;
-                _stop.Enabled = false;
+                _background.Enabled = true;
+                _sync.Enabled = true;
+                _sync.Text = "Sync";
+                _sync.ForeColor = Color.FromArgb(59, 228, 137);
                 WorkspaceChanged?.Invoke();
             }
         }

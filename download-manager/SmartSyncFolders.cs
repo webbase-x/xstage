@@ -546,6 +546,7 @@ public sealed record SmartSyncLaneSnapshot(bool Upload, int Total, int Done, lon
     string State, double ElapsedSeconds, string LastFile)
 {
     public double Fraction => Total == 0 ? (State == "สำเร็จ" ? 1 : 0) : Math.Clamp(Done / (double)Total, 0, 1);
+    public bool IsScanning => State == "กำลังตรวจสอบ";
     public double Rate => State == "กำลังรับส่ง" && ElapsedSeconds > 0 ? DoneBytes / ElapsedSeconds : 0;
 }
 public sealed class SmartSyncLaneTracker
@@ -618,5 +619,21 @@ public sealed class SmartSyncLaneTracker
             if (_up.State is "กำลังรับส่ง" or "กำลังตรวจสอบ") _up = _up with { State = state };
             if (_down.State is "กำลังรับส่ง" or "กำลังตรวจสอบ") _down = _down with { State = state };
         }
+    }
+}
+
+
+// Indeterminate scan is a bouncing segment, never a guessed percentage.
+public static class SmartSyncScanAnimation
+{
+    public static (int Offset, int Width) Band(int width, long ticks)
+    {
+        if (width <= 0) return (0, 0);
+        int segment = Math.Max(1, width / 4);
+        int travel = width - segment;
+        if (travel == 0) return (0, segment);
+        long period = 2L * travel;
+        long step = ((ticks / 12) % period + period) % period;
+        return ((int)(step <= travel ? step : period - step), segment);
     }
 }

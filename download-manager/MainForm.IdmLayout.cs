@@ -1308,6 +1308,23 @@ public sealed partial class MainForm
         RefreshRows();
     }
 
+    private void OnSmartSyncStarted()
+    {
+        ShowSmartSyncPanel(false);
+        _jobSearch.Clear();
+        SelectCategory("all");
+        RefreshRows();
+        foreach (DataGridViewRow row in _grid.Rows)
+            if (Equals(row.Tag, SyncUploadTag) || Equals(row.Tag, SyncDownloadTag))
+            {
+                _grid.ClearSelection();
+                _grid.CurrentCell = row.Cells["File"];
+                row.Selected = true;
+                break;
+            }
+        if (_previewTabs is not null) _previewTabs.SelectedIndex = 0;
+    }
+
     private void ShowSmartSyncPanel(bool visible)
     {
         if (_entryHost is null || _workspaceRoot is null) return;
@@ -1318,12 +1335,13 @@ public sealed partial class MainForm
             {
                 _smartSyncWindow = new SmartSyncForm();
                 _smartSyncWindow.WorkspaceChanged += RefreshRows;
+                _smartSyncWindow.WorkspaceStarted += OnSmartSyncStarted;
                 _entryHost.Controls.Add(_smartSyncWindow);
             }
             _syncPanelOpen = true;
             _smartSyncWindow.Visible = true;
             _smartSyncWindow.BringToFront();
-            _workspaceRoot.RowStyles[2].Height = Math.Min(292, Math.Max(150, ClientSize.Height - 400));
+            _workspaceRoot.RowStyles[2].Height = Math.Min(218, Math.Max(150, ClientSize.Height - 400));
         }
         else
         {

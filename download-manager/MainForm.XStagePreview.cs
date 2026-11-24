@@ -167,6 +167,12 @@ public sealed partial class MainForm
             using var background = new SolidBrush(Color.FromArgb(4, 21, 46));
             using var fill = new SolidBrush(Color.FromArgb(51, 235, 75));
             e.Graphics.FillRectangle(background, bounds);
+            if (SelectedSyncLane()?.IsScanning == true)
+            {
+                var band = SmartSyncScanAnimation.Band(bounds.Width, Environment.TickCount64);
+                if (band.Width > 0) e.Graphics.FillRectangle(fill, band.Offset, 0, band.Width, bounds.Height);
+                return;
+            }
             var width = (int)Math.Round(bounds.Width * Math.Clamp(_previewProgressFraction, 0, 1));
             if (width > 0) e.Graphics.FillRectangle(fill, 0, 0, width, bounds.Height);
         };

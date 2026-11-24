@@ -160,7 +160,7 @@ if (args.Contains("--ui-smoke", StringComparer.Ordinal))
                         BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(sync)!;
                     if (Field<TextBox>("_pc").Text != saved.Pc || Field<TextBox>("_drive").Text != saved.Drive ||
                         Field<ComboBox>("_direction").SelectedIndex != (int)saved.Direction ||
-                        !Field<CheckBox>("_background").Checked || sync.IsBusy || Field<Button>("_start").Enabled ||
+                        !Field<CheckBox>("_background").Checked || sync.IsBusy || !Field<Button>("_sync").Enabled || Field<Button>("_sync").Text != "Sync" ||
                         Field<ComboBox>("_mode").SelectedIndex != (int)SmartSyncMode.Fast ||
                         Field<NumericUpDown>("_parallel").Value != 8 ||
                         Field<TextBox>("_pc").BackColor != MainForm.DarkGrid)
@@ -173,6 +173,34 @@ if (args.Contains("--ui-smoke", StringComparer.Ordinal))
                     var expected = saved with { Direction = SmartSyncDirection.ToDrive, Background = false };
                     if (SmartSyncPreferencesStore.Load(file) != expected || reopened.IsBusy)
                         throw new Exception("Smart Sync UI changes were not persisted");
+                }
+                // Test the actual one-click session using local temporary
+                // directories and an isolated receipt database.
+                Directory.CreateDirectory(saved.Pc);
+                Directory.CreateDirectory(saved.Drive);
+                File.WriteAllText(Path.Combine(saved.Pc, "00001.xmid"), "PC");
+                File.WriteAllText(Path.Combine(saved.Drive, "00002.xmid"), "Drive");
+                SmartSyncPreferencesStore.Save(file, saved with { Direction = SmartSyncDirection.Both, Background = false });
+                using (var oneClick = new SmartSyncForm(file, Path.Combine(syncSettings, "receipts.sqlite3")))
+                {
+                    int starts = 0;
+                    oneClick.WorkspaceStarted += () =>
+                    {
+                        starts++;
+                        if (!oneClick.IsBusy || !oneClick.Lanes.Snapshot().Upload.IsScanning)
+                            throw new Exception("Sync must enter scanning before the workspace hides");
+                    };
+                    var work = oneClick.StartFromWorkspaceAsync();
+                    var watch = System.Diagnostics.Stopwatch.StartNew();
+                    while (!work.IsCompleted && watch.Elapsed < TimeSpan.FromSeconds(30))
+                    { Application.DoEvents(); Thread.Sleep(10); }
+                    if (!work.IsCompleted) throw new Exception("One-click Sync timed out");
+                    work.GetAwaiter().GetResult();
+                    var (up, down) = oneClick.Lanes.Snapshot();
+                    if (starts != 1 || oneClick.IsBusy || up.Done != 1 || down.Done != 1 ||
+                        !File.Exists(Path.Combine(saved.Drive, "00001.xmid")) ||
+                        !File.Exists(Path.Combine(saved.Pc, "00002.xmid")))
+                        throw new Exception("One-click Sync must scan and transfer both directions without a second click");
                 }
             }
             finally { if (Directory.Exists(syncSettings)) Directory.Delete(syncSettings, true); }

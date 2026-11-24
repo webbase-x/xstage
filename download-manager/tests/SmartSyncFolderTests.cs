@@ -131,7 +131,15 @@ internal static class SmartSyncFolderTests
                 throw new Exception("Smart scan missed equal-size changed content");
             File.Delete(Path.Combine(pc, "equal-size.txt")); File.Delete(Path.Combine(drive, "equal-size.txt"));
             var receipt = Path.Combine(root, "receipts.sqlite3");
+            var bandStart = SmartSyncScanAnimation.Band(100, 0);
+            var bandEnd = SmartSyncScanAnimation.Band(100, 900);
+            var bandBack = SmartSyncScanAnimation.Band(100, 1800);
+            if (bandStart != (0, 25) || bandEnd != (75, 25) || bandBack != bandStart)
+                throw new Exception("Scan animation must bounce within the cell");
             var lanes = new SmartSyncLaneTracker();
+            lanes.Reset("กำลังตรวจสอบ");
+            if (!lanes.Snapshot().Upload.IsScanning || !lanes.Snapshot().Download.IsScanning)
+                throw new Exception("Both scan lanes must be indeterminate");
             lanes.Plan(fast);
             lanes.Start();
             var result = await SmartSyncFolders.ExecuteAsync(fast, 8, null, default, receipt, lanes.Complete);

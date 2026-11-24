@@ -29,6 +29,10 @@ public sealed partial class MainForm : Form
     private volatile bool _sleeping;
     private long _lastSpeedMeasurementTick;
     private bool _uiSmokeMode;
+    private readonly System.Windows.Forms.Timer _syncAnimation = new() { Interval = 90 };
+    private Image? _syncIdleIcon;
+    private readonly List<Image> _syncFrames = new();
+    private int _syncFrame;
 
     public MainForm(string[] args)
     {
@@ -47,6 +51,7 @@ public sealed partial class MainForm : Form
         catch (ArgumentException) { Icon = SystemIcons.Application; }
         catch (System.ComponentModel.Win32Exception) { Icon = SystemIcons.Application; }
         CreateXStageWorkspace();
+        _syncAnimation.Tick += (_, _) => AnimateSmartSync();
         FormClosed += (_, _) => _completedMenu.Dispose();
         _parts.Items.AddRange(new object[] { "1", "2", "4", "8", "16", "32" });
         _parts.SelectedItem = _engine.DefaultParts.ToString();
@@ -120,6 +125,11 @@ public sealed partial class MainForm : Form
         };
         FormClosed += (_, _) =>
         {
+            _syncAnimation.Stop();
+            _syncAnimation.Dispose();
+            RestoreSyncIcon();
+            foreach (var frame in _syncFrames) frame.Dispose();
+            _syncFrames.Clear();
             _finishedFileFont.Dispose();
             _normalFileFont.Dispose();
             foreach (var image in _rowIcons.Values) image.Dispose();
@@ -1160,9 +1170,13 @@ public sealed partial class MainForm : Form
         var failed = jobs.Count(j => j.Status == "Failed");
         _transferHeading.Text = "▣  รายการงาน (" + tags.Length.ToString("N0") + ")";
         if (_smartSyncWindow?.IsBusy == true) _transferHeading.Text += " · Smart Sync";
+        UpdateSyncAnimation();
         _summary.Text = $"พร้อมทำงาน  ·  ทั้งหมด {jobs.Length:N0} งาน  ·  กำลังดาวน์โหลด {active:N0}  ·  เสร็จแล้ว {completed:N0}";
         _details.Text = $"ความเร็วดาวน์โหลด {FormatBytes((long)speedTotal)}/s  ·  รอคิว {queued:N0}  ·  ผิดพลาด {failed:N0}" +
-            (_smartSyncWindow?.IsBusy == true ? " · Sync ทำงาน" : "");
+            (_smartSyncWindow?.IsBusy == true
+                ? " · " + (syncLanes.Any(l => l.IsScanning) ? "Sync ตรวจสอบ" :
+                    syncLanes.Any(l => l.State == "กำลังรับส่ง") ? "Sync รับส่งไฟล์" : "Sync รอตรวจใหม่")
+                : "");
         if (measureRate) RecordTransferSpeed(speedTotal);
         UpdateDetails();
         _engine.SaveProgressIfDue();
@@ -1194,9 +1208,14 @@ public sealed partial class MainForm : Form
             using var background = new SolidBrush(Color.FromArgb(229, 236, 245));
             using var green = new SolidBrush(Color.FromArgb(17, 157, 104));
             graphics.FillRectangle(background, rect);
-            graphics.FillRectangle(green, rect.X, rect.Y, (int)Math.Round(rect.Width * lane.Fraction), rect.Height);
+            if (lane.IsScanning)
+            {
+                var band = SmartSyncScanAnimation.Band(rect.Width, Environment.TickCount64);
+                graphics.FillRectangle(green, rect.X + band.Offset, rect.Y, band.Width, rect.Height);
+            }
+            else graphics.FillRectangle(green, rect.X, rect.Y, (int)Math.Round(rect.Width * lane.Fraction), rect.Height);
             using var font = new Font("Segoe UI", 8, FontStyle.Bold);
-            TextRenderer.DrawText(graphics, lane.Total == 0 ? "—" : $"{lane.Fraction * 100:0.0}%", font, rect,
+            TextRenderer.DrawText(graphics, lane.IsScanning ? "กำลังตรวจสอบ" : lane.Total == 0 ? "—" : $"{lane.Fraction * 100:0.0}%", font, rect,
                 lane.Fraction > .52 ? Color.White : Color.FromArgb(25, 70, 117),
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             e.Handled = true;
@@ -1303,7 +1322,7 @@ public sealed partial class MainForm : Form
         row.Cells["File"].Style.Font = _normalFileFont;
         row.Cells["File"].ToolTipText = lane.LastFile;
         row.Cells["Size"].Value = lane.Total > 0 ? FormatBytes(lane.Bytes) : "—";
-        row.Cells["Progress"].Value = lane.Total > 0 ? $"{lane.Fraction * 100:0.0}%" : "—";
+        row.Cells["Progress"].Value = lane.IsScanning ? "กำลังตรวจสอบ" : lane.Total > 0 ? $"{lane.Fraction * 100:0.0}%" : "—";
         row.Cells["Progress"].ToolTipText = $"{lane.Done:N0}/{lane.Total:N0} ไฟล์";
         row.Cells["Speed"].Value = lane.Rate > 0 ? FormatBytes((long)lane.Rate) + "/s" : "—";
         row.Cells["ETA"].Value = SyncEta(lane);
@@ -1318,17 +1337,71 @@ public sealed partial class MainForm : Form
     private void UpdateSyncPreview(SmartSyncLaneSnapshot lane)
     {
         _previewTitle.Text = SyncName(lane.Upload);
-        _previewMeta.Text = $"ไฟล์สำเร็จ {lane.Done:N0}/{lane.Total:N0} · {FormatBytes(lane.DoneBytes)} / {FormatBytes(lane.Bytes)}";
-        _previewState.Text = lane.State;
+        var statusLines = (_smartSyncWindow?.StatusText ?? "").Split('\n');
+        _previewMeta.Text = lane.IsScanning ? statusLines[0] :
+            $"ไฟล์สำเร็จ {lane.Done:N0}/{lane.Total:N0} · {FormatBytes(lane.DoneBytes)} / {FormatBytes(lane.Bytes)}";
+        _previewState.Text = lane.IsScanning && statusLines.Length > 1 ? statusLines[1] : lane.State;
         _previewState.ForeColor = Accent;
         _previewPath.Text = "ปลายทาง: " + (lane.Upload ? _smartSyncWindow?.DrivePath : _smartSyncWindow?.PcPath);
-        _previewUrl.Text = "ล่าสุด: " + lane.LastFile;
+        _previewUrl.Text = "ล่าสุด: " + (lane.IsScanning && statusLines.Length > 2 ? statusLines[2] : lane.LastFile);
         _previewProgressFraction = lane.Fraction;
-        _previewPercent.Text = lane.Total == 0 ? "—" : $"{lane.Fraction * 100:0.0}%";
+        _previewPercent.Text = lane.IsScanning ? "กำลังตรวจสอบ · ยังไม่ทราบจำนวนทั้งหมด" :
+            lane.Total == 0 ? lane.State : $"{lane.Fraction * 100:0.0}% · {lane.Done:N0}/{lane.Total:N0} ไฟล์";
         var diagnostic = _smartSyncWindow?.StatusText + Environment.NewLine + _smartSyncWindow?.ReviewText;
         if (_diagnosticText.Text != diagnostic) _diagnosticText.Text = diagnostic;
         _previewProgressTrack.Invalidate();
     }
+    private ToolStripButton? SmartSyncToolbarButton() => _toolbar?.Items.OfType<ToolStripButton>().FirstOrDefault(x => x.Text == "Smart Sync");
+    private void RestoreSyncIcon()
+    {
+        var button = SmartSyncToolbarButton();
+        if (button is not null && _syncIdleIcon is not null) button.Image = _syncIdleIcon;
+    }
+    private void UpdateSyncAnimation()
+    {
+        if (_smartSyncWindow is null) return;
+        var (up, down) = _smartSyncWindow.Lanes.Snapshot();
+        bool active = up.IsScanning || down.IsScanning || up.State == "กำลังรับส่ง" || down.State == "กำลังรับส่ง";
+        if (active && !_syncAnimation.Enabled)
+        {
+            _syncAnimation.Start();
+            AnimateSmartSync();
+        }
+        else if (!active && _syncAnimation.Enabled)
+        {
+            _syncAnimation.Stop();
+            RestoreSyncIcon();
+        }
+    }
+    private void AnimateSmartSync()
+    {
+        if (IsDisposed || _grid.IsDisposed) return;
+        var button = SmartSyncToolbarButton();
+        if (button is not null && button.Image is not null)
+        {
+            _syncIdleIcon ??= button.Image;
+            if (_syncFrames.Count == 0)
+            {
+                for (int i = 0; i < 16; i++)
+                {
+                    var frame = new Bitmap(40, 40);
+                    using var g = Graphics.FromImage(frame);
+                    g.Clear(Color.Transparent);
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.TranslateTransform(20, 20);
+                    g.RotateTransform(i * 22.5f);
+                    g.DrawImage(_syncIdleIcon, -20, -20, 40, 40);
+                    _syncFrames.Add(frame);
+                }
+            }
+            button.Image = _syncFrames[_syncFrame++ % _syncFrames.Count];
+        }
+        foreach (DataGridViewRow row in _grid.Rows)
+            if (SyncLaneAt(row.Index)?.IsScanning == true)
+                _grid.InvalidateCell(_grid.Columns["Progress"].Index, row.Index);
+        if (SelectedSyncLane()?.IsScanning == true) _previewProgressTrack.Invalidate();
+    }
+
     private async Task StartSelectedWorkspaceAsync()
     {
         if (SelectedSyncLane() is not null && _smartSyncWindow is not null)
