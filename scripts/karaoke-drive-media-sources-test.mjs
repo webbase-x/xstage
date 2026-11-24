@@ -18,7 +18,7 @@ assert.ok(html.includes('cloud-drive-folders.js?v=')&&
   html.includes('browser-midi.js?v=1201-soundfont-all'),
   'Page must load updated Drive folder, SoundFont and FX implementations');
 assert.ok(app.includes('async function chooseUserDriveFolder(kind)')&&
-  app.includes('.setSelectFolderEnabled(!authorizeFiles)')&&
+  app.includes('xstage-drive-main-select')&&!app.includes('new google.picker.PickerBuilder()')&&
   app.includes('const xstageDriveFolders=window.XStageDriveFolders?.init({')&&
   app.includes('ensureAuth:ensureImporterGoogleAuth')&&
   app.includes('onFxChange:folderId=>window.dispatchEvent'),
@@ -54,9 +54,13 @@ const sourcePanel=html.slice(html.indexOf('id="xstage-drive-sources"'),html.inde
 assert.ok(!menu.includes('xstage-soundfont-authorize'),'Playback menu must not grant Drive files');
 assert.equal((html.match(/id="xstage-soundfont-authorize"/g)||[]).length,1);
 assert.ok(sourcePanel.includes('id="xstage-soundfont-authorize" type="button" hidden'));
-assert.ok(app.includes("chooseUserDriveSource('soundfont',true,choice.id)")&&app.includes('view.setParent(parentId)'));
-assert.ok(app.includes('browseAuthorizedDriveFolders({')&&app.includes('list:async id=>')&&app.includes('if(result?.grant&&sameSession())return chooseUserDriveSource(kind)'));
-assert.ok(app.includes("escapeButton.addEventListener('click',()=>finish(null))"));
+assert.ok(app.includes("verifyFolder(drive,choice.id,rootId,'soundfont')"));
+assert.ok(html.includes('id="xstage-drive-main-select"'));
+assert.ok(settings.includes('if(parent===root)return first;'));
+assert.ok(app.includes('Array.isArray(x.parents)&&x.parents.includes(current.id)'));
+assert.ok(app.includes('!preferredRootId&&roots.length===1'));
+assert.ok(app.includes('browseAuthorizedDriveFolders({')&&app.includes('list:async id=>')&&app.includes('if(sameSession())return chooseUserDriveFolder(kind)'));
+assert.ok(app.includes("dialog.addEventListener('cancel',event=>{event.preventDefault();finish();})"));
 assert.ok(soundfont.includes('showPermission(!fullRead&&!!chosenFolder'));
 assert.ok(importer.includes('xstage:drive-sources-open')&&settings.includes('xstage:drive-sources-open'));
 assert.ok(html.includes('id="xstage-drive-read-all"')&&html.includes('id="xstage-drive-scan-counts"'));
