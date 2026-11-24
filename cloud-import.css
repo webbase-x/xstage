@@ -322,3 +322,16 @@
 #cloud-import-dialog .xstage-drive-crossapp-help p{
   font-size:12px;line-height:1.65;margin:7px 0 0;overflow-wrap:anywhere
 }
+
+/* Explicit new PC/Online SQLite build — separate from incremental updates. */
+#cloud-import-dialog #xstage-drive-rebuild-db{
+  background:#2e3540;border:1px dashed #d8af70;color:#ffe1ae;
+  min-height:42px;font-size:13px;font-weight:750;border-radius:9px;
+  padding:9px 14px
+}
+#cloud-import-dialog #xstage-drive-rebuild-db:disabled{
+  opacity:.45;cursor:not-allowed
+}
+#cloud-import-dialog #xstage-drive-rebuild-db:not(:disabled):hover{
+  background:#4a3a2c
+}
