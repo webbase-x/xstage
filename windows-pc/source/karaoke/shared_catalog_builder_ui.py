@@ -151,6 +151,14 @@ def open_builder(app):
                 else:
                     state["approved"] = None
                     app.settings["shared_drive_root"] = requested
+                    if messagebox.askyesno(
+                        "ใช้ฐานเพลงร่วมใน Karaoke PC",
+                        "สร้างฐานเพลงร่วมสำเร็จแล้ว\n"
+                        "ต้องการใช้ XStageKaraoke/DB/songs.sqlite3 "
+                        "เป็นฐานเพลงหลักของ Karaoke PC หลังเปิดโปรแกรมใหม่หรือไม่?\n"
+                        "ฐาน Song Studio Pro จะไม่เปลี่ยน",
+                        parent=panel):
+                        app.settings["library_mode"] = "google-drive"
                     app.save_settings()
                     status.set("สร้าง SQLite ใหม่สำเร็จ "+str(result["accepted"]) +
                                " เพลง · ข้าม MIDI ซ้ำ "+str(result["duplicates"]) +
