@@ -56,9 +56,9 @@ const sandbox={
     }
   }}
 };
-sandbox.window.XStageBrowserMidi=sandbox.XStageBrowserMidi;
+// The actual mock synthesizer already lives on sandbox.window.
 sandbox.renderWithSoundFontRecovery=async(bytes,bank,token,{signal})=>
-  sandbox.XStageBrowserMidi.render(bytes,{fontBytes:bank,signal});
+  sandbox.window.XStageBrowserMidi.render(bytes,{fontBytes:bank,signal});
 vm.runInNewContext(source,sandbox,{filename:'app-xsk-queue.js'});
 const prefetch=sandbox.preloadFirstQueueSong;
 const schedule=sandbox.scheduleQueuePreload;
