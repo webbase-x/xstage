@@ -1258,3 +1258,29 @@ dialog[open]{opacity:1!important;filter:none!important}
   #view-drive .drive-tree-row span{text-align:left}
   #view-build .build-action-layout{grid-template-columns:minmax(0,1fr);gap:12px}
 }
+
+
+/* Shared Google Drive media publisher controls — Studio Pro theme. */
+#view-drive .drive-push-panel{
+  margin-top:18px;padding:17px;border:1px solid #365b75;border-radius:14px;
+  background:linear-gradient(145deg,#13263d,#0c192b);min-width:0
+}
+#view-drive .drive-push-panel h3{
+  margin:0 0 7px;font-size:clamp(15px,1.5vw,18px);color:#c6edf5;font-weight:800
+}
+#view-drive .drive-push-panel .field-label{display:block;margin-top:15px}
+#view-drive .drive-push-panel .drive-commands{margin-top:16px}
+#view-drive .drive-push-panel .drive-push-select{
+  appearance:auto;box-sizing:border-box;display:block;width:100%;
+  padding:11px 14px;border:1px solid #41627d;border-radius:9px;
+  background:#0e2035;color:#e9f7ff;font:inherit
+}
+#view-drive .drive-push-panel .drive-operation-status{margin:12px 0;padding:10px 13px}
+#view-drive .drive-push-panel :is(button,input,select):focus-visible{
+  outline:3px solid #79e5e7;outline-offset:2px
+}
+#view-drive .drive-push-panel button:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:640px){
+  #view-drive .drive-push-panel{padding:13px}
+  #view-drive .drive-push-panel .drive-commands>*{width:100%;flex:1 1 100%}
+}
