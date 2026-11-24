@@ -145,9 +145,13 @@ async function create(kind,songs,removes=[],generation=''){
           row.xmid?.path?.split('/').pop()||
           row.xsk?.path?.split('/').pop()||
           row.midi?.path?.split('/').pop()||'').slice(0,255);
-        const mediaPath=[row.xmid,row.xsk,row.midi,row.audio,row.video]
-          .map(item=>item?.path).find(Boolean)||'';
+        const sourceMedia=[row.xmid,row.xsk,row.midi,row.audio,row.video]
+          .find(item=>item?.fileId&&item?.path);
+        if(!sourceMedia)fail('เพลงไม่มี Drive File ID และตำแหน่งไฟล์ที่ตรวจสอบได้: '+row.webSongId);
+        const mediaPath=sourceMedia.path;
         const cloudPath=String(mediaPath).replaceAll('\\','/');
+        if(!/^SONGS\//i.test(cloudPath))
+          fail('ไฟล์เพลงต้องอยู่ใต้ XStageKaraoke/SONGS: '+row.webSongId);
         const relativeCloudPath=/^SONGS\/(.+)$/i.exec(cloudPath)?.[1]||'';
         const originalPath=String(relativeCloudPath||row.originalRelativePath||'')
           .replaceAll('\\','/').slice(0,1024);
