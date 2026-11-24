@@ -8,6 +8,12 @@ on:
       - "cloud-import.js"
       - "karaoke.html"
       - "scripts/karaoke-drive-sqlite-test.mjs"
+      - "scripts/test-shared-sqlite-cross-runtime.mjs"
+      - "scripts/cloud-drive-folders-test.mjs"
+      - "cloud-drive-folders.js"
+      - "windows-pc/source/karaoke/shared_song_library.py"
+      - "windows-pc/source/karaoke/drive_online_catalog.py"
+      - "windows-pc/source/tests/test_shared_song_library.py"
       - ".github/workflows/test-karaoke-sqlite.yml"
   workflow_dispatch:
 
@@ -31,3 +37,8 @@ jobs:
           node --check cloud-import.js
       - name: Exercise genuine SQLite3 binary
         run: node scripts/karaoke-drive-sqlite-test.mjs
+      - name: Cross-runtime PC and Online single-DB acceptance
+        run: |
+          node scripts/test-shared-sqlite-cross-runtime.mjs
+          node scripts/cloud-drive-folders-test.mjs
+          PYTHONPATH=windows-pc/source python3 -m unittest discover -s windows-pc/source/tests -p 'test_shared_song_library.py' -v
