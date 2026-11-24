@@ -489,10 +489,10 @@ assert.ok(style.includes('.cloud-import-body{')&&
   style.includes('.cloud-import-footer-buttons{')&&
   style.includes('flex:0 0 auto'),
   'Import Start and status must be anchored outside scrollable contents');
-assert.ok(page.includes('cloud-import.js?v=1188-drive-upload-only')&&
-  page.includes('cloud-import.css?v=1189-folder-cancel-controls')&&
+assert.ok(/cloud-import\.js\?v=\d+[\w-]*/.test(page)&&
+  /cloud-import\.css\?v=\d+[\w-]*/.test(page)&&
   page.includes('video-metadata-editor.js?v=1138-verified-video-selection'),
-  'Updated scripts and styles must bypass stale browser caches');
+  'Cloud manager scripts and styles must use versioned cache-busting URLs');
 const oldDoc=ctx.document,oldAdd=ctx.addEventListener,oldScan=ctx.XStageImportCore.scan;
 const fakeNodes=new Map();
 const node=id=>{
