@@ -43,6 +43,7 @@ const parents=new Map([
 ]);
 const names=new Map([[music,'XMID'],[font,'SOUNDFONT'],[fx,'FX']]);
 let denied=false,cancelOnList=false,uploads=0,reads=0,published=0,lastRows=null,failOnce=false;
+let existingRows=[];
 class FakeDrive {
   async folderMetadata(id){
     if(!parents.has(id))throw Error('Not permitted');
@@ -77,7 +78,7 @@ const window={
 window.window=window;
 const context={window,document:window.document,navigator:window.navigator,localStorage:storage,
   Blob,TextDecoder,TextEncoder,Uint8Array,DataView,URL,URLSearchParams,crypto:webcrypto,
-  console,setTimeout,clearTimeout};Object.assign(window,{Blob,TextDecoder,TextEncoder});
+  console,setTimeout,clearTimeout,AbortController};Object.assign(window,{Blob,TextDecoder,TextEncoder});
 vm.runInNewContext(read('cloud-import-core.js'),context,{filename:'cloud-import-core.js'});
 vm.runInNewContext(read('xmid-browser.js'),context,{filename:'xmid-browser.js'});
 window.XStageImportCore.hashBlob=async(blob)=>{
@@ -86,8 +87,8 @@ window.XStageImportCore.hashBlob=async(blob)=>{
 };
 window.XStageCloudImport={
   Drive:FakeDrive,
-  loadCatalog:async()=>({pointer:null,rows:new Map()}),
-  buildMidiIndex:async()=>({hashes:new Map(),duplicates:0,backfilled:0}),
+  loadCatalog:async()=>({pointer:null,rows:new Map(existingRows.map(row=>[row.webSongId,{...row}]))}),
+  buildMidiIndex:async(rows)=>({hashes:new Map([...rows.values()].map(row=>[row.midiHash,row])),duplicates:0,backfilled:0}),
   distinctImportCode:(requested,hash,codes)=>
     codes.get(String(requested).toLowerCase())?.length
       ?requested+'-'+hash.slice(0,8):requested,
@@ -130,8 +131,18 @@ assert.notEqual(lastRows[0].code,lastRows[1].code,
   'Distinct MIDI with colliding embedded song code must receive an alias');
 assert.equal(uploads,0,'Rebuilding must not upload any source file');
 assert.equal(reads,4,'Resume reuses two verified packages and retries only the failed file');
-assert.match(element('xstage-drive-folder-status').textContent,/MIDI ซ้ำ 1/);
+assert.match(element('xstage-drive-folder-status').textContent,/ฐานเดิม 0 เพลง/);
+assert.match(element('xstage-drive-folder-status').textContent,/MIDI ซ้ำ 1 \(มีในฐานแล้ว 0 · ซ้ำในรอบนี้ 1\)/);
 assert.match(element('xstage-drive-folder-status').textContent,/รูปแบบอื่นที่ยังไม่ได้ทำดัชนี 1/);
+existingRows=[...lastRows];
+const readsBeforeRepeat=reads;
+await workflow.rebuild();
+assert.equal(published,1,'Existing songs must not be published again');
+assert.equal(reads,readsBeforeRepeat,'Verified unchanged packages must reuse checkpoints');
+assert.match(element('xstage-drive-folder-status').textContent,/ฐานเดิม 2 เพลง/);
+assert.match(element('xstage-drive-folder-status').textContent,/เพิ่มใหม่ 0 เพลง/);
+assert.match(element('xstage-drive-folder-status').textContent,/MIDI ซ้ำ 3 \(มีในฐานแล้ว 3 · ซ้ำในรอบนี้ 0\)/);
+assert.match(element('xstage-drive-folder-status').textContent,/ฐานเพลงรวม 2 เพลง/);
 cancelOnList=true;
 await workflow.rebuild();
 assert.equal(published,1,'Cancelled scan must never publish a partial SQLite catalog');
