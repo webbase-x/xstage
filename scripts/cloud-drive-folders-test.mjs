@@ -42,7 +42,7 @@ const parents=new Map([
   [music,root],[font,root],[fx,root]
 ]);
 const names=new Map([[music,'XMID'],[font,'SOUNDFONT'],[fx,'FX']]);
-let denied=false,cancelOnList=false,uploads=0,reads=0,published=0,lastRows=null;
+let denied=false,cancelOnList=false,uploads=0,reads=0,published=0,lastRows=null,failOnce=false;
 class FakeDrive {
   async folderMetadata(id){
     if(!parents.has(id))throw Error('Not permitted');
@@ -55,7 +55,7 @@ class FakeDrive {
     if(id===music)return records;
     return [];
   }
-  async getSqlite(id){reads++;if(!blobs.has(id))throw Error('Unexpected media');return blobs.get(id);}
+  async getSqlite(id){reads++;if(failOnce&&id==='file00003'){failOnce=false;throw Error('Network timeout');}if(!blobs.has(id))throw Error('Unexpected media');return blobs.get(id);}
   async upload(){uploads++;throw Error('Builder must never upload songs');}
 }
 const values=new Map(),elements=new Map();
@@ -95,7 +95,9 @@ window.XStageCloudImport={
 };
 vm.runInNewContext(read('cloud-drive-folders.js'),context,{filename:'cloud-drive-folders.js'});
 let current={sub:'account1',rootId:root,token:'token1'},pick={id:music,name:'XMID'};
+const savedMetadata=new Map();
 const workflow=window.XStageDriveFolders.init({
+  openCheckpoint:async()=>({get:async key=>savedMetadata.get(key),put:async(key,value)=>savedMetadata.set(key,value)}),
   session:()=>current,chooseFolder:async()=>pick,
   refresh:async()=>{},ensureAuth:async()=>{}
 });
@@ -111,6 +113,12 @@ assert.equal(workflow.getFolderId('another-account',root,'music'),'',
   'Stored folder IDs must not cross Google identities');
 assert.equal(workflow.getFolderId('account1','anotherRoot123','music'),'',
   'Stored folder IDs must not cross library roots');
+failOnce=true;
+await workflow.rebuild();
+assert.equal(published,0,'Interrupted scan never publishes an incomplete catalog');
+assert.equal(savedMetadata.size,2,'Verified packages are checkpointed independently');
+assert.match(element('xstage-drive-folder-status').textContent,/พักงานชั่วคราว/);
+assert.equal(window.XStageDriveBuildBusy,false);
 await workflow.rebuild();
 assert.equal(published,1,'Build should publish one DB snapshot only');
 assert.equal(lastRows.length,2,'Duplicate raw MIDI across distinct packages must collapse');
@@ -121,7 +129,7 @@ assert.ok(lastRows.every(x=>x.lyricsMode==='unavailable'),'Placeholder lyrics ar
 assert.notEqual(lastRows[0].code,lastRows[1].code,
   'Distinct MIDI with colliding embedded song code must receive an alias');
 assert.equal(uploads,0,'Rebuilding must not upload any source file');
-assert.equal(reads,3,'File contents must be read only for candidate XMID assets');
+assert.equal(reads,4,'Resume reuses two verified packages and retries only the failed file');
 assert.match(element('xstage-drive-folder-status').textContent,/MIDI ซ้ำ 1/);
 assert.match(element('xstage-drive-folder-status').textContent,/รูปแบบอื่นที่ยังไม่ได้ทำดัชนี 1/);
 cancelOnList=true;

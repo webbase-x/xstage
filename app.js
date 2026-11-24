@@ -162,6 +162,9 @@ async function stageWebUpdateFiles(remote){
 }
 let preserveUpdateResumeOnUnload=false;
 async function performAppUpdateReload({preserveSnapshot=false}={}){
+  if(window.XStageDriveBuildBusy){
+    setStatus('กำลังสร้างฐานเพลง · อัปเดตหลังสร้างฐานเสร็จ');return;
+  }
   preserveUpdateResumeOnUnload=preserveSnapshot;
   if(!preserveSnapshot)try{savePlaybackResumeState();}catch{}
   const next=new URL(location.href);
@@ -176,7 +179,7 @@ function autoApplyWebUpdate(remote){
   if(androidTvNativeBridgeReady()||!remote||webUpdateReloading)return false;
   // Never navigate away while a GIS popup is returning or its token is being verified.
   if(webGoogleAuthFlow||state.authRecovering)return false;
-  if(playbackBusyForUpdate())return false;
+  if(playbackBusyForUpdate()||window.XStageDriveBuildBusy)return false;
   const target=Number(remote.build);
   try{
     const previous=JSON.parse(sessionStorage.getItem(WEB_AUTO_UPDATE_GUARD)||'null');

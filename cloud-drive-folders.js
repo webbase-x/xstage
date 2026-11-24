@@ -1,5 +1,6 @@
 /* X-Stage: user-selected Drive sources and deferred canonical SQLite build.
- * Private files stay in Google Drive. Only folder IDs/labels are persisted locally.
+ * Private files stay in Google Drive. Folder settings and verified song metadata
+ * checkpoints are stored locally, scoped to the account and selected library.
  * Does not read retired libraries, migrate files, or publish partial catalogs.
  */
 (function(scope){
@@ -81,6 +82,42 @@ async function walkMusic(drive,start,check,progress){
   }
   return {files,otherCount:count-files.length,folders:seen.size};
 }
+// Persistent verified metadata, not audio, credentials or a second SQLite catalog.
+// Reuse only when Drive ID, package checksum, size and format are unchanged.
+const JOB='xstage-drive-build-pending-v1:';
+const checkpointKey=(s,folder,file)=>/^[a-f0-9]{32}$/i.test(file.md5Checksum||'')
+  ?JSON.stringify([s.sub,s.rootId,folder,file.id,String(file.md5Checksum).toLowerCase(),String(file.size),file.ext]):null;
+function openCheckpoint(){
+  return new Promise(resolve=>{
+    try{
+      if(!scope.indexedDB){resolve(null);return;}
+      const request=scope.indexedDB.open('xstage-drive-build-checkpoints-v1',1);
+      request.onupgradeneeded=()=>request.result.createObjectStore('verified');
+      request.onerror=request.onblocked=()=>resolve(null);
+      request.onsuccess=()=>{
+        const db=request.result;
+        db.onversionchange=()=>db.close();
+        resolve({
+          get:key=>new Promise(done=>{
+            try{const r=db.transaction('verified').objectStore('verified').get(key);
+              r.onsuccess=()=>done(r.result||null);r.onerror=()=>done(null);
+            }catch{done(null);}
+          }),
+          put:(key,value)=>new Promise(done=>{
+            try{const t=db.transaction('verified','readwrite');
+              t.objectStore('verified').put(value,key);
+              t.oncomplete=()=>done(true);t.onerror=t.onabort=()=>done(false);
+            }catch{done(false);}
+          }),
+          close:()=>db.close()
+        });
+      };
+    }catch{resolve(null);}
+  });
+}
+function pendingKey(s){return JOB+entryKey(s.sub,s.rootId);}
+function pending(s){try{return scope.localStorage?.getItem(pendingKey(s))||'';}catch{return '';}}
+function setPending(s,id){try{scope.localStorage?.setItem(pendingKey(s),id||'');}catch{}}
 async function inspectPackage(drive,file,check){
   check();
   if(!Number.isSafeInteger(Number(file.size))||Number(file.size)>96*1024*1024)
@@ -97,7 +134,8 @@ async function inspectPackage(drive,file,check){
   const midiHash=await scope.XStageImportCore.hashBlob(parsed.midi,check);
   const midiSize=parsed.midi.size;
   const identity=scope.XStageImportCore.songIdentity(parsed.document,parsed.code);
-  return {file,parsed,midiHash,midiSize,packedMd5,identity};
+  return {file,parsed:{code:parsed.code,document:{lyricsMode:parsed.document.lyricsMode}},
+    midiHash,midiSize,packedMd5,identity};
 }
 function createWorkflow(options={}){
   const labels={music:'คลังเพลง',soundfont:'SoundFont',fx:'FX'};
@@ -167,7 +205,10 @@ function createWorkflow(options={}){
     const chosen=readSelections(initial.sub,initial.rootId).music;
     if(!chosen?.id){display('เลือกโฟลเดอร์เพลงบน Google Drive ก่อนสร้างฐาน');return;}
     const work=async()=>{
-      busy=true;controller=new AbortController();render();
+      if(busy)return;
+      busy=true;scope.XStageDriveBuildBusy=true;controller=new AbortController();
+      setPending(initial,chosen.id);render();
+      let checkpoint=null;
       const check=()=>{
         if(controller.signal.aborted)fail('ยกเลิกการสร้างฐาน');
         const now=options.session?.();
@@ -179,6 +220,8 @@ function createWorkflow(options={}){
       drive.signal=()=>controller.signal;
       try{
         await verifyFolder(drive,chosen.id,initial.rootId,'music');
+        checkpoint=await (options.openCheckpoint||openCheckpoint)();
+        check();
         display('กำลังอ่าน DB/songs.sqlite3 ที่ใช้งานอยู่…');
         const existing=await scope.XStageCloudImport.loadCatalog(drive,initial.rootId);
         const rows=existing.rows;
@@ -193,14 +236,33 @@ function createWorkflow(options={}){
         const listing=await walkMusic(drive,chosen.id,check,display);
         if(!listing.files.length)
           fail('ไม่พบ XMID/XSK ที่อ่านได้ในโฟลเดอร์นี้ · ยังไม่ได้แก้ไข DB');
-        let added=0,duplicates=0,invalid=0;
+        let added=0,duplicates=0,invalid=0,reused=0;
+        const inspect=async file=>{
+          check();
+          const key=checkpointKey(initial,chosen.id,file);
+          const saved=key&&checkpoint?await checkpoint.get(key):null;
+          check();
+          if(saved&&saved.packedMd5===String(file.md5Checksum).toLowerCase()&&
+              /^[a-f0-9]{32}$/i.test(saved.midiHash)&&Number.isSafeInteger(saved.midiSize)&&
+              saved.midiSize>0&&saved.parsed?.document&&saved.identity){
+            reused++;
+            return {...saved,file};
+          }
+          const item=await inspectPackage(drive,file,check);
+          check();
+          if(key&&checkpoint){
+            const {file:ignored,...metadata}=item;
+            await checkpoint.put(key,metadata);
+          }
+          return item;
+        };
         // Bounded parallel reads, sequential catalog merge. The SQLite file
         // is published once, and only after all Drive assets are verified.
         for(let offset=0;offset<listing.files.length;offset+=4){
           check();
           const batch=listing.files.slice(offset,offset+4);
           const outcomes=await Promise.allSettled(batch.map(file=>
-            inspectPackage(drive,file,check)));
+            inspect(file)));
           for(let i=0;i<outcomes.length;i++){
             check();
             const result=outcomes[i];
@@ -240,7 +302,9 @@ function createWorkflow(options={}){
           }
           if(offset%16===0||offset+4>=listing.files.length)
             display('ตรวจ '+Math.min(offset+4,listing.files.length)+' / '+listing.files.length+
-              ' · เพิ่ม '+added+' · MIDI ซ้ำ '+duplicates+' · ไฟล์ผิดรูปแบบ '+invalid);
+              ' ('+Math.floor(Math.min(offset+4,listing.files.length)*100/listing.files.length)+'%)'+
+              ' · เพิ่ม '+added+' · MIDI ซ้ำ '+duplicates+' · ไฟล์ผิดรูปแบบ '+invalid+
+              ' · ใช้จุดบันทึก '+reused);
         }
         check();
         const needsPublication=Boolean(added||indexed.duplicates||indexed.backfilled);
@@ -250,6 +314,7 @@ function createWorkflow(options={}){
             drive,rootId:initial.rootId,pointer:existing.pointer,rows,check,status:display
           });
         }
+        setPending(initial,'');
         display((needsPublication?'สร้างฐานเสร็จ':'ตรวจเสร็จ · ไม่มีข้อมูลใหม่ให้เผยแพร่')+
           ' · เพิ่ม '+added+' เพลง · ข้าม MIDI ซ้ำ '+duplicates+
           ' · ไฟล์ผิดรูปแบบ '+invalid+
@@ -259,9 +324,15 @@ function createWorkflow(options={}){
           console.warn('Catalog refresh deferred:',error?.message||error);
         }
       }catch(error){
-        display('สร้างฐานไม่สำเร็จ: '+String(error?.message||error)+
+        const reason=String(error?.message||error);
+        const interrupted=!controller.signal.aborted&&
+          /network|fetch|timeout|offline|HTTP (?:401|429|5\d\d)|Google.*(?:ต่ออายุ|ยืนยัน|เชื่อม|หมดอายุ)|การเชื่อมต่อ/i.test(reason);
+        if(!interrupted)setPending(initial,'');
+        display((interrupted?'พักงานชั่วคราว · จะทำต่อเมื่อเชื่อมต่อหรือกลับมาเปิดแท็บ: ':'สร้างฐานไม่สำเร็จ: ')+reason+
           ' · DB เดิมยังคงอยู่ (หากเผยแพร่ไม่ผ่าน ระบบพยายามคืนฐานเดิม)');
-      }finally{busy=false;controller=null;render();}
+      }finally{
+        checkpoint?.close?.();busy=false;scope.XStageDriveBuildBusy=false;controller=null;render();
+      }
     };
     if(scope.navigator?.locks?.request){
       await scope.navigator.locks.request('xstage-drive-import-'+initial.sub,
@@ -275,9 +346,17 @@ function createWorkflow(options={}){
     $('xstage-drive-folder-'+kind)?.addEventListener('click',()=>void choose(kind));
   buildButton?.addEventListener('click',()=>void rebuild());
   cancelButton?.addEventListener('click',()=>controller?.abort());
+  function resume(){
+    if(busy||scope.document?.hidden)return;
+    let s;try{s=session();}catch{return;}
+    const chosen=readSelections(s.sub,s.rootId).music;
+    if(chosen?.id&&pending(s)===chosen.id)void rebuild();
+  }
   for(const event of ['xstage:auth-ready','xstage:auth-refreshed','xstage:librarychange',
-    'xstage:auth-cleared'])scope.addEventListener?.(event,render);
-  render();
+    'xstage:auth-cleared'])scope.addEventListener?.(event,()=>{render();resume();});
+  for(const event of ['online','pageshow','focus'])scope.addEventListener?.(event,resume);
+  scope.document?.addEventListener?.('visibilitychange',resume);
+  render();resume();
   return {render,choose,rebuild,getFolderId:selectedId,
     getSelection:(sub,root,kind)=>readSelections(sub,root)[kind]||null,
     cancel:()=>controller?.abort()};
