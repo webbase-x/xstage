@@ -97,6 +97,20 @@ if (args.Contains("--ui-smoke", StringComparer.Ordinal))
                 using var graphics = Graphics.FromImage(target);
                 graphics.DrawImage(rendered, 0, 0, 40, 40);
             }
+            // Instantiate the actual detached updater UI without showing it:
+            // painting must not launch installation or signal a real handshake.
+            using (var transition = new UpdateTransitionForm(new[] {
+                "--apply-verified-update", "1", "setup.exe", "old.exe",
+                new string('a', 64), "1024", "0.2.25", "28", "test-only" }))
+            {
+                transition.CreateControl();
+                transition.PerformLayout();
+                using var snapshot = new Bitmap(transition.Width, transition.Height);
+                transition.DrawToBitmap(snapshot, new Rectangle(0, 0, snapshot.Width, snapshot.Height));
+                var bars = transition.Controls.OfType<ProgressBar>().ToArray();
+                if (bars.Length != 1 || !transition.Controls.OfType<Label>().Any(x => x.Text.Contains("ขั้นที่ 1/6")))
+                    throw new Exception("Single updater progress window did not render its first stage.");
+            }
             main.Close();
         }
         catch (Exception error) { failure = error; }

@@ -299,7 +299,20 @@ public static class SelfUpdater
                 if (process is null)
                     throw new IOException("ไม่สามารถเริ่มกระบวนการติดตั้งอัปเดต");
                 if (!readyEvent.WaitOne(TimeSpan.FromSeconds(12)))
-                    throw new IOException("หน้าต่างอัปเดตใหม่ไม่พร้อม จึงเก็บแอปเดิมไว้ ไม่ปิดโปรแกรม");
+                {
+                    try
+                    {
+                        if (!process.HasExited) process.Kill();
+                        process.WaitForExit(5000);
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                    {
+                        LogDownload("Could not stop unacknowledged helper: " + ex.Message);
+                    }
+                    // Never try another location after a child process was
+                    // launched. It could otherwise produce two updater windows.
+                    throw new InvalidOperationException("หน้าต่างอัปเดตไม่พร้อม · โปรแกรมเดิมยังเปิดอยู่ กรุณาตรวจสอบอัปเดตอีกครั้ง");
+                }
                 return;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
@@ -379,7 +392,7 @@ public static class SelfUpdater
 
         try
         {
-            reportStatus?.Invoke("รอให้แอปรุ่นเก่าปิดก่อนติดตั้ง");
+            reportStatus?.Invoke("ขั้นที่ 2/6 · ตรวจสอบ SHA-256 และขนาดไฟล์");
             var expectedName = $"X-Stage-Download-Manager-v{version}-build{build}-win-x64-Setup.exe";
             if (Path.GetFileName(setup) != expectedName ||
                 Path.GetFullPath(setup) != Path.Combine(UpdateFolder, expectedName) ||
@@ -388,6 +401,7 @@ public static class SelfUpdater
             if (!VerifyFileAsync(setup, sha, size).GetAwaiter().GetResult())
                 throw new IOException("SHA-256 ไม่ตรง: ยกเลิกการติดตั้ง");
 
+            reportStatus?.Invoke("ขั้นที่ 3/6 · รอให้แอปรุ่นเก่าปิดและบันทึกคิว");
             try
             {
                 using var previous = Process.GetProcessById(oldPid);
@@ -396,7 +410,7 @@ public static class SelfUpdater
             }
             catch (ArgumentException) { /* The main process already exited. */ }
 
-            reportStatus?.Invoke("กำลังขอสิทธิ์ติดตั้งจาก Windows");
+            reportStatus?.Invoke("ขั้นที่ 4/6 · ขอสิทธิ์ติดตั้งจาก Windows");
             // Program Files requires UAC. Prompt for elevation only after
             // SHA-256 verification and after the previous app has exited.
             // The helper remains at user integrity level and later relaunches
@@ -412,7 +426,7 @@ public static class SelfUpdater
                 install.ArgumentList.Add(arg);
             using var process = Process.Start(install) ??
                                 throw new IOException("เริ่มตัวติดตั้งไม่สำเร็จ");
-            reportStatus?.Invoke("กำลังติดตั้งและเตรียมเปิดแอปรุ่นใหม่");
+            reportStatus?.Invoke("ขั้นที่ 4/6 · กำลังติดตั้งรุ่นใหม่");
             if (!process.WaitForExit(600000))
             {
                 WriteLog("Installer timeout; not claiming success or launching a second installer.");
@@ -420,7 +434,7 @@ public static class SelfUpdater
             }
             if (process.ExitCode != 0)
                 throw new IOException("ตัวติดตั้งคืนรหัสข้อผิดพลาด " + process.ExitCode);
-            reportStatus?.Invoke("ตรวจสอบไฟล์แอปรุ่นใหม่");
+            reportStatus?.Invoke("ขั้นที่ 5/6 · ตรวจสอบเวอร์ชันที่ติดตั้ง");
             if (!File.Exists(installedExe))
                 throw new IOException("ติดตั้งเสร็จ แต่ไม่พบแอปรุ่นใหม่");
             var installedVersion = FileVersionInfo.GetVersionInfo(installedExe).FileVersion;
@@ -428,7 +442,7 @@ public static class SelfUpdater
                 throw new IOException("เวอร์ชันไฟล์หลังติดตั้งไม่ตรงกับรุ่นใหม่: " + installedVersion);
             // Open the new version immediately after verification. Cleanup of
             // the old per-user install must NEVER block the next UI opening.
-            reportStatus?.Invoke("กำลังเปิด X-Stage Download Manager รุ่นใหม่");
+            reportStatus?.Invoke("ขั้นที่ 6/6 · กำลังเปิดแอปรุ่นใหม่");
             Process.Start(new ProcessStartInfo(installedExe) { UseShellExecute = true });
             WriteLog("SUCCESS v" + version + " Build " + build +
                      " in " + installedExe);

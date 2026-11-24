@@ -4,23 +4,24 @@ using System.Windows.Forms;
 
 namespace XStageDownloadManager;
 
-/// <summary>
-/// A small independent window, copied with the self-contained update helper,
-/// stays on screen while the old EXE is replaced. The old app remains visible
-/// until this window signals that it is ready to manage the transition.
-/// </summary>
+/// <summary>One independent progress window for the entire installation handoff.
+/// The original application closes only after the readiness handshake.</summary>
 public sealed class UpdateTransitionForm : Form
 {
     private readonly string[] _args;
     private readonly Label _message = new();
     private readonly Label _subtext = new();
+    private readonly Label _version = new();
+    private readonly ProgressBar _bar = new();
+    private readonly Button _dismiss = new();
+    private bool _finished;
 
     public UpdateTransitionForm(string[] args)
     {
         _args = args;
-        Text = "X-Stage Download Manager — กำลังอัปเดต";
-        Size = new Size(620, 205);
-        MinimumSize = MaximumSize = Size;
+        Text = "X-Stage Download Manager — อัปเดต";
+        AutoScaleMode = AutoScaleMode.Font;
+        ClientSize = new Size(580, 245);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         ControlBox = false;
@@ -29,30 +30,46 @@ public sealed class UpdateTransitionForm : Form
         BackColor = Color.FromArgb(245, 249, 253);
         ForeColor = Color.FromArgb(23, 44, 76);
         Font = new Font("Segoe UI", 11);
-        _message.Text = "เตรียมติดตั้งรุ่นใหม่ · กรุณาอย่าปิดหน้าต่างนี้";
-        _message.Left = 22;
-        _message.Top = 18;
-        _message.Width = 565;
-        _message.Height = 40;
+        _version.SetBounds(20, 12, 540, 30);
+        _version.Text = args.Length == 9 ? $"รุ่น {_args[6]} · Build {_args[7]}" : "X-Stage Download Manager";
+        _message.SetBounds(20, 45, 540, 58);
         _message.Font = new Font("Segoe UI", 14, FontStyle.Bold);
-        _subtext.Text = "โปรแกรมเดิมยังเปิดอยู่จนกว่าจะส่งต่องานอัปเดตสำเร็จ";
-        _subtext.Left = 22;
-        _subtext.Top = 66;
-        _subtext.Width = 565;
-        _subtext.Height = 40;
-        var bar = new ProgressBar
-        {
-            Left = 22, Top = 120, Width = 565, Height = 22,
-            Style = ProgressBarStyle.Marquee, MarqueeAnimationSpeed = 25
-        };
-        Controls.AddRange(new Control[] { _message, _subtext, bar });
+        _subtext.SetBounds(20, 105, 540, 58);
+        _bar.SetBounds(20, 172, 540, 20);
+        _bar.Style = ProgressBarStyle.Marquee;
+        _bar.MarqueeAnimationSpeed = 25;
+        _dismiss.SetBounds(440, 202, 120, 32);
+        _dismiss.Text = "ปิด";
+        _dismiss.Visible = false;
+        _dismiss.Click += (_, _) => Close();
+        Controls.AddRange(new Control[] { _version, _message, _subtext, _bar, _dismiss });
+        SetStage("ขั้นที่ 1/6 · เตรียมติดตั้ง", "ดาวน์โหลดและตรวจสอบไฟล์เบื้องต้นแล้ว · กำลังส่งต่องานจากแอปเดิม");
+        FormClosing += (_, e) => { if (!_finished && e.CloseReason == CloseReason.UserClosing) e.Cancel = true; };
         Shown += (_, _) => BeginInvoke(new Action(StartInBackground));
+    }
+
+    private void SetStage(string message, string details)
+    {
+        _message.Text = message;
+        _subtext.Text = details;
+    }
+
+    private void Finish(int result, string? detail = null)
+    {
+        _finished = true;
+        Environment.ExitCode = result;
+        _bar.MarqueeAnimationSpeed = 0;
+        _bar.Style = ProgressBarStyle.Blocks;
+        _bar.Value = result == 0 ? 100 : 0;
+        TopMost = false;
+        SetStage(result == 0 ? "ขั้นที่ 6/6 · ติดตั้งสำเร็จ" : "อัปเดตไม่สำเร็จ",
+            detail ?? (result == 0 ? "ส่งคำสั่งเปิด X-Stage Download Manager รุ่นใหม่แล้ว" :
+            "ดูรายละเอียดที่ LocalAppData\\X-Stage\\Download Manager\\updates\\last-update.log"));
+        _dismiss.Visible = true;
     }
 
     private void StartInBackground()
     {
-        // Handshake: the original app does NOT close if the helper GUI failed
-        // to start. Signal only after the window has been shown.
         try
         {
             if (_args.Length != 9)
@@ -62,30 +79,26 @@ public sealed class UpdateTransitionForm : Form
         }
         catch (Exception ex)
         {
-            _message.Text = "ไม่สามารถเตรียมการอัปเดต";
-            _subtext.Text = ex.Message;
+            // The parent retains its original UI. Do not leave an orphan
+            // helper window behind if the readiness handshake failed.
+            Finish(2, ex.Message);
+            Close();
             return;
         }
 
         _ = Task.Run(async () =>
         {
             int result = SelfUpdater.ApplyUpdateInHelper(_args, UpdateStatus);
-            Environment.ExitCode = result;
             try
             {
                 if (IsDisposed || !IsHandleCreated) return;
-                BeginInvoke(new Action(() =>
+                BeginInvoke(new Action(() => Finish(result)));
+                if (result == 0)
                 {
-                    _message.Text = result == 0
-                        ? "เปิดแอปรุ่นใหม่แล้ว"
-                        : "อัปเดตไม่สำเร็จ · กำลังกลับไปยังแอปเดิม";
-                    _subtext.Text = result == 0
-                        ? "X-Stage Download Manager พร้อมใช้งาน"
-                        : "ดูรายละเอียดที่ LocalAppData\\X-Stage\\Download Manager\\updates\\last-update.log";
-                }));
-                await Task.Delay(1400);
-                if (!IsDisposed && IsHandleCreated)
-                    BeginInvoke(new Action(Close));
+                    await Task.Delay(1200);
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke(new Action(Close));
+                }
             }
             catch (InvalidOperationException) { }
         });
@@ -98,8 +111,8 @@ public sealed class UpdateTransitionForm : Form
             if (!IsDisposed && IsHandleCreated)
                 BeginInvoke(new Action(() =>
                 {
-                    _message.Text = status;
-                    _subtext.Text = "กำลังจัดการอัปเดตอัตโนมัติ โปรดเปิดหน้าต่างนี้ไว้";
+                    if (!_finished)
+                        SetStage(status, "กำลังจัดการอัปเดตอัตโนมัติ · โปรดเปิดหน้าต่างนี้ไว้");
                 }));
         }
         catch (InvalidOperationException) { }

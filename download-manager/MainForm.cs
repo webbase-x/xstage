@@ -540,15 +540,24 @@ public sealed partial class MainForm : Form
             });
             var installer = await SelfUpdater.DownloadVerifiedAsync(release, progress);
             if (IsDisposed) return;
-            _updateStatus.Text = "ตรวจสอบไฟล์ผ่านแล้ว กำลังเตรียมหน้าต่างติดตั้ง...";
-            // Do not close the existing UI until the independent updater
-            // window has actually been shown and acknowledged readiness.
+            // Do not start the helper if closing would be vetoed by an active
+            // live recording. Keep the verified setup for the next attempt.
+            if (Application.OpenForms.OfType<LiveStreamCaptureForm>().Any(window => window.IsBusy))
+            {
+                _updateStatus.Text = "ไฟล์อัปเดตพร้อมแล้ว · กรุณาหยุดบันทึกไลฟ์ก่อนติดตั้ง แล้วกดตรวจสอบอัปเดตอีกครั้ง";
+                return;
+            }
+            _updateStatus.Text = "ตรวจสอบ SHA-256 ผ่าน · กำลังส่งต่อไปยังหน้าต่างอัปเดต";
+            // The detached helper is the sole progress window. Do not open
+            // another countdown dialog over it. Close only after its readiness
+            // handshake; FormClosing still saves interrupted download intent.
             SelfUpdater.LaunchInstallerHelper(installer, release);
-            await ShowRestartCountdownAsync(release);
+            Close();
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or
                                      System.Text.Json.JsonException or IOException or
-                                     UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+                                     UnauthorizedAccessException or System.ComponentModel.Win32Exception or
+                                     InvalidOperationException)
         {
             if (IsDisposed) return;
             _updateStatus.Text = "อัปเดตไม่สำเร็จ: " + ex.Message.Split('\n')[0];
@@ -568,47 +577,6 @@ public sealed partial class MainForm : Form
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         finally { _checkingUpdates = false; }
-    }
-
-    private async Task ShowRestartCountdownAsync(DownloadManagerRelease release)
-    {
-        // The update helper is already visible. Keep the old application's
-        // window present and clearly show the seconds before handing off.
-        using var notice = new Form
-        {
-            Text = "พร้อมติดตั้งอัปเดต X-Stage",
-            Width = 570, Height = 175,
-            StartPosition = FormStartPosition.CenterParent,
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            ControlBox = false,
-            ShowInTaskbar = false,
-            TopMost = true,
-            BackColor = Color.White
-        };
-        var message = new Label
-        {
-            Left = 18, Top = 20, Width = 530, Height = 82,
-            Font = new Font("Segoe UI", 14, FontStyle.Bold),
-            ForeColor = Color.FromArgb(20, 71, 135),
-            TextAlign = ContentAlignment.MiddleCenter
-        };
-        notice.Controls.Add(message);
-        notice.Show(this);
-        for (int seconds = 3; seconds >= 1; seconds--)
-        {
-            if (IsDisposed) return;
-            var status = $"พร้อมติดตั้ง v{release.Version} Build {release.Build} · กำลังจะปิดและเปิดใหม่ใน {seconds} วินาที";
-            message.Text = status;
-            _updateStatus.Text = status;
-            Text = $"X-Stage Download Manager · เปิดรุ่นใหม่ใน {seconds} วินาที";
-            await Task.Delay(1000);
-        }
-        if (IsDisposed) return;
-        _updateStatus.Text = "กำลังส่งต่อไปยังหน้าต่างติดตั้งและเปิดรุ่นใหม่...";
-        // The detached updater stays on-screen during the short period when
-        // Windows must replace the original EXE in Program Files.
-        // FormClosing pauses current downloads and saves their state.
-        Close();
     }
 
     private void PrepareCompletedMenu(DownloadJob job)

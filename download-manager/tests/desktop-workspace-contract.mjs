@@ -16,6 +16,15 @@ const liveUi = readFileSync(join(root, 'LiveStreamCaptureForm.cs'), 'utf8');
 const background = readFileSync(join(root, 'LiveBackgroundMonitor.cs'), 'utf8');
 const testProject = readFileSync(join(root, 'tests/DownloadEngine.Tests.csproj'), 'utf8');
 
+const updateUi = readFileSync(join(root, 'UpdateTransitionForm.cs'), 'utf8');
+const updater = readFileSync(join(root, 'SelfUpdater.cs'), 'utf8');
+assert.ok(!main.includes('ShowRestartCountdownAsync'), 'Do not show a second countdown popup');
+assert.match(main, /SelfUpdater\.LaunchInstallerHelper\(installer, release\);\s*Close\(\);/);
+assert.match(main, /OfType<LiveStreamCaptureForm>\(\)\.Any\(window => window\.IsBusy\)[\s\S]*?SelfUpdater\.LaunchInstallerHelper/);
+assert.match(updater, /process\.Kill\(\)[\s\S]*?throw new InvalidOperationException/);
+for (let step = 2; step <= 6; step++) assert.ok(updater.includes('ขั้นที่ '+step+'/6'));
+assert.ok(updateUi.includes('ขั้นที่ 1/6') && updateUi.includes('ขั้นที่ 6/6'));
+assert.ok(updateUi.includes('_dismiss.Visible = true'));
 const contracts = [
   ['changed source clears stale adaptive throughput', /if \(sourceChanged\)[\s\S]*?job\.PreviousBytes = 0;\s*job\.SpeedBytesPerSecond = 0;\s*job\.SmoothedSpeedBytesPerSecond = 0;/, engine],
   ['protected subscription domains rejected before job creation', /host\.EndsWith\("\." \+ domain, StringComparison\.OrdinalIgnoreCase\)/, engine],
