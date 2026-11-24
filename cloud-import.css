@@ -310,3 +310,15 @@
 #cloud-import-dialog #xstage-drive-compare-status[data-state="different"]{color:#f5cc8a}
 #cloud-import-dialog #xstage-drive-build-db:disabled{opacity:.43;box-shadow:none}
 #cloud-import-dialog #xstage-drive-build-db:not(:disabled){opacity:1}
+
+/* Shared XStageKaraoke workflow: informative, not an action that deletes music. */
+#cloud-import-dialog .xstage-drive-crossapp-help{
+  margin-top:10px;padding:8px 12px;border:1px solid #31525f;border-radius:10px;
+  background:#122b39;color:#c2dbe0
+}
+#cloud-import-dialog .xstage-drive-crossapp-help summary{
+  font-size:13px;font-weight:750;color:#96e3d5;cursor:pointer
+}
+#cloud-import-dialog .xstage-drive-crossapp-help p{
+  font-size:12px;line-height:1.65;margin:7px 0 0;overflow-wrap:anywhere
+}
