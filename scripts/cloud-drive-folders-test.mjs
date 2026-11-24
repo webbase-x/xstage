@@ -218,3 +218,31 @@ assert.equal((await compare([mfile,diff],dbRows,{get:async()=>({packedMd5:sig2,m
 assert.equal((await compare([{...mfile,md5Checksum:''}],dbRows,null,contextKey,music)).equal,false);
 assert.equal((await compare([],dbRows,null,contextKey,music)).stale,1);
 console.log('PASS: verified catalog reconciliation handles same-count changes, duplicates, missing checksums and stale rows');
+
+current={sub:'account1',rootId:root,token:'token1'};
+const verified=window.XStageDriveFolders.verifiedPackageRows(
+  records.filter(f=>/\.xmid$/i.test(f.name)).map(f=>({...f,ext:'xmid'})),new Map(existingRows.map(r=>[r.webSongId,r])));
+assert.equal(verified.size,2);
+const readBeforeFast=reads;
+savedMetadata.clear();
+const midiC=Buffer.from(midiA);midiC[13]=99;
+const fresh=packageFile('fresh-incremental',midiC);
+records.push({...records[0],id:'copyOfKnown123',name:'copy.XMID'});
+for(let i=0;i<10;i++){
+  const id='newCopy'+String(i).padStart(3,'0');
+  records.push({id,name:id+'.XMID',size:String(fresh.bytes.length),mimeType:'application/octet-stream',md5Checksum:fresh.md5});
+  blobs.set(id,fresh.bytes);
+}
+await workflow.rebuild();
+assert.equal(reads-readBeforeFast,2,'Only unknown different-metadata duplicate and one new package may download; known rows and byte-identical copies must skip');
+assert.equal(published,2);
+assert.equal(lastRows.length,3,'One new MIDI, despite ten identical copies');
+assert.match(element('xstage-drive-folder-status').textContent,/ข้ามจากฐาน 3/);
+assert.match(element('xstage-drive-folder-status').textContent,/ดาวน์โหลดตรวจจริง 2/);
+const limits=window.XStageDriveFolders.inspectionLimits;
+assert.equal(limits({connection:{saveData:true}}).workers,4);
+assert.equal(limits({deviceMemory:8,connection:{effectiveType:'4g'}}).workers,12);
+assert.equal(limits({}).workers,8);
+const changedKnown={...records[0],ext:'xmid',md5Checksum:'f'.repeat(32)};
+assert.equal(window.XStageDriveFolders.verifiedPackageRows([changedKnown],new Map(existingRows.map(r=>[r.webSongId,r]))).size,0,'Changed contents must never bypass inspection');
+console.log('PASS: incremental scan bypasses verified database files, shares new identical packages across batches and preserves changed-file inspection');
