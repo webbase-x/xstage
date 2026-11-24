@@ -146,7 +146,7 @@ assert.match(element('xstage-drive-folder-status').textContent,/ฐานเพ�
 cancelOnList=true;
 await workflow.rebuild();
 assert.equal(published,1,'Cancelled scan must never publish a partial SQLite catalog');
-assert.match(element('xstage-drive-folder-status').textContent,/ยกเลิกการสร้างฐาน/);
+assert.match(element('xstage-drive-folder-status').textContent,/พักงานอย่างปลอดภัย/);
 denied=true;
 await workflow.rebuild();
 assert.equal(published,1,'Folder permission failures must keep the last published DB unchanged');
@@ -246,3 +246,27 @@ assert.equal(limits({}).workers,8);
 const changedKnown={...records[0],ext:'xmid',md5Checksum:'f'.repeat(32)};
 assert.equal(window.XStageDriveFolders.verifiedPackageRows([changedKnown],new Map(existingRows.map(r=>[r.webSongId,r]))).size,0,'Changed contents must never bypass inspection');
 console.log('PASS: incremental scan bypasses verified database files, shares new identical packages across batches and preserves changed-file inspection');
+
+const midiD=Buffer.from(midiA);midiD[13]=101;
+const pausePackage=packageFile('pause-safe',midiD);
+const pauseId='pauseFile123';
+records.push({id:pauseId,name:'pause.XMID',size:String(pausePackage.bytes.length),mimeType:'application/octet-stream',md5Checksum:pausePackage.md5});
+blobs.set(pauseId,pausePackage.bytes);
+existingRows=[...lastRows];
+const normalRead=FakeDrive.prototype.getSqlite;
+let askedPause=false;
+FakeDrive.prototype.getSqlite=async function(id){
+  if(id===pauseId&&!askedPause){askedPause=true;workflow.cancel();}
+  return normalRead.call(this,id);
+};
+const beforePausePublications=published;
+await workflow.rebuild();
+assert.equal(published,beforePausePublications,'Pause must not publish an incomplete catalog');
+assert.match(element('xstage-drive-folder-status').textContent,/พักงานอย่างปลอดภัย/);
+assert.match(element('xstage-drive-build-db').textContent,/ทำงานต่อจากจุดที่หยุด/);
+const readsAtPause=reads;
+await workflow.rebuild();
+assert.equal(reads,readsAtPause,'Resume must reuse completed verification from the drained batch');
+assert.equal(published,beforePausePublications+1);
+assert.equal(lastRows.length,4);
+console.log('PASS: safe pause drains active reads, persists results and resumes without downloading again');
