@@ -1515,10 +1515,60 @@ function timeLabel(t) {
 function getFileId(data) {
   return typeof data?.fileId === 'string' && data.fileId.length > 0 ? data.fileId : '';
 }
+// PC-created catalogs preserve the same IDs/paths but Google Drive for
+// desktop cannot expose API file IDs. Bind on *first playback* by walking the
+// selected XStageKaraoke root and verifying exact path, bytes and package MD5.
+async function resolvePcDriveLink(song,token,signal){
+  if(song?.pendingDriveLink!==true)return;
+  const media= song?.xmid?.path&&!getFileId(song.xmid)?song.xmid:
+               song?.xsk?.path&&!getFileId(song.xsk)?song.xsk:null;
+  if(!media)return;
+  const root=state.libraryRootId;
+  if(!root||!token)throw Error('กรุณาเชื่อมคลัง XStageKaraoke บน Google Drive');
+  const raw=String(media.path||'').replace(/\\/g,'/');
+  const parts=raw.split('/');
+  if(parts[0]!=='SONGS'||parts.length<3||parts.length>20||
+    parts.some(part=>!part||part==='.'||part==='..'||part.includes(':')))
+    throw Error('ตำแหน่งเพลงจากฐาน PC ไม่ปลอดภัย: '+raw);
+  const expected=String(media.md5Checksum||'').toLowerCase();
+  const expectedSize=Number(media.size);
+  if(!/^[0-9a-f]{32}$/.test(expected)||!Number.isSafeInteger(expectedSize)||expectedSize<1)
+    throw Error('ฐาน PC ไม่มี MD5 และขนาดไฟล์ต้นฉบับสำหรับยืนยัน');
+  const queryName=name=>name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const folderMime='application/vnd.google-apps.folder';
+  let parent=root;
+  for(let i=0;i<parts.length;i++){
+    if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
+    if(token!==state.token)throw Error('บัญชี Google เปลี่ยนระหว่างตรวจเพลง');
+    const name=parts[i],isFile=i===parts.length-1;
+    const list=await driveList(
+      "'"+parent+"' in parents and name='"+queryName(name)+"' and trashed=false",token);
+    const matches=list.filter(item=>item.name===name&&
+      item.parents?.includes(parent)&&
+      (isFile?item.mimeType!==folderMime:item.mimeType===folderMime));
+    if(matches.length!==1)
+      throw Error('พบไฟล์หรือโฟลเดอร์ซ้ำ/ไม่พบใน XStageKaraoke: '+raw+
+        ' · ตรวจ Google Drive for desktop แล้วอัปเดตฐานเพลง');
+    const selected=matches[0];
+    if(isFile){
+      if(Number(selected.size)!==expectedSize||
+        String(selected.md5Checksum||'').toLowerCase()!==expected)
+        throw Error('ไฟล์บน Google Drive ไม่ตรงกับเพลงในฐาน PC (ขนาด/MD5): '+raw);
+      if(!/^[A-Za-z0-9_-]{5,256}$/.test(String(selected.id||'')))
+        throw Error('Google Drive File ID ของเพลงไม่ถูกต้อง');
+      media.fileId=selected.id;
+      song.pendingDriveLink=false;
+    }else{
+      parent=selected.id;
+    }
+  }
+}
 function playable(song) {
   // XSK2 is a complete, self-describing media+lyrics package on Drive.
   // Old catalog pairs remain supported without migration.
-  return !!(getFileId(song?.xmid) || getFileId(song?.xsk) ||
+  return !!((song?.pendingDriveLink===true&&
+      (song?.xmid?.path||song?.xsk?.path))||
+    getFileId(song?.xmid) || getFileId(song?.xsk) ||
     (getFileId(song?.midi) && song?.sourceFormat==='KAR') ||
     (getFileId(song?.lyrics) && (getFileId(song?.audio) || getFileId(song?.midi))));
 }
@@ -3037,6 +3087,7 @@ async function prepareFirstMidiSynth(source,bank,options){
   }finally{clearTimeout(timeout);}
 }
 async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=false){
+  if(song?.pendingDriveLink===true)await resolvePcDriveLink(song,token,signal);
   const soundFontGeneration=state.xskSoundFontGeneration||0;
   const isXmid=!!getFileId(song?.xmid);
   const fileId=getFileId(isXmid?song?.xmid:song?.xsk);
@@ -3867,7 +3918,8 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       liveMidiBytes=readyPrepared.liveMidi||null;
       liveFontBytes=readyPrepared.liveFont||null;
       lateFontPromise=readyPrepared.lateFont||null;
-    }else if(getFileId(song.xsk)||getFileId(song.xmid)){
+    }else if(getFileId(song.xsk)||getFileId(song.xmid)||
+             (song.pendingDriveLink===true&&(song.xsk?.path||song.xmid?.path))){
       const ready=await boundedPlaybackTask(
         prepareXskPlayback(song,token,controller.signal,message=>{
           if(request===state.requestId)setPlayStatus(message);
