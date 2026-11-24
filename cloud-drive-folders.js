@@ -483,7 +483,7 @@ function createWorkflow(options={}){
     if(chosen?.id&&pending(s)===chosen.id)void rebuild();
   }
   for(const event of ['xstage:auth-ready','xstage:auth-refreshed','xstage:librarychange',
-    'xstage:auth-cleared'])scope.addEventListener?.(event,()=>{render();resume();});
+    'xstage:auth-cleared'])scope.addEventListener?.(event,()=>{render();resume();if($('cloud-import-dialog')?.open&&!busy)void discoverDefaults();});
   scope.addEventListener?.('xstage:drive-sources-open',()=>{
     render();
     if(!busy)void discoverDefaults();
