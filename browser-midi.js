@@ -576,8 +576,8 @@ async function refreshFonts(auth){
   const sequence=++fontRefreshSequence;
   const select=$('xstage-soundfont-select');if(!select)return;
   const sub=auth?.sub||'',rootId=auth?.rootId||'';
-  const chosenFolder=scope.XStageDriveFolders?.readSelections?.(sub,rootId)
-    ?.soundfont?.id||'';
+  const chosen=scope.XStageDriveFolders?.readSelections?.(sub,rootId)?.soundfont;
+  const chosenFolder=chosen?.id||'';
   const sameLibrary=context?.sub===sub&&context?.rootId===rootId&&
     context?.fontFolderId===chosenFolder;
   context={...auth,fontFolderId:chosenFolder};
@@ -606,15 +606,18 @@ async function refreshFonts(auth){
     try{
       // Selected source may contain .sf2/.sf3 files directly, or in
       // SF2/SF3 subfolders. Without a custom choice, retain the old layout.
-      let sourceId=chosenFolder;
+      let sourceId=chosenFolder,sourceName=chosen?.name||'โฟลเดอร์ที่เลือก';
       if(!sourceId){
         const categories=await listFolder(rootId,auth.token);
         const soundFolders=categories.filter(x=>
-          x.name==='SOUNDFONT'&&x.mimeType==='application/vnd.google-apps.folder');
+          String(x.name||'').trim().toLowerCase()==='soundfont'&&x.mimeType==='application/vnd.google-apps.folder');
         if(soundFolders.length>1)fail('พบ SOUNDFONT ซ้ำใน XStageKaraoke');
         sourceId=soundFolders[0]?.id||'';
+        sourceName=soundFolders[0]?.name||'SoundFont';
       }
+      if(!sourceId)fail('ไม่พบโฟลเดอร์ SoundFont ในคลังที่ใช้งาน กรุณาเลือกโฟลเดอร์ SoundFont อีกครั้ง');
       if(sourceId){
+        if(status)status.textContent='กำลังค้นหาใน '+sourceName;
         const all=[],pendingFolders=[sourceId],visited=new Set();
         while(pendingFolders.length){
           if(sequence!==fontRefreshSequence)return;
@@ -639,7 +642,7 @@ async function refreshFonts(auth){
         }
       }
       if(sequence!==fontRefreshSequence)return;
-      if(status)status.textContent='พบ SoundFont '+(choices.length-1)+' ไฟล์';
+      if(status)status.textContent=sourceName+' · พบ SoundFont '+(choices.length-1)+' ไฟล์'+(choices.length===1?' · ตรวจสอบสิทธิ์บัญชีและโฟลเดอร์ที่เลือก':'');
       const storageKey='xstage-font-pref:'+sub+':'+rootId+':'+(chosenFolder||'default');
       let saved='';
       try{saved=localStorage.getItem(storageKey)||(!chosenFolder?localStorage.getItem('xstage-font-pref:'+sub+':'+rootId):'')||'';}catch{}

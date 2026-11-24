@@ -47,13 +47,13 @@ const fakeFetch=async(url,options={})=>{
     const parent=q.match(/'([^']+)' in parents/)?.[1]||'';
     driveParents.push({q,parent});
     const folders=parent==='root'
-      ?[{id:'font-root',name:'SOUNDFONT',mimeType:'application/vnd.google-apps.folder'}]
+      ?[{id:'font-root',name:'SoundFont',mimeType:'application/vnd.google-apps.folder'}]
       :parent==='font-root'
         ?[{id:'sf2-folder',name:'SF2',mimeType:'application/vnd.google-apps.folder'}]
         :parent==='sf2-folder'
           ?[{id:large,name:'Nong SoundFont SF2 (243 MB).sf2',size:String(243*1048576)},
             {id:'compact-37',name:'CT58MGM_V45.sf2',size:String(37*1048576)}, {id:'nested',name:'Custom banks',mimeType:'application/vnd.google-apps.folder'}]
-          :parent==='nested'?[{id:'nested-font',name:'Nested.sf3',size:'12345'}]:[];
+          :parent==='nested'?[{id:'nested-font',name:'Nested.SF3',size:'12345'}]:[];
     return {ok:true,json:async()=>({files:folders})};
   }
   if(url.includes('alt=media')){
