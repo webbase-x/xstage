@@ -7,6 +7,7 @@ This adapter opens DB/songs.sqlite3 read-only and never writes SQLite sidecars.
 from __future__ import annotations
 
 import json
+from contextlib import closing
 import sqlite3
 from pathlib import Path, PurePosixPath
 
@@ -57,7 +58,7 @@ def _validate(db):
 
 def summary(root_value):
     root = shared_root(root_value)
-    with _open_read_only(root) as db:
+    with closing(_open_read_only(root)) as db:
         _validate(db)
         amount = db.execute("SELECT COUNT(*) FROM songs").fetchone()[0]
         duplicates = 0
@@ -101,7 +102,7 @@ def search(root_value, term="", limit=100):
     root = shared_root(root_value)
     limit = max(1, min(MAX_ROWS, int(limit)))
     term = str(term or "").strip()[:120]
-    with _open_read_only(root) as db:
+    with closing(_open_read_only(root)) as db:
         _validate(db)
         if term:
             escaped = term.replace(chr(92), chr(92) * 2).replace("%", chr(92) + "%").replace("_", chr(92) + "_")
@@ -128,7 +129,7 @@ def search(root_value, term="", limit=100):
 def duplicate_report(root_value):
     """Read-only duplicate report; no deletion or destructive deduplication."""
     root = shared_root(root_value)
-    with _open_read_only(root) as db:
+    with closing(_open_read_only(root)) as db:
         _validate(db)
         columns = {row[1] for row in db.execute("PRAGMA table_info(songs)")}
         if "midi_md5" not in columns:
