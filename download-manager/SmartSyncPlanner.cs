@@ -78,3 +78,40 @@ public static class SmartSyncPlanner
         return result;
     }
 }
+
+
+// UI-only formatting: actions describe the plan, not verified completion.
+// Keep relative paths for disambiguation across nested folders.
+public static class SmartSyncPresentation
+{
+    public static string Describe(SyncDecision decision)
+    {
+        var action = decision.Action switch
+        {
+            SyncAction.UploadNew => decision.Note?.Contains("เก็บทั้งสองฉบับ", StringComparison.Ordinal) == true
+                ? "เก็บทั้งสองฉบับ (PC → Drive)" : "อัปโหลดใหม่",
+            SyncAction.DownloadNew => decision.Note?.Contains("เก็บทั้งสองฉบับ", StringComparison.Ordinal) == true
+                ? "เก็บทั้งสองฉบับ (Drive → PC)" : "ดาวน์โหลดใหม่",
+            SyncAction.UploadUpdate => "เขียนทับ (PC → Drive)",
+            SyncAction.DownloadUpdate => "เขียนทับ (Drive → PC)",
+            SyncAction.Conflict => "แจ้งเตือน",
+            SyncAction.ReviewDeletion => "ตรวจสอบไฟล์ที่หาย",
+            SyncAction.Unchanged => "ข้าม",
+            _ => "ตรวจสอบ"
+        };
+        var path = decision.SourcePath is not null &&
+            !string.Equals(decision.SourcePath, decision.RelativePath, StringComparison.Ordinal)
+            ? decision.SourcePath + " → " + decision.RelativePath : decision.RelativePath;
+        var note = decision.Note;
+        if (decision.Action == SyncAction.Unchanged)
+            note = note switch
+            {
+                "รหัส/ขนาดตรงกัน · ข้าม" => "รหัส/ขนาดตรงกัน (ยังไม่ยืนยันเนื้อหา)",
+                "SHA-256 ตรงกัน · ข้าม" => "เนื้อหาเหมือนกัน (SHA-256 ตรงกัน)",
+                null => null,
+                _ => note
+            };
+        if (note == "ปรับชื่อสำเนา") note = null; // The displayed path change is sufficient.
+        return action + " · " + path + (string.IsNullOrWhiteSpace(note) ? "" : " · " + note);
+    }
+}

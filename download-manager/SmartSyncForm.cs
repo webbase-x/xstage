@@ -285,10 +285,19 @@ public sealed class SmartSyncForm : Form
         var down = plan.Decisions.Count(d => d.Action is SyncAction.DownloadNew or SyncAction.DownloadUpdate);
         var replacements = plan.Decisions.Count(d => d.Action is SyncAction.UploadUpdate or SyncAction.DownloadUpdate);
         var matchLabel = plan.Mode == SmartSyncMode.Fast ? "ชื่อ/ขนาดตรงกัน (ยังไม่ตรวจเนื้อหา)" : "ไฟล์เหมือนกัน";
-        _status.Text = $"{matchLabel} {s.Identical:N0} · ใหม่ PC→Drive {up:N0} · Drive→PC {down:N0} · ทับ {replacements:N0} · ตรวจสอบ {s.Review:N0} · ส่งแล้ว {copied:N0}";
-        _review.Lines = plan.Decisions.Where(d => d.Action != SyncAction.Unchanged).Take(500)
-            .Select(d => d.Action + "   " + (d.SourcePath is null ? "" : d.SourcePath + " → ") + d.RelativePath + (d.Note is null ? "" : " · " + d.Note))
-            .Prepend("รายการตัวอย่างสูงสุด 500 ไฟล์ · SQLite/sidecar ที่ข้าม: " + plan.DatabaseReviewCount).ToArray();
+        _status.Text = $"{matchLabel} {s.Identical:N0} · แผน PC→Drive {up:N0} · Drive→PC {down:N0} · ทับ {replacements:N0} · ตรวจสอบ {s.Review:N0} · ส่งแล้ว {copied:N0}";
+        // Show conflicts and planned replacements before regular transfers;
+        // keep skipped entries available in the preview when space remains.
+        _review.Lines = plan.Decisions.OrderBy(d => d.Action switch
+            {
+                SyncAction.Conflict or SyncAction.ReviewDeletion => 0,
+                SyncAction.UploadUpdate or SyncAction.DownloadUpdate => 1,
+                SyncAction.Unchanged => 3,
+                _ => 2
+            }).Take(500)
+            .Select(SmartSyncPresentation.Describe)
+            .Prepend("แผนรับส่ง (ไม่ใช่ผลสำเร็จรายไฟล์) · ตัวอย่างสูงสุด 500 รายการ · SQLite/sidecar ที่ข้าม: " +
+                plan.DatabaseReviewCount).ToArray();
     }
 
     private async Task RunAsync(bool transfer)

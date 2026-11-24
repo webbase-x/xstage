@@ -52,7 +52,22 @@ internal static class SmartSyncFolderTests
             File.WriteAllText(Path.Combine(songPc, "a00002.xmid"), "new content");
             File.WriteAllText(Path.Combine(songDrive, "a00002 (2).xmid"), "old");
             File.WriteAllText(Path.Combine(songDrive, "00003 (1).xmid"), "new song");
+            File.WriteAllText(Path.Combine(songPc, "00005.xmid"), "new plain");
             var songPlan = SmartSyncFolders.Scan(songPc, songDrive, SmartSyncDirection.Both, default, null, SmartSyncMode.Fast);
+            var plain = songPlan.Decisions.Single(d => d.Action == SyncAction.UploadNew && d.RelativePath == "00005.xmid");
+            var renamed = songPlan.Decisions.Single(d => d.Action == SyncAction.DownloadNew && d.RelativePath == "00003.xmid");
+            if (plain.Note is not null || SmartSyncPresentation.Describe(plain) != "อัปโหลดใหม่ · 00005.xmid" ||
+                SmartSyncPresentation.Describe(renamed) != "ดาวน์โหลดใหม่ · 00003 (1).xmid → 00003.xmid")
+                throw new Exception("Sync preview must show a path arrow only for an actual name change");
+            if (SmartSyncPresentation.Describe(new SyncDecision("0/00001.xmid", SyncAction.Unchanged,
+                Note: "รหัส/ขนาดตรงกัน · ข้าม")) != "ข้าม · 0/00001.xmid · รหัส/ขนาดตรงกัน (ยังไม่ยืนยันเนื้อหา)" ||
+                !SmartSyncPresentation.Describe(new SyncDecision("00001.xmid", SyncAction.Conflict,
+                    Note: "SHA-256 ต่างกัน")).StartsWith("แจ้งเตือน · ") ||
+                !SmartSyncPresentation.Describe(new SyncDecision("00001.xmid", SyncAction.UploadUpdate,
+                    Note: "ทับพร้อมสำรอง")).StartsWith("เขียนทับ (PC → Drive) · ") ||
+                !SmartSyncPresentation.Describe(new SyncDecision("00001_hash.xmid", SyncAction.UploadNew,
+                    "00001.xmid", Note: "เก็บทั้งสองฉบับ")).StartsWith("เก็บทั้งสองฉบับ (PC → Drive) · "))
+                throw new Exception("Sync preview action labels regressed");
             if (!songPlan.Decisions.Any(d => d.Action == SyncAction.Conflict && d.Note!.Contains("SHA-256")) ||
                 songPlan.Decisions.Any(d => d.Action == SyncAction.DownloadNew && d.RelativePath.Contains("00001")) ||
                 !songPlan.Decisions.Any(d => d.Action == SyncAction.DownloadNew && d.RelativePath == "00003.xmid"))

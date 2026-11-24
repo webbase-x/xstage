@@ -256,7 +256,10 @@ public static class SmartSyncFolders
                     if (candidates.Length == 0)
                     {
                         var name = Regex.Replace(Path.GetFileName(source.RelativePath), @"(?: ?\([0-9]+\))+(?=\.xmid$)", "", RegexOptions.IgnoreCase);
-                        New(InFolder(source.RelativePath, name), source.Fingerprint, "รหัสใหม่ · ตัดวงเล็บสำเนา");
+                        var destination = InFolder(source.RelativePath, name);
+                        New(destination, source.Fingerprint,
+                            string.Equals(source.RelativePath, destination, StringComparison.Ordinal)
+                                ? null : "ปรับชื่อสำเนา");
                         continue;
                     }
                     var sameSize = candidates.Where(t => t.Entry.Fingerprint.Size == source.Fingerprint.Size).ToArray();
