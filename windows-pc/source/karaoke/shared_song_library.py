@@ -33,10 +33,10 @@ def validate_shared(root):
             metadata.get("kind") != "snapshot"):
             raise ValueError(
                 "ฐานเพลงยังไม่ใช่ SQLite สำหรับ PC/Online ร่วมกัน "
-                "ให้เปิด Karaoke Online > จัดการคลัง > สร้างฐานใหม่สำหรับ PC/Online")
+                "ใช้เมนู สร้างฐานใหม่สำหรับ PC / Online ได้ทั้งใน Karaoke PC หรือ Karaoke Online")
         cols = {row[1] for row in db.execute("PRAGMA table_info(songs)")}
         if not REQUIRED.issubset(cols):
-            raise ValueError("ฐานร่วมมีคอลัมน์ไม่ครบ กรุณาสร้างฐานใหม่จาก Karaoke Online")
+            raise ValueError("ฐานร่วมมีคอลัมน์ไม่ครบ กรุณาสร้างฐานใหม่จาก Karaoke PC หรือ Karaoke Online")
         if db.execute("PRAGMA quick_check(1)").fetchone()[0] != "ok":
             raise ValueError("ฐานร่วม SQLite ไม่สมบูรณ์ หยุดอ่านเพื่อป้องกันเพลงผิดรายการ")
     return root
@@ -165,9 +165,9 @@ class SharedSongLibrary:
     @staticmethod
     def _cloud_owned(*args, **kwargs):
         raise ValueError(
-            "ฐานเพลงร่วมสร้างจาก Karaoke Online เท่านั้น "
-            "ให้ส่งไฟล์ผ่าน Google Drive แล้วกดสร้าง/อัปเดตฐานบนเว็บ "
-            "ไม่เพิ่มรายการที่ไม่มี Drive File ID ลง SQLite")
+            "ฐานเพลงร่วมต้องสร้างใหม่เป็นชุดผ่านเมนู สร้างฐานใหม่สำหรับ PC / Online "
+            "บน Karaoke PC หรือ Karaoke Online เท่านั้น ไม่แก้แถวเพลงเดี่ยว "
+            "ส่งไฟล์ใหม่ผ่าน Google Drive และตรวจรายการก่อนสร้าง SQLite")
 
     edit = _cloud_owned
     add_files = _cloud_owned
