@@ -56,6 +56,9 @@ const sandbox={
     }
   }}
 };
+sandbox.window.XStageBrowserMidi=sandbox.XStageBrowserMidi;
+sandbox.renderWithSoundFontRecovery=async(bytes,bank,token,{signal})=>
+  sandbox.XStageBrowserMidi.render(bytes,{fontBytes:bank,signal});
 vm.runInNewContext(source,sandbox,{filename:'app-xsk-queue.js'});
 const prefetch=sandbox.preloadFirstQueueSong;
 const schedule=sandbox.scheduleQueuePreload;
