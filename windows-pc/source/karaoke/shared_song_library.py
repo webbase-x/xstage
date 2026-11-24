@@ -54,9 +54,23 @@ class SharedReader(SearchReader):
         self._count = None
         from collections import OrderedDict
         self._cache = OrderedDict()
+        self._file_signature = library.file_signature()
+
+    def _refresh_if_changed(self):
+        signature=self.library.file_signature()
+        if signature==self._file_signature:
+            return
+        validate_shared(self.library.root)
+        self.db.close()
+        self.db=_open_read_only(self.library.root)
+        self.db.create_function("xstage_rank",4,self.library._rank,deterministic=True)
+        self._file_signature=signature
+        self._version=self._count=None
+        self._cache.clear()
 
     def search(self, text="", favorite=False, limit=1000,
                playable_only=False, cancelled=None):
+        self._refresh_if_changed()
         # Local favorites are a per-device presentation preference; never
         # modify a shared cloud music catalog just because PC marked a star.
         fetch_limit = 5000 if favorite else limit
@@ -78,6 +92,10 @@ class SharedSongLibrary:
         self.save_settings = save_settings
         from .library import search_rank
         self._rank = search_rank
+
+    def file_signature(self):
+        stat=self.path.stat()
+        return (stat.st_ino,stat.st_size,stat.st_mtime_ns)
 
     def _visible(self, row):
         row = dict(row)
