@@ -391,10 +391,8 @@
         <h3 id="xstage-drive-sources-title">เลือกแหล่งข้อมูลบน Google Drive</h3>
         <p>เข้าสู่ระบบ Google ครั้งเดียว แล้วเลือกโฟลเดอร์เพลง, SoundFont และ FX แยกกัน · จำ Folder ID เฉพาะบัญชีและคลังนี้ · ไม่ย้ายหรือลบไฟล์เดิม</p>
         <div class="xstage-drive-build-controls">
-          <button id="xstage-drive-read-all" type="button" disabled>อนุญาตอ่านไฟล์ทั้งหมดบน Google Drive</button>
           <button id="xstage-drive-scan-counts" type="button" disabled>ตรวจนับไฟล์ทุกโฟลเดอร์</button>
         </div>
-        <p id="xstage-drive-read-status" role="status" aria-live="polite">ตรวจสอบสิทธิ์อ่าน Google Drive</p>
         <div class="xstage-drive-source-list">
           <div class="xstage-drive-source-row">
             <div><strong>เพลง XMID / XSK</strong><output id="xstage-drive-folder-music-name">ยังไม่เลือกโฟลเดอร์</output></div>
@@ -405,7 +403,9 @@
             <div><strong>SoundFont (SF2 / SF3)</strong><output id="xstage-drive-folder-soundfont-name">ยังไม่เลือกโฟลเดอร์</output></div>
             <button id="xstage-drive-folder-soundfont" type="button" disabled>เลือกโฟลเดอร์ SoundFont</button>
             <output id="xstage-drive-count-soundfont" role="status" aria-live="polite"></output>
-            <button id="xstage-soundfont-authorize" type="button" hidden style="display:none">อนุญาตไฟล์ที่ Google ยังไม่เปิดสิทธิ์</button>
+            <button id="xstage-drive-read-all" type="button" disabled>อนุญาตอ่านไฟล์ทั้งหมดบน Google Drive</button>
+            <p id="xstage-drive-read-status" role="status" aria-live="polite">ตรวจสอบสิทธิ์อ่าน Google Drive</p>
+            <button id="xstage-soundfont-authorize" type="button" hidden style="display:none">อนุญาตไฟล์ SoundFont ที่ยังขาด (Google Picker)</button>
             <output id="xstage-drive-font-permission-status" role="status" aria-live="polite"></output>
           </div>
           <div class="xstage-drive-source-row">
@@ -531,14 +531,14 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="xmid-browser.js?v=1186-optional-artist" defer></script>
   <script src="memory-budget.js?v=1137" defer></script>
   <script src="ios-midi-audio.js?v=1151-queue-handoff-1168-screen-wake" defer></script>
-  <script src="browser-midi.js?v=1200-drive-readonly" defer></script>
+  <script src="browser-midi.js?v=1201-soundfont-all" defer></script>
   <script src="midi-pro-engine.js?v=1137-playback-restore-1168-screen-wake" defer></script>
   <script src="video-metadata-editor.js?v=1138-verified-video-selection" defer></script>
   <script src="video-transcode.js?v=1137" defer></script>
   <script src="cloud-import.js?v=1198-source-dialog" defer></script>
   <script src="cloud-drive-folders.js?v=7-file-counts" defer></script>
   <script src="tv-refresh.js?v=1144" defer></script>
-  <script src="app.js?v=1200-drive-readonly" defer></script><script src="pc-extensions.js?v=1190-selected-drive-fx" defer></script>
+  <script src="app.js?v=1201-soundfont-all" defer></script><script src="pc-extensions.js?v=1190-selected-drive-fx" defer></script>
   <script src="midi-keyboard-ui.js?v=1137-clean-title-1157-top-song-key-single-menu" defer></script>
   <script src="native-audio-meter.js?v=1144-live-stage-eq" defer></script>
   <script src="stage-controls.js?v=1137-monitor-only-eq" defer></script>

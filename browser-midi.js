@@ -563,12 +563,15 @@ async function listFolder(parent,token){
   const list=[],seenPages=new Set();let page='';
   do{
     const q=new URLSearchParams({q:"'"+parent+"' in parents and trashed=false",
-      fields:'nextPageToken,files(id,name,mimeType,size,version,md5Checksum)',pageSize:'1000',supportsAllDrives:'true',includeItemsFromAllDrives:'true'});
+      fields:'nextPageToken,incompleteSearch,files(id,name,mimeType,size,version,md5Checksum)',pageSize:'1000',supportsAllDrives:'true',includeItemsFromAllDrives:'true'});
     if(page)q.set('pageToken',page);
     const response=await fetch('https://www.googleapis.com/drive/v3/files?'+q,
       {headers:{Authorization:'Bearer '+token},cache:'no-store'});
     if(!response.ok)fail('อ่านรายการ SoundFont บน Drive ไม่สำเร็จ HTTP '+response.status);
-    const json=await response.json();list.push(...(json.files||[]));page=json.nextPageToken||'';
+    const json=await response.json();
+    if(json.incompleteSearch)fail('Google Drive รายงานว่าค้นหาไม่ครบ');
+    if(!Array.isArray(json.files))fail('Google Drive ส่งรายการไฟล์ไม่ถูกต้อง');
+    list.push(...json.files);page=json.nextPageToken||'';
     if(page&&seenPages.has(page))fail('Google Drive ส่งหน้ารายการซ้ำ');
     if(page)seenPages.add(page);
   }while(page);
@@ -644,7 +647,7 @@ async function refreshFonts(auth){
           }
         }
         const seenIds=new Set();
-        for(const f of all.filter(x=>/\.sf[23]$/i.test(x.name))){
+        for(const f of all.filter(x=>/\.sf[23]$/i.test(x.name)&&x.mimeType!=='application/vnd.google-apps.shortcut').sort((a,b)=>String(a.name).localeCompare(String(b.name)))){
           if(seenIds.has(f.id))continue;
           seenIds.add(f.id);
           const option=new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id);
@@ -655,9 +658,13 @@ async function refreshFonts(auth){
       }
       if(sequence!==fontRefreshSequence)return;
       const count=choices.length-1;
+      const fullRead=!!scope.XStageDriveReadAccess?.();
       const summary=sourceName+' · พบ SoundFont '+count+' ไฟล์';
-      if(status)status.textContent=summary+(count===0?' · ตรวจสอบในเมนูจัดการคลัง Google Drive':'');
-      showPermission(!scope.XStageDriveReadAccess?.()&&count===0&&!!chosenFolder,summary+(count===0?(chosenFolder?' · หากมีไฟล์อยู่ ให้เปิดสิทธิ์เฉพาะไฟล์ที่จำเป็น':' · เลือกโฟลเดอร์ SoundFont เพื่อยืนยันแหล่งข้อมูล'):' · พร้อมเลือกใช้งานจากเมนู SoundFont'));
+      const accessHint=fullRead?' · ตรวจครบในโฟลเดอร์ที่เลือก':
+        ' · เฉพาะไฟล์ที่ Google อนุญาต อาจยังไม่ครบ';
+      if(status)status.textContent=summary+accessHint+(!fullRead?' · เปิดสิทธิ์เพิ่มเติมในเมนูจัดการคลัง':'');
+      showPermission(!fullRead&&!!chosenFolder,summary+accessHint+
+        (!fullRead?' · กดอนุญาตอ่านทุกไฟล์ หรืออนุญาตไฟล์ที่ขาด':' · พร้อมเลือกใช้งานจากเมนู SoundFont'));
       const storageKey='xstage-font-pref:'+sub+':'+rootId+':'+(chosenFolder||'default');
       let saved='';
       try{saved=localStorage.getItem(storageKey)||(!chosenFolder?localStorage.getItem('xstage-font-pref:'+sub+':'+rootId):'')||'';}catch{}
@@ -669,9 +676,9 @@ async function refreshFonts(auth){
       // A selected GM bank sounds like actual instruments; the old
       // no-SoundFont fallback used raw oscillators (8-bit game sound).
       // Prefer the user's saved bank, then a complete-looking GM/GS bank.
-      const savedChoice=eligible.find(option=>option.value===saved);
+      const savedChoice=choices.slice(1).find(option=>option.value===saved);
       const savedTooLarge=!!savedChoice&&
-        Number(savedChoice.dataset.size)>FAST_START_FONT_MAX_BYTES;
+        (Number(savedChoice.dataset.size)>FAST_START_FONT_MAX_BYTES||!eligible.includes(savedChoice));
       // Include common complete-GM bank names such as CT56MGM_V45.
       // A larger GM SoundFont can sound fuller than the 6 MB starter bank,
       // but never auto-select a collection that appears single-instrument.
@@ -692,7 +699,7 @@ async function refreshFonts(auth){
         :'';
       fontStatusChanged();
       // Save automatic choice so subsequent sessions retain the same bank.
-      if(autoChoice){try{localStorage.setItem(storageKey,selected);}catch{}}
+      if(autoChoice&&!saved){try{localStorage.setItem(storageKey,selected);}catch{}}
       select.onchange=()=>{
         selected=select.value;fontCache=null;fontLoadPromise=null;fontWarning='';fontStatusChanged();
         try{localStorage.setItem(storageKey,selected);}catch{}

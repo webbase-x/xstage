@@ -15,7 +15,7 @@ for(const id of ['xstage-drive-folder-music','xstage-drive-folder-soundfont',
   assert.ok(html.includes('id="'+id+'"'),'Missing media source control: '+id);
 assert.ok(html.includes('cloud-drive-folders.js?v=')&&
   html.includes('pc-extensions.js?v=1190-selected-drive-fx')&&
-  html.includes('browser-midi.js?v=1200-drive-readonly'),
+  html.includes('browser-midi.js?v=1201-soundfont-all'),
   'Page must load updated Drive folder, SoundFont and FX implementations');
 assert.ok(app.includes('async function chooseUserDriveFolder(kind)')&&
   app.includes('.setSelectFolderEnabled(!authorizeFiles)')&&
@@ -57,7 +57,7 @@ assert.ok(sourcePanel.includes('id="xstage-soundfont-authorize" type="button" hi
 assert.ok(app.includes("chooseUserDriveSource('soundfont',true,choice.id)")&&app.includes('view.setParent(parentId)'));
 assert.ok(app.includes('browseAuthorizedDriveFolders({')&&app.includes('list:async id=>')&&app.includes('if(result?.grant&&sameSession())return chooseUserDriveSource(kind)'));
 assert.ok(app.includes("escapeButton.addEventListener('click',()=>finish(null))"));
-assert.ok(soundfont.includes('showPermission(!scope.XStageDriveReadAccess?.()&&count===0&&!!chosenFolder'));
+assert.ok(soundfont.includes('showPermission(!fullRead&&!!chosenFolder'));
 assert.ok(importer.includes('xstage:drive-sources-open')&&settings.includes('xstage:drive-sources-open'));
 assert.ok(html.includes('id="xstage-drive-read-all"')&&html.includes('id="xstage-drive-scan-counts"'));
 assert.ok(app.includes('ensureImporterGoogleAuth(true,true,true)')&&app.includes('grantedDriveReadAndWrite(newToken)'));

@@ -32,7 +32,7 @@ const select={
   get selectedOptions(){return this.options.filter(x=>x.value===this.value);}
 };
 const permission={hidden:true,style:{display:'none'}},sourceStatus={textContent:''};
-let explicitFolder='';
+let explicitFolder='',fullRead=false;
 const saved=new Map([['xstage-font-pref:account:root',large]]);
 const fakeFetch=async(url,options={})=>{
   url=String(url);
@@ -67,6 +67,7 @@ const fakeFetch=async(url,options={})=>{
 const ctx={
   navigator:{deviceMemory:8},
   document:{getElementById:id=>id==='xstage-soundfont-select'?select:id==='xstage-soundfont-authorize'?permission:id==='xstage-drive-font-permission-status'?sourceStatus:null},
+  XStageDriveReadAccess:()=>fullRead,
   XStageDriveFolders:{readSelections:()=>explicitFolder?{soundfont:{id:explicitFolder,name:'Selected'}}:{}},
   localStorage:{getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v)},
   fetch:fakeFetch,Option,CustomEvent,
@@ -104,10 +105,14 @@ assert.equal(midi.isFastGmBytes(quick),true);
 assert.equal(permission.hidden,true,'Already accessible SoundFonts require no extra grant');
 explicitFolder='empty-folder';
 await midi.refreshFonts(auth);
-assert.equal(permission.hidden,false,'Only empty explicit source offers the permission recovery');
+assert.equal(permission.hidden,false,'An empty explicit source offers permission recovery');
 assert.match(sourceStatus.textContent,/พบ SoundFont 0 ไฟล์/);
 explicitFolder='font-root';
 await midi.refreshFonts(auth);
-assert.equal(permission.hidden,true,'Successful scan hides permission recovery again');
+assert.equal(permission.hidden,false,'A nonempty but limited scan still offers permission recovery');
+assert.match(sourceStatus.textContent,/อาจยังไม่ครบ/);
+fullRead=true;
+await midi.refreshFonts(auth);
+assert.equal(permission.hidden,true,'Verified full read hides permission recovery');
 assert.ok(select.options.some(option=>option.value==='nested-font'));
 console.log('PASS: 243 MB saved SF2 cannot block first MIDI; validated 6 MB GM bank is reused');

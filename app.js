@@ -903,6 +903,14 @@ const DRIVE_READ_SCOPE='https://www.googleapis.com/auth/drive.readonly';
 const DRIVE_FILE_SCOPE='https://www.googleapis.com/auth/drive.file';
 let fullDriveReadToken='';
 function hasFullDriveRead(){return !!state.token&&fullDriveReadToken===state.token;}
+function rememberedFullDriveRead(sub){
+  if(!sub)return false;
+  try{return localStorage.getItem('xstage-drive-read-consent:'+sub)==='1';}catch{return false;}
+}
+function rememberFullDriveRead(sub){
+  if(!sub)return;
+  try{localStorage.setItem('xstage-drive-read-consent:'+sub,'1');}catch{}
+}
 function grantedDriveReadAndWrite(result){
   const scopes=new Set(String(result?.scope||'').split(/\s+/));
   return scopes.has(DRIVE_READ_SCOPE)&&scopes.has(DRIVE_FILE_SCOPE);
@@ -2025,7 +2033,7 @@ function applyInstantCatalog(instant){
   return true;
 }
 
-async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseExistingSession=!!expectedSub) {
+async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseExistingSession=!!expectedSub, fullReadGranted=false) {
   setStatus('กำลังยืนยันบัญชี Google…');
   const accountResult = await googleFetch('https://openidconnect.googleapis.com/v1/userinfo', {headers:requestHeaders(token),cache:'no-store'},'Google Account');
   if (!accountResult.ok) throw driveError(accountResult.status,'ข้อมูลบัญชี Google');
@@ -2037,6 +2045,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
   // A new short-lived token for the SAME account must not reset the player,
   // downloaded audio, search results or queue. Only the credential changes.
   if (reuseExistingSession && state.token && state.accountSub===account.sub && state.libraryRootId && !isRetiredDriveRoot(state.libraryRootId)) {
+    if(fullReadGranted){fullDriveReadToken=token;rememberFullDriveRead(account.sub);}
     state.token=token;
     state.tokenExpiresAt=tokenExpiresAt;
     rememberVerifiedGoogleAccount(account);
@@ -2054,6 +2063,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
   if(state.accountSub && state.accountSub!==account.sub)resetPrivate({revoke:false,keepAuth:true});
   if(state.token && state.token!==token)state.catalogCache.clear();
   // Authentication is complete. Activate the account immediately.
+  if(fullReadGranted){fullDriveReadToken=token;rememberFullDriveRead(account.sub);}
   state.token=token;
   state.tokenExpiresAt=tokenExpiresAt;
   state.accountSub=account.sub;
@@ -2383,9 +2393,11 @@ function login({automatic=false,remembered=false} = {}) {
     setStatus('กำลังรอ Google ยืนยันสิทธิ์ · หากหน้าต่าง Google ปิดแล้วสามารถกดเข้าสู่ระบบอีกครั้ง');
   },12_000);
   try {
+    const knownAccount=(automatic||remembered)?rememberedGoogleAccount():null;
+    const restoreRead=rememberedFullDriveRead(knownAccount?.sub);
     const client = google.accounts.oauth2.initTokenClient({
       client_id:cfg.googleClientId,
-      scope:'openid email https://www.googleapis.com/auth/drive.file',
+      scope:'openid email https://www.googleapis.com/auth/drive.file'+(restoreRead?' '+DRIVE_READ_SCOPE:''),
       include_granted_scopes:false,
       callback: async result => {
         if(authId!==state.authId||settled)return;
@@ -2401,9 +2413,11 @@ function login({automatic=false,remembered=false} = {}) {
         // Do not reset a playing track until the new Google account is verified.
         const expiresIn=Number(result.expires_in);
         const expiresAt=Date.now()+Math.max(0,Math.min(3600,Number.isFinite(expiresIn)?expiresIn:3600))*1000;
-        savePendingAuth(result.access_token,expiresAt);
-        const known=(automatic||remembered)?rememberedGoogleAccount():null;
-        try { await openDrive(result.access_token,authId,expiresAt,known?.sub||'',true); }
+        const fullReadGranted=restoreRead&&grantedDriveReadAndWrite(result);
+        // Never persist a broad-scope token in the pending login store.
+        if(!restoreRead)savePendingAuth(result.access_token,expiresAt);
+        const known=knownAccount;
+        try { await openDrive(result.access_token,authId,expiresAt,known?.sub||'',true,fullReadGranted); }
         catch (e) {
           if (authId === state.authId) {
             if(state.awaitingSharedLibrary){
@@ -5170,7 +5184,7 @@ async function ensureImporterGoogleAuth(force=false,interactive=false,readAll=fa
             include_granted_scopes:false,
             callback:result=>{
               if(result?.error||!result?.access_token)
-                settle(Error('Google ต้องการการยืนยันสิทธิ์อีกครั้ง'));
+                settle(Error(googleAuthErrorMessage(result)));
               else settle(null,result);
             },
             error_callback:()=>settle(Error('Google ต้องการให้ผู้ใช้ยืนยันสิทธิ์อีกครั้ง'))
@@ -5203,6 +5217,7 @@ async function ensureImporterGoogleAuth(force=false,interactive=false,readAll=fa
       if(requestRead&&!grantedDriveReadAndWrite(newToken))
         throw Error('Google ยังไม่ได้อนุญาตทั้งการอ่านไฟล์ทั้งหมดและสิทธิ์ไฟล์ของแอป · สิทธิ์เดิมยังใช้ได้');
       fullDriveReadToken=requestRead?newToken.access_token:'';
+      if(requestRead)rememberFullDriveRead(expectedSub);
       state.token=newToken.access_token;
       state.tokenExpiresAt=expiresAt;
       saveActiveAuth(state.token,expiresAt,expectedSub);
@@ -5210,6 +5225,9 @@ async function ensureImporterGoogleAuth(force=false,interactive=false,readAll=fa
       importerGoogleRenewalRetryAfter=0;
       window.dispatchEvent(new CustomEvent('xstage:auth-refreshed',
         {detail:{sub:expectedSub,source:'importer-auto-renew'}}));
+      if(!readAll&&state.libraryRootId)void window.XStageBrowserMidi?.refreshFonts({
+        token:state.token,sub:expectedSub,rootId:state.libraryRootId,ownedByMe:state.libraryRootOwnedByMe
+      }).catch(error=>console.warn('SoundFont renewed token:',error.message));
       return true;
     }catch(error){
       importerGoogleRenewalRetryAfter=Date.now()+60000;

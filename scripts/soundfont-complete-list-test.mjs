@@ -1,0 +1,37 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const code=fs.readFileSync(new URL('../browser-midi.js',import.meta.url),'utf8');
+const sizes=[230569982,172456754,255310812,99663650,45605786,15873406,38651222];
+const files=sizes.map((size,i)=>({id:'bank-'+i,name:'Bank '+i+(i%2?'.sf2':'.SF2'),size:String(size),mimeType:'application/octet-stream'}));
+let full=false,pages=[],privateDownloads=0;
+const select={options:[],value:'',replaceChildren(...items){this.options=items;this.value=items[0]?.value||'';},get selectedOptions(){return this.options.filter(x=>x.value===this.value);}};
+const permission={hidden:true,style:{}},status={textContent:''};
+class Option{constructor(text,value){this.text=text;this.value=value;this.dataset={};}}
+const ctx={navigator:{deviceMemory:2},document:{getElementById:id=>({'xstage-soundfont-select':select,'xstage-soundfont-authorize':permission,'xstage-drive-font-permission-status':status})[id]},
+ XStageDriveReadAccess:()=>full,XStageDriveFolders:{readSelections:()=>({soundfont:{id:'selectedFolder',name:'SoundFont'}})},localStorage:{getItem:()=>null,setItem(){}},
+ Option,CustomEvent:class{},URLSearchParams,Uint8Array,ArrayBuffer,DataView,TextEncoder,TextDecoder,Blob,DOMException,setTimeout,clearTimeout,console,dispatchEvent(){},addEventListener(){},
+ fetch:async(url,opts)=>{
+   if(String(url).includes('raw.githubusercontent.com'))return {ok:false,status:503};
+   if(String(url).includes('alt=media')){privateDownloads++;throw Error('inventory must not download private banks');}
+   const params=new URL(String(url)).searchParams;
+   assert.equal(opts.headers.Authorization,'Bearer test-token');
+   assert.match(params.get('q'),/'selectedFolder' in parents/);
+   pages.push(params.get('pageToken')||'first');
+   return {ok:true,json:async()=>!full?{files:[files[0]]}:params.get('pageToken')?{files:[...files.slice(3),files[0]]}:{files:files.slice(0,3),nextPageToken:'next'}};
+ }};
+ctx.window=ctx;vm.runInNewContext(code,ctx);
+const auth={token:'test-token',sub:'account',rootId:'activeRoot'};
+await ctx.XStageBrowserMidi.refreshFonts(auth);
+assert.equal(select.options.length,2);
+assert.equal(permission.hidden,false);
+assert.match(status.textContent,/อาจยังไม่ครบ/);
+full=true;pages=[];
+await ctx.XStageBrowserMidi.refreshFonts(auth);
+assert.equal(select.options.length,8,'Seven banks plus builtin, even on 2GB device');
+assert.equal(new Set(select.options.map(x=>x.value)).size,8);
+assert.deepEqual(pages,['first','next']);
+assert.equal(permission.hidden,true);
+assert.match(status.textContent,/พบ SoundFont 7 ไฟล์/);
+assert.equal(privateDownloads,0);
+console.log('PASS: all seven paginated SoundFonts remain listed independently of RAM; limited scope remains visible');
