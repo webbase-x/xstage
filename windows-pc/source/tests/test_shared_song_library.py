@@ -1,5 +1,6 @@
 """The Online SQLite is the Karaoke PC's primary song registry in Drive mode."""
 import hashlib
+from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
@@ -19,7 +20,7 @@ class SharedSongLibraryTests(unittest.TestCase):
         self.file.parent.mkdir(parents=True)
         self.file.write_bytes(b"Xmid-test-placeholder")
         self.database = self.root / "DB/songs.sqlite3"
-        with sqlite3.connect(self.database) as db:
+        with closing(sqlite3.connect(self.database)) as db:
             db.executescript("""
                 CREATE TABLE catalog_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
                 INSERT INTO catalog_meta VALUES('format','xstage-sqlite3-v1');
@@ -55,7 +56,8 @@ class SharedSongLibraryTests(unittest.TestCase):
         self.assertEqual(library.search("เพลง")[0]["id"],1417)
         self.assertEqual(library.search("00001")[0]["code"],"00001")
         self.assertEqual(library.get(1417)["path"],str(self.file.resolve()))
-        self.assertEqual(library.open_reader().warm_up(),1)
+        with closing(library.open_reader()) as reader:
+            self.assertEqual(reader.warm_up(),1)
         library.favorite(1417)
         self.assertEqual(library.search("เพลง",favorite=True)[0]["id"],1417)
         self.assertEqual(original,hashlib.sha256(self.database.read_bytes()).hexdigest())
