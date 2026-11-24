@@ -55,28 +55,28 @@ async function verifyFolder(drive,id,root,kind){
 }
 // Metadata only; do not download, copy or modify any file during inventory.
 async function countSourceFiles(drive,start,check=()=>{},collect=null){
-  const folders=[{id:start,depth:0}],visited=new Set(),files=new Set();
+  const folders=[{id:start,depth:0,path:''}],visited=new Set(),files=new Set();
   const counts={total:0,xmid:0,xsk:0,sf2:0,sf3:0,fx:0,other:0};
   while(folders.length){
     check();
     const batch=[];
     while(folders.length&&batch.length<4){
-      const {id,depth}=folders.shift();
+      const {id,depth,path}=folders.shift();
       if(!isId(id)||retired.has(id))fail('พบโฟลเดอร์ที่ไม่อนุญาต');
       if(visited.has(id))continue;
       visited.add(id);
       if(visited.size>MAX_FOLDERS)fail('จำนวนโฟลเดอร์เกินขอบเขต');
-      batch.push({id,depth});
+      batch.push({id,depth,path});
     }
     const pages=await Promise.all(batch.map(x=>drive.listChildren(x.id)));
     check();
     for(let page=0;page<pages.length;page++){
-      const {depth}=batch[page];
+      const {depth,path}=batch[page];
       for(const item of pages[page]){
       if(!isId(item.id)||retired.has(item.id))fail('พบ File ID ที่ไม่อนุญาต');
       if(item.mimeType===FOLDER){
         if(depth>=MAX_DEPTH)fail('โครงสร้างโฟลเดอร์ลึกเกินขอบเขต');
-        folders.push({id:item.id,depth:depth+1});
+        folders.push({id:item.id,depth:depth+1,path:path+item.name+'/'});
         continue;
       }
       if(files.has(item.id))continue;
@@ -86,7 +86,7 @@ async function countSourceFiles(drive,start,check=()=>{},collect=null){
       const name=String(item.name||'');
       const ext=name.split('.').pop().toLowerCase();
       if(item.mimeType==='application/vnd.google-apps.shortcut')counts.other++;
-      else if(['xmid','xsk','sf2','sf3'].includes(ext)){counts[ext]++;if(ext==='xmid'||ext==='xsk')collect?.({...item,ext});}
+      else if(['xmid','xsk','sf2','sf3'].includes(ext)){counts[ext]++;if(ext==='xmid'||ext==='xsk')collect?.({...item,ext,relative:path+name});}
       else if(/^audio\//.test(item.mimeType||'')||/\.(wav|mp3|m4a|aac|ogg|flac|opus)$/i.test(name))counts.fx++;
       else counts.other++;
       }
@@ -188,11 +188,28 @@ async function inspectPackage(drive,file,check){
 const packageSignature=file=>/^[a-f0-9]{32}$/i.test(file?.md5Checksum||'')&&Number.isSafeInteger(Number(file.size))&&Number(file.size)>0
   ?String(file.md5Checksum).toLowerCase()+':'+Number(file.size):'';
 // Only trust rows whose source is still present with the same package checksum and size.
-function verifiedPackageRows(files,rows){
-  const byId=new Map(files.map(file=>[file.id,file])),known=new Map();
+function packagePathIndex(files){
+  const map=new Map();
+  for(const file of files){
+    if(typeof file.relative!=='string')continue;
+    const path='SONGS/'+file.relative;
+    map.set(path,map.has(path)?null:file);
+  }
+  return map;
+}
+function matchingPackageFile(row,byId,byPath){
+  const media=row.xmid||row.xsk;
+  if(!media)return null;
+  const sig=packageSignature(media);
+  const file=media.fileId?byId.get(media.fileId):
+    row.pendingDriveLink===true?byPath?.get(media.path):null;
+  return file&&sig&&sig===packageSignature(file)&&file.ext===(row.xmid?'xmid':'xsk')?file:null;
+}
+function verifiedPackageRows(files,rows,canonical=false){
+  const byId=new Map(files.map(file=>[file.id,file])),known=new Map(),byPath=canonical?packagePathIndex(files):null;
   for(const row of rows.values()){
     const media=row.xmid||row.xsk,kind=row.xmid?'xmid':'xsk';
-    const file=media&&byId.get(media.fileId),sig=packageSignature(media);
+    const file=matchingPackageFile(row,byId,byPath),sig=packageSignature(media);
     const hash=String(row.midiHash||row.midi?.md5Checksum||'').toLowerCase();
     const size=Number(row.midiSize||row.midi?.size||0);
     if(file&&file.ext===kind&&sig&&sig===packageSignature(file)&&/^[a-f0-9]{32}$/.test(hash)&&Number.isSafeInteger(size)&&size>0)
@@ -207,8 +224,9 @@ function inspectionLimits(navigator={}){
   if(memory>=8&&conn.effectiveType==='4g')return {workers:12,bytes:48*1024*1024};
   return {workers:8,bytes:24*1024*1024};
 }
-async function compareCatalog(files,rows,checkpoint,s,folder,check=()=>{}){
+async function compareCatalog(files,rows,checkpoint,s,folder,check=()=>{},canonical=false){
   const byId=new Map(files.map(f=>[f.id,f])),validIds=new Set(),packages=new Set(),midi=new Set(),midiSeen=new Set();
+  const byPath=canonical?packagePathIndex(files):null;
   let stale=0,other=0,duplicateRows=0,matchedRows=0,uncertain=0,newFiles=0,duplicates=0;
   for(const row of rows.values()){
     const mh=String(row.midiHash||row.midi?.md5Checksum||'').toLowerCase(),ms=Number(row.midiSize||row.midi?.size||0);
@@ -216,7 +234,7 @@ async function compareCatalog(files,rows,checkpoint,s,folder,check=()=>{}){
     if(identity){if(midiSeen.has(identity))duplicateRows++;midiSeen.add(identity);}
     const media=row.xmid||row.xsk;
     if(!media){other++;continue;}
-    const file=byId.get(media.fileId),sig=packageSignature(media);
+    const file=matchingPackageFile(row,byId,byPath),sig=packageSignature(media);
     if(!file||!sig||sig!==packageSignature(file)||file.ext!==(row.xmid?'xmid':'xsk')){stale++;continue;}
     matchedRows++;validIds.add(file.id);packages.add(file.ext+':'+sig);
     if(identity)midi.add(identity);else uncertain++;
@@ -299,6 +317,7 @@ function createWorkflow(options={}){
     compareStatus('กำลังตรวจจำนวนไฟล์และฐานข้อมูล…','checking');
     if(dbCount)dbCount.textContent='กำลังตรวจ…';
     const musicFiles=[];
+    let canonicalMusic=false;
     task.promise=(async()=>{
       const results=await Promise.allSettled([
         ...KIND.map(async kind=>{
@@ -306,7 +325,8 @@ function createWorkflow(options={}){
           if(!choice?.id){if(node)node.textContent='ยังไม่เลือกโฟลเดอร์';return null;}
           if(node)node.textContent='กำลังตรวจนับ…';
           try{
-            await verifyFolder(drive,choice.id,s.rootId,kind);check();
+            const meta=await verifyFolder(drive,choice.id,s.rootId,kind);check();
+            if(kind==='music')canonicalMusic=meta.name==='SONGS'&&meta.parents?.includes(s.rootId);
             const c=await countSourceFiles(drive,choice.id,check,kind==='music'?file=>musicFiles.push(file):null);check();
             const n=kind==='music'?c.xmid+c.xsk:kind==='soundfont'?c.sf2+c.sf3:c.fx;
             if(node)node.textContent=format(n)+' ไฟล์'+(c.total!==n?' · ทั้งหมด '+format(c.total)+' ไฟล์':'')+(options.hasFullRead?.()?'':' · เท่าที่มีสิทธิ์');
@@ -324,7 +344,7 @@ function createWorkflow(options={}){
       let checkpoint=null;
       try{
         checkpoint=await (options.openCheckpoint||openCheckpoint)();
-        const result=await compareCatalog(musicFiles,rows,checkpoint,s,choices.music.id,check);
+        const result=await compareCatalog(musicFiles,rows,checkpoint,s,choices.music.id,check,canonicalMusic);
         check();
         const detail=' · เพลงตรงฐาน '+format(result.matchedRows)+' · ไฟล์ซ้ำ '+format(result.duplicates);
         if(!options.hasFullRead?.()||result.uncertain){
