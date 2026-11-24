@@ -44,6 +44,15 @@ class NameIndex:
             self.db.execute('INSERT INTO names VALUES (?,?,?)',(row['id'],key,int(not row.get('duplicate_of',0))))
     def refresh(self,connection,cancelled=lambda:False):
         version=connection.execute('PRAGMA data_version').fetchone()[0]
+        # A Drive for desktop SQLite file is replaced as a complete immutable
+        # snapshot. PRAGMA data_version can remain unchanged across that
+        # replacement, so include its Online generation in the cache key.
+        try:
+            info=connection.execute(
+                "SELECT value FROM catalog_meta WHERE key='generation'").fetchone()
+            if info:version=(version,str(info[0]))
+        except sqlite3.OperationalError:
+            pass
         if version==self.version:return
         self.db.execute('DELETE FROM names')
         cursor=connection.execute("SELECT id,title,artist,key_signature,duplicate_of,duplicate_state FROM songs WHERE duplicate_state NOT IN ('moved','recycled','deleted','excluded','invalid','missing') ORDER BY id")
