@@ -40,11 +40,12 @@ class ClassicApp(KaraokeApp):
         self.title(f'X-Stage Karaoke PC {__version__} — Classic Studio')
         self.minsize(1000, 650)
         self.geometry(f'{min(1440, self.winfo_screenwidth()-60)}x{min(900, self.winfo_screenheight()-90)}')
-        if auto_catalog and self.settings.get('auto_catalog', False):
+        if not self.shared_drive_mode and auto_catalog and self.settings.get('auto_catalog', False):
             self.after(600, self.auto_connect_catalog)
         # Only observe a library selected by the operator on an earlier run.
         self._pc_last_attempt = None
-        self.after(8000, self._watch_songstudio_pc_catalog)
+        if not self.shared_drive_mode:
+            self.after(8000, self._watch_songstudio_pc_catalog)
         # Local mobile remote is LAN-first; no cloud service or Google login.
         # Start after the player UI is ready so snapshots run on Tk's thread.
         self.after(1200, self._boot_local_remote)
