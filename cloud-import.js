@@ -226,6 +226,18 @@ class Drive {
     this.rememberChild(parent,created);
     return created.id;
   }
+  async renameFolder(id,name){
+    const meta=await this.folderMetadata(id);
+    if(meta.mimeType!==MIME_FOLDER||meta.trashed||String(meta.name).toUpperCase()!==name)
+      fail('อนุญาตเฉพาะการปรับตัวพิมพ์ชื่อโฟลเดอร์มาตรฐาน');
+    const response=await this.fetch(API+'/'+driveId(id)+'?fields=id,name,mimeType,parents',{
+      method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})
+    });
+    const updated=await response.json();
+    if(updated.id!==id||updated.name!==name)fail('ปรับชื่อโฟลเดอร์ไม่สำเร็จ');
+    this.children.clear();this.childNames.clear();
+    return updated;
+  }
   async ensurePath(root,parts){
     let id=root;
     for(const part of parts)id=await this.folder(id,part);
