@@ -46,6 +46,9 @@ assert.match(smartSyncUi, /Task\.Delay\(TimeSpan\.FromSeconds\(60\), token\)/);
 assert.match(smartSyncUi, /Volatile\.Read\(ref _latestScan\)/);
 assert.match(smartSyncUi, /_scanTicker\.Tick/);
 assert.match(smartSyncUi, /SmartSyncFolders\.Scan\(pc, drive, direction, token, progress\)/);
+assert.match(smartSyncUi, /RestorePreferences\(\);[\s\S]*?_direction\.SelectedIndexChanged/);
+assert.match(smartSyncUi, /_background\.CheckedChanged \+= \(_, _\) => SavePreferences\(\)/);
+assert.match(smartSyncUi, /SmartSyncPreferencesStore\.Load\(_preferencesPath\)/);
 assert.ok(testProject.includes('../SmartSyncFolders.cs'));
 const contracts = [
   ['changed source clears stale adaptive throughput', /if \(sourceChanged\)[\s\S]*?job\.PreviousBytes = 0;\s*job\.SpeedBytesPerSecond = 0;\s*job\.SmoothedSpeedBytesPerSecond = 0;/, engine],

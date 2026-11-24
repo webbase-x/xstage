@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace XStageDownloadManager;
 
@@ -194,6 +195,70 @@ public static class SmartSyncFolders
         finally
         {
             if (created) try { File.Delete(staging); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+    }
+}
+
+ 
+// Per-Windows-user preferences only. No access tokens, file inventory or
+// authorization to start a transfer is persisted here.
+public sealed record SmartSyncPreferences(string Pc = "", string Drive = "",
+    SmartSyncDirection Direction = SmartSyncDirection.Both, bool Background = false);
+
+public static class SmartSyncPreferencesStore
+{
+    public static string DefaultPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "X-Stage", "Download Manager", "smart-sync-preferences.json");
+
+    private static SmartSyncPreferences Validate(SmartSyncPreferences? preferences)
+    {
+        if (preferences is null || preferences.Pc is null || preferences.Drive is null ||
+            preferences.Pc.Length > 32767 || preferences.Drive.Length > 32767 ||
+            !Enum.IsDefined(preferences.Direction))
+            throw new InvalidDataException("ตัวเลือก Smart Sync ไม่ถูกต้อง");
+        foreach (var path in new[] { preferences.Pc, preferences.Drive })
+            if (path.Length > 0 && (!Path.IsPathFullyQualified(path) || path.Contains('\0')))
+                throw new InvalidDataException("ตำแหน่งโฟลเดอร์ Smart Sync ไม่ถูกต้อง");
+        // Do not probe the network or a disconnected volume during restore.
+        // Scan and transfer still perform their original root/safety validation.
+        return preferences;
+    }
+
+    public static SmartSyncPreferences Load(string file)
+    {
+        try
+        {
+            using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (stream.Length > 1024 * 1024)
+                throw new InvalidDataException("ไฟล์ตัวเลือก Smart Sync ใหญ่เกินกำหนด");
+            return Validate(JsonSerializer.Deserialize<SmartSyncPreferences>(stream));
+        }
+        catch (FileNotFoundException) { return new(); }
+        catch (DirectoryNotFoundException) { return new(); }
+    }
+
+    public static void Save(string file, SmartSyncPreferences preferences)
+    {
+        Validate(preferences);
+        file = Path.GetFullPath(file);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        var temporary = file + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        bool created = false;
+        try
+        {
+            using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                created = true;
+                JsonSerializer.Serialize(stream, preferences);
+                stream.Flush(true);
+            }
+            File.Move(temporary, file, overwrite: true);
+            created = false;
+        }
+        finally
+        {
+            if (created) try { File.Delete(temporary); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
     }
 }

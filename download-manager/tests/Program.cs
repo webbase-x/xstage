@@ -129,6 +129,34 @@ if (args.Contains("--ui-smoke", StringComparer.Ordinal))
             if (!videoButton.Checked || addButton.Checked || root.RowStyles[2].Height != 268)
                 throw new Exception("Switching mode must reuse the same visible panel.");
             videoButton.PerformClick();
+            // Recreate the actual Smart Sync window, including a path which
+            // does not exist; restore must not launch a scan or transfer.
+            var syncSettings = Path.Combine(Path.GetTempPath(), "xstage-sync-ui-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var file = Path.Combine(syncSettings, "preferences.json");
+                var saved = new SmartSyncPreferences(Path.Combine(syncSettings, "PC"),
+                    Path.Combine(syncSettings, "Drive"), SmartSyncDirection.ToPc, true);
+                SmartSyncPreferencesStore.Save(file, saved);
+                using (var sync = new SmartSyncForm(file))
+                {
+                    T Field<T>(string name) => (T)typeof(SmartSyncForm).GetField(name,
+                        BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(sync)!;
+                    if (Field<TextBox>("_pc").Text != saved.Pc || Field<TextBox>("_drive").Text != saved.Drive ||
+                        Field<ComboBox>("_direction").SelectedIndex != (int)saved.Direction ||
+                        !Field<CheckBox>("_background").Checked || sync.IsBusy || Field<Button>("_start").Enabled)
+                        throw new Exception("Smart Sync UI failed to restore saved settings safely");
+                    Field<ComboBox>("_direction").SelectedIndex = (int)SmartSyncDirection.ToDrive;
+                    Field<CheckBox>("_background").Checked = false;
+                }
+                using (var reopened = new SmartSyncForm(file))
+                {
+                    var expected = saved with { Direction = SmartSyncDirection.ToDrive, Background = false };
+                    if (SmartSyncPreferencesStore.Load(file) != expected || reopened.IsBusy)
+                        throw new Exception("Smart Sync UI changes were not persisted");
+                }
+            }
+            finally { if (Directory.Exists(syncSettings)) Directory.Delete(syncSettings, true); }
             // Both real update windows render without initiating network or
             // install actions. Test shared center and clamping separately.
             using (var download = new UpdateDownloadForm(

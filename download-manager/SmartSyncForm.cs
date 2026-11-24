@@ -30,10 +30,12 @@ public sealed class SmartSyncForm : Form
     private CancellationTokenSource? _cancel;
     private SmartSyncFolderPlan? _plan;
     private bool _shutdown;
+    private readonly string _preferencesPath;
     public bool IsBusy => _cancel is not null;
 
-    public SmartSyncForm()
+    public SmartSyncForm(string? preferencesPath = null)
     {
+        _preferencesPath = preferencesPath ?? SmartSyncPreferencesStore.DefaultPath;
         Text = "Smart Sync · Google Drive for desktop";
         StartPosition = FormStartPosition.CenterParent;
         Size = new Size(780, 620);
@@ -66,7 +68,11 @@ public sealed class SmartSyncForm : Form
             {
                 using var picker = new FolderBrowserDialog { SelectedPath = field.Text, Description = name };
                 if (picker.ShowDialog(this) == DialogResult.OK)
-                { field.Text = picker.SelectedPath; InvalidatePlan(); }
+                {
+                    field.Text = picker.SelectedPath;
+                    InvalidatePlan();
+                    SavePreferences();
+                }
             };
             grid.Controls.Add(button, 2, row);
             _choices.Add(button);
@@ -76,7 +82,7 @@ public sealed class SmartSyncForm : Form
         grid.Controls.Add(new Label { Text = "ทิศทาง", Dock = DockStyle.Fill }, 0, 4);
         _direction.Items.AddRange(new object[] { "สองทาง PC ↔ Drive", "PC → Drive", "Drive → PC" });
         _direction.SelectedIndex = 0;
-        _direction.SelectedIndexChanged += (_, _) => InvalidatePlan();
+        // Subscribe after restoring saved controls, not during initialization.
         grid.Controls.Add(_direction, 1, 4);
         _choices.Add(_direction);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true };
@@ -97,6 +103,13 @@ public sealed class SmartSyncForm : Form
         Full(_review, 7);
         Full(new Label { Text = "ไม่ลบหรือเขียนทับไฟล์เดิม · SQLite/ไฟล์ขัดแย้งต้องตรวจสอบแยก · Drive เป็นผู้ส่งขึ้นคลาวด์", Dock = DockStyle.Fill }, 8);
         Controls.Add(grid);
+        RestorePreferences();
+        _direction.SelectedIndexChanged += (_, _) =>
+        {
+            InvalidatePlan();
+            SavePreferences();
+        };
+        _background.CheckedChanged += (_, _) => SavePreferences();
         FormClosing += (_, e) =>
         {
             if (!_shutdown && e.CloseReason == CloseReason.UserClosing)
@@ -104,8 +117,39 @@ public sealed class SmartSyncForm : Form
         };
     }
 
+    private void RestorePreferences()
+    {
+        try
+        {
+            var saved = SmartSyncPreferencesStore.Load(_preferencesPath);
+            _pc.Text = saved.Pc;
+            _drive.Text = saved.Drive;
+            _direction.SelectedIndex = (int)saved.Direction;
+            _background.Checked = saved.Background;
+            if (saved.Pc.Length > 0 || saved.Drive.Length > 0)
+                _status.Text = "เรียกคืนค่าที่เลือกครั้งล่าสุดแล้ว · กดตรวจสอบไฟล์ก่อนเริ่ม Sync";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException)
+        {
+            _status.Text = "อ่านค่าที่บันทึกไม่ได้ · กรุณาเลือกใหม่: " + ex.Message;
+        }
+    }
+
+    private void SavePreferences()
+    {
+        try
+        {
+            SmartSyncPreferencesStore.Save(_preferencesPath, new SmartSyncPreferences(
+                _pc.Text, _drive.Text, (SmartSyncDirection)_direction.SelectedIndex, _background.Checked));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            _status.Text = "บันทึกค่าที่เลือกไม่ได้: " + ex.Message;
+        }
+    }
+
     private void InvalidatePlan()
-    { _plan = null; _start.Enabled = false; _status.Text = "กรุณาตรวจสอบไฟล์ใหม่"; }
+    { _plan = null; _start.Enabled = false; _activity.Value = 0; _review.Clear(); _status.Text = "กรุณาตรวจสอบไฟล์ใหม่"; }
 
     public void RequestStop()
     { if (_cancel is not null) { _status.Text = "กำลังหยุดอย่างปลอดภัย"; _cancel.Cancel(); } }

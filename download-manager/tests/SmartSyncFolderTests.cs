@@ -19,6 +19,32 @@ internal static class SmartSyncFolderTests
         Directory.CreateDirectory(pc); Directory.CreateDirectory(drive);
         try
         {
+            var preferencesFile = Path.Combine(root, "settings", "smart-sync.json");
+            if (SmartSyncPreferencesStore.Load(preferencesFile) != new SmartSyncPreferences())
+                throw new Exception("Missing preferences must start with safe defaults");
+            // A disconnected drive must be retained without scanning or resolving it.
+            var disconnected = Path.Combine(root, "disconnected-drive");
+            var saved = new SmartSyncPreferences(pc, disconnected, SmartSyncDirection.ToPc, true);
+            SmartSyncPreferencesStore.Save(preferencesFile, saved);
+            if (SmartSyncPreferencesStore.Load(preferencesFile) != saved || Directory.Exists(disconnected))
+                throw new Exception("Smart Sync preference round trip failed");
+            var changed = saved with { Drive = drive, Direction = SmartSyncDirection.ToDrive, Background = false };
+            SmartSyncPreferencesStore.Save(preferencesFile, changed);
+            if (SmartSyncPreferencesStore.Load(preferencesFile) != changed ||
+                Directory.GetFiles(Path.GetDirectoryName(preferencesFile)!).Length != 1)
+                throw new Exception("Smart Sync settings replacement failed");
+            try
+            {
+                SmartSyncPreferencesStore.Save(preferencesFile, changed with { Direction = (SmartSyncDirection)99 });
+                throw new Exception("Invalid direction accepted");
+            }
+            catch (InvalidDataException) { }
+            if (SmartSyncPreferencesStore.Load(preferencesFile) != changed)
+                throw new Exception("Invalid save modified previous settings");
+            File.WriteAllText(preferencesFile, "{broken");
+            try { SmartSyncPreferencesStore.Load(preferencesFile); throw new Exception("Corrupt preferences accepted"); }
+            catch (System.Text.Json.JsonException) { }
+            Console.WriteLine("PASS: Smart Sync preferences persist across restarts and reject invalid data");
             Directory.CreateDirectory(Path.Combine(pc, "nested"));
             File.WriteAllText(Path.Combine(pc, "nested", "new.txt"), "new PC");
             File.WriteAllText(Path.Combine(drive, "remote.txt"), "new Drive");
