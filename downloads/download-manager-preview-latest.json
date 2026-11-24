@@ -1,12 +1,12 @@
 {
   "name": "X-Stage Download Manager",
-  "version": "0.2.24",
-  "build": 27,
+  "version": "0.2.25",
+  "build": 28,
   "channel": "preview",
   "available": true,
-  "file": "X-Stage-Download-Manager-v0.2.24-build27-win-x64-Setup.exe",
-  "sha256": "b3a18e39291a5997d7bf4d7c28a419c0599374e60206e3f4656afa35a4df52ef",
-  "size_bytes": 214707264,
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.24-build27-preview/X-Stage-Download-Manager-v0.2.24-build27-win-x64-Setup.exe",
-  "note": "Verified Windows Setup EXE installed under Program Files (UAC required); in-app SHA-256-checked download/install/restart, solid green completed progress, priority-aware queue, configurable per-host concurrent jobs and HTTP bandwidth cap, smoothed speed/ETA, friendly filename recovery, resilient per-chunk exponential backoff and HTTP Range fallback, SQLite WAL state recovery and safe JSON migration, original X-Stage icon workspace and sortable download table with file-type metadata and URL clipboard paste, dark workspace and filterable categories, video redownload without overwriting old media, verified playable MP4 instead of broken partial output, yt-dlp error details in file menu and capped video streams, simplified toolbar, CDN filename repair and resumable SHA-256 update, video-only controls and countdown updater, MP4 default, MKV/WEBM/MP3 options. Opt-in live watcher (15/30/60-second checks) without browser playback, system tray, preserved MKV and silence-aligned MP4 clips on stop; the app and PC must remain running. Unsigned preview."
+  "file": "X-Stage-Download-Manager-v0.2.25-build28-win-x64-Setup.exe",
+  "sha256": "14733df381e1dd5ecdad14ef387f047242404741d4600e2d6186e2641d1c7d87",
+  "size_bytes": 214713264,
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.25-build28-preview/X-Stage-Download-Manager-v0.2.25-build28-win-x64-Setup.exe",
+  "note": "Verified Windows Setup EXE installed under Program Files (UAC required); in-app SHA-256-checked download/install/restart, solid green completed progress, priority-aware queue, configurable per-host concurrent jobs and HTTP bandwidth cap, smoothed speed/ETA, friendly filename recovery, resilient per-chunk exponential backoff and HTTP Range fallback, SQLite WAL state recovery and safe JSON migration, original X-Stage icon workspace and sortable download table with file-type metadata and URL clipboard paste, dark workspace and filterable categories, video redownload without overwriting old media, verified playable MP4 instead of broken partial output, yt-dlp error details in file menu and capped video streams, simplified toolbar, CDN filename repair and resumable SHA-256 update, video-only controls and single staged updater, MP4 default, MKV/WEBM/MP3 options. Opt-in live watcher (15/30/60-second checks) without browser playback, system tray, preserved MKV and silence-aligned MP4 clips on stop; the app and PC must remain running. Unsigned preview."
 }
