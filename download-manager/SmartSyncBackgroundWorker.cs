@@ -1,5 +1,18 @@
 namespace XStageDownloadManager;
 
+public enum SmartSyncStartupMode { Manual, Ask, Automatic }
+
+public static class SmartSyncStartupPolicy
+{
+    // Unfinished work is not sufficient: an explicit user pause or a blocked
+    // authorization/conflict must override the saved startup preference.
+    public static bool ShouldResume(SmartSyncStartupMode mode, bool interrupted,
+        bool userPaused, bool requiresReview, bool confirmed = false) =>
+        interrupted && !userPaused && !requiresReview &&
+        (mode == SmartSyncStartupMode.Automatic ||
+         (mode == SmartSyncStartupMode.Ask && confirmed));
+}
+
 // The UI owns one worker per sync pair. The provider must checkpoint verified
 // transfers itself and honor cancellation. No UI context or overlapping passes.
 public sealed class SmartSyncBackgroundWorker : IAsyncDisposable

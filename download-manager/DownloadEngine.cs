@@ -28,6 +28,8 @@ public sealed class DownloadEngine
     public string LastStorageError { get; private set; } = "";
     public string DatabasePath => _state.DatabasePath;
     public static readonly int[] AllowedParts = { 1, 2, 4, 8, 16, 32 };
+    public SmartSyncStartupMode SmartSyncStartup => _state.ReadSmartSyncStartupMode();
+    public void SetSmartSyncStartup(SmartSyncStartupMode mode) => _state.SaveSmartSyncStartupMode(mode);
     public int DefaultParts { get; private set; } = 4;
     public int MaxRetryCount { get; private set; } = DownloadRetryPolicy.DefaultAttempts;
     public int MaxConcurrentJobs => _slots.MaxConcurrent;

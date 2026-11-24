@@ -4,6 +4,43 @@ internal static class SmartSyncBackgroundTests
 {
     public static async Task RunAsync()
     {
+        foreach (var mode in Enum.GetValues<SmartSyncStartupMode>())
+        foreach (var interrupted in new[] { false, true })
+        foreach (var paused in new[] { false, true })
+        foreach (var review in new[] { false, true })
+        foreach (var confirmed in new[] { false, true })
+        {
+            var expected = interrupted && !paused && !review &&
+                (mode == SmartSyncStartupMode.Automatic || (mode == SmartSyncStartupMode.Ask && confirmed));
+            if (SmartSyncStartupPolicy.ShouldResume(mode, interrupted, paused, review, confirmed) != expected)
+                throw new Exception("Smart Sync startup consent policy regressed");
+        }
+        var stateFolder = Path.Combine(Path.GetTempPath(), "xstage-sync-settings-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new DownloadStateStore(stateFolder);
+            if (store.ReadSmartSyncStartupMode() != SmartSyncStartupMode.Manual)
+                throw new Exception("Smart Sync must be opt-in");
+            foreach (var mode in Enum.GetValues<SmartSyncStartupMode>())
+            {
+                store.SaveSmartSyncStartupMode(mode);
+                if (new DownloadStateStore(stateFolder).ReadSmartSyncStartupMode() != mode)
+                    throw new Exception("Smart Sync preference not restored");
+            }
+            try
+            {
+                store.SaveSmartSyncStartupMode((SmartSyncStartupMode)99);
+                throw new Exception("Invalid Smart Sync setting accepted");
+            }
+            catch (ArgumentOutOfRangeException) { }
+            if (store.ReadSmartSyncStartupMode() != SmartSyncStartupMode.Automatic)
+                throw new Exception("Invalid setting mutated persisted preference");
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Directory.Delete(stateFolder, true);
+        }
         var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var exited = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         int calls = 0;

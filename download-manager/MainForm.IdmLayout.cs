@@ -236,6 +236,7 @@ public sealed partial class MainForm
         menu.Items.Add(Menu("ตั้งค่า",
             Action("ประสิทธิภาพ / การเชื่อมต่อ...", (_, _) => ConfigurePerformance()),
             Action("จำนวนครั้งลองใหม่...", (_, _) => ConfigureNetworkRetry()),
+            Action("Smart Sync — เมื่อเปิดโปรแกรม...", (_, _) => ConfigureSmartSyncStartup()),
             Action("รับดาวน์โหลดจาก Chrome / Edge...", (_, _) => SetupBrowserIntegration()),
             new ToolStripSeparator(),
             diagnostics,
@@ -1188,6 +1189,50 @@ public sealed partial class MainForm
             parts.Any(part => !DownloadEngine.TryParseUrl(part, out _)))
             return "";
         return string.Join(Environment.NewLine, parts);
+    }
+
+    private void ConfigureSmartSyncStartup()
+    {
+        try
+        {
+            using var dialog = new Form
+            {
+                Text = "Smart Sync — เมื่อเปิดโปรแกรม",
+                StartPosition = FormStartPosition.CenterParent,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MaximizeBox = false, MinimizeBox = false,
+                ClientSize = new Size(460, 205)
+            };
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill, Padding = new Padding(14), ColumnCount = 1,
+                RowCount = 4
+            };
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+            var choices = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+            choices.Items.AddRange(new object[] { "เริ่มด้วยตนเอง", "ถามก่อนทำงานต่อ", "ทำงานต่ออัตโนมัติ" });
+            choices.SelectedIndex = (int)_engine.SmartSyncStartup;
+            layout.Controls.Add(new Label { Text = "เมื่อเปิด X-Stage Download Manager", AutoSize = true }, 0, 0);
+            layout.Controls.Add(choices, 0, 1);
+            layout.Controls.Add(new Label { Dock = DockStyle.Fill,
+                Text = "บันทึกตัวเลือกไว้สำหรับ Smart Sync เท่านั้น ระบบรับส่งไฟล์ Drive และการกู้คืนงานกำลังพัฒนา งานที่หยุดเองหรือรอตรวจสอบจะไม่เริ่มอัตโนมัติ" }, 0, 2);
+            var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
+            var save = new Button { Text = "บันทึก", DialogResult = DialogResult.OK, AutoSize = true };
+            var cancel = new Button { Text = "ยกเลิก", DialogResult = DialogResult.Cancel, AutoSize = true };
+            buttons.Controls.Add(save); buttons.Controls.Add(cancel);
+            layout.Controls.Add(buttons, 0, 3);
+            dialog.Controls.Add(layout); dialog.AcceptButton = save; dialog.CancelButton = cancel;
+            if (dialog.ShowDialog(this) == DialogResult.OK && choices.SelectedIndex >= 0)
+                _engine.SetSmartSyncStartup((SmartSyncStartupMode)choices.SelectedIndex);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException)
+        {
+            MessageBox.Show(this, "ไม่สามารถบันทึกตัวเลือก Smart Sync ได้", "X-Stage",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void ConfigureNetworkRetry()

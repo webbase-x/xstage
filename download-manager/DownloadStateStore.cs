@@ -256,6 +256,39 @@ public sealed class DownloadStateStore
         }
     }
 
+    public SmartSyncStartupMode ReadSmartSyncStartupMode()
+    {
+        lock (_gate)
+        {
+            using var db = Open();
+            using var cmd = db.CreateCommand();
+            cmd.CommandText = "SELECT value FROM xstage_download_settings WHERE key='smart_sync_startup_mode';";
+            return cmd.ExecuteScalar()?.ToString() switch
+            {
+                "Automatic" => SmartSyncStartupMode.Automatic,
+                "Ask" => SmartSyncStartupMode.Ask,
+                _ => SmartSyncStartupMode.Manual
+            };
+        }
+    }
+
+    public void SaveSmartSyncStartupMode(SmartSyncStartupMode mode)
+    {
+        if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
+        lock (_gate)
+        {
+            using var db = Open();
+            using var cmd = db.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO xstage_download_settings(key,value)
+                VALUES('smart_sync_startup_mode',$value)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """;
+            cmd.Parameters.AddWithValue("$value", mode.ToString());
+            cmd.ExecuteNonQuery();
+        }
+    }
+
     public int ReadDefaultParts(int fallback)
     {
         lock (_gate)
