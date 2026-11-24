@@ -114,7 +114,8 @@ public static class SmartSyncFolders
             if (!sourceMap.TryGetValue(d.RelativePath, out var expected))
                 throw new InvalidDataException("ข้อมูลไฟล์ต้นทางเปลี่ยน กรุณาตรวจสอบใหม่");
             await CopyNewAsync(sourceRoot, destinationRoot, d.RelativePath, expected, token).ConfigureAwait(false);
-            progress?.Report(Interlocked.Increment(ref copied));
+            var completed = Interlocked.Increment(ref copied);
+            progress?.Report(completed);
         }, (_, _) => throw new InvalidDataException("SQLite ต้องตรวจสอบก่อนส่ง"), ct).ConfigureAwait(false);
         return Summarize(plan, copied);
     }

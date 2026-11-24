@@ -2,6 +2,11 @@ using XStageDownloadManager;
 
 internal static class SmartSyncFolderTests
 {
+    private sealed class InlineProgress(System.Collections.Concurrent.ConcurrentBag<int> values) : IProgress<int>
+    {
+        public void Report(int value) => values.Add(value);
+    }
+
     public static async Task RunAsync()
     {
         var root = Path.Combine(Path.GetTempPath(), "xstage-sync-test-" + Guid.NewGuid().ToString("N"));
@@ -24,7 +29,7 @@ internal static class SmartSyncFolderTests
                 File.ReadAllText(Path.Combine(pc, "remote.txt")) != "new Drive" ||
                 File.ReadAllText(Path.Combine(drive, "conflict.txt")) != "drive" ||
                 File.Exists(Path.Combine(drive, "songs.sqlite3")))
-                throw new Exception("Smart Sync new-only mirror or conflict guard failed");
+                throw new Exception($"Smart Sync new-only mirror or conflict guard failed: copied={result.Copied}, identical={result.Identical}, review={result.Review}");
             var second = await SmartSyncFolders.ExecuteAsync(
                 SmartSyncFolders.Scan(pc, drive, SmartSyncDirection.Both, default), 4, null, default);
             if (second.Copied != 0 || second.Identical != 3)
@@ -35,6 +40,13 @@ internal static class SmartSyncFolderTests
                 SmartSyncFolders.Scan(pc, drive, SmartSyncDirection.ToDrive, default), 2, null, default);
             if (upload.Copied != 1 || upload.SkippedDirection != 1 || File.Exists(Path.Combine(pc, "stay.txt")))
                 throw new Exception("Smart Sync direction ignored");
+            var observed = new System.Collections.Concurrent.ConcurrentBag<int>();
+            File.WriteAllText(Path.Combine(drive, "progress.txt"), "progress");
+            var withProgress = await SmartSyncFolders.ExecuteAsync(
+                SmartSyncFolders.Scan(pc, drive, SmartSyncDirection.ToPc, default), 2,
+                new InlineProgress(observed), default);
+            if (withProgress.Copied != 2 || !observed.OrderBy(x => x).SequenceEqual(new[] { 1, 2 }))
+                throw new Exception("Copy count must be independent of optional progress observer");
             File.WriteAllText(Path.Combine(pc, "race.txt"), "original");
             var stale = SmartSyncFolders.Scan(pc, drive, SmartSyncDirection.ToDrive, default);
             File.WriteAllText(Path.Combine(drive, "race.txt"), "new destination");
