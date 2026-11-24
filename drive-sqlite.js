@@ -67,6 +67,7 @@ function createSchema(db,kind,generation){
   );
   CREATE TABLE songs (
     id INTEGER PRIMARY KEY NOT NULL,
+    ordinal INTEGER NOT NULL,
     web_song_id TEXT UNIQUE NOT NULL,
     path TEXT NOT NULL,
     kind TEXT NOT NULL,
@@ -121,8 +122,9 @@ async function create(kind,songs,removes=[],generation=''){
     createSchema(db,kind,generation);
     db.run('BEGIN TRANSACTION');
     const upsert=db.prepare(
-      'INSERT INTO songs(id,web_song_id,path,kind,search,format,code,title,artist,source_format,original_filename,original_relative_path,original_file_size,source_code,midi_size,midi_md5,payload) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+      'INSERT INTO songs(id,ordinal,web_song_id,path,kind,search,format,code,title,artist,source_format,original_filename,original_relative_path,original_file_size,source_code,midi_size,midi_md5,payload) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
     const seen=new Set(),midiHashes=new Map(),pcIds=new Map(),pcPaths=new Set();
+    let ordinal=0;
     try{
       for(const row of songs){
         if(!row||!validId(row.webSongId)||seen.has(row.webSongId))
@@ -171,7 +173,7 @@ async function create(kind,songs,removes=[],generation=''){
         if(originalFileSize&&(!Number.isSafeInteger(originalFileSize)||originalFileSize<0))
           fail('ขนาดไฟล์ต้นฉบับไม่ถูกต้อง');
         const sourceCode=String(row.sourceCode||row.code||'').slice(0,140);
-        upsert.run([stableId,row.webSongId,pcPath,pcKind(row),pcSearch(row),
+        upsert.run([stableId,ordinal++,row.webSongId,pcPath,pcKind(row),pcSearch(row),
           String(row.sourceFormat||''),String(row.code||''),String(row.title||''),
           String(row.artist||''),String(row.sourceFormat||''),
           originalFilename,originalPath,originalFileSize||null,
@@ -217,10 +219,10 @@ async function read(bytes){
       .map(row=>String(row[1])));
     const indexed=columns.has('midi_md5')&&columns.has('midi_size');
     const shared=metadata.pcSchema==='shared-v1';
-    if(shared&&!['id','path','kind','search','duplicate_of','duplicate_state'].every(c=>columns.has(c)))
+    if(shared&&!['id','ordinal','path','kind','search','duplicate_of','duplicate_state'].every(c=>columns.has(c)))
       fail('ฐาน SQLite ไม่ครบโครงสร้าง PC/Online ร่วม');
     const rowsSql=shared
-      ?'SELECT web_song_id,payload,midi_md5,midi_size,id,path,kind FROM songs'
+      ?'SELECT web_song_id,payload,midi_md5,midi_size,id,path,kind FROM songs ORDER BY ordinal'
       :indexed?'SELECT web_song_id,payload,midi_md5,midi_size FROM songs'
       :'SELECT web_song_id,payload FROM songs';
     const songRows=(db.exec(rowsSql)[0]?.values)||[];
