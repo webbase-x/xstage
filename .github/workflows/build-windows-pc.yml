@@ -1,4 +1,4 @@
-name: X-Stage Karaoke PC installer candidate (v1.0.81)
+name: X-Stage Karaoke PC installer candidate (v1.0.82)
 
 on:
   workflow_dispatch:
@@ -37,7 +37,7 @@ jobs:
         run: |
           if [ -f windows-pc/source/Build-Source.ps1 ] &&
              [ -f windows-pc/source/karaoke/continuous_medley.py ] &&
-             python3 -c "import json,sys; m=json.load(open('windows-pc/manifest.json')); sys.exit(0 if m.get('source_imported') is True and m.get('version')=='1.0.81' and m.get('build')==1081 else 1)"; then
+             python3 -c "import json,sys; m=json.load(open('windows-pc/manifest.json')); sys.exit(0 if m.get('source_imported') is True and m.get('version')=='1.0.82' and m.get('build')==1082 else 1)"; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
             echo "Windows source verified and imported; installer build can proceed."
           else
@@ -64,8 +64,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $meta = Get-Content windows-pc/manifest.json -Raw | ConvertFrom-Json
-          if ($meta.source_imported -ne $true -or $meta.version -ne '1.0.81' -or $meta.build -ne 1081) {
-            throw 'Windows v1.0.81 source is not imported. Upload the SHA-256 verified source ZIP before building.'
+          if ($meta.source_imported -ne $true -or $meta.version -ne '1.0.82' -or $meta.build -ne 1082) {
+            throw 'Windows v1.0.82 source is not imported. Upload the SHA-256 verified source ZIP before building.'
           }
           if (-not (Test-Path windows-pc/source/Build-Source.ps1) -or
               -not (Test-Path windows-pc/source/karaoke/continuous_medley.py)) {
@@ -418,7 +418,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v6
         with:
-          name: X-Stage-Karaoke-PC-Windows-v1.0.81-build1081-CANDIDATE
+          name: X-Stage-Karaoke-PC-Windows-v1.0.82-build1082-CANDIDATE
           if-no-files-found: error
           retention-days: 30
           path: |
