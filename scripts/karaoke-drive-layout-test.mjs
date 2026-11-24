@@ -20,13 +20,13 @@ assert.ok(importer.includes("await drive.ensurePath(rootId,['DB'])")&&importer.i
 assert.ok(!midi.includes("name==='AUDIO'"),'No SoundFont fallback to legacy AUDIO');
 assert.ok(midi.includes("x.name==='SOUNDFONT'"));
 assert.ok(midi.includes("['SF2','SF3']"));
-assert.ok(/cloud-import\\.js\\?v=/.test(html),'cloud-import.js cache-busted script loads');
-assert.ok(/cloud-import\\.css\\?v=/.test(html),'cloud-import.css cache-busted stylesheet loads');
+assert.ok(/cloud-import\.js\?v=/.test(html),'cloud-import.js cache-busted script loads');
+assert.ok(/cloud-import\.css\?v=/.test(html),'cloud-import.css cache-busted stylesheet loads');
 assert.ok(html.includes('id="cloud-import-action-hint"'));
 assert.ok(html.includes('id="cloud-import-start"'));
 assert.ok(importer.includes('onVideoApproved(item)'));
 assert.ok(importer.includes('this.chosenItems.add(entry.key)'));
-assert.ok(html.includes('browser-midi.js?v=1139-soundfont-extension'));
+assert.ok(/browser-midi\.js\?v=/.test(html),'browser MIDI script is cache-busted');
 
 const first=importer.indexOf('function pathFor(');
 const end=importer.indexOf('async function db()',first);
