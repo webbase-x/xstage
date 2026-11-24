@@ -524,7 +524,7 @@ async function listFolder(parent,token){
   const list=[];let page='';
   do{
     const q=new URLSearchParams({q:"'"+parent+"' in parents and trashed=false",
-      fields:'nextPageToken,files(id,name,mimeType,size)',pageSize:'1000'});
+      fields:'nextPageToken,files(id,name,mimeType,size)',pageSize:'1000',supportsAllDrives:'true',includeItemsFromAllDrives:'true'});
     if(page)q.set('pageToken',page);
     const response=await fetch('https://www.googleapis.com/drive/v3/files?'+q,
       {headers:{Authorization:'Bearer '+token},cache:'no-store'});

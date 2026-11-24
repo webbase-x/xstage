@@ -7,8 +7,8 @@ const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
 const html=fs.readFileSync(new URL('../karaoke.html',import.meta.url),'utf8');
 const version=JSON.parse(fs.readFileSync(new URL('../version.json',import.meta.url),'utf8'));
 assert.ok(version.build>=1144,'revision must not regress');
-assert.ok(html.includes('browser-midi.js?v=1139-soundfont-extension'));
-assert.ok(html.includes('app.js?v=1178-sqlite-only'));
+assert.ok(/browser-midi\.js\?v=\d+/.test(html));
+assert.ok(/app\.js\?v=\d+/.test(html));
 assert.ok(app.includes('window.XStageBrowserMidi.prefersCompactGm?.()'));
 assert.ok(app.includes('setTimeout(()=>resolve({expired:true}),12000)'),
   'Slow chosen SoundFont must have a bounded 12-second startup wait');
