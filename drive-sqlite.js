@@ -104,6 +104,7 @@ function createSchema(db,kind,generation){
   CREATE INDEX songs_code ON songs(code);
   CREATE INDEX songs_title ON songs(title COLLATE NOCASE,id);
   CREATE INDEX songs_duplicate ON songs(duplicate_of);
+  CREATE UNIQUE INDEX songs_portable_path ON songs(path COLLATE NOCASE);
   CREATE TABLE removed_songs (web_song_id TEXT PRIMARY KEY NOT NULL);`);
   const insert=db.prepare('INSERT INTO catalog_meta(key,value) VALUES (?,?)');
   for(const [key,value] of Object.entries({format:FORMAT,schemaVersion:VERSION,kind,generation,pcSchema:'shared-v1',pathBase:'SONGS'})){
@@ -121,7 +122,7 @@ async function create(kind,songs,removes=[],generation=''){
     db.run('BEGIN TRANSACTION');
     const upsert=db.prepare(
       'INSERT INTO songs(id,web_song_id,path,kind,search,format,code,title,artist,source_format,original_filename,original_relative_path,original_file_size,source_code,midi_size,midi_md5,payload) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-    const seen=new Set(),midiHashes=new Map(),pcIds=new Map();
+    const seen=new Set(),midiHashes=new Map(),pcIds=new Map(),pcPaths=new Set();
     try{
       for(const row of songs){
         if(!row||!validId(row.webSongId)||seen.has(row.webSongId))
@@ -144,11 +145,18 @@ async function create(kind,songs,removes=[],generation=''){
           row.xmid?.path?.split('/').pop()||
           row.xsk?.path?.split('/').pop()||
           row.midi?.path?.split('/').pop()||'').slice(0,255);
-        const originalPath=String(row.originalRelativePath||'').replaceAll('\\','/').slice(0,1024);
+        const mediaPath=[row.xmid,row.xsk,row.midi,row.audio,row.video]
+          .map(item=>item?.path).find(Boolean)||'';
+        const originalPath=String(row.originalRelativePath||
+          mediaPath.replace(/^SONGS\//i,'')).replaceAll('\\','/').slice(0,1024);
         // The relative path is the exact location under XStageKaraoke/SONGS.
         // Reject paths that cannot be mapped identically on PC and Online.
         if(!originalPath||originalPath.startsWith('/')||originalPath.split('/').some(p=>!p||p==='.'||p==='..'||p.includes(':')))
           fail('พาธเพลงไม่ตรงโครงสร้าง SONGS: '+originalPath);
+        const pcPath='SONGS/'+originalPath;
+        const pcPathKey=pcPath.toLowerCase();
+        if(pcPaths.has(pcPathKey))fail('ไฟล์เพลงหลายรายการอ้างพาธเดียวกัน: '+originalPath);
+        pcPaths.add(pcPathKey);
         const stableId=pcId(row.webSongId);
         const collision=pcIds.get(stableId);
         if(collision&&collision!==row.webSongId)fail('รหัสเพลง PC ชนกัน กรุณาตรวจฐาน');
@@ -157,7 +165,7 @@ async function create(kind,songs,removes=[],generation=''){
         if(originalFileSize&&(!Number.isSafeInteger(originalFileSize)||originalFileSize<0))
           fail('ขนาดไฟล์ต้นฉบับไม่ถูกต้อง');
         const sourceCode=String(row.sourceCode||row.code||'').slice(0,140);
-        upsert.run([stableId,row.webSongId,'SONGS/'+originalPath,pcKind(row),pcSearch(row),
+        upsert.run([stableId,row.webSongId,pcPath,pcKind(row),pcSearch(row),
           String(row.sourceFormat||''),String(row.code||''),String(row.title||''),
           String(row.artist||''),String(row.sourceFormat||''),
           originalFilename,originalPath,originalFileSize||null,
