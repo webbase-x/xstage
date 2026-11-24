@@ -175,7 +175,8 @@ function createWorkflow(options={}){
   const nodes=Object.fromEntries(KIND.map(k=>[k,$('xstage-drive-folder-'+k+'-name')]));
   const status=$('xstage-drive-folder-status'),buildButton=$('xstage-drive-build-db'),
     cancelButton=$('xstage-drive-cancel-db');
-  let busy=false,controller=null,scanSequence=0;
+  let busy=false,controller=null,scanSequence=0,discoverTask=null;
+  const defaultNames={music:'SONGS',soundfont:'SOUNDFONT',fx:'FX'};
   const scanButton=$('xstage-drive-scan-counts');
   const countNodes=Object.fromEntries(KIND.map(k=>[k,$('xstage-drive-count-'+k)]));
   async function scanCounts(only=''){
@@ -215,6 +216,50 @@ function createWorkflow(options={}){
     return readSelections(sub,root)[kind]?.id||'';
   }
   function display(message){if(status)status.textContent=message;}
+  function sameSession(s){const now=options.session?.();return now?.sub===s.sub&&now?.rootId===s.rootId&&!!now.token;}
+  async function discoverDefaults(){
+    if(busy)return;
+    let s;try{s=session();}catch{return;}
+    if(KIND.every(k=>readSelections(s.sub,s.rootId)[k]?.id))return;
+    if(discoverTask?.sub===s.sub&&discoverTask?.rootId===s.rootId)return discoverTask.promise;
+    const task={sub:s.sub,rootId:s.rootId};
+    task.promise=(async()=>{
+      const drive=new scope.XStageCloudImport.Drive(()=>options.session()?.token,()=>{if(!sameSession(s))fail('เปลี่ยนบัญชีหรือคลังแล้ว');});
+      drive.ensureAuth=force=>options.ensureAuth?.(force);
+      const children=await drive.listChildren(s.rootId);
+      const found={};
+      for(const kind of KIND){
+        if(readSelections(s.sub,s.rootId)[kind]?.id)continue;
+        const matches=children.filter(x=>x.mimeType===FOLDER&&String(x.name||'').toUpperCase()===defaultNames[kind]&&isId(x.id)&&!retired.has(x.id));
+        if(matches.length!==1)continue;
+        const meta=await verifyFolder(drive,matches[0].id,s.rootId,kind);
+        found[kind]={id:meta.id,name:meta.name||defaultNames[kind]};
+      }
+      if(!sameSession(s)||busy)return;
+      const values=readSelections(s.sub,s.rootId),changed=[];
+      for(const kind of KIND)if(!values[kind]?.id&&found[kind]){values[kind]=found[kind];changed.push(kind);}
+      if(changed.length){saveSelections(s.sub,s.rootId,values);render();
+        if(changed.includes('soundfont'))options.onSoundfontChange?.(values.soundfont.id);
+        if(changed.includes('fx'))options.onFxChange?.(values.fx.id);
+      }
+    })().catch(error=>{if(sameSession(s)&&!busy)display('ตรวจโฟลเดอร์ไม่ได้ · '+String(error.message||error));}).finally(()=>{if(discoverTask===task)discoverTask=null;render();});
+    discoverTask=task;return task.promise;
+  }
+  async function openDriveFolder(kind){
+    let s,choice;try{s=session();choice=readSelections(s.sub,s.rootId)[kind];}catch(error){display(error.message);return;}
+    if(!choice?.id){await choose(kind);return;}
+    // Open synchronously in the click handler to preserve browser popup activation.
+    const tab=scope.open?.('about:blank','_blank');
+    if(!tab){if(!busy)display('เบราว์เซอร์ปิดกั้นหน้าต่างใหม่ · กรุณาอนุญาตป๊อปอัปแล้วลองอีกครั้ง');return;}
+    try{
+      tab.opener=null;
+      const drive=new scope.XStageCloudImport.Drive(()=>options.session()?.token,()=>{if(!sameSession(s))fail('เปลี่ยนบัญชีหรือคลังแล้ว');});
+      drive.ensureAuth=force=>options.ensureAuth?.(force);
+      await verifyFolder(drive,choice.id,s.rootId,kind);
+      if(!sameSession(s)||readSelections(s.sub,s.rootId)[kind]?.id!==choice.id)fail('โฟลเดอร์เปลี่ยนระหว่างตรวจสอบ');
+      tab.location.replace('https://drive.google.com/drive/folders/'+encodeURIComponent(choice.id));
+    }catch(error){try{tab.close();}catch{}if(!busy)display('เปิดโฟลเดอร์ไม่ได้ · '+String(error.message||error));}
+  }
   function render(){
     const s=options.session?.()||{};
     const valid=!!(s.token&&s.sub&&isId(s.rootId)&&!retired.has(s.rootId));
@@ -222,6 +267,8 @@ function createWorkflow(options={}){
     for(const kind of KIND){
       if(nodes[kind])nodes[kind].textContent=pref[kind]?.name||
         (valid?'ยังไม่เลือกโฟลเดอร์':'เชื่อม Google Drive ก่อน');
+      const open=$('xstage-drive-open-'+kind);
+      if(open){open.disabled=!valid||!pref[kind]?.id;}
       const button=$('xstage-drive-folder-'+kind);
       if(button){
         button.disabled=busy||!valid;
@@ -229,9 +276,10 @@ function createWorkflow(options={}){
           (!valid?'กรุณาเชื่อม Google Drive และเลือกคลังที่ใช้งานอยู่':'');
       }
     }
-    if(scanButton)scanButton.disabled=!valid;
+    if(scanButton)scanButton.disabled=!valid||busy;
     if(buildButton)buildButton.disabled=busy||!pref.music?.id;
     if(cancelButton)cancelButton.disabled=!busy;
+    if(cancelButton)cancelButton.hidden=!busy;
   }
   async function choose(kind){
     if(busy||!KIND.includes(kind))return;
@@ -422,8 +470,10 @@ function createWorkflow(options={}){
         });
     }else await work();
   }
-  for(const kind of KIND)
+  for(const kind of KIND){
     $('xstage-drive-folder-'+kind)?.addEventListener('click',()=>void choose(kind));
+    $('xstage-drive-open-'+kind)?.addEventListener('click',()=>void openDriveFolder(kind));
+  }
   buildButton?.addEventListener('click',()=>void rebuild());
   cancelButton?.addEventListener('click',()=>controller?.abort());
   function resume(){
@@ -436,12 +486,12 @@ function createWorkflow(options={}){
     'xstage:auth-cleared'])scope.addEventListener?.(event,()=>{render();resume();});
   scope.addEventListener?.('xstage:drive-sources-open',()=>{
     render();
-    if(busy)display('กำลังสร้างฐานเพลง · เปลี่ยนโฟลเดอร์ได้เมื่อเสร็จหรือกดยกเลิกการสร้างฐาน');
+    if(!busy)void discoverDefaults();
   });
   for(const event of ['online','pageshow','focus'])scope.addEventListener?.(event,resume);
   scope.document?.addEventListener?.('visibilitychange',resume);
   render();resume();
-  return {render,choose,rebuild,scanCounts,getFolderId:selectedId,
+  return {render,choose,rebuild,scanCounts,discoverDefaults,openDriveFolder,getFolderId:selectedId,
     getSelection:(sub,root,kind)=>readSelections(sub,root)[kind]||null,
     cancel:()=>controller?.abort()};
 }
