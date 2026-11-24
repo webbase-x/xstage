@@ -1,7 +1,7 @@
 {
   "platform": "windows",
-  "version": "1.0.81",
-  "build": 1081,
+  "version": "1.0.82",
+  "build": 1082,
   "source_revision": "XStageSong-FormatScoped-SongLyrics",
   "source_archive": "downloads/X-Stage-Karaoke-v1.0.76-Windows-Source-Continuous-Medley.zip",
   "sha256": "bb9498deff94e8bf3debe48bcce32a9b5e6adb595c4c26783f8553128cdfe224",
