@@ -49,6 +49,9 @@ class ClassicApp(KaraokeApp):
         # Local mobile remote is LAN-first; no cloud service or Google login.
         # Start after the player UI is ready so snapshots run on Tk's thread.
         self.after(1200, self._boot_local_remote)
+        if self.shared_drive_mode:
+            self._shared_db_last_signature = None
+            self.after(12000, self._watch_shared_drive_catalog)
 
     def open_shared_google_drive_catalog(self):
         from .drive_online_catalog_ui import open_shared_drive_catalog
@@ -57,6 +60,25 @@ class ClassicApp(KaraokeApp):
     def open_shared_drive_push(self):
         from .shared_drive_sync_ui import open_drive_push
         return open_drive_push(self)
+
+    def _watch_shared_drive_catalog(self):
+        if getattr(self, "closing", False) or not self.shared_drive_mode:
+            return
+        try:
+            from .shared_song_library import validate_shared
+            validate_shared(self.settings.get("shared_drive_root", ""))
+            signature = self.library.file_signature()
+            if signature != self._shared_db_last_signature:
+                self._shared_db_last_signature = signature
+                self.refresh_library()
+                self.refresh_queue()
+                self.status_var.set("Google Drive · อ่านฐาน PC/Online ล่าสุดแล้ว · "
+                                    "ไม่ขัดจังหวะเพลงที่กำลังเล่น")
+        except (ValueError, OSError, sqlite3.DatabaseError) as error:
+            self.status_var.set("Google Drive · ฐานยังไม่พร้อม: "+str(error))
+        finally:
+            if not getattr(self, "closing", False):
+                self.after(12000, self._watch_shared_drive_catalog)
 
     def _setup_style(self):
         super()._setup_style()
