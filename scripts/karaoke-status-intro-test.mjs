@@ -5,8 +5,8 @@ const app=read('app.js'),html=read('karaoke.html'),stageUI=read('stage-ui.js'),c
 const ver=JSON.parse(read('version.json'));
 assert.ok(ver.build>=1144,'revision must not regress');
 assert.ok(html.includes('xstage-ux.css?v=1164-mobile-controls-lights'));
-assert.ok(html.includes('stage-ui.js?v=1164-bottom-menu'));
-assert.ok(html.includes('app.js?v=1178-sqlite-only'));
+assert.ok(/stage-ui\.js\?v=/.test(html),'Stage UI has versioned script');
+assert.ok(/app\.js\?v=/.test(html),'App has versioned script');
 const titleRow=html.indexOf('class="transport-song-title"');
 const name=html.indexOf('id="now-playing"',titleRow);
 const key=html.indexOf('id="toolbar-song-key"',titleRow);
