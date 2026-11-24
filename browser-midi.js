@@ -665,12 +665,12 @@ async function refreshFonts(auth){
       if(!sourceId){
         const categories=await listFolder(rootId,auth.token);
         const soundFolders=categories.filter(x=>
-          String(x.name||'').trim().toLowerCase()==='soundfont'&&x.mimeType==='application/vnd.google-apps.folder');
+          x.name==='SOUNDFONT'&&x.mimeType==='application/vnd.google-apps.folder');
         if(soundFolders.length>1)fail('พบ SOUNDFONT ซ้ำใน XStageKaraoke');
         sourceId=soundFolders[0]?.id||'';
         sourceName=soundFolders[0]?.name||'SoundFont';
       }
-      if(!sourceId)fail('ไม่พบโฟลเดอร์ SoundFont ในคลังที่ใช้งาน กรุณาเลือกโฟลเดอร์ SoundFont อีกครั้ง');
+      if(!sourceId)fail('ไม่พบโฟลเดอร์ SoundFont ในคลังที่ใช้งาน กรุณาตั้งค่าโครงสร้างคลังหลักอีกครั้ง');
       if(sourceId){
         const drive=new scope.XStageCloudImport.Drive(()=>auth.token,()=>{});
         await scope.XStageDriveFolders.verifyFolder(drive,sourceId,rootId,'soundfont');
