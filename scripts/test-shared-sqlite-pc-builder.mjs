@@ -68,7 +68,7 @@ try{
   const catalog=await scope.XStageDriveSQLite.read(new Uint8Array(dbBytes));
   assert.equal(catalog.kind,'snapshot');
   assert.equal(catalog.songs.length,2);
-  assert.deepEqual(catalog.songs.map(song=>song.code),['10001','10002']);
+  assert.equal(catalog.songs.map(song=>song.code).join(','),'10001,10002');
   assert.ok(catalog.songs.every(song=>
     song.pendingDriveLink===true&&song.xmid?.path.startsWith('SONGS/')&&
     /^[0-9a-f]{32}$/.test(song.xmid.md5Checksum)));
