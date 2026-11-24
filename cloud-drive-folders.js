@@ -598,7 +598,7 @@ function createWorkflow(options={}){
         if(!listing.files.length)
           fail('ไม่พบ XMID/XSK ที่อ่านได้ในโฟลเดอร์นี้ · ยังไม่ได้แก้ไข DB');
         let added=0,duplicates=0,alreadyRegistered=0,duplicateInBatch=0,invalid=0,reused=0,skipped=0,downloaded=0,shared=0;
-        const known=verifiedPackageRows(listing.files,rows),remaining=[];
+        const known=verifiedPackageRows(listing.files,rows,musicRoot.name==='SONGS'&&musicRoot.parents?.includes(initial.rootId)),remaining=[];
         const markDuplicate=row=>{
           duplicates++;
           if(existingIds.has(row.webSongId))alreadyRegistered++;
