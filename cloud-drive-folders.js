@@ -46,13 +46,12 @@ async function verifyFolder(drive,id,root,kind){
     if(!first)first=meta;
     if(meta.mimeType!==FOLDER||meta.trashed===true)
       fail('รายการที่เลือกไม่ใช่โฟลเดอร์ Google Drive ที่ใช้งานได้');
-    if(kind==='music'&&['DB','CACHE','BACKUP','LOGS'].includes(String(meta.name||'').toUpperCase()))
+    if(['DB','CACHE','BACKUP','LOGS'].includes(String(meta.name||'').toUpperCase()))
       fail('ไม่สามารถใช้โฟลเดอร์ฐานข้อมูลหรือสำรองเป็นแหล่งเพลง');
     parent=meta.parents?.[0]||'';
-    if(parent===root)break;
+    if(parent===root)return first;
   }
-  if(depth>=MAX_DEPTH+30)fail('โครงสร้างโฟลเดอร์ลึกเกินขอบเขตที่อนุญาต');
-  return first;
+  fail('โฟลเดอร์ต้องอยู่ภายในคลังหลัก XStageKaraoke ที่เลือกเท่านั้น');
 }
 // Metadata only; do not download, copy or modify any file during inventory.
 async function countSourceFiles(drive,start,check=()=>{}){
