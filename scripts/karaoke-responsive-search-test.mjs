@@ -44,7 +44,7 @@ assert.ok(mobile.includes('layoutHeight-visualHeight-visualTop')&&
   mobile.includes('--xs-search-visual-height')&&
   mobile.includes('(max-width:820px)'),
   'Mobile keyboard and tablet-size phones must keep the bottom search visible');
-assert.match(html,/mobile-layout\.js\?v=1164-mobile-controls-lights/);
+assert.match(html,/mobile-layout\.js\?v=/,'Mobile layout script must be cache-busted');
 const topHeader=html.split('<header class="mobile-stage-header stage-toolbar"')[1]?.split('</header>')[0]||'';
 const songStatus=html.split('<div class="transport-song-info">')[1]?.split('<div class="timeline">')[0]||'';
 const mobileRules=css.split('/* 1.16.4 — One lower-right menu')[1];
