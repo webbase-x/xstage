@@ -1634,6 +1634,35 @@ async function loadGooglePickerApi(){
     }
   });
 }
+$('xstage-soundfont-authorize')?.addEventListener('click',async()=>{
+  const status=$('xstage-soundfont-scan-status');
+  try{
+    if(!state.token||!state.accountSub||!state.libraryRootId)throw Error('กรุณาเชื่อม Google Drive ก่อน');
+    await ensureImporterGoogleAuth(false,false);
+    await loadGooglePickerApi();
+    const sub=state.accountSub,rootId=state.libraryRootId;
+    const view=new google.picker.DocsView(google.picker.ViewId.DOCS)
+      .setIncludeFolders(true).setSelectFolderEnabled(false).setMode(google.picker.DocsViewMode.LIST);
+    const picker=new google.picker.PickerBuilder().addView(view)
+      .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+      .setOAuthToken(state.token).setDeveloperKey(String(cfg.googlePickerApiKey).trim())
+      .setAppId(String(cfg.googleAppId).trim()).setOrigin(location.origin)
+      .setTitle('เลือกไฟล์ SoundFont (.sf2 / .sf3)')
+      .setCallback(async data=>{
+        if(data?.[google.picker.Response.ACTION]!==google.picker.Action.PICKED)return;
+        try{
+          if(sub!==state.accountSub||rootId!==state.libraryRootId)throw Error('บัญชีหรือคลังเปลี่ยนแล้ว');
+          const ids=(data[google.picker.Response.DOCUMENTS]||[]).filter(d=>/\.sf[23]$/i.test(d[google.picker.Document.NAME]||''))
+            .map(d=>String(d[google.picker.Document.ID]||'')).filter(id=>/^[A-Za-z0-9_-]{5,256}$/.test(id)&&!isRetiredDriveRoot(id));
+          if(!ids.length)throw Error('กรุณาเลือกไฟล์ .sf2 หรือ .sf3');
+          const folder=window.XStageDriveFolders?.readSelections?.(sub,rootId)?.soundfont?.id;
+          if(!folder)throw Error('กรุณาเลือกโฟลเดอร์ SoundFont ก่อน');
+          await window.XStageBrowserMidi.refreshFonts({token:state.token,sub,rootId,ownedByMe:state.libraryRootOwnedByMe});
+        }catch(e){if(status)status.textContent=e.message;}
+      }).build();
+    picker.setVisible(true);
+  }catch(e){if(status)status.textContent=e.message;}
+});
 async function chooseUserDriveFolder(kind){
   const labels={music:'เพลง',soundfont:'SoundFont',fx:'FX'};
   if(!Object.hasOwn(labels,kind))throw Error('ประเภทโฟลเดอร์ไม่ถูกต้อง');

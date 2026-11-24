@@ -124,6 +124,7 @@
                <select id="xstage-soundfont-select" aria-label="เลือก SoundFont สำหรับเพลง MIDI">
                  <option value="builtin:TimGM6mb">เสียงเครื่องดนตรี GM · TimGM6mb (6 MB)</option>
                </select>
+               <button type="button" id="xstage-soundfont-authorize">เลือกและอนุญาตไฟล์ SoundFont จาก Google Drive</button>
                <button type="button" id="xstage-soundfont-refresh">รีเฟรช SoundFont</button>
                <button type="button" id="xstage-soundfont-local-clear">ลบ SoundFont ที่เลือกออกจากเครื่อง</button>
                <output id="xstage-soundfont-local-status" role="status" aria-live="polite"></output>
@@ -528,7 +529,7 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="cloud-import.js?v=1188-drive-upload-only" defer></script>
   <script src="cloud-drive-folders.js?v=5-existing-song-count" defer></script>
   <script src="tv-refresh.js?v=1144" defer></script>
-  <script src="app.js?v=1193-drive-build-reload-guard" defer></script><script src="pc-extensions.js?v=1190-selected-drive-fx" defer></script>
+  <script src="app.js?v=1197-font-picker" defer></script><script src="pc-extensions.js?v=1190-selected-drive-fx" defer></script>
   <script src="midi-keyboard-ui.js?v=1137-clean-title-1157-top-song-key-single-menu" defer></script>
   <script src="native-audio-meter.js?v=1144-live-stage-eq" defer></script>
   <script src="stage-controls.js?v=1137-monitor-only-eq" defer></script>
