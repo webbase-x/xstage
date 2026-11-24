@@ -31,11 +31,12 @@ def open_builder(app, initial_root=None):
                                        initialdir=folder.get() or str(Path.home()))
         if name:
             folder.set(name)
-            confirm.configure(state="disabled")
             state["approved"] = None
     ttk.Button(row, text="เลือก Google Drive…", command=select).pack(side="left")
 
-    status = tk.StringVar(value="เลือกคลังหลัก แล้วกดตรวจไฟล์และเพลงซ้ำก่อนสร้างฐาน")
+    full_verify = tk.BooleanVar(value=False)
+    ttk.Checkbutton(frame, text="ตรวจ SHA-256 ทุกไฟล์ใหม่ (ช้ากว่า)", variable=full_verify).pack(anchor="w")
+    status = tk.StringVar(value="เลือกคลังหลัก แล้วกดสร้างฐานและซิงก์ · ข้ามการตรวจไฟล์เดิมที่ไม่เปลี่ยน")
     ttk.Label(frame, textvariable=status, style="Muted.TLabel",
               wraplength=860).pack(fill="x", pady=8)
     progress = ttk.Progressbar(frame, mode="determinate", maximum=100)
@@ -56,7 +57,7 @@ def open_builder(app, initial_root=None):
                 progress.configure(value=min(100, info.get("scanned", 0) * 100 / total))
             status.set(message + " · " + str(info.get("scanned", 0)) + " / " +
                        str(total) + " · พร้อม " + str(info.get("accepted", 0)) +
-                       " · MIDI ซ้ำ " + str(info.get("duplicates", 0)))
+                       " · MIDI ซ้ำ " + str(info.get("duplicates", 0)) + " · ใช้ผลเดิม " + str(info.get("reused", 0)))
         try:
             app.after(0, paint)
         except RuntimeError:
@@ -70,10 +71,6 @@ def open_builder(app, initial_root=None):
             status.set("กรุณาเลือก XStageKaraoke ก่อน")
             return
         if publish:
-            if not state["approved"] or state["approved"] != requested:
-                status.set("ปลายทางเปลี่ยน กรุณาตรวจไฟล์ใหม่")
-                confirm.configure(state="disabled")
-                return
             if not messagebox.askyesno(
                 "ยืนยันสร้าง SQLite ใหม่จาก Karaoke PC",
                 "ต้องการสร้างและเผยแพร่ XStageKaraoke/DB/songs.sqlite3 ใหม่จาก XMID/XSK2 "
@@ -84,6 +81,7 @@ def open_builder(app, initial_root=None):
                 parent=panel
             ):
                 return
+        verify_all = full_verify.get()
         state["busy"] = True
         stop.clear()
         inspect.configure(state="disabled")
@@ -120,7 +118,8 @@ def open_builder(app, initial_root=None):
                         app._search_thread = None
                         reader_stopped = True
                 result = builder.build(requested, progress=update, cancel=stop,
-                                       publish=publish)
+                                       publish=publish, cache_dir=Path(app.data_dir) / "index-cache",
+                                       full_verify=verify_all)
             except Exception as exc:
                 result, error = None, str(exc)
             finally:
@@ -137,6 +136,7 @@ def open_builder(app, initial_root=None):
                         pass
                 state["busy"] = False
                 inspect.configure(state="normal")
+                confirm.configure(state="normal")
                 cancel.configure(state="disabled")
                 if error:
                     state["approved"] = None
@@ -162,7 +162,7 @@ def open_builder(app, initial_root=None):
                     app.save_settings()
                     status.set("สร้าง SQLite ใหม่สำเร็จ "+str(result["accepted"]) +
                                " เพลง · ข้าม MIDI ซ้ำ "+str(result["duplicates"]) +
-                               " · รอซิงก์ File ID "+str(result["pending_drive_ids"]) +
+                               " · รอ Google Drive ซิงก์ (ยังไม่ยืนยัน Cloud) · File ID รอตรวจ "+str(result["pending_drive_ids"]) +
                                " เพลง · เมื่อ Online เปิดเพลงจะตรวจจับคู่กับ Drive")
                     if getattr(app, "shared_drive_mode", False):
                         try:
@@ -177,15 +177,15 @@ def open_builder(app, initial_root=None):
         threading.Thread(target=work, daemon=True,
                          name="xstage-shared-sqlite-pc-build").start()
 
-    inspect = ttk.Button(buttons, text="1. ตรวจไฟล์และ MIDI ซ้ำ", command=lambda: submit(False))
+    inspect = ttk.Button(buttons, text="ตรวจอย่างเดียว", command=lambda: submit(False))
     inspect.pack(side="left", padx=(0, 10))
-    confirm = ttk.Button(buttons, text="2. สร้างฐานใหม่สำหรับ PC / Online",
-                         command=lambda: submit(True), state="disabled")
+    confirm = ttk.Button(buttons, text="สร้างฐานและซิงก์ (เร็วที่สุด)",
+                         command=lambda: submit(True))
     confirm.pack(side="left", padx=(0, 10))
     cancel = ttk.Button(buttons, text="หยุดอย่างปลอดภัย",
                         command=stop.set, state="disabled")
     cancel.pack(side="left")
-    ttk.Label(frame, text="ใช้ Google Drive for desktop โฟลเดอร์หลักเดียวกันทั้ง PC และ Web "
+    ttk.Label(frame, text="ตรวจสถานะซิงก์ใน Google Drive for desktop แล้วตรวจฐานบน Karaoke Online · ใช้โฟลเดอร์หลักเดียวกันทั้ง PC และ Web "
               "· SQLite ของ Song Studio Pro ยังแยก · ไม่มีการลบไฟล์เพลงต้นฉบับ",
               style="Muted.TLabel", wraplength=860).pack(anchor="w")
     def close():
