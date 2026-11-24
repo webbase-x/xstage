@@ -359,23 +359,23 @@ assert.ok(inspectedNames-beforeLookup<50,
   'Exact-name lookup must not repeatedly inspect 30,000 siblings');
 const duplicateParent=id();
 ensure(duplicateParent).push(
-  {id:'dupA',name:'duplicate',mimeType:'application/vnd.google-apps.folder'},
-  {id:'dupB',name:'duplicate',mimeType:'application/vnd.google-apps.folder'});
-assert.equal(await indexedDrive.folder(duplicateParent,'duplicate'),'dupA',
+  {id:'duplicateA123',name:'duplicate',mimeType:'application/vnd.google-apps.folder'},
+  {id:'duplicateB123',name:'duplicate',mimeType:'application/vnd.google-apps.folder'});
+assert.equal(await indexedDrive.folder(duplicateParent,'duplicate'),'duplicateA123',
   'Multiple empty same-name folders must reuse a stable existing ID without creating more');
 const populatedParent=id();
 ensure(populatedParent).push(
-  {id:'popA',name:'MIDI',mimeType:'application/vnd.google-apps.folder'},
-  {id:'popB',name:'MIDI',mimeType:'application/vnd.google-apps.folder'});
-ensure('popB').push({id:'song-existing',name:'001.mid',mimeType:'audio/midi'});
-assert.equal(await indexedDrive.folder(populatedParent,'MIDI'),'popB',
+  {id:'populatedA123',name:'MIDI',mimeType:'application/vnd.google-apps.folder'},
+  {id:'populatedB123',name:'MIDI',mimeType:'application/vnd.google-apps.folder'});
+ensure('populatedB123').push({id:'song-existing',name:'001.mid',mimeType:'audio/midi'});
+assert.equal(await indexedDrive.folder(populatedParent,'MIDI'),'populatedB123',
   'Reuse the only populated MIDI folder without modifying songs');
-ensure('popA').push({id:'song-other',name:'002.mid',mimeType:'audio/midi'});
+ensure('populatedA123').push({id:'song-other',name:'002.mid',mimeType:'audio/midi'});
 // Use a fresh Drive to avoid stale cached parent listings.
 const conflictDrive=new Drive(()=> 'token_TEST',()=>{});
 await assert.rejects(conflictDrive.folder(populatedParent,'MIDI'),
   error=>/มีข้อมูลมากกว่าหนึ่งแห่ง/.test(error.message)&&
-    error.message.includes('popA')&&error.message.includes('popB'),
+    error.message.includes('populatedA123')&&error.message.includes('populatedB123'),
   'Two populated MIDI folders must report both IDs rather than silently losing songs');
 const collidingParent=id();
 ensure(collidingParent).push(
