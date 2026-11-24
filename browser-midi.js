@@ -672,6 +672,9 @@ async function refreshFonts(auth){
       }
       if(!sourceId)fail('ไม่พบโฟลเดอร์ SoundFont ในคลังที่ใช้งาน กรุณาเลือกโฟลเดอร์ SoundFont อีกครั้ง');
       if(sourceId){
+        const drive=new scope.XStageCloudImport.Drive(()=>auth.token,()=>{});
+        await scope.XStageDriveFolders.verifyFolder(drive,sourceId,rootId,'soundfont');
+        if(sequence!==fontRefreshSequence)return;
         if(status)status.textContent='กำลังค้นหาใน '+sourceName;
         const all=[],pendingFolders=[sourceId],visited=new Set();
         while(pendingFolders.length){
