@@ -108,6 +108,43 @@ class SharedPcBuilderTests(unittest.TestCase):
             build(self.root,cancel=stopped)
         self.assertEqual(old.read_bytes(),b"old-database-placeholder")
 
+    def test_fast_cache_reuses_verified_unchanged_files(self):
+        cache = Path(self.tmp.name) / "index-cache"
+        first = build(self.root, cache_dir=cache, publish=False)
+        self.assertEqual(first["reused"], 0)
+        second = build(self.root, cache_dir=cache)
+        self.assertEqual(second["reused"], 1)
+        full = build(self.root, cache_dir=cache, publish=False, full_verify=True)
+        self.assertEqual(full["reused"], 0)
+        (self.songs/"10001.xmid").write_bytes(
+            _xmid("10001","เพลงใหม่ยาวกว่า","ศิลปิน",self.midi))
+        changed = build(self.root, cache_dir=cache)
+        self.assertEqual(changed["reused"], 0)
+        self.assertEqual(SharedSongLibrary(self.root,{}).search("10001")[0]["title"],"เพลงใหม่ยาวกว่า")
+        self.assertFalse((self.root/"DB/songs.sqlite3-wal").exists())
+
+    def test_fast_cache_keeps_verified_work_on_cancel(self):
+        cache = Path(self.tmp.name) / "index-cache"
+        for n in range(10002, 10030):
+            (self.songs/f"{n}.xmid").write_bytes(
+                _xmid(str(n),"เพลง","ศิลปิน",self.midi))
+        # Stop during a preview after a verified package has been saved.
+        from unittest.mock import patch
+        from karaoke import shared_catalog_builder as builder
+        original = builder._record
+        stop = threading.Event()
+        def record(*args):
+            row = original(*args)
+            stop.set()
+            return row
+        with patch.object(builder,"_record",side_effect=record):
+            with self.assertRaises(InterruptedError):
+                build(self.root,cache_dir=cache,cancel=stop)
+        self.assertFalse((self.root/"DB/songs.sqlite3").exists())
+        result = build(self.root,cache_dir=cache)
+        self.assertGreaterEqual(result["reused"],1)
+        self.assertEqual(result["accepted"],1)
+
     def test_bad_xmid_does_not_publish(self):
         (self.songs/"10001.xmid").write_bytes(b"corrupt")
         with self.assertRaises(ValueError):
