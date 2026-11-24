@@ -101,10 +101,17 @@
   }
   toggle.addEventListener('click',()=>{setMenu(menu.hidden);updateIndicators();});
   $('mobile-menu-close')?.addEventListener('click',()=>setMenu(false));
+  // Exclusive accordion, including browsers without native details[name].
+  for(const group of menu.querySelectorAll('.xstage-menu-category')){
+    group.addEventListener('toggle',()=>{
+      if(group.open)for(const other of menu.querySelectorAll('.xstage-menu-category'))
+        if(other!==group)other.open=false;
+    });
+  }
   // Menu actions close their menu unless the user is expanding a nested group.
   menu.addEventListener('click',e=>{
     const button=e.target.closest('button');
-    if(!button||!menu.contains(button))return;
+    if(!button||!menu.contains(button)||button.closest('.xstage-font-control'))return;
     if(button.closest('summary,details') && button.matches('summary'))return;
     queueMicrotask(()=>{if(!menu.hidden)setMenu(false);});
   });

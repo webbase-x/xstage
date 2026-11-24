@@ -511,6 +511,41 @@ const FAST_START_FONT_MAX_BYTES=48*1048576;
 let quickGmPromise=null,quickGmBytes=null;
 let context=null,selected=BUILTIN_GM_ID,fontCache=null,fontRefreshSequence=0,fontRefreshPromise=null;
 let fontLoadPromise=null, fontWarning='',builtinRetryAfter=0;
+let switchTask=null, switchGeneration=0, approvedFont='', downloadController=null, recoveryChecked=false;
+const FONT_RECOVERY='xstage-font-pending-v2', FONT_READY='xstage-font-ready-v2';
+function localGet(key){try{return scope.localStorage?.getItem(key)||'';}catch{return '';}}
+function localSet(key,value){try{scope.localStorage?.setItem(key,value);}catch{}}
+function currentFontKey(){
+  const option=$('xstage-soundfont-select')?.selectedOptions?.[0];
+  return fontDiskKey(context?.sub,context?.rootId,selected,option?.dataset?.revision);
+}
+function recommendedFontBytes(){
+  const n=Number(scope.navigator?.deviceMemory||4);
+  return (n<=2?64:n<=4?128:256)*1048576;
+}
+function beginFontTrial(bytes){
+  if(fontCache?.id!==BUILTIN_GM_ID&&fontCache?.bytes===bytes&&currentFontKey())
+    localSet(FONT_RECOVERY,currentFontKey());
+}
+function finishFontTrial(bytes){
+  if(fontCache?.bytes===bytes&&localGet(FONT_RECOVERY)===currentFontKey())
+    localSet(FONT_RECOVERY,'');
+}
+async function recoverFont(bytes,reason){
+  if(bytes&&fontCache?.bytes!==bytes)return false;
+  if(selected===BUILTIN_GM_ID)return false;
+  ++switchGeneration;downloadController?.abort();
+  selected=BUILTIN_GM_ID;approvedFont='';fontCache=null;fontLoadPromise=null;
+  const select=$('xstage-soundfont-select');if(select)select.value=selected;
+  const pref='xstage-font-pref:'+context?.sub+':'+context?.rootId+':'+(context?.fontFolderId||'default');
+  localSet(pref,selected);localSet(FONT_READY,'');localSet(FONT_RECOVERY,'');
+  fontWarning='ถอน SoundFont จากเครื่องแล้ว · ใช้ GM 6 MB · '+String(reason||'โหลดหรือเล่นไม่สำเร็จ');
+  let removed=true;
+  try{await fontDisk('readwrite',store=>store.clear());}catch{removed=false;}
+  const out=$('xstage-soundfont-local-status');if(out)out.textContent=removed?'กลับไปใช้ GM · ไฟล์บน Drive ยังอยู่':'กลับไปใช้ GM · ถอนแคชไม่สำเร็จ กรุณากดถอนอีกครั้ง';
+  if(!removed)fontWarning='กลับไปใช้ GM · ถอนแคชในเครื่องไม่สำเร็จ';
+  fontStatusChanged();return true;
+}
 // Private banks are cached only after an authenticated listing supplies a revision.
 function fontDisk(mode,operation){
   if(!scope.indexedDB)return Promise.resolve(null);
@@ -536,7 +571,7 @@ async function readDiskFont(key,size){
   try{
     const value=await fontDisk('readonly',store=>store.get(key));
     if(!value)return null;
-    const bytes=new Uint8Array(value);
+    const bytes=value instanceof Uint8Array?value:new Uint8Array(value);
     if(bytes.byteLength!==size)throw Error('Cached size mismatch');
     validateFontContainer(bytes);
     return bytes;
@@ -545,9 +580,13 @@ async function readDiskFont(key,size){
     return null;
   }
 }
-async function saveDiskFont(key,bytes){
+async function saveDiskFont(key,bytes,isCurrent=()=>true){
   if(!key||!scope.indexedDB)return false;
-  try{await fontDisk('readwrite',store=>store.put(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),key));return true;}
+  try{await fontDisk('readwrite',store=>{
+    if(!isCurrent())throw Error('SoundFont selection changed');
+    store.clear();
+    return store.put(bytes,key);
+  });return true;}
   catch{return false;}
 }
 function fontStatus(){
@@ -586,7 +625,7 @@ async function refreshFonts(auth){
   const sameLibrary=context?.sub===sub&&context?.rootId===rootId&&
     context?.fontFolderId===chosenFolder;
   context={...auth,fontFolderId:chosenFolder};
-  if(!sameLibrary){selected=BUILTIN_GM_ID;fontCache=null;fontLoadPromise=null;fontStatusChanged();}
+  if(!sameLibrary){++switchGeneration;downloadController?.abort();selected=BUILTIN_GM_ID;approvedFont='';fontCache=null;fontLoadPromise=null;fontStatusChanged();}
   const status=$('xstage-soundfont-scan-status');
   const permission=$('xstage-soundfont-authorize');
   const sourceStatus=$('xstage-drive-font-permission-status');
@@ -600,11 +639,14 @@ async function refreshFonts(auth){
   if(refresh)refresh.onclick=()=>{const current=scope.XStageDriveFontAuth?.()||context;if(current)void refreshFonts(current);};
   const clear=$('xstage-soundfont-local-clear');
   if(clear)clear.onclick=async()=>{
-    const option=select.selectedOptions?.[0],key=fontDiskKey(context?.sub,context?.rootId,option?.value,option?.dataset?.revision);
-    if(!key)return;
-    try{await fontDisk('readwrite',store=>store.delete(key));
-      const out=$('xstage-soundfont-local-status');if(out)out.textContent='ลบไฟล์ที่เก็บในเครื่องแล้ว';
-    }catch{if(status)status.textContent='ลบไฟล์ในเครื่องไม่สำเร็จ';}
+    if(selected!==BUILTIN_GM_ID){
+      await recoverFont(null,'ผู้ใช้ถอน SoundFont');
+      scope.dispatchEvent?.(new CustomEvent('xstage:soundfont-change',{detail:{soundFontId:selected}}));
+    }else{
+      try{await fontDisk('readwrite',store=>store.clear());localSet(FONT_READY,'');
+        const out=$('xstage-soundfont-local-status');if(out)out.textContent='ถอนแคชในเครื่องแล้ว · ไม่ลบไฟล์ Drive';
+      }catch{if(status)status.textContent='ถอนแคชในเครื่องไม่สำเร็จ';}
+    }
   };
   if(status)status.textContent='กำลังค้นหา SoundFont…';
   select.replaceChildren(new Option('กำลังตรวจสอบ SoundFont…',''));
@@ -668,6 +710,15 @@ async function refreshFonts(auth){
       const storageKey='xstage-font-pref:'+sub+':'+rootId+':'+(chosenFolder||'default');
       let saved='';
       try{saved=localStorage.getItem(storageKey)||(!chosenFolder?localStorage.getItem('xstage-font-pref:'+sub+':'+rootId):'')||'';}catch{}
+      let interrupted=false;
+      if(!recoveryChecked&&localGet(FONT_RECOVERY)){
+        interrupted=true;
+        try{await fontDisk('readwrite',store=>store.clear());}catch{}
+        localSet(FONT_RECOVERY,'');localSet(FONT_READY,'');
+        saved=BUILTIN_GM_ID;localSet(storageKey,saved);
+      }
+      recoveryChecked=true;
+      if(sequence!==fontRefreshSequence)return;
       select.replaceChildren(...choices);
       const hinted=Number(scope.navigator?.deviceMemory||4);
       const maxMB=(hinted<=2?64:hinted<=4?128:256)*1048576;
@@ -677,7 +728,10 @@ async function refreshFonts(auth){
       // no-SoundFont fallback used raw oscillators (8-bit game sound).
       // Prefer the user's saved bank, then a complete-looking GM/GS bank.
       const savedChoice=choices.slice(1).find(option=>option.value===saved);
-      const savedTooLarge=!!savedChoice&&
+      const savedKey=savedChoice?fontDiskKey(sub,rootId,savedChoice.value,savedChoice.dataset.revision):'';
+      const restored=!!savedKey&&localGet(FONT_READY)===savedKey;
+      const alreadyApproved=!!savedChoice&&sameLibrary&&selected===savedChoice.value&&approvedFont===(savedKey||savedChoice.value);
+      const savedTooLarge=!!savedChoice&&!restored&&!alreadyApproved&&
         (Number(savedChoice.dataset.size)>FAST_START_FONT_MAX_BYTES||!eligible.includes(savedChoice));
       // Include common complete-GM bank names such as CT56MGM_V45.
       // A larger GM SoundFont can sound fuller than the 6 MB starter bank,
@@ -686,14 +740,15 @@ async function refreshFonts(auth){
         /general.?midi|generaluser|fluidr3|timgm|mgm|(?:^|[^a-z])gm(?:[^a-z]|$)|(?:^|[^a-z])gs(?:[^a-z]|$)/i.test(option.text));
       // Never auto-download a saved 243 MB bank on page open.
       // Preserve the user's saved choice for explicit use in the menu.
-      const autoChoice=savedTooLarge?null:savedChoice||
+      const autoChoice=interrupted||saved===BUILTIN_GM_ID||savedTooLarge?null:savedChoice||
         gmCandidates.slice().sort((a,b)=>
           Number(b.dataset.size)-Number(a.dataset.size))[0];
       // Use the bundled-source GM reference rather than guessing that an
       // unrelated instrument-only SF2 can play a complete karaoke arrangement.
       select.value=autoChoice?.value||BUILTIN_GM_ID;
       selected=select.value;
-      fontWarning=savedTooLarge
+      if(restored)approvedFont=savedKey;
+      fontWarning=interrupted?'พบการโหลดหรือเล่น SoundFont ที่ไม่เสร็จ · ถอนแคชแล้ว · ใช้ GM 6 MB':savedTooLarge
         ?'SoundFont เดิม '+Math.round(Number(savedChoice.dataset.size)/1048576)+
           ' MB ใหญ่เกินไปสำหรับเริ่มเพลงทันที · ใช้ GM 6 MB ก่อน'
         :'';
@@ -701,19 +756,29 @@ async function refreshFonts(auth){
       // Save automatic choice so subsequent sessions retain the same bank.
       if(autoChoice&&!saved){try{localStorage.setItem(storageKey,selected);}catch{}}
       select.onchange=()=>{
-        selected=select.value;fontCache=null;fontLoadPromise=null;fontWarning='';fontStatusChanged();
-        try{localStorage.setItem(storageKey,selected);}catch{}
-        // Selected SoundFont is retained for this app session and reused.
-        // Private disk cache is isolated by verified account, library, file and revision.
-        if(selected&&context?.token)void selectedFont(context.token).catch(error=>{
-          console.warn('SoundFont preload:',error.message);
-          scope.dispatchEvent?.(new CustomEvent('xstage:font-memory-error',
-            {detail:{message:error.message}}));
+        const next=select.value, previous=selected, option=select.selectedOptions?.[0];
+        if(next===previous)return;
+        const size=Number(option?.dataset?.size||0);
+        if(next!==BUILTIN_GM_ID&&size>MAX_FONT){
+          select.value=previous;fontWarning='เกินเพดานตัวถอดรหัส 256 MB · ใช้ชุดเสียงอื่น';fontStatusChanged();return;
+        }
+        if(next!==BUILTIN_GM_ID&&size>FAST_START_FONT_MAX_BYTES&&
+           typeof scope.confirm==='function'&&!scope.confirm('SoundFont '+Math.round(size/1048576)+' MB · RAM ว่างจริงอาจตรวจไม่ได้ (เกณฑ์แนะนำ '+Math.round(recommendedFontBytes()/1048576)+' MB)\\nยืนยันการโหลดหรือไม่? หากเล่นไม่ได้จะถอนแคชและกลับไปใช้ GM โดยไม่ลบไฟล์บน Drive')){
+          select.value=previous;return;
+        }
+        const generation=++switchGeneration;
+        downloadController?.abort();selected=next;fontCache=null;fontLoadPromise=null;fontWarning='';
+        approvedFont=currentFontKey()||next;localSet(storageKey,selected);
+        localSet(FONT_READY,'');localSet(FONT_RECOVERY,'');fontStatusChanged();
+        // Clear private local cache BEFORE starting a new bank; no Drive mutation.
+        const cleanup=fontDisk('readwrite',store=>store.clear()).catch(()=>{});
+        switchTask=cleanup;
+        void cleanup.finally(()=>{
+          if(switchTask===cleanup)switchTask=null;
+          if(generation!==switchGeneration)return;
+          if(context?.token)void selectedFont(context.token).catch(error=>console.warn('SoundFont preload:',error.message));
+          scope.dispatchEvent?.(new CustomEvent('xstage:soundfont-change',{detail:{soundFontId:selected}}));
         });
-        // Any pre-rendered XSK2 in the queue used the prior SoundFont.
-        // Invalidate that temporary audio before the next song starts.
-        scope.dispatchEvent?.(new CustomEvent('xstage:soundfont-change',
-          {detail:{soundFontId:selected}}));
       };
     }catch(error){
       if(sequence!==fontRefreshSequence)return;
@@ -731,7 +796,7 @@ async function refreshFonts(auth){
   // Start preload only after the scan Promise is cleared: selectedFont
   // itself awaits that Promise, so preloading inside the scan deadlocks.
   if(selected&&context?.token&&sequence===fontRefreshSequence&&
-     !prefersCompactGm())
+     (!prefersCompactGm()||approvedFont===currentFontKey()))
     void selectedFont(context.token).catch(error=>{
       console.warn('SoundFont automatic preload:',error.message);
       scope.dispatchEvent?.(new CustomEvent('xstage:font-memory-error',
@@ -774,11 +839,13 @@ async function fastGmFont(token,signal){
 }
 async function selectedFont(token,signal){
   if(fontRefreshPromise)await fontRefreshPromise;
+  if(switchTask)await switchTask;
   if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
   if(!selected)selected=BUILTIN_GM_ID;
   if(!context||token!==context.token)fail('บัญชี Google เปลี่ยน · โปรดเลือก SoundFont อีกครั้ง');
   if(selected===BUILTIN_GM_ID){
     const id=BUILTIN_GM_ID,sub=context.sub;
+    if(quickGmBytes&&!fontCache){fontCache={id,sub,bytes:quickGmBytes,parsed:null,label:'TimGM6mb · General MIDI'};fontStatusChanged();return quickGmBytes;}
     if(Date.now()<builtinRetryAfter)return null;
     if(fontCache?.id===id&&fontCache.sub===sub)return fontCache.bytes;
     if(fontLoadPromise?.id===id&&fontLoadPromise.sub===sub)
@@ -820,8 +887,8 @@ async function selectedFont(token,signal){
   // Falling back to the built-in MIDI synthesizer keeps playback functional.
   const option=$('xstage-soundfont-select')?.selectedOptions?.[0];
   const listedSize=Number(option?.dataset?.size||0);
-  const hinted=Number(scope.navigator?.deviceMemory||4);
-  const sizeLimit=Math.min(MAX_FONT,(hinted<=2?64:hinted<=4?128:256)*1048576);
+  const confirmed=approvedFont===(currentFontKey()||selected);
+  const sizeLimit=confirmed?MAX_FONT:Math.min(MAX_FONT,recommendedFontBytes());
   if(listedSize>sizeLimit){
     fontWarning='SoundFont '+Math.round(listedSize/1048576)+' MB ใหญ่เกินงบ RAM · ใช้เสียง MIDI พื้นฐานเพื่อเริ่มเล่นโดยไม่ต้องดาวน์โหลดไฟล์ใหญ่';
     fontStatusChanged();
@@ -833,64 +900,72 @@ async function selectedFont(token,signal){
   if(fontCache?.id===id&&fontCache?.sub===sub)return fontCache.bytes;
   if(fontLoadPromise?.id===id&&fontLoadPromise.sub===sub)
     return fontLoadPromise.promise;
+  const generation=switchGeneration;
+  const controller=typeof AbortController==='function'?new AbortController():null;
+  downloadController=controller;
+  const trialKey=currentFontKey()||id;
   const task=(async()=>{
     const early=scope.XStageMemory?.nativeRam?.();
     if(early?.lowMemory){
-      fontWarning='Android RAM ต่ำ · ใช้เสียง MIDI พื้นฐานชั่วคราว';
-      fontStatusChanged();
-      return null;
+      throw Error('Android รายงาน RAM ต่ำ');
     }
+    localSet(FONT_RECOVERY,trialKey);
     const cached=await readDiskFont(diskKey,listedSize);
-    if(signal?.aborted||selected!==id||context?.token!==token||context?.sub!==sub)
+    if(signal?.aborted||generation!==switchGeneration||selected!==id||context?.token!==token||context?.sub!==sub)
       throw new DOMException('เปลี่ยนบัญชีหรือชุดเสียง','AbortError');
     if(cached){
       fontCache={id,sub,bytes:cached,parsed:null,label:option?.text||'SoundFont'};
       fontWarning='';if(diskStatus)diskStatus.textContent='ใช้ SoundFont ที่เก็บในเครื่อง';
-      fontStatusChanged();return cached;
+      localSet(FONT_RECOVERY,'');fontStatusChanged();return cached;
     }
+    if(confirmed&&localGet(FONT_READY)===trialKey&&listedSize>FAST_START_FONT_MAX_BYTES)
+      throw Error('แคช SoundFont ไม่อยู่ในเครื่อง กรุณาเลือกใหม่เพื่อยืนยัน');
     if(diskStatus)diskStatus.textContent='กำลังดาวน์โหลด SoundFont…';
     const res=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',
-      {headers:{Authorization:'Bearer '+token},cache:'no-store',signal});
+      {headers:{Authorization:'Bearer '+token},cache:'no-store',signal:controller?.signal||signal});
     if(!res.ok)fail('โหลด SoundFont จาก Drive ไม่สำเร็จ HTTP '+res.status);
     const len=Number(res.headers.get('Content-Length')||0);
-    const hinted=Number(scope.navigator?.deviceMemory||4);
-    const deviceLimit=(hinted<=2?64:hinted<=4?128:256)*1048576;
+    const deviceLimit=sizeLimit;
     const native=scope.XStageMemory?.nativeRam?.();
     if(native?.lowMemory||native&&len&&
        len>Math.max(16*1048576,native.available*.22)||
        len>MAX_FONT||len>deviceLimit){
-      fontWarning='SoundFont ใหญ่เกินงบ RAM · เล่นด้วยเสียง MIDI พื้นฐานชั่วคราว';
-      fontStatusChanged();
       await res.body?.cancel?.();
-      return null;
+      throw Error('SoundFont เกินขอบเขตหรือ RAM ไม่เพียงพอ');
     }
     const bytes=new Uint8Array(await res.arrayBuffer());
     if(bytes.byteLength>MAX_FONT||bytes.byteLength>deviceLimit||
        native&&bytes.byteLength>Math.max(16*1048576,native.available*.22)){
-      fontWarning='SoundFont ใช้ RAM มากเกินไป · เล่นด้วยเสียงพื้นฐานชั่วคราว';
-      fontStatusChanged();
-      return null;
+      throw Error('SoundFont ใช้ RAM มากเกินไป');
     }
     if(signal?.aborted)throw new DOMException('ยกเลิกการโหลด SoundFont','AbortError');
-    if(selected!==id||context?.token!==token||context?.sub!==sub)
-      fail('รายการ SoundFont เปลี่ยนระหว่างโหลด · กรุณาเลือกใหม่');
+    if(generation!==switchGeneration||selected!==id||context?.token!==token||context?.sub!==sub)
+      throw new DOMException('รายการ SoundFont เปลี่ยน','AbortError');
     // Parse once, then reuse decoded structure and bounded sample buffers.
     validateFontContainer(bytes);
     const label=$('xstage-soundfont-select')?.selectedOptions?.[0]?.text||'SoundFont';
+    if(listedSize&&bytes.byteLength!==listedSize)throw Error('ขนาด SoundFont ไม่ตรงกับรายการ Drive');
     fontCache={id,sub,bytes,parsed:null,label};
     if(diskKey&&bytes.byteLength===listedSize){
-      void saveDiskFont(diskKey,bytes).then(ok=>{
-        if(selected===id&&context?.sub===sub&&diskStatus)
-          diskStatus.textContent=ok?'บันทึก SoundFont ลงเครื่องแล้ว':'เก็บใน RAM เท่านั้น · พื้นที่จัดเก็บไม่พร้อม';
-      });
+      const ok=await saveDiskFont(diskKey,bytes,()=>generation===switchGeneration&&selected===id&&context?.sub===sub);
+      if(generation===switchGeneration&&selected===id&&context?.sub===sub){
+        if(ok)localSet(FONT_READY,diskKey);
+        if(diskStatus)diskStatus.textContent=ok?'บันทึก SoundFont ลงเครื่องแล้ว · 1 ไฟล์':'เก็บใน RAM เท่านั้น · พื้นที่จัดเก็บไม่พร้อม';
+      }
     }
-    fontWarning='';
+    if(generation!==switchGeneration)throw new DOMException('เปลี่ยน SoundFont','AbortError');
+    localSet(FONT_RECOVERY,'');fontWarning='';
     fontStatusChanged();
     return bytes;
-  })();
+  })().catch(async error=>{
+    if(generation!==switchGeneration)throw error;
+    if(error?.name==='AbortError'){localSet(FONT_RECOVERY,'');throw error;}
+    await recoverFont(null,error.message);
+    return null;
+  });
   fontLoadPromise={id,sub,promise:task};
   try{return await task;}
-  finally{if(fontLoadPromise?.promise===task)fontLoadPromise=null;}
+  finally{if(fontLoadPromise?.promise===task)fontLoadPromise=null;if(downloadController===controller)downloadController=null;}
 }
 // Fast native-clock MIDI playback: no whole-song OfflineAudioContext/WAV render.
 // Used only with the built-in synthesizer; selected SoundFonts retain full rendering.
@@ -1113,9 +1188,9 @@ function playRealtime(player,source,{signal,onStatus,fontBytes=null,getTranspose
   };
 }
 scope.XStageBrowserMidi={parseMidi,midiLyrics,ncnLyrics,parseFont,render,refreshFonts,selectedFont,fontStatus,playRealtime,warmRealtimeSamples,unlockAudio,
-  prefersCompactGm,fastGmFont,isFastGmBytes:bytes=>!!bytes&&bytes===quickGmBytes,
+  prefersCompactGm,fastGmFont,beginFontTrial,finishFontTrial,recoverFont,isFastGmBytes:bytes=>!!bytes&&bytes===quickGmBytes,
   liveAudioContext:()=>sharedLiveContext?.state!=='closed'?sharedLiveContext:null,
   supportsRealtime:()=>!!(scope.AudioContext||scope.webkitAudioContext),
-  reset(){fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;fontWarning='';context=null;selected=BUILTIN_GM_ID;fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียงเครื่องดนตรี GM · TimGM6mb (6 MB)',BUILTIN_GM_ID));}};
+  reset(){++switchGeneration;downloadController?.abort();approvedFont='';fontRefreshSequence++;fontRefreshPromise=null;fontLoadPromise=null;fontWarning='';context=null;selected=BUILTIN_GM_ID;fontCache=null;fontStatusChanged();const node=$('xstage-soundfont-select');if(node)node.replaceChildren(new Option('เสียงเครื่องดนตรี GM · TimGM6mb (6 MB)',BUILTIN_GM_ID));}};
 scope.addEventListener?.('xstage:auth-cleared',()=>scope.XStageBrowserMidi.reset());
 })(typeof window!=='undefined'?window:globalThis);

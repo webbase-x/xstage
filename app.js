@@ -3013,6 +3013,19 @@ async function ensureMidiInstrumentBank(fontBytes,pending,token,controller){
 
 // Prefer the real MIDI sequencer. When it cannot initialize, the existing
 // Web Audio fallback must still receive the loaded SF2 sample bank.
+async function renderWithSoundFontRecovery(source,bank,token,controller,options={}){
+  const midi=window.XStageBrowserMidi;
+  midi.beginFontTrial?.(bank);
+  try{
+    const result=await midi.render(source,{...options,fontBytes:bank,signal:controller.signal});
+    midi.finishFontTrial?.(bank);return result;
+  }catch(error){
+    if(controller.signal?.aborted||error?.name==='AbortError'){midi.finishFontTrial?.(bank);throw error;}
+    if(!await midi.recoverFont?.(bank,error.message))throw error;
+    const gm=await midi.selectedFont(token,controller.signal);
+    return midi.render(source,{...options,fontBytes:gm,signal:controller.signal});
+  }
+}
 async function prepareFirstMidiSynth(source,bank,options){
   if(!bank||!window.XStageProMidi?.available?.())return null;
   const task=window.XStageProMidi.prepare(source,bank,options);
@@ -3086,9 +3099,7 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
   onStatus('กำลังสังเคราะห์ MIDI ของ XSK2 ด้วย SoundFont…');
   const verifiedBank=await ensureMidiInstrumentBank(fontBytes,lateFont,token,
     {signal,abort(){ /* XSK's outer controller owns cancellation. */ }});
-  const rendered=await window.XStageBrowserMidi.render(midiBytes,{
-    fontBytes:verifiedBank,signal,onStatus
-  });
+  const rendered=await renderWithSoundFontRecovery(midiBytes,verifiedBank,token,{signal},{onStatus});
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   if(soundFontGeneration!==(state.xskSoundFontGeneration||0))
     throw Error('SoundFont เปลี่ยนระหว่างเตรียม XSK2 · ต้องเรนเดอร์ใหม่');
@@ -3329,15 +3340,19 @@ window.addEventListener('xstage:soundfont-change',()=>{
   // after the newly selected SoundFont has loaded; stale requests are ignored.
   const generation=state.xskSoundFontGeneration=(state.xskSoundFontGeneration||0)+1;
   releaseQueuePreload();
-  if(state.liveMidiPlayback&&state.liveMidiSource&&state.token){
+  if(state.liveMidiSource&&state.token&&midiTransport.active){
     const token=state.token,source=state.liveMidiSource;
+    // Retire the old synth before allocating a new large SoundFont.
+    state.liveMidiPlayback?.dispose();state.liveMidiPlayback=null;
     setPlayStatus('กำลังเปลี่ยน SoundFont โดยไม่หยุดเวลาเพลง…');
     void (async()=>{
       try{
-        const fontBytes=await window.XStageBrowserMidi.selectedFont(token);
+        let fontBytes=await window.XStageBrowserMidi.selectedFont(token);
+        if(!fontBytes)fontBytes=await window.XStageBrowserMidi.selectedFont(token);
         const isCurrent=()=>generation===state.xskSoundFontGeneration&&
           token===state.token&&source===state.liveMidiSource&&midiTransport.active;
         if(!isCurrent())return;
+        window.XStageBrowserMidi.beginFontTrial?.(fontBytes);
         const options={
           fontBytes,onStatus:setPlayStatus,
           getTranspose:()=>Number($('midi-transpose')?.value||0),
@@ -3368,9 +3383,15 @@ window.addEventListener('xstage:soundfont-change',()=>{
         const previous=state.liveMidiPlayback;
         state.liveMidiPlayback=nextEngine;
         previous?.dispose();
+        window.XStageBrowserMidi.finishFontTrial?.(fontBytes);
         setMidiEngineStatus(nextEngine);
         setPlayStatus('เปลี่ยน SoundFont สำเร็จ · '+(nextEngine.engine||'Web Audio สำรอง'));
-      }catch(error){setPlayStatus('เปลี่ยน SoundFont ไม่สำเร็จ: '+error.message);}
+      }catch(error){
+        if(generation===state.xskSoundFontGeneration&&error?.name!=='AbortError'&&
+           await window.XStageBrowserMidi.recoverFont?.(null,error.message))
+          window.dispatchEvent(new CustomEvent('xstage:soundfont-change'));
+        setPlayStatus('เปลี่ยน SoundFont ไม่สำเร็จ: '+error.message);
+      }
     })();
   }
   scheduleQueuePreload();
@@ -3845,9 +3866,8 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
         liveMidiBytes=midiBytes;liveFontBytes=fontBytes;
         return null;
       }
-      const verifiedBank=await ensureMidiInstrumentBank(fontBytes,lateFont,token,controller);
-      const rendered=await window.XStageBrowserMidi.render(midiBytes,{
-        fontBytes:verifiedBank,signal:controller.signal,
+      let verifiedBank=await ensureMidiInstrumentBank(fontBytes,lateFont,token,controller);
+      const rendered=await renderWithSoundFontRecovery(midiBytes,verifiedBank,token,controller,{
         onStatus:message=>{if(request===state.requestId)setPlayStatus(message);}
       });
       return rendered.audio;
@@ -3934,6 +3954,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       // The previous MIDI handoff owns a loaded SpessaSynth/GM bank and
       // continues a bounded rhythm. Reuse that SAME Worklet for MIDI->MIDI
       // rather than allocating another 200+ MB SoundFont and going silent.
+      window.XStageBrowserMidi.beginFontTrial?.(liveFontBytes);
       let professional=null;
       const handoff=state.transitionFill;
       if(handoff?.prepareNextMidi){
@@ -3950,9 +3971,19 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       if(!professional){
         // Prime cold SF2 sample buffers before the first audible MIDI note.
         setPlayStatus('กำลังเตรียมตัวอย่างเสียงเครื่องดนตรีก่อนเริ่มเพลง…');
-        await window.XStageBrowserMidi.warmRealtimeSamples(liveMidiBytes,
-          liveFontBytes,{signal:controller.signal,
-            onStatus:message=>{if(request===state.requestId)setPlayStatus(message);}});
+        try{
+          await window.XStageBrowserMidi.warmRealtimeSamples(liveMidiBytes,
+            liveFontBytes,{signal:controller.signal,
+              onStatus:message=>{if(request===state.requestId)setPlayStatus(message);}});
+        }catch(error){
+          if(controller.signal.aborted||error?.name==='AbortError'){
+            window.XStageBrowserMidi.finishFontTrial?.(liveFontBytes);throw error;
+          }
+          if(!await window.XStageBrowserMidi.recoverFont?.(liveFontBytes,error.message))throw error;
+          liveFontBytes=await ensureMidiInstrumentBank(null,null,token,controller);
+          midiOptions.fontBytes=liveFontBytes;
+          await window.XStageBrowserMidi.warmRealtimeSamples(liveMidiBytes,liveFontBytes,{signal:controller.signal});
+        }
       }
       if(controller.signal.aborted||request!==state.requestId||
          token!==state.token){
@@ -3980,6 +4011,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
           player,liveMidiBytes,midiOptions);
         setMidiEngineStatus(state.liveMidiPlayback);
       }
+      window.XStageBrowserMidi.finishFontTrial?.(liveFontBytes);
       window.XStageMIDIPiano?.setSong({
         bytes:liveMidiBytes,
         getCurrentTime:()=>Number(player.currentTime)||0,

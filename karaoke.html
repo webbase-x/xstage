@@ -23,7 +23,7 @@
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
   <link rel="stylesheet" href="style.css?v=1153-concert-lights">
-  <link rel="stylesheet" href="xstage-ux.css?v=1164-mobile-controls-lights-thai-accents-1169-live-update-ui-google-remember-tv-online-parity-v1180-tv-dpad-search-queue-r1">
+  <link rel="stylesheet" href="xstage-ux.css?v=1202-menu">
   <link rel="stylesheet" href="cloud-import.css?v=1189-folder-cancel-controls">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
@@ -119,50 +119,90 @@
           <nav id="mobile-stage-menu" class="mobile-stage-menu" aria-label="เมนูหน้าจอเล็ก" hidden>
             <div class="mobile-menu-head"><strong>เมนู X-Stage</strong><button type="button" id="mobile-menu-close" aria-label="ปิดเมนู">✕</button></div>
             <div id="mobile-menu-status" class="mobile-menu-status" role="status"></div>
-            <button type="button" id="cloud-import-open" hidden>☁ จัดการคลัง Google Drive</button>
-             <label class="xstage-font-control" for="xstage-soundfont-select"><span>ซาวด์ฟอนต์ MIDI</span>
+            <details class="xstage-menu-category" name="xstage-main-menu">
+              <summary>01. หน้าแรก</summary>
+              <div class="xstage-menu-category-body">
+                <button type="button" id="mobile-home-toggle" aria-label="หน้าแรก">หน้าแรก</button>
+              </div>
+            </details>
+            <details class="xstage-menu-category" name="xstage-main-menu">
+              <summary>02. เพลงและคิวเพลง</summary>
+              <div class="xstage-menu-category-body">
+                <button type="button" id="mobile-queue-toggle" aria-label="คิวเพลง">คิวเพลง <span id="mobile-queue-count">0</span></button>
+                <button type="button" id="mobile-favorites">เพลงโปรด</button>
+                <button type="button" id="mobile-history">ประวัติการเล่น</button>
+                <button type="button" id="mobile-random">สุ่มเพลงเพิ่มในคิว</button>
+                <button type="button" id="mobile-import-queue">นำเข้าคิวเพลง</button>
+                <button type="button" id="mobile-export-queue">ส่งออกคิวเพลง</button>
+              </div>
+            </details>
+            <details class="xstage-menu-category" name="xstage-main-menu">
+              <summary>03. ระบบเสียงและ SoundFont</summary>
+              <div class="xstage-menu-category-body">
+                <label class="xstage-font-control" for="xstage-soundfont-select"><span>ซาวด์ฟอนต์ MIDI</span>
                <select id="xstage-soundfont-select" aria-label="เลือก SoundFont สำหรับเพลง MIDI">
                  <option value="builtin:TimGM6mb">เสียงเครื่องดนตรี GM · TimGM6mb (6 MB)</option>
                </select>
                <button type="button" id="xstage-soundfont-refresh">รีเฟรชรายการ SoundFont</button>
-               <button type="button" id="xstage-soundfont-local-clear">ลบแคช SoundFont ในเครื่อง</button>
+               <button type="button" id="xstage-soundfont-local-clear">ถอน SoundFont จากเครื่อง</button>
                <output id="xstage-soundfont-local-status" role="status" aria-live="polite"></output>
                <output id="xstage-soundfont-scan-status" role="status" aria-live="polite"></output>
                <output id="xstage-font-memory" class="xstage-memory-indicator" data-level="low" role="status" aria-live="polite">SoundFont · ยังไม่โหลด</output>
              </label>
-            <button type="button" id="mobile-home-toggle" aria-label="หน้าแรก">หน้าแรก</button>
-            <button type="button" id="mobile-queue-toggle" aria-label="คิวเพลง">คิวเพลง <span id="mobile-queue-count">0</span></button>
-            <button type="button" id="mobile-stage-pop" aria-label="เปิดจอร้องแยก">เปิดจอร้องแยก</button>
-            <button type="button" id="mobile-medley-toggle" aria-pressed="false" aria-label="เปิดเมดเลย์สุ่มเพลงต่อเนื่อง">เปิดเมดเลย์สุ่มเพลงต่อเนื่อง</button>
-            <label class="mobile-speed-control" for="mobile-speed-select"><span>ความเร็วเพลง</span><select id="mobile-speed-select" aria-label="ความเร็วเพลง"><option value="0.75">0.75×</option><option value="0.9">0.90×</option><option value="1" selected>1.00×</option><option value="1.1">1.10×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option></select></label>
-            <button type="button" id="mobile-tools-toggle" aria-label="เปิดเครื่องมือเพิ่มเติม">เครื่องมือเพิ่มเติม</button>
-            <details class="stage-extra-tools" id="stage-extra-tools">
-              <summary>เครื่องมือทั้งหมด</summary>
-              <div class="stage-extra-tools-list">
-                <button type="button" id="mobile-random">สุ่มเพลงเพิ่มในคิว</button>
-                <button type="button" id="mobile-history">ประวัติการเล่น</button>
-                <button type="button" id="mobile-favorites">เพลงโปรด</button>
-                <button type="button" id="mobile-lyrics">ตั้งค่าเนื้อร้อง / พื้นหลัง</button>
                 <button type="button" id="mobile-eq">อีควอไลเซอร์ EQ</button>
+              </div>
+            </details>
+            <details class="xstage-menu-category" name="xstage-main-menu">
+              <summary>04. ควบคุมการเล่น</summary>
+              <div class="xstage-menu-category-body">
+                <button type="button" id="mobile-medley-toggle" aria-pressed="false" aria-label="เปิดเมดเลย์สุ่มเพลงต่อเนื่อง">เปิดเมดเลย์สุ่มเพลงต่อเนื่อง</button>
+                <label class="mobile-speed-control" for="mobile-speed-select"><span>ความเร็วเพลง</span><select id="mobile-speed-select" aria-label="ความเร็วเพลง"><option value="0.75">0.75×</option><option value="0.9">0.90×</option><option value="1" selected>1.00×</option><option value="1.1">1.10×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option></select></label>
                 <button type="button" id="mobile-ab-a">ตั้งจุดวน A</button>
                 <button type="button" id="mobile-ab-b">ตั้งจุดวน B</button>
                 <button type="button" id="mobile-ab-clear">ยกเลิกจุดวน A–B</button>
-                <button type="button" id="mobile-import-queue">นำเข้าคิวเพลง</button>
-                <button type="button" id="mobile-export-queue">ส่งออกคิวเพลง</button>
-                <button type="button" id="mobile-more-tools">เครื่องมือขั้นสูง / LRC / ไมโครโฟน</button>
-                <button type="button" id="mobile-share-library">แชร์โฟลเดอร์เพลง</button>
-                <button type="button" id="mobile-clear-cache">เคลียร์แคช (คงล็อกอิน Google)</button>
+                <button type="button" id="midi-keyboard-toggle" hidden aria-controls="midi-keyboard-panel" aria-expanded="false">🎹 คีย์บอร์ด MIDI</button>
               </div>
             </details>
-            <button type="button" id="midi-keyboard-toggle" hidden aria-controls="midi-keyboard-panel" aria-expanded="false">🎹 คีย์บอร์ด MIDI</button>
-            <button type="button" id="mobile-keyboard-toggle">แป้นพิมพ์บนจอ</button>
-            <button type="button" id="toggle-remote" class="menu-direct" aria-controls="remote-pair-panel" aria-expanded="false">รีโมทมือถือ QR</button>
-            <button type="button" id="remote-request-toggle" aria-controls="remote-request-panel" aria-expanded="false">เพลงจากมือถือ <span id="remote-request-count">0</span></button>
-            <a id="android-tv-apk-download" class="android-tv-apk-download" hidden>ดาวน์โหลด Android APK สำหรับ TV/แท็บเล็ต</a>
-            <button type="button" id="mobile-fullscreen-toggle">เต็มหน้าจอ / กลับ</button>
-            <button type="button" id="mobile-about-toggle">เกี่ยวกับ X-Stage</button>
-            <button type="button" id="mobile-login-toggle">เชื่อมต่อ Google Drive</button>
-            <button type="button" id="mobile-logout-toggle" hidden>ออกจากระบบ Google</button>
+            <details class="xstage-menu-category" name="xstage-main-menu">
+              <summary>05. เวทีและการแสดงผล</summary>
+              <div class="xstage-menu-category-body">
+                <button type="button" id="mobile-stage-pop" aria-label="เปิดจอร้องแยก">เปิดจอร้องแยก</button>
+                <button type="button" id="mobile-lyrics">ตั้งค่าเนื้อร้อง / พื้นหลัง</button>
+                <button type="button" id="mobile-fullscreen-toggle">เต็มหน้าจอ / กลับ</button>
+              </div>
+            </details>
+            <details class="xstage-menu-category" name="xstage-main-menu">
+              <summary>06. จัดการคลัง Google Drive</summary>
+              <div class="xstage-menu-category-body">
+                <button type="button" id="cloud-import-open" hidden>☁ จัดการคลัง Google Drive</button>
+                <button type="button" id="mobile-share-library">แชร์โฟลเดอร์เพลง</button>
+              </div>
+            </details>
+            <details class="xstage-menu-category" name="xstage-main-menu">
+              <summary>07. รีโมทและอุปกรณ์</summary>
+              <div class="xstage-menu-category-body">
+                <button type="button" id="toggle-remote" class="menu-direct" aria-controls="remote-pair-panel" aria-expanded="false">รีโมทมือถือ QR</button>
+                <button type="button" id="remote-request-toggle" aria-controls="remote-request-panel" aria-expanded="false">เพลงจากมือถือ <span id="remote-request-count">0</span></button>
+                <button type="button" id="mobile-keyboard-toggle">แป้นพิมพ์บนจอ</button>
+              </div>
+            </details>
+            <details class="xstage-menu-category" id="stage-extra-tools" name="xstage-main-menu">
+              <summary>08. เครื่องมือขั้นสูง</summary>
+              <div class="xstage-menu-category-body">
+                <button type="button" id="mobile-more-tools">เครื่องมือขั้นสูง / LRC / ไมโครโฟน</button>
+                <button type="button" id="mobile-clear-cache">เคลียร์แคช (คงล็อกอิน Google)</button>
+                <button type="button" id="mobile-tools-toggle" aria-label="เปิดเครื่องมือเพิ่มเติม">เครื่องมือเพิ่มเติม</button>
+              </div>
+            </details>
+            <details class="xstage-menu-category" name="xstage-main-menu">
+              <summary>09. ระบบและบัญชี</summary>
+              <div class="xstage-menu-category-body">
+                <button type="button" id="mobile-login-toggle">เชื่อมต่อ Google Drive</button>
+                <button type="button" id="mobile-logout-toggle" hidden>ออกจากระบบ Google</button>
+                <a id="android-tv-apk-download" class="android-tv-apk-download" hidden>ดาวน์โหลด Android APK สำหรับ TV/แท็บเล็ต</a>
+                <button type="button" id="mobile-about-toggle">เกี่ยวกับ X-Stage</button>
+              </div>
+            </details>
           </nav>
           <div class="stage-metrics" aria-label="นาฬิกา"><time id="stage-clock" class="stage-clock">--:--:--</time></div>
           <div class="stage-label"><span class="on-air-dot"></span><span>NOW PLAYING</span><span id="stage-code" class="stage-code">—</span></div>
@@ -509,7 +549,7 @@
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
 <script>
-window.XSTAGE_RELEASE={version:'1.0.144',build:1144};
+window.XSTAGE_RELEASE={version:'1.0.145',build:1145};
 document.addEventListener('DOMContentLoaded',function(){
   const label=document.getElementById('karaoke-release-label');
   if(!label)return;
@@ -531,18 +571,18 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="xmid-browser.js?v=1186-optional-artist" defer></script>
   <script src="memory-budget.js?v=1137" defer></script>
   <script src="ios-midi-audio.js?v=1151-queue-handoff-1168-screen-wake" defer></script>
-  <script src="browser-midi.js?v=1201-soundfont-all" defer></script>
+  <script src="browser-midi.js?v=1202-soundfont-safe" defer></script>
   <script src="midi-pro-engine.js?v=1137-playback-restore-1168-screen-wake" defer></script>
   <script src="video-metadata-editor.js?v=1138-verified-video-selection" defer></script>
   <script src="video-transcode.js?v=1137" defer></script>
   <script src="cloud-import.js?v=1198-source-dialog" defer></script>
   <script src="cloud-drive-folders.js?v=7-file-counts" defer></script>
   <script src="tv-refresh.js?v=1144" defer></script>
-  <script src="app.js?v=1201-soundfont-all" defer></script><script src="pc-extensions.js?v=1190-selected-drive-fx" defer></script>
+  <script src="app.js?v=1202-soundfont-safe" defer></script><script src="pc-extensions.js?v=1190-selected-drive-fx" defer></script>
   <script src="midi-keyboard-ui.js?v=1137-clean-title-1157-top-song-key-single-menu" defer></script>
   <script src="native-audio-meter.js?v=1144-live-stage-eq" defer></script>
   <script src="stage-controls.js?v=1137-monitor-only-eq" defer></script>
-  <script src="mobile-layout.js?v=1164-mobile-controls-lights" defer></script>
+  <script src="mobile-layout.js?v=1202-menu" defer></script>
   <script src="android-apk-download.js?v=1144" defer></script>
 
   <script src="windows-volume-bridge.js?v=1137-system-volume-bridge" defer></script>

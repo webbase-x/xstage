@@ -32,7 +32,7 @@ const select={
   get selectedOptions(){return this.options.filter(x=>x.value===this.value);}
 };
 const permission={hidden:true,style:{display:'none'}},sourceStatus={textContent:''};
-let explicitFolder='',fullRead=false;
+let explicitFolder='',fullRead=false,confirmLoad=false,confirmations=0;
 const saved=new Map([['xstage-font-pref:account:root',large]]);
 const fakeFetch=async(url,options={})=>{
   url=String(url);
@@ -65,7 +65,8 @@ const fakeFetch=async(url,options={})=>{
   throw Error('Unexpected network request: '+url);
 };
 const ctx={
-  navigator:{deviceMemory:8},
+  navigator:{userAgent:'iPhone'},
+  confirm:()=>{confirmations++;return confirmLoad;},
   document:{getElementById:id=>id==='xstage-soundfont-select'?select:id==='xstage-soundfont-authorize'?permission:id==='xstage-drive-font-permission-status'?sourceStatus:null},
   XStageDriveReadAccess:()=>fullRead,
   XStageDriveFolders:{readSelections:()=>explicitFolder?{soundfont:{id:explicitFolder,name:'Selected'}}:{}},
@@ -92,7 +93,14 @@ assert.ok(select.options.some(option=>option.value===large),
   JSON.stringify({parents:driveParents,options:select.options.map(option=>({value:option.value,size:option.dataset?.size}))}));
 assert.ok(select.options.some(option=>option.value==='nested-font'),'Nested SoundFont must appear');
 select.value=large;
+select.onchange();
+assert.equal(select.value,'builtin:TimGM6mb','Cancelling confirmation retains current font');
+assert.equal(largeDownloads,0);
+assert.equal(confirmations,1);
+confirmLoad=true;
+select.value=large;
 select.onchange(); // Explicit large-bank choice may start a background fetch.
+await new Promise(resolve=>setTimeout(resolve,0));
 assert.equal(midi.prefersCompactGm(),true,
   'An unloaded user-selected 243 MB bank triggers fast GM for the song');
 const quick=await midi.fastGmFont(auth.token);

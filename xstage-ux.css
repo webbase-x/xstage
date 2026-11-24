@@ -5493,3 +5493,15 @@ html body.xstage-ui-v2 .account-tools .google-renew-button[hidden]{
   .xstage-tv-queue-row{padding:6px 10px;gap:8px}
   .xstage-tv-queue-actions button{min-height:42px;padding:5px 10px}
 }
+
+/* Compact, accessible nine-category stage menu. */
+html body.xstage-ui-v2 .stage .mobile-stage-menu .xstage-menu-category{display:block;width:100%;min-width:0;border:1px solid rgba(105,180,221,.25);border-radius:10px;margin:3px 0;background:rgba(9,23,43,.84);}
+html body.xstage-ui-v2 .stage .mobile-stage-menu .xstage-menu-category>summary{display:flex;align-items:center;justify-content:space-between;list-style:none;cursor:pointer;min-height:42px;padding:8px 12px;font-size:14px;font-weight:650;overflow-wrap:anywhere;}
+.xstage-menu-category>summary::-webkit-details-marker{display:none}
+.xstage-menu-category>summary::after{content:'›';font-size:20px;flex:none;margin-left:8px}
+.xstage-menu-category[open]>summary::after{content:'⌄'}
+.xstage-menu-category-body{padding:4px 8px 8px;min-width:0;}
+.xstage-menu-category:not([open])>.xstage-menu-category-body{display:none!important}
+.xstage-menu-category[open]>.xstage-menu-category-body{display:grid;gap:4px;grid-template-columns:minmax(0,1fr)}
+.xstage-menu-category>summary:focus-visible{outline:2px solid #57d9ec;outline-offset:-2px}
+.xstage-menu-category .xstage-font-control{min-width:0;width:100%;box-sizing:border-box}
