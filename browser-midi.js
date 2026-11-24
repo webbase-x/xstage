@@ -530,7 +530,7 @@ async function listFolder(parent,token){
       {headers:{Authorization:'Bearer '+token},cache:'no-store'});
     if(!response.ok)fail('อ่านรายการ SoundFont บน Drive ไม่สำเร็จ HTTP '+response.status);
     const json=await response.json();list.push(...(json.files||[]));page=json.nextPageToken||'';
-  }while(page&&list.length<10000);
+  }while(page);
   return list;
 }
 async function refreshFonts(auth){
@@ -543,6 +543,10 @@ async function refreshFonts(auth){
     context?.fontFolderId===chosenFolder;
   context={...auth,fontFolderId:chosenFolder};
   if(!sameLibrary){selected=BUILTIN_GM_ID;fontCache=null;fontLoadPromise=null;fontStatusChanged();}
+  const status=$('xstage-soundfont-scan-status');
+  const refresh=$('xstage-soundfont-refresh');
+  if(refresh)refresh.onclick=()=>{if(context)void refreshFonts(context);};
+  if(status)status.textContent='กำลังค้นหา SoundFont…';
   select.replaceChildren(new Option('กำลังตรวจสอบ SoundFont…',''));
   const pending=(async()=>{
     const choices=[
@@ -564,15 +568,19 @@ async function refreshFonts(auth){
         sourceId=soundFolders[0]?.id||'';
       }
       if(sourceId){
-        const direct=await listFolder(sourceId,auth.token);
-        const folders=direct.filter(x=>x.mimeType==='application/vnd.google-apps.folder'&&
-          ['SF2','SF3'].includes(String(x.name||'').toUpperCase()));
-        for(const format of ['SF2','SF3'])
-          if(folders.filter(x=>x.name.toUpperCase()===format).length>1)
-            fail('พบโฟลเดอร์ '+format+' ชื่อซ้ำใน SoundFont');
-        const all=[...direct.filter(x=>x.mimeType!=='application/vnd.google-apps.folder')];
-        for(const dir of folders)all.push(...(await listFolder(dir.id,auth.token))
-          .filter(x=>x.mimeType!=='application/vnd.google-apps.folder'));
+        const all=[],pendingFolders=[sourceId],visited=new Set();
+        while(pendingFolders.length){
+          if(sequence!==fontRefreshSequence)return;
+          const id=pendingFolders.shift();
+          if(visited.has(id))continue;
+          visited.add(id);
+          const entries=await listFolder(id,auth.token);
+          for(const entry of entries){
+            if(entry.mimeType==='application/vnd.google-apps.folder'){
+              if(entry.id&&!visited.has(entry.id))pendingFolders.push(entry.id);
+            }else all.push(entry);
+          }
+        }
         const seenIds=new Set();
         for(const f of all.filter(x=>/\.sf[23]$/i.test(x.name))){
           if(seenIds.has(f.id))continue;
@@ -583,9 +591,10 @@ async function refreshFonts(auth){
         }
       }
       if(sequence!==fontRefreshSequence)return;
+      if(status)status.textContent='พบ SoundFont '+(choices.length-1)+' ไฟล์';
       const storageKey='xstage-font-pref:'+sub+':'+rootId+':'+(chosenFolder||'default');
       let saved='';
-      try{saved=localStorage.getItem(storageKey)||'';}catch{}
+      try{saved=localStorage.getItem(storageKey)||(!chosenFolder?localStorage.getItem('xstage-font-pref:'+sub+':'+rootId):'')||'';}catch{}
       select.replaceChildren(...choices);
       const hinted=Number(scope.navigator?.deviceMemory||4);
       const maxMB=(hinted<=2?64:hinted<=4?128:256)*1048576;
@@ -635,6 +644,7 @@ async function refreshFonts(auth){
       };
     }catch(error){
       if(sequence!==fontRefreshSequence)return;
+      if(status)status.textContent='อ่านรายการไม่ได้: '+String(error.message);
       select.replaceChildren(...choices);
       const option=new Option('SoundFont: '+String(error.message).slice(0,80),'');
       option.disabled=true;select.append(option);

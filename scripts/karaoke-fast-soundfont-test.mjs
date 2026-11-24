@@ -52,8 +52,8 @@ const fakeFetch=async(url,options={})=>{
         ?[{id:'sf2-folder',name:'SF2',mimeType:'application/vnd.google-apps.folder'}]
         :parent==='sf2-folder'
           ?[{id:large,name:'Nong SoundFont SF2 (243 MB).sf2',size:String(243*1048576)},
-            {id:'compact-37',name:'CT58MGM_V45.sf2',size:String(37*1048576)}]
-          :[];
+            {id:'compact-37',name:'CT58MGM_V45.sf2',size:String(37*1048576)}, {id:'nested',name:'Custom banks',mimeType:'application/vnd.google-apps.folder'}]
+          :parent==='nested'?[{id:'nested-font',name:'Nested.sf3',size:'12345'}]:[];
     return {ok:true,json:async()=>({files:folders})};
   }
   if(url.includes('alt=media')){
@@ -86,6 +86,7 @@ assert.equal(publicFetches,1);
 assert.ok(select.options.some(option=>option.value===large),
   'The SOUNDFONT/SF2 browser picker must expose the 243 MB file: '+
   JSON.stringify({parents:driveParents,options:select.options.map(option=>({value:option.value,size:option.dataset?.size}))}));
+assert.ok(select.options.some(option=>option.value==='nested-font'),'Nested SoundFont must appear');
 select.value=large;
 select.onchange(); // Explicit large-bank choice may start a background fetch.
 assert.equal(midi.prefersCompactGm(),true,
