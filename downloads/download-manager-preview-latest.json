@@ -1,12 +1,12 @@
 {
   "name": "X-Stage Download Manager",
-  "version": "0.2.29",
-  "build": 32,
+  "version": "0.2.30",
+  "build": 33,
   "channel": "preview",
   "available": true,
-  "file": "X-Stage-Download-Manager-v0.2.29-build32-win-x64-Setup.exe",
-  "sha256": "196e1ddb1864997371afac180c86052041e42bc37c25597f355930390d39fd38",
-  "size_bytes": 215953855,
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.29-build32-preview/X-Stage-Download-Manager-v0.2.29-build32-win-x64-Setup.exe",
+  "file": "X-Stage-Download-Manager-v0.2.30-build33-win-x64-Setup.exe",
+  "sha256": "f6d5694e10f5b20f3a1f7c44b7c8efe2ff2e6f5b51d672663ab7aa173615b2ee",
+  "size_bytes": 215963659,
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/xstage-download-manager-v0.2.30-build33-preview/X-Stage-Download-Manager-v0.2.30-build33-win-x64-Setup.exe",
   "note": "Verified Windows Setup EXE installed under Program Files (UAC required); in-app SHA-256-checked download/install/restart, solid green completed progress, priority-aware queue, configurable per-host concurrent jobs and HTTP bandwidth cap, smoothed speed/ETA, friendly filename recovery, resilient per-chunk exponential backoff and HTTP Range fallback, SQLite WAL state recovery and safe JSON migration, original X-Stage icon workspace and sortable download table with file-type metadata and URL clipboard paste, dark workspace and filterable categories, video redownload without overwriting old media, verified playable MP4 instead of broken partial output, yt-dlp error details in file menu and capped video streams, simplified toolbar, CDN filename repair and resumable SHA-256 update, video-only controls and single staged updater, MP4 default, MKV/WEBM/MP3 options. Opt-in live watcher (15/30/60-second checks) without browser playback, system tray, preserved MKV and silence-aligned MP4 clips on stop; the app and PC must remain running. Unsigned preview."
 }
