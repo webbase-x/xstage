@@ -10,6 +10,8 @@ on:
       - "scripts/karaoke-drive-sqlite-test.mjs"
       - "scripts/test-shared-sqlite-cross-runtime.mjs"
       - "scripts/test-shared-sqlite-pc-builder.mjs"
+      - "scripts/test-shared-sqlite-drive-link.mjs"
+      - "windows-pc/source/karaoke/xmid_reader.py"
       - "windows-pc/source/karaoke/shared_catalog_builder.py"
       - "windows-pc/source/karaoke/shared_catalog_builder_ui.py"
       - "windows-pc/source/tests/test_shared_catalog_builder.py"
@@ -45,5 +47,6 @@ jobs:
         run: |
           node scripts/test-shared-sqlite-cross-runtime.mjs
           node scripts/test-shared-sqlite-pc-builder.mjs
+          node scripts/test-shared-sqlite-drive-link.mjs
           node scripts/cloud-drive-folders-test.mjs
           PYTHONPATH=windows-pc/source python3 -m unittest discover -s windows-pc/source/tests -p 'test_shared_*.py' -v
