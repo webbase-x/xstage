@@ -7,6 +7,8 @@ using System.Security.Cryptography;
 using System.Text;
 using XStageDownloadManager;
 
+if (args.Length == 0) SmartSyncPlannerTests.Run();
+
 // CI smoke: instantiate and paint the exact desktop UI across window sizes.
 // Unlike source-only contracts, this reaches WinForms/GDI+ at runtime and
 // catches the "Parameter is not valid" failure in icon or panel painting.

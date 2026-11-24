@@ -50,3 +50,5 @@ The long-term target is an IDM / aria2 / yt-dlp / JDownloader-class application 
 
 ### Google Drive transfer extension (development)
 - Public file-share URL normalization with resource-key preservation; existing HTTP Range probing, retry, resume and concurrency apply when supported by Drive. Reject folder URLs and HTML permission/confirmation pages instead of saving them as completed files. No cookie import or quota bypass. Pending Windows CI, large-file confirmation handling, authorized private Drive API integration and real throughput tests.
+
+- [ ] Smart Sync two-way Google Drive/local folder: pure three-way planner using last verified baseline, size + MD5 (compatibility only), no implicit deletion, conflicts on duplicate paths, unsafe paths and file/folder collisions. Tests include 50,000 entries. Pending CI, authorized Drive inventory and transfer provider, durable per-pair SQLite checkpoints, precondition checks, conflict-review UI and adaptive parallel execution. Planner alone does not synchronize files.
