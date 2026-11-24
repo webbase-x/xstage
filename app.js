@@ -1648,7 +1648,96 @@ $('xstage-soundfont-authorize')?.addEventListener('click',async()=>{
     await window.XStageBrowserMidi?.refreshFonts({token:state.token,sub,rootId,ownedByMe:state.libraryRootOwnedByMe});
   }catch(e){if(status)status.textContent=e.message;}
 });
-async function chooseUserDriveFolder(kind){return chooseUserDriveSource(kind);}
+// Browse the already granted Drive folders using the current OAuth token.
+ // No Google iframe or third-party cookies are needed on iOS/Safari.
+async function chooseUserDriveFolder(kind){
+  if(!['music','soundfont','fx'].includes(kind))throw Error('ประเภทโฟลเดอร์ไม่ถูกต้อง');
+  if(!state.token||!state.accountSub||!state.libraryRootId||
+     isRetiredDriveRoot(state.libraryRootId))throw Error('กรุณาเชื่อม Google Drive ก่อน');
+  const account=state.accountSub,rootId=state.libraryRootId;
+  const sameSession=()=>state.accountSub===account&&state.libraryRootId===rootId&&!!state.token;
+  const result=await browseAuthorizedDriveFolders({
+    rootId,kind,sameSession,
+    list:async id=>{
+      if(!sameSession())throw Error('บัญชีหรือคลังเปลี่ยนแล้ว');
+      if(!/^[A-Za-z0-9_-]{5,256}$/.test(id)||isRetiredDriveRoot(id))throw Error('Folder ID ไม่ถูกต้อง');
+      const folders=await driveList("'"+id+"' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",state.token);
+      if(!sameSession())throw Error('บัญชีหรือคลังเปลี่ยนแล้ว');
+      return folders;
+    },
+    allowGrant:sharedLibraryFeatureReady()
+  });
+  if(result?.grant&&sameSession())return chooseUserDriveSource(kind);
+  return result;
+}
+function browseAuthorizedDriveFolders({rootId,kind,sameSession,list,allowGrant}){
+  const labels={music:'เพลง',soundfont:'SoundFont',fx:'FX'};
+  return new Promise(resolve=>{
+    const dialog=document.createElement('dialog');
+    dialog.className='cloud-import-dialog';
+    dialog.setAttribute('aria-label','เลือกโฟลเดอร์ '+labels[kind]);
+    dialog.style.cssText='width:min(94vw,520px);max-height:82dvh;padding:16px;overflow:auto;background:#0c192b;color:#e7f6ff;border:1px solid #407d92;border-radius:14px';
+    const title=document.createElement('h3');title.textContent='เลือกโฟลเดอร์ '+labels[kind];
+    const path=document.createElement('p'),status=document.createElement('p'),items=document.createElement('div');
+    status.setAttribute('role','status');
+    const stack=[{id:rootId,name:'XStageKaraoke'}];
+    let done=false,sequence=0;
+    function button(label,handler,parent=dialog){
+      const el=document.createElement('button');el.type='button';el.textContent=label;
+      el.style.cssText='display:block;width:100%;margin:8px 0;padding:12px;background:#163748;color:#e7f6ff;border:1px solid #407d92;border-radius:8px;white-space:normal;text-align:left';
+      el.addEventListener('click',handler);parent.append(el);return el;
+    }
+    function finish(value){
+      if(done)return;done=true;sequence++;
+      if(dialog.open)dialog.close();
+      dialog.remove();resolve(value);
+    }
+    dialog.append(title,path,status);
+    const cancel=button('ปิด / ยกเลิก',()=>finish(null));
+    const back=button('ย้อนกลับ',()=>{if(stack.length>1){stack.pop();void render();}});
+    const select=button('ใช้โฟลเดอร์นี้',()=>{
+      if(sameSession()&&stack.length>1)finish({...stack.at(-1)});
+    });
+    dialog.append(items);
+    button('ลองโหลดรายการใหม่',()=>void render());
+    if(allowGrant)button('ไม่พบโฟลเดอร์ · ขอสิทธิ์เพิ่มเติมผ่าน Google Picker',()=>finish({grant:true}));
+    const help=document.createElement('p');
+    help.textContent='แสดงเฉพาะโฟลเดอร์ที่บัญชีนี้อนุญาตแล้ว หาก Google Picker แจ้งเรื่องคุกกี้ ให้ปิดและเปิด X-Stage ผ่าน Safari หรือเบราว์เซอร์บนคอมพิวเตอร์เพื่ออนุญาตไฟล์ก่อน ไม่จำเป็นต้องเปลี่ยนการตั้งค่าความเป็นส่วนตัว';
+    dialog.append(help);
+    dialog.addEventListener('cancel',event=>{event.preventDefault();finish(null);});
+    dialog.addEventListener('close',()=>finish(null));
+    async function render(){
+      if(done)return;
+      const current=stack.at(-1),request=++sequence;
+      path.textContent=stack.map(x=>x.name).join(' / ');
+      items.replaceChildren();back.disabled=stack.length===1;select.disabled=true;
+      status.textContent='กำลังอ่านโฟลเดอร์ที่มีสิทธิ์…';
+      try{
+        if(!sameSession())throw Error('บัญชีหรือคลังเปลี่ยนแล้ว');
+        const folders=await list(current.id);
+        if(done||request!==sequence)return;
+        if(!sameSession())throw Error('บัญชีหรือคลังเปลี่ยนแล้ว');
+        const seen=new Set(stack.map(x=>x.id));
+        const choices=folders.filter(x=>x.mimeType==='application/vnd.google-apps.folder'&&
+          /^[A-Za-z0-9_-]{5,256}$/.test(x.id)&&!isRetiredDriveRoot(x.id)&&
+          !seen.has(x.id)&&!['DB','CACHE','BACKUP','LOGS'].includes(String(x.name).toUpperCase()));
+        choices.sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+        for(const folder of choices){
+          if(seen.has(folder.id))continue;seen.add(folder.id);
+          button('📁 '+folder.name,()=>{stack.push({id:folder.id,name:folder.name});void render();},items);
+        }
+        select.disabled=stack.length===1;
+        status.textContent=choices.length?'เลือกโฟลเดอร์หรือเปิดโฟลเดอร์ย่อย':'ไม่พบโฟลเดอร์ย่อยที่แอปมีสิทธิ์อ่าน · สามารถใช้โฟลเดอร์ปัจจุบันได้หากไม่ใช่คลังหลัก';
+      }catch(error){
+        if(done||request!==sequence)return;
+        status.textContent=String(error.message||error);
+      }
+    }
+    document.body.append(dialog);
+    try{dialog.showModal();cancel.focus();void render();}
+    catch(error){finish(null);}
+  });
+}
 async function chooseUserDriveSource(kind,authorizeFiles=false,parentId=''){
   const labels={music:'เพลง',soundfont:'SoundFont',fx:'FX'};
   if(!Object.hasOwn(labels,kind))throw Error('ประเภทโฟลเดอร์ไม่ถูกต้อง');
@@ -1665,7 +1754,7 @@ async function chooseUserDriveSource(kind,authorizeFiles=false,parentId=''){
   // do not call the importer's close() method (which would stop uploads).
   const importDialog=$('cloud-import-dialog');
   return new Promise((resolve,reject)=>{
-    let complete=false,picker=null,dialogSuspended=false;
+    let complete=false,picker=null,dialogSuspended=false,escapeButton=null;
     const restoreDialog=()=>{
       if(!dialogSuspended||!importDialog||importDialog.open)return;
       dialogSuspended=false;
@@ -1678,6 +1767,7 @@ async function chooseUserDriveSource(kind,authorizeFiles=false,parentId=''){
     };
     const finish=(value,error)=>{
       if(complete)return;complete=true;
+      escapeButton?.remove();
       // Dismiss the Google overlay before returning the importer to top layer.
       try{picker?.setVisible(false);}catch(closeError){
         console.warn('Google Picker close:',closeError);
@@ -1727,6 +1817,14 @@ async function chooseUserDriveSource(kind,authorizeFiles=false,parentId=''){
         dialogSuspended=true;
       }
       picker.setVisible(true);
+      // A blocked cross-site cookie can leave the Google iframe without a callback.
+      // Keep an application-owned escape path above it, even on iOS.
+      if(!complete&&typeof document!=='undefined'&&document.body){
+        escapeButton=document.createElement('button');escapeButton.type='button';
+        escapeButton.textContent='ปิด Google Picker / กลับไปจัดการคลัง';
+        escapeButton.style.cssText='position:fixed;top:calc(env(safe-area-inset-top, 0px) + 8px);right:8px;z-index:2147483647;background:#12394b;color:white;padding:12px;border:1px solid #77c4dc;border-radius:8px;max-width:90vw';
+        escapeButton.addEventListener('click',()=>finish(null));document.body.append(escapeButton);
+      }
     }catch(error){finish(null,error);}
   });
 }

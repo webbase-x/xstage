@@ -4,14 +4,14 @@ import assert from 'node:assert/strict';
 // Regression for native HTML dialog top-layer obscuring Google Picker's iframe.
 // Exercise the production folder Picker function with mocked picker callbacks.
 const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
-const start=app.indexOf('async function chooseUserDriveFolder(kind){');
+const start=app.indexOf('async function chooseUserDriveSource(kind,authorizeFiles=false,parentId=\'\'){');
 const end=app.indexOf('async function openSharedLibraryPicker(){',start);
 assert.ok(start>0&&end>start,'Drive folder picker function must be present');
 const pickerSource=app.slice(start,end);
 const makePicker=new Function('state','sharedLibraryFeatureReady',
   'ensureImporterGoogleAuth','loadGooglePickerApi','$','google','cfg',
   'location','isRetiredDriveRoot','console',
-  pickerSource+';return chooseUserDriveFolder;');
+  pickerSource+';return chooseUserDriveSource;');
 
 async function run(action,options={}){
   const steps=[],state={token:'temporary-token',accountSub:'accountA',

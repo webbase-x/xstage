@@ -55,6 +55,8 @@ assert.ok(!menu.includes('xstage-soundfont-authorize'),'Playback menu must not g
 assert.equal((html.match(/id="xstage-soundfont-authorize"/g)||[]).length,1);
 assert.ok(sourcePanel.includes('id="xstage-soundfont-authorize" type="button" hidden'));
 assert.ok(app.includes("chooseUserDriveSource('soundfont',true,choice.id)")&&app.includes('view.setParent(parentId)'));
+assert.ok(app.includes('browseAuthorizedDriveFolders({')&&app.includes('list:async id=>')&&app.includes('if(result?.grant&&sameSession())return chooseUserDriveSource(kind)'));
+assert.ok(app.includes("escapeButton.addEventListener('click',()=>finish(null))"));
 assert.ok(soundfont.includes('showPermission(count===0&&!!chosenFolder'));
 assert.ok(importer.includes('xstage:drive-sources-open')&&settings.includes('xstage:drive-sources-open'));
 console.log('PASS: Google Drive music, SoundFont, FX source selection; deferred SQLite; scoped auth and media safety');
