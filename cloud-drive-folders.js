@@ -260,6 +260,44 @@ function createWorkflow(options={}){
       tab.location.replace('https://drive.google.com/drive/folders/'+encodeURIComponent(choice.id));
     }catch(error){try{tab.close();}catch{}if(!busy)display('เปิดโฟลเดอร์ไม่ได้ · '+String(error.message||error));}
   }
+  let folderMenu=null;
+  function closeFolderMenu(){
+    if(!folderMenu)return;
+    const dialog=folderMenu;folderMenu=null;
+    if(dialog.open)dialog.close();
+    dialog.remove();
+  }
+  async function manageFolder(kind){
+    if(busy||!KIND.includes(kind))return;
+    let s;try{s=session();}catch(error){display(error.message);return;}
+    const choice=readSelections(s.sub,s.rootId)[kind];
+    if(!choice?.id){await choose(kind);return;}
+    if(folderMenu)return;
+    const doc=scope.document;
+    const dialog=doc.createElement('dialog');
+    dialog.className='xstage-drive-folder-menu';
+    dialog.setAttribute('aria-label','จัดการโฟลเดอร์ '+labels[kind]);
+    const heading=doc.createElement('h3');heading.textContent='จัดการโฟลเดอร์ '+labels[kind];
+    const name=doc.createElement('p');name.textContent=choice.name;
+    dialog.append(heading,name);
+    const add=(label,handler,primary=false)=>{
+      const button=doc.createElement('button');button.type='button';button.textContent=label;
+      if(primary)button.className='primary';
+      button.addEventListener('click',()=>{
+        closeFolderMenu();
+        if(!sameSession(s)||busy)return;
+        handler();
+      });
+      dialog.append(button);
+    };
+    add('เปิดใน Google Drive ↗',()=>void openDriveFolder(kind),true);
+    add('เปลี่ยนโฟลเดอร์',()=>void choose(kind));
+    add('ยกเลิก',()=>{});
+    dialog.addEventListener('cancel',event=>{event.preventDefault();closeFolderMenu();});
+    dialog.addEventListener('close',()=>{if(folderMenu===dialog){folderMenu=null;dialog.remove();}});
+    folderMenu=dialog;doc.body.append(dialog);
+    try{dialog.showModal();}catch(error){closeFolderMenu();display('เปิดเมนูไม่ได้ · '+String(error.message||error));}
+  }
   function render(){
     const s=options.session?.()||{};
     const valid=!!(s.token&&s.sub&&isId(s.rootId)&&!retired.has(s.rootId));
@@ -267,13 +305,13 @@ function createWorkflow(options={}){
     for(const kind of KIND){
       if(nodes[kind])nodes[kind].textContent=pref[kind]?.name||
         (valid?'ยังไม่เลือกโฟลเดอร์':'เชื่อม Google Drive ก่อน');
-      const open=$('xstage-drive-open-'+kind);
-      if(open){open.disabled=!valid||!pref[kind]?.id;}
       const button=$('xstage-drive-folder-'+kind);
       if(button){
         button.disabled=busy||!valid;
+        button.textContent='จัดการโฟลเดอร์';
+        button.setAttribute?.('aria-label','จัดการโฟลเดอร์ '+labels[kind]);
         button.title=busy?'กำลังสร้างฐานเพลง · เปลี่ยนโฟลเดอร์ได้เมื่อเสร็จหรือยกเลิก':
-          (!valid?'กรุณาเชื่อม Google Drive และเลือกคลังที่ใช้งานอยู่':'');
+          (!valid?'กรุณาเชื่อม Google Drive และเลือกคลังที่ใช้งานอยู่':'เปิดหรือเปลี่ยนโฟลเดอร์');
       }
     }
     if(scanButton)scanButton.disabled=!valid||busy;
@@ -471,8 +509,7 @@ function createWorkflow(options={}){
     }else await work();
   }
   for(const kind of KIND){
-    $('xstage-drive-folder-'+kind)?.addEventListener('click',()=>void choose(kind));
-    $('xstage-drive-open-'+kind)?.addEventListener('click',()=>void openDriveFolder(kind));
+    $('xstage-drive-folder-'+kind)?.addEventListener('click',()=>void manageFolder(kind));
   }
   buildButton?.addEventListener('click',()=>void rebuild());
   cancelButton?.addEventListener('click',()=>controller?.abort());
@@ -483,7 +520,7 @@ function createWorkflow(options={}){
     if(chosen?.id&&pending(s)===chosen.id)void rebuild();
   }
   for(const event of ['xstage:auth-ready','xstage:auth-refreshed','xstage:librarychange',
-    'xstage:auth-cleared'])scope.addEventListener?.(event,()=>{render();resume();if($('cloud-import-dialog')?.open&&!busy)void discoverDefaults();});
+    'xstage:auth-cleared'])scope.addEventListener?.(event,()=>{if(event==='xstage:librarychange'||event==='xstage:auth-cleared')closeFolderMenu();render();resume();if($('cloud-import-dialog')?.open&&!busy)void discoverDefaults();});
   scope.addEventListener?.('xstage:drive-sources-open',()=>{
     render();
     if(!busy)void discoverDefaults();
@@ -491,7 +528,7 @@ function createWorkflow(options={}){
   for(const event of ['online','pageshow','focus'])scope.addEventListener?.(event,resume);
   scope.document?.addEventListener?.('visibilitychange',resume);
   render();resume();
-  return {render,choose,rebuild,scanCounts,discoverDefaults,openDriveFolder,getFolderId:selectedId,
+  return {render,choose,rebuild,scanCounts,discoverDefaults,openDriveFolder,manageFolder,getFolderId:selectedId,
     getSelection:(sub,root,kind)=>readSelections(sub,root)[kind]||null,
     cancel:()=>controller?.abort()};
 }
