@@ -1850,7 +1850,7 @@ function browseAuthorizedDriveFolders({rootId,kind,sameSession,list,allowGrant})
     const title=document.createElement('h3');title.textContent='เลือกโฟลเดอร์ '+labels[kind];
     const path=document.createElement('p'),status=document.createElement('p'),items=document.createElement('div');
     status.setAttribute('role','status');
-    const stack=[{id:rootId,name:String(state.availableLibraries.find(x=>x.id===rootId)?.name||'คลังเพลง')}];
+    const stack=[{id:rootId,name:'คลังเพลง'}];
     let done=false,sequence=0;
     function button(label,handler,parent=dialog){
       const el=document.createElement('button');el.type='button';el.textContent=label;
