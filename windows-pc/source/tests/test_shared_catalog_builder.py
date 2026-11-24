@@ -124,6 +124,7 @@ class SharedPcBuilderTests(unittest.TestCase):
             row["pendingDriveLink"]=False
             db.execute("UPDATE songs SET payload=?",
                        (json.dumps(row,ensure_ascii=False),))
+            db.commit()
         result=build(self.root)
         self.assertEqual(result["pending_drive_ids"],0)
         with closing(sqlite3.connect(db_path)) as db:
