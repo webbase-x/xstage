@@ -28,6 +28,7 @@ import manual_editor as manual
 import pro_updater as updater
 import song_download as songdl
 import drive_library as drivelib
+import shared_drive_sync as drivesync
 
 class State:
     def __init__(self,workspace):
@@ -40,6 +41,7 @@ class State:
         self.lock=threading.RLock()
         self.token=secrets.token_urlsafe(30)
         self.native_picker=None
+        self.drive_push_plan=None  # verified, in-memory preview; never persisted to Drive
         # A successful update check must be the single verified snapshot used
         # by the subsequent download. Do not query CDN/Pages a SECOND time
         # inside the worker; a transient "available=false" would abort at 0 B.
@@ -486,6 +488,36 @@ class Handler(BaseHTTPRequestHandler):
             path=urllib.parse.urlsplit(self.path).path
             if path=="/api/drive/check":
                 result=drivelib.describe(body.get("folder",""))
+            elif path=="/api/drive/push-preview":
+                source=body.get("source","")
+                root=body.get("folder","")
+                area=body.get("area","SONGS")
+                # Preview never writes a file and runs off the request thread.
+                with self.state.lock:
+                    self.state.drive_push_plan=None
+                def preview_drive(progress,cancel):
+                    snapshot=drivesync.inspect(source,root,area,cancel,progress)
+                    if cancel.is_set():
+                        return {"cancelled":True}
+                    with self.state.lock:
+                        self.state.drive_push_plan=snapshot
+                    return {"stats":snapshot["stats"],"area":area,"root":snapshot["root"]}
+                result=self.state.start_job("drive-push-preview",preview_drive)
+            elif path=="/api/drive/push":
+                with self.state.lock:
+                    snapshot=self.state.drive_push_plan
+                if not snapshot:
+                    raise ValueError("กรุณาตรวจสอบไฟล์ก่อนกดส่งเข้า Google Drive")
+                if (body.get("source","")!=snapshot["source"] or
+                    body.get("folder","")!=snapshot["root"] or
+                    body.get("area","SONGS")!=snapshot["area"]):
+                    raise ValueError("แหล่งหรือปลายทางไม่ตรงกับรายการที่ตรวจ กรุณาตรวจใหม่")
+                if snapshot["stats"]["conflict"]:
+                    raise ValueError("พบชื่อไฟล์ชนกับไฟล์อื่น กรุณาจัดการรายการที่ขัดแย้งก่อนส่ง")
+                def push_drive(progress,cancel):
+                    return drivesync.publish(snapshot["source"],snapshot["root"],
+                        snapshot["area"],progress,cancel,plan=snapshot)
+                result=self.state.start_job("drive-push",push_drive)
             elif path=="/api/import":
                 source=body.get("folder","")
                 self.state.diagnostic("import.request",folder=source,
