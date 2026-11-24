@@ -1747,10 +1747,10 @@ function setSharedLibraryGate(active,message=''){
     if(button){
       button.hidden=false;
       button.disabled=!ready;
-      button.textContent=ready?'เลือกโฟลเดอร์หลัก XStageKaraoke':'เชื่อม Google ก่อนเลือกคลัง';
+      button.textContent=ready?'เลือกหรือสร้างคลังเพลง Google Drive':'เชื่อม Google ก่อนเลือกคลัง';
     }
     if(copy)copy.textContent=ready
-      ? 'เลือกโฟลเดอร์หลัก XStageKaraoke ของคุณหรือที่ได้รับแชร์หนึ่งครั้ง'
+      ? 'เลือกโฟลเดอร์เดิมหรือสร้างคลังชื่อใหม่ได้ · ยึด Folder ID ไม่ใช่ชื่อ'
       : 'เชื่อม Google ก่อนเลือกคลังหลัก';
     if(footnote)footnote.textContent=ready
       ? 'แสดงและใช้งานเฉพาะคลังหลักที่เลือก · ไม่คัดลอกไฟล์'
@@ -1965,6 +1965,7 @@ async function openSharedLibraryPicker(){
       const id=await drive.folder('root',name);
       const actual=await selectedDriveRootById(id,state.token);
       if(actual.name!==name)throw Error('ชื่อโฟลเดอร์ที่ได้ไม่ตรงกับที่ยืนยัน');
+      working=false;
       await activate(id);
     }catch(error){if(!closed)status.textContent='ยังไม่ได้ตั้งค่าคลัง: '+error.message;}
     finally{working=false;}
