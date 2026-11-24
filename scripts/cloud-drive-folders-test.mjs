@@ -203,3 +203,18 @@ const inventory=await window.XStageDriveFolders.countSourceFiles(inventoryDrive,
 assert.equal(inventory.total,4);assert.equal(inventory.sf2,1);assert.equal(inventory.sf3,1);
 assert.equal(inventory.fx,1);assert.equal(inventory.xmid,1);
 console.log('PASS: Three user-picked Drive folders, account-scoped preferences, retired-folder safety, deferred one-time DB, and raw MIDI dedup');
+
+const compare=window.XStageDriveFolders.compareCatalog;
+const sig='a'.repeat(32),raw='b'.repeat(32),sig2='c'.repeat(32);
+const mfile={id:'verifiedFile123',ext:'xmid',md5Checksum:sig,size:100};
+const dbRows=new Map([['song',{webSongId:'song',xmid:{fileId:mfile.id,md5Checksum:sig,size:100},midiHash:raw,midiSize:40}]]);
+const contextKey={sub:'account1',rootId:root};
+assert.equal((await compare([mfile],dbRows,null,contextKey,music)).equal,true);
+assert.equal((await compare([{...mfile,md5Checksum:sig2}],dbRows,null,contextKey,music)).equal,false,'Equal counts cannot conceal changed file content');
+assert.equal((await compare([mfile,{...mfile,id:'duplicate123'}],dbRows,null,contextKey,music)).equal,true,'Verified identical package need not create another DB row');
+const diff={...mfile,id:'otherFile123',md5Checksum:sig2};
+assert.equal((await compare([mfile,diff],dbRows,null,contextKey,music)).newFiles,1);
+assert.equal((await compare([mfile,diff],dbRows,{get:async()=>({packedMd5:sig2,midiHash:raw,midiSize:40})},contextKey,music)).equal,true,'Previously verified raw MIDI duplicate is represented');
+assert.equal((await compare([{...mfile,md5Checksum:''}],dbRows,null,contextKey,music)).equal,false);
+assert.equal((await compare([],dbRows,null,contextKey,music)).stale,1);
+console.log('PASS: verified catalog reconciliation handles same-count changes, duplicates, missing checksums and stale rows');
