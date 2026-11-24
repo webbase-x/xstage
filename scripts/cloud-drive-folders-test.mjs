@@ -217,6 +217,15 @@ assert.equal((await compare([mfile,diff],dbRows,null,contextKey,music)).newFiles
 assert.equal((await compare([mfile,diff],dbRows,{get:async()=>({packedMd5:sig2,midiHash:raw,midiSize:40})},contextKey,music)).equal,true,'Previously verified raw MIDI duplicate is represented');
 assert.equal((await compare([{...mfile,md5Checksum:''}],dbRows,null,contextKey,music)).equal,false);
 assert.equal((await compare([],dbRows,null,contextKey,music)).stale,1);
+const pcFile={...mfile,relative:'MIDI/XMID/1/10001.xmid'};
+const pcRows=new Map([['pc',{webSongId:'pc',pendingDriveLink:true,
+  xmid:{fileId:'',path:'SONGS/'+pcFile.relative,md5Checksum:sig,size:100},midiHash:raw,midiSize:40}]]);
+assert.equal((await compare([pcFile],pcRows,null,contextKey,music,()=>{},true)).equal,true);
+assert.equal((await compare([pcFile],pcRows,null,contextKey,music)).equal,false);
+assert.equal((await compare([{...pcFile,relative:'wrong.xmid'}],pcRows,null,contextKey,music,()=>{},true)).equal,false);
+assert.equal((await compare([{...pcFile,md5Checksum:sig2}],pcRows,null,contextKey,music,()=>{},true)).equal,false);
+assert.equal((await compare([pcFile,{...pcFile,id:'ambiguousFile123'}],pcRows,null,contextKey,music,()=>{},true)).equal,false);
+assert.equal(window.XStageDriveFolders.verifiedPackageRows([pcFile],pcRows,true).size,1);
 console.log('PASS: verified catalog reconciliation handles same-count changes, duplicates, missing checksums and stale rows');
 
 current={sub:'account1',rootId:root,token:'token1'};
