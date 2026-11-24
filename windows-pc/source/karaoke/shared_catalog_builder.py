@@ -88,8 +88,8 @@ def _pc_id(ident):
 
 def _root(value):
     root = Path(value).expanduser()
-    if root.name != "XStageKaraoke" or root.is_symlink() or not root.is_dir():
-        raise ValueError("ต้องเลือกโฟลเดอร์หลัก XStageKaraoke ใน Google Drive for desktop")
+    if root.is_symlink() or not root.is_dir() or root.name in ("", ".", ".."):
+        raise ValueError("กรุณาเลือกโฟลเดอร์หลักของคลังเพลงบน Google Drive for desktop")
     root = root.resolve(strict=True)
     for kind in ("SONGS", "SOUNDFONT"):
         child = root / kind
@@ -219,7 +219,7 @@ def build(root_value, progress=None, cancel=None, publish=True):
     root = _root(root_value)
     songs = _files(root, cancel)
     if not songs:
-        raise ValueError("ไม่มี XMID/XSK ที่พร้อมสร้างฐานใน XStageKaraoke/SONGS")
+        raise ValueError("ไม่มี XMID/XSK ที่พร้อมสร้างฐานในโฟลเดอร์ SONGS ของคลังที่เลือก")
     old_file = root / "DB/songs.sqlite3"
     if old_file.is_symlink() or (old_file.exists() and not old_file.is_file()):
         raise ValueError("DB/songs.sqlite3 ไม่ใช่ไฟล์ SQLite ปกติ หยุดเพื่อไม่เขียนนอกคลัง")
