@@ -758,6 +758,10 @@ class Importer {
     this.dom.selectionCount=$('cloud-import-selection-count');
     this.dom.actionHint=$('cloud-import-action-hint');
     this.dom.done=$('cloud-import-done');
+    this.dom.localOptions=$('cloud-import-local-options');
+    this.dom.localOptions?.addEventListener('toggle',()=>{
+      if(this.running&&!this.dom.localOptions.open)this.dom.localOptions.open=true;
+    });
     // The import footer intentionally has only one Start/Pause toggle and Close.
     // OAuth renewal and checkpoint resume remain internal.
     this.dom.done?.addEventListener('click',()=>this.close());
@@ -1034,6 +1038,7 @@ class Importer {
         String(this.saved?.error||'')));
     for(const input of this.dom.selectionList?.querySelectorAll('input[type="checkbox"]')||[])
       input.disabled=this.running;
+    if(this.running&&this.dom.localOptions)this.dom.localOptions.open=true;
     this.dom.start.textContent=this.running?'พัก':'เริ่ม';
     if(this.dom.done){
       this.dom.done.textContent='ปิดหน้าต่าง';
@@ -1087,6 +1092,7 @@ class Importer {
     }
     scope.dispatchEvent?.(new CustomEvent('xstage:drive-sources-open'));
     this.saved=await checkpoint(this.session().sub,undefined);
+    if(this.dom.localOptions&&(this.running||this.selected||this.saved&&['uploading','publishing','paused','running'].includes(this.saved.status)))this.dom.localOptions.open=true;
     if(this.saved&&['uploading','publishing','paused','running'].includes(this.saved.status)&&!this.selected){
       this.status('พบงานค้างของบัญชีนี้ · กด “เริ่ม” เพื่อทำต่อ (อาจต้องอนุญาตโฟลเดอร์เดิม)');
       this.dom.source.textContent='งานเดิม: '+String(this.saved.label||'โฟลเดอร์เพลง');
