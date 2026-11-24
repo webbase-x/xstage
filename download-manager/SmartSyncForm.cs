@@ -4,7 +4,8 @@ using System.Windows.Forms;
 
 namespace XStageDownloadManager;
 
-public sealed class SmartSyncForm : Form
+// Retain type name for the existing preference/UI tests; this is now an embedded view.
+public sealed class SmartSyncForm : UserControl
 {
     private readonly TextBox _pc = new() { ReadOnly = true, Dock = DockStyle.Fill };
     private readonly TextBox _drive = new() { ReadOnly = true, Dock = DockStyle.Fill };
@@ -32,38 +33,32 @@ public sealed class SmartSyncForm : Form
     }
     private CancellationTokenSource? _cancel;
     private SmartSyncFolderPlan? _plan;
-    private bool _shutdown;
+    public SmartSyncLaneTracker Lanes { get; } = new();
+    public string StatusText => _status.Text;
+    public string ReviewText => _review.Text;
+    public string PcPath => _pc.Text;
+    public string DrivePath => _drive.Text;
+    public event Action? WorkspaceChanged;
     private readonly string _preferencesPath;
     public bool IsBusy => _cancel is not null;
 
     public SmartSyncForm(string? preferencesPath = null)
     {
         _preferencesPath = preferencesPath ?? SmartSyncPreferencesStore.DefaultPath;
-        Text = "Smart Sync · Google Drive for desktop";
-        StartPosition = FormStartPosition.CenterParent;
-        Size = new Size(860, 700);
-        MinimumSize = new Size(690, 580);
+        AccessibleName = "Smart Sync · Google Drive";
+        Dock = DockStyle.Fill;
+        AutoScroll = true;
+        Size = new Size(860, 320);
         BackColor = MainForm.DarkTop;
         ForeColor = Color.White;
         Font = new Font("Segoe UI", 10);
-        ShowInTaskbar = false;
-        var grid = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 3, RowCount = 11 };
+        var grid = new TableLayoutPanel { Dock = DockStyle.Top, Height = 292, Padding = new Padding(8), ColumnCount = 3, RowCount = 7 };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 116));
-        foreach (int height in new[] { 60, 36, 36, 36, 36, 40, 36, 72, 106 })
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
+        foreach (int height in new[] { 32, 32, 32, 32, 32, 62, 50 })
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
-        grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         void Full(Control control, int row) { grid.Controls.Add(control, 0, row); grid.SetColumnSpan(control, 3); }
-        Full(new Label { Dock = DockStyle.Fill, Text = "ใช้บัญชี Google ที่เข้าสู่ระบบใน Google Drive for desktop แล้ว เลือกโฟลเดอร์แบบ Mirror ที่เก็บไฟล์จริงในเครื่องทั้งสองฝั่ง · ไม่ใช่ลิงก์ Drive หรือ Stream files" }, 0);
-        var login = new Button { Text = "เปิดหน้า Google Drive for desktop", AutoSize = true };
-        login.Click += (_, _) =>
-        {
-            try { Process.Start(new ProcessStartInfo("https://www.google.com/drive/download/") { UseShellExecute = true }); }
-            catch (Exception ex) { _status.Text = ex.Message; }
-        };
-        Full(login, 1);
         void Folder(string name, TextBox field, int row)
         {
             grid.Controls.Add(new Label { Text = name, Dock = DockStyle.Fill }, 0, row);
@@ -82,46 +77,38 @@ public sealed class SmartSyncForm : Form
             grid.Controls.Add(button, 2, row);
             _choices.Add(button);
         }
-        Folder("Google Drive", _drive, 2);
-        Folder("เครื่อง PC", _pc, 3);
-        grid.Controls.Add(new Label { Text = "ทิศทาง", Dock = DockStyle.Fill }, 0, 4);
+        Folder("Google Drive", _drive, 0);
+        Folder("เครื่อง PC", _pc, 1);
+        grid.Controls.Add(new Label { Text = "ทิศทาง", Dock = DockStyle.Fill }, 0, 2);
         _direction.Items.AddRange(new object[] { "สองทาง PC ↔ Drive", "PC → Drive", "Drive → PC" });
         _direction.SelectedIndex = 0;
         // Subscribe after restoring saved controls, not during initialization.
-        grid.Controls.Add(_direction, 1, 4);
+        grid.Controls.Add(_direction, 1, 2);
         _choices.Add(_direction);
-        grid.Controls.Add(new Label { Text = "โหมด Sync", Dock = DockStyle.Fill }, 0, 5);
+        grid.Controls.Add(new Label { Text = "โหมด Sync", Dock = DockStyle.Fill }, 0, 3);
         _mode.Items.AddRange(new object[] { "Fast · ข้ามไฟล์ชื่อ/ขนาดตรงกัน", "Smart · ตรวจแฮชคู่ไฟล์", "Full Verify · ตรวจทุกไฟล์" });
         _mode.SelectedIndex = 0;
-        grid.Controls.Add(_mode, 1, 5);
+        grid.Controls.Add(_mode, 1, 3);
         var lanes = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
         lanes.Controls.Add(new Label { Text = "พร้อมกัน", AutoSize = true });
         lanes.Controls.Add(_parallel);
-        grid.Controls.Add(lanes, 2, 5);
+        grid.Controls.Add(lanes, 2, 3);
         _choices.Add(_mode); _choices.Add(_parallel);
-        grid.Controls.Add(new Label { Text = "รหัสเพลงชนกัน", Dock = DockStyle.Fill }, 0, 6);
+        grid.Controls.Add(new Label { Text = "รหัสเพลงชนกัน", Dock = DockStyle.Fill }, 0, 4);
         _conflict.Items.AddRange(new object[] { "ข้าม · ไม่เปลี่ยนไฟล์", "ทับ · สำรองเดิม (สองทางยึด PC)", "เก็บทั้งคู่ · รหัส_SHA-256" });
         _conflict.SelectedIndex = 0;
-        grid.Controls.Add(_conflict, 1, 6);
+        grid.Controls.Add(_conflict, 1, 4);
         grid.SetColumnSpan(_conflict, 2);
         _choices.Add(_conflict);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true };
         actions.Controls.AddRange(new Control[] { _scan, _start, _stop, _background });
-        Full(actions, 7);
+        Full(actions, 5);
         _scan.Click += async (_, _) => await RunAsync(false);
         _start.Click += async (_, _) => await RunAsync(true);
         _stop.Click += (_, _) => RequestStop();
-        var activityPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
-        activityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
-        activityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
-        activityPanel.Controls.Add(_status, 0, 0);
-        activityPanel.Controls.Add(_activity, 0, 1);
-        Full(activityPanel, 8);
+        Full(_status, 6);
         _scanTicker.Tick += (_, _) => RenderScanProgress();
-        FormClosed += (_, _) => _scanTicker.Dispose();
-        _status.Text = "เลือกสองโฟลเดอร์แล้วกดตรวจสอบไฟล์";
-        Full(_review, 9);
-        Full(new Label { Text = "ไม่ลบไฟล์ · ทับเฉพาะ XMID พร้อมสำรอง · SQLite ไม่รับส่ง · Drive เป็นผู้ส่งขึ้นคลาวด์", Dock = DockStyle.Fill }, 10);
+        _status.Text = "เลือกคู่โฟลเดอร์ Mirror แล้วตรวจสอบไฟล์ · SQLite ไม่รับส่ง";
         Controls.Add(grid);
         ApplyWorkspaceTheme(grid);
         RestorePreferences();
@@ -134,11 +121,7 @@ public sealed class SmartSyncForm : Form
         _mode.SelectedIndexChanged += (_, _) => { InvalidatePlan(); SavePreferences(); };
         _parallel.ValueChanged += (_, _) => SavePreferences();
         _conflict.SelectedIndexChanged += (_, _) => { InvalidatePlan(); SavePreferences(); };
-        FormClosing += (_, e) =>
-        {
-            if (!_shutdown && e.CloseReason == CloseReason.UserClosing)
-            { e.Cancel = true; Hide(); }
-        };
+        Disposed += (_, _) => { _scanTicker.Dispose(); _review.Dispose(); _activity.Dispose(); };
     }
 
     private void ApplyWorkspaceTheme(Control parent)
@@ -224,13 +207,25 @@ public sealed class SmartSyncForm : Form
     }
 
     private void InvalidatePlan()
-    { _plan = null; _start.Enabled = false; _activity.Value = 0; _review.Clear(); _status.Text = "กรุณาตรวจสอบไฟล์ใหม่"; }
+    { _plan = null; _start.Enabled = false; _activity.Value = 0; _review.Clear(); _status.Text = "กรุณาตรวจสอบไฟล์ใหม่"; Lanes.Reset("ยังไม่ตรวจสอบ"); WorkspaceChanged?.Invoke(); }
 
     public void RequestStop()
     { if (_cancel is not null) { _status.Text = "กำลังหยุดอย่างปลอดภัย"; _cancel.Cancel(); } }
 
-    public void CloseForShutdown()
-    { _shutdown = true; Close(); }
+    public void CloseForShutdown() => Dispose();
+
+    // Shared toolbar controls the whole paired session; direction-specific
+    // cancellation would otherwise leave half of a two-way plan running.
+    public async Task StartFromWorkspaceAsync()
+    {
+        if (IsBusy) return;
+        if (_plan is null) await RunAsync(false);
+        if (_plan is not null && !IsBusy) await RunAsync(true);
+    }
+    public void ClearPreview()
+    {
+        if (!IsBusy) InvalidatePlan();
+    }
 
     private void RenderScanProgress()
     {
@@ -258,7 +253,9 @@ public sealed class SmartSyncForm : Form
         Volatile.Write(ref _latestScan, null);
         _lastAdvance = 0; _lastCount = 0;
         _scanWatch.Restart();
+        Lanes.Reset("กำลังตรวจสอบ");
         _review.Clear();
+        WorkspaceChanged?.Invoke();
         _activity.Style = ProgressBarStyle.Marquee;
         _activity.MarqueeAnimationSpeed = 25;
         _scanTicker.Start();
@@ -327,12 +324,16 @@ public sealed class SmartSyncForm : Form
                 var plan = transfer && _plan is not null ? _plan :
                     await ScanWithProgressAsync(pc, drive, direction, mode, policy, token);
                 _plan = plan;
+                Lanes.Plan(plan);
                 DisplayPlan(plan);
+                WorkspaceChanged?.Invoke();
                 if (!transfer) { _activity.Value = 100; break; }
                 var total = plan.Decisions.Count(d =>
                     ((d.Action is SyncAction.UploadNew or SyncAction.UploadUpdate) && direction != SmartSyncDirection.ToPc) ||
                     ((d.Action is SyncAction.DownloadNew or SyncAction.DownloadUpdate) && direction != SmartSyncDirection.ToDrive));
                 _activity.Value = 0;
+                Lanes.Start();
+                WorkspaceChanged?.Invoke();
                 var progress = new Progress<int>(n =>
                 {
                     if (IsDisposed || !IsBusy || token.IsCancellationRequested) return;
@@ -342,8 +343,10 @@ public sealed class SmartSyncForm : Form
                     _activity.Value = percent;
                     _status.Text = $"กำลังซิงค์ไฟล์ · สำเร็จ {n:N0}/{total:N0} รายการ";
                 });
-                var result = await Task.Run(() => SmartSyncFolders.ExecuteAsync(plan, parallel, progress, token, SmartSyncReceiptStore.DefaultPath), token);
+                var result = await Task.Run(() => SmartSyncFolders.ExecuteAsync(plan, parallel, progress, token, SmartSyncReceiptStore.DefaultPath, Lanes.Complete), token);
+                Lanes.Finish("สำเร็จ");
                 DisplayPlan(plan, result.Copied);
+                WorkspaceChanged?.Invoke();
                 _activity.Value = 100;
                 _plan = null;
                 if (repeat)
@@ -354,9 +357,9 @@ public sealed class SmartSyncForm : Form
             } while (repeat);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
-        { _plan = null; _activity.Value = 0; _status.Text = "หยุดแล้ว · ไฟล์ที่ตรวจสอบและบันทึกสำเร็จยังคงอยู่"; }
+        { _plan = null; Lanes.Finish("หยุดชั่วคราว"); _activity.Value = 0; _status.Text = "หยุดแล้ว · ไฟล์ที่ตรวจสอบและบันทึกสำเร็จยังคงอยู่"; }
         catch (Exception ex)
-        { _plan = null; _status.Text = "หยุด: " + ex.Message; }
+        { _plan = null; Lanes.Finish("เกิดข้อผิดพลาด"); _status.Text = "หยุด: " + ex.Message; }
         finally
         {
             _cancel = null;
@@ -366,6 +369,7 @@ public sealed class SmartSyncForm : Form
                 _scan.Enabled = _background.Enabled = true;
                 _start.Enabled = _plan is not null;
                 _stop.Enabled = false;
+                WorkspaceChanged?.Invoke();
             }
         }
     }

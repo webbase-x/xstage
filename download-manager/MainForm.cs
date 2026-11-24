@@ -96,7 +96,7 @@ public sealed partial class MainForm : Form
             {
                 e.Cancel = true;
                 _smartSyncWindow.RequestStop();
-                _smartSyncWindow.Show();
+                ShowSmartSyncPanel(true);
                 return;
             }
             var openLive = Application.OpenForms.OfType<LiveStreamCaptureForm>()
@@ -201,7 +201,7 @@ public sealed partial class MainForm : Form
         // Shrink the entire panel: no empty video-property rows for ZIP,
         // documents, ordinary HTTP links, or direct-file video links.
         entry.Height = showVideo ? 268 : 166;
-        if (_workspaceRoot is not null)
+        if (_workspaceRoot is not null && !_syncPanelOpen)
             _workspaceRoot.RowStyles[2].Height = _inputVisible ? entry.Height : 0;
         entry.ResumeLayout(true);
     }
@@ -1041,12 +1041,14 @@ public sealed partial class MainForm : Form
         }
 
         TrackLiveEvents(jobs);
-        var selectedId = Selected()?.Id;
+        var selectedId = _grid.SelectedRows.Count > 0 ? _grid.SelectedRows[0].Tag as string : null;
         var visible = DownloadTableSort.Sort(jobs.Where(job => InSelectedCategory(job) && MatchesSearch(job)),
             _sortColumn, _sortDescending, jobs);
-        var listChanged = _grid.Rows.Count != visible.Count ||
-            visible.Where((job, index) => index < _grid.Rows.Count &&
-                !Equals(_grid.Rows[index].Tag, job.Id)).Any();
+        var syncLanes = VisibleSyncLanes();
+        var tags = visible.Select(j => j.Id).Concat(syncLanes.Select(l => l.Upload ? SyncUploadTag : SyncDownloadTag)).ToArray();
+        var listChanged = _grid.Rows.Count != tags.Length ||
+            tags.Where((tag, index) => index < _grid.Rows.Count &&
+                !Equals(_grid.Rows[index].Tag, tag)).Any();
         _visibleJobs = visible;
         UpdateCategoryCounts(jobs);
         UpdateOverviewCounts(jobs);
@@ -1056,10 +1058,10 @@ public sealed partial class MainForm : Form
             try
             {
                 _grid.Rows.Clear();
-                foreach (var job in visible)
+                foreach (var tag in tags)
                 {
                     var index = _grid.Rows.Add();
-                    _grid.Rows[index].Tag = job.Id;
+                    _grid.Rows[index].Tag = tag;
                 }
                 _grid.ClearSelection();
                 if (selectedId is not null)
@@ -1150,13 +1152,17 @@ public sealed partial class MainForm : Form
                     _ => "ไฟล์ทั่วไป"
                 };
         }
+        for (int i = 0; i < syncLanes.Length; i++)
+            RenderSyncRow(_grid.Rows[visible.Count + i], syncLanes[i], visible.Count + i);
         var active = jobs.Count(j => j.Status == "Running");
         var completed = jobs.Count(j => j.Status == "Completed");
         var queued = jobs.Count(j => j.Status == "Queued");
         var failed = jobs.Count(j => j.Status == "Failed");
-        _transferHeading.Text = "▣  รายการดาวน์โหลด (" + visible.Count.ToString("N0") + ")";
+        _transferHeading.Text = "▣  รายการงาน (" + tags.Length.ToString("N0") + ")";
+        if (_smartSyncWindow?.IsBusy == true) _transferHeading.Text += " · Smart Sync";
         _summary.Text = $"พร้อมทำงาน  ·  ทั้งหมด {jobs.Length:N0} งาน  ·  กำลังดาวน์โหลด {active:N0}  ·  เสร็จแล้ว {completed:N0}";
-        _details.Text = $"ความเร็วรวม {FormatBytes((long)speedTotal)}/s  ·  รอคิว {queued:N0}  ·  ผิดพลาด {failed:N0}";
+        _details.Text = $"ความเร็วดาวน์โหลด {FormatBytes((long)speedTotal)}/s  ·  รอคิว {queued:N0}  ·  ผิดพลาด {failed:N0}" +
+            (_smartSyncWindow?.IsBusy == true ? " · Sync ทำงาน" : "");
         if (measureRate) RecordTransferSpeed(speedTotal);
         UpdateDetails();
         _engine.SaveProgressIfDue();
@@ -1166,6 +1172,8 @@ public sealed partial class MainForm : Form
 
     private void UpdateDetails()
     {
+        var lane = SelectedSyncLane();
+        if (lane is not null) { UpdateSyncPreview(lane); return; }
         var job = Selected();
         UpdateLivePreview(job);
         // The full job URL, location, progress and diagnostics now live in
@@ -1179,6 +1187,21 @@ public sealed partial class MainForm : Form
         var graphics = e.Graphics;
         if (graphics is null) return;
         e.PaintBackground(e.CellBounds, true);
+        var lane = SyncLaneAt(e.RowIndex);
+        if (lane is not null)
+        {
+            var rect = new Rectangle(e.CellBounds.X + 9, e.CellBounds.Y + 10, Math.Max(1, e.CellBounds.Width - 18), 20);
+            using var background = new SolidBrush(Color.FromArgb(229, 236, 245));
+            using var green = new SolidBrush(Color.FromArgb(17, 157, 104));
+            graphics.FillRectangle(background, rect);
+            graphics.FillRectangle(green, rect.X, rect.Y, (int)Math.Round(rect.Width * lane.Fraction), rect.Height);
+            using var font = new Font("Segoe UI", 8, FontStyle.Bold);
+            TextRenderer.DrawText(graphics, lane.Total == 0 ? "—" : $"{lane.Fraction * 100:0.0}%", font, rect,
+                lane.Fraction > .52 ? Color.White : Color.FromArgb(25, 70, 117),
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            e.Handled = true;
+            return;
+        }
         var job = VisibleJobAt(e.RowIndex);
         if (job is not null && (job.TotalBytes > 0 || job.Kind == "Video" ||
                                 ProgressPresentation.IsComplete(job)))
@@ -1232,6 +1255,95 @@ public sealed partial class MainForm : Form
                 _grid.Font, e.CellBounds, Color.FromArgb(188, 198, 214),
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         e.Handled = true;
+    }
+
+    private static string SyncName(bool upload) => upload ? "Smart Sync · อัปโหลด PC → Drive" : "Smart Sync · ดาวน์โหลด Drive → PC";
+
+    private SmartSyncLaneSnapshot[] VisibleSyncLanes()
+    {
+        if (_smartSyncWindow is null) return Array.Empty<SmartSyncLaneSnapshot>();
+        var (up, down) = _smartSyncWindow.Lanes.Snapshot();
+        return new[] { up, down }.Where(lane =>
+            (_categoryFilter switch
+            {
+                "all" or "sync" => true,
+                "active" => lane.State is "กำลังรับส่ง" or "กำลังตรวจสอบ",
+                "queued" => lane.State == "พร้อมรับส่ง",
+                "completed" => lane.State == "สำเร็จ",
+                "failed" => lane.State == "เกิดข้อผิดพลาด",
+                "incomplete" => lane.State is "กำลังรับส่ง" or "กำลังตรวจสอบ" or "พร้อมรับส่ง" or "หยุดชั่วคราว" or "เกิดข้อผิดพลาด",
+                _ => false
+            }) && (string.IsNullOrWhiteSpace(_jobSearch.Text) ||
+                SyncName(lane.Upload).Contains(_jobSearch.Text.Trim(), StringComparison.OrdinalIgnoreCase))).ToArray();
+    }
+
+    private SmartSyncLaneSnapshot? SyncLaneAt(int row)
+    {
+        if (_smartSyncWindow is null || row < 0 || row >= _grid.Rows.Count) return null;
+        var (up, down) = _smartSyncWindow.Lanes.Snapshot();
+        return (_grid.Rows[row].Tag as string) switch
+        {
+            SyncUploadTag => up, SyncDownloadTag => down, _ => null
+        };
+    }
+    private SmartSyncLaneSnapshot? SelectedSyncLane() => _grid.SelectedRows.Count == 0 ? null : SyncLaneAt(_grid.SelectedRows[0].Index);
+    private static string SyncEta(SmartSyncLaneSnapshot lane)
+    {
+        if (lane.Rate <= 0 || lane.Bytes <= lane.DoneBytes) return "—";
+        var seconds = Math.Min(8640000, (lane.Bytes - lane.DoneBytes) / lane.Rate);
+        var eta = TimeSpan.FromSeconds(seconds);
+        return $"{(int)eta.TotalHours:00}:{eta.Minutes:00}:{eta.Seconds:00}";
+    }
+    private void RenderSyncRow(DataGridViewRow row, SmartSyncLaneSnapshot lane, int index)
+    {
+        row.Cells["No"].Value = (index + 1).ToString("00");
+        row.Cells["KindIcon"].Value = _categoryIcons.Images["sync"];
+        row.Cells["File"].Value = SyncName(lane.Upload);
+        row.Cells["File"].Style.ForeColor = Color.FromArgb(229, 236, 246);
+        row.Cells["File"].Style.Font = _normalFileFont;
+        row.Cells["File"].ToolTipText = lane.LastFile;
+        row.Cells["Size"].Value = lane.Total > 0 ? FormatBytes(lane.Bytes) : "—";
+        row.Cells["Progress"].Value = lane.Total > 0 ? $"{lane.Fraction * 100:0.0}%" : "—";
+        row.Cells["Progress"].ToolTipText = $"{lane.Done:N0}/{lane.Total:N0} ไฟล์";
+        row.Cells["Speed"].Value = lane.Rate > 0 ? FormatBytes((long)lane.Rate) + "/s" : "—";
+        row.Cells["ETA"].Value = SyncEta(lane);
+        row.Cells["Status"].Value = lane.State;
+        row.Cells["Status"].Style.ForeColor = lane.State == "สำเร็จ" ? Color.FromArgb(124, 235, 173) :
+            lane.State == "เกิดข้อผิดพลาด" ? Color.FromArgb(255, 166, 166) : Color.FromArgb(215, 225, 238);
+        row.Cells["FileType"].Value = "SYNC";
+        row.Cells["QueueName"].Value = "Smart Sync";
+        row.Cells["Description"].Value = $"{lane.Done:N0}/{lane.Total:N0} ไฟล์";
+    }
+
+    private void UpdateSyncPreview(SmartSyncLaneSnapshot lane)
+    {
+        _previewTitle.Text = SyncName(lane.Upload);
+        _previewMeta.Text = $"ไฟล์สำเร็จ {lane.Done:N0}/{lane.Total:N0} · {FormatBytes(lane.DoneBytes)} / {FormatBytes(lane.Bytes)}";
+        _previewState.Text = lane.State;
+        _previewState.ForeColor = Accent;
+        _previewPath.Text = "ปลายทาง: " + (lane.Upload ? _smartSyncWindow?.DrivePath : _smartSyncWindow?.PcPath);
+        _previewUrl.Text = "ล่าสุด: " + lane.LastFile;
+        _previewProgressFraction = lane.Fraction;
+        _previewPercent.Text = lane.Total == 0 ? "—" : $"{lane.Fraction * 100:0.0}%";
+        var diagnostic = _smartSyncWindow?.StatusText + Environment.NewLine + _smartSyncWindow?.ReviewText;
+        if (_diagnosticText.Text != diagnostic) _diagnosticText.Text = diagnostic;
+        _previewProgressTrack.Invalidate();
+    }
+    private async Task StartSelectedWorkspaceAsync()
+    {
+        if (SelectedSyncLane() is not null && _smartSyncWindow is not null)
+            await _smartSyncWindow.StartFromWorkspaceAsync();
+        else SelectedAction(_engine.Start);
+    }
+    private void PauseSelectedWorkspace()
+    {
+        if (SelectedSyncLane() is not null) _smartSyncWindow?.RequestStop();
+        else SelectedAction(_engine.Pause);
+    }
+    private void PauseWorkspaceAll()
+    {
+        _smartSyncWindow?.RequestStop();
+        _engine.PauseAll();
     }
 
     private static string FormatBytes(long count)

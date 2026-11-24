@@ -129,6 +129,22 @@ if (args.Contains("--ui-smoke", StringComparer.Ordinal))
             if (!videoButton.Checked || addButton.Checked || root.RowStyles[2].Height != 268)
                 throw new Exception("Switching mode must reuse the same visible panel.");
             videoButton.PerformClick();
+            syncButton.PerformClick();
+            Application.DoEvents();
+            var embedded = (SmartSyncForm)typeof(MainForm).GetField("_smartSyncWindow",
+                BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(main)!;
+            var mainGrid = (DataGridView)typeof(MainForm).GetField("_grid",
+                BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(main)!;
+            if (embedded.FindForm() != main || !embedded.Visible ||
+                mainGrid.Rows.Cast<DataGridViewRow>().Count(row => (row.Tag as string)?.StartsWith("workspace:smart-sync:") == true) != 2)
+                throw new Exception("Smart Sync must use two aggregate rows and the main window");
+            syncButton.PerformClick();
+            if (embedded.Visible || root.RowStyles[2].Height != 0)
+                throw new Exception("Smart Sync inline settings must hide without disposal");
+            addButton.PerformClick();
+            if (!addButton.Checked || embedded.Visible)
+                throw new Exception("Quick entry must share the inline host");
+            addButton.PerformClick();
             // Recreate the actual Smart Sync window, including a path which
             // does not exist; restore must not launch a scan or transfer.
             var syncSettings = Path.Combine(Path.GetTempPath(), "xstage-sync-ui-" + Guid.NewGuid().ToString("N"));

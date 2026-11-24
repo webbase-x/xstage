@@ -19,6 +19,10 @@ public sealed partial class MainForm
     private Panel? _entryShell;
     private bool _inputVisible;
     private SmartSyncForm? _smartSyncWindow;
+    private Panel? _entryHost;
+    private bool _syncPanelOpen;
+    private const string SyncUploadTag = "workspace:smart-sync:upload";
+    private const string SyncDownloadTag = "workspace:smart-sync:download";
     private bool _videoEntryRequested;
     private string _categoryFilter = "all";
     private List<DownloadJob> _visibleJobs = new();
@@ -55,7 +59,9 @@ public sealed partial class MainForm
 
         root.Controls.Add(CreateBrandHeader(), 0, 0);
         root.Controls.Add(CreateIconToolbar(), 0, 1);
-        root.Controls.Add(CreateQuickEntry(), 0, 2);
+        _entryHost = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, BackColor = DarkPanel };
+        _entryHost.Controls.Add(CreateQuickEntry());
+        root.Controls.Add(_entryHost, 0, 2);
         root.Controls.Add(CreateDownloadWorkspace(), 0, 3);
         root.Controls.Add(CreateStatusBar(), 0, 4);
         Controls.Add(root);
@@ -148,10 +154,10 @@ public sealed partial class MainForm
         menu.Items.Add(Menu("งาน",
             addUrl,
             new ToolStripSeparator(),
-            Action("เริ่ม / ต่อรายการที่เลือก", (_, _) => SelectedAction(_engine.Start)),
-            Action("พักรายการที่เลือก", (_, _) => SelectedAction(_engine.Pause)),
+            Action("เริ่ม / ต่อรายการที่เลือก", async (_, _) => await StartSelectedWorkspaceAsync()),
+            Action("พักรายการที่เลือก", (_, _) => PauseSelectedWorkspace()),
             Action("ทำต่อทุกงานที่ยังไม่เสร็จ", (_, _) => StartIncomplete()),
-            Action("พักทั้งหมด", (_, _) => _engine.PauseAll())));
+            Action("พักทั้งหมด", (_, _) => PauseWorkspaceAll())));
 
         var priority = Menu("ลำดับความสำคัญ",
             Action("สูง", (_, _) => WithSelectedJob(j => SetPriority(j, 0))),
@@ -322,11 +328,11 @@ public sealed partial class MainForm
         Button("Smart Sync", "sync", Color.FromArgb(59, 228, 137),
             (_, _) => ToggleSmartSync(), "เปิด/ซ่อน Smart Sync Google Drive", 116);
         Button("เริ่ม", "play", Color.FromArgb(98, 166, 255),
-            (_, _) => SelectedAction(_engine.Start), "เริ่ม / ต่อรายการที่เลือก");
+            async (_, _) => await StartSelectedWorkspaceAsync(), "เริ่ม / ต่อรายการที่เลือก");
         Button("พัก", "pause", Color.FromArgb(142, 187, 255),
-            (_, _) => SelectedAction(_engine.Pause), "พักรายการที่เลือก");
+            (_, _) => PauseSelectedWorkspace(), "พักรายการที่เลือก");
         Button("หยุดทั้งหมด", "pause", Color.FromArgb(250, 142, 158),
-            (_, _) => _engine.PauseAll(), "พักทุกงาน ไม่ลบข้อมูล");
+            (_, _) => PauseWorkspaceAll(), "พักทุกงาน ไม่ลบข้อมูล");
         Button("ลบ", "trash", Color.FromArgb(252, 110, 131),
             (_, _) => RemoveSelectedJob(), "ลบประวัติของรายการที่เลือก");
         Button("จัดคิว", "queue", Color.FromArgb(97, 205, 248),
@@ -745,7 +751,7 @@ public sealed partial class MainForm
             ("priority-low", "queue"),
             ("completed", "check"), ("type", "folder"), ("video", "video"),
             ("music", "file"), ("document", "file"), ("program", "settings"),
-            ("archive", "folder"), ("other", "file")
+            ("archive", "folder"), ("other", "file"), ("sync", "sync")
         })
         {
             var icon = DrawToolbarGlyph(glyph, GlyphColor(glyph));
@@ -775,6 +781,7 @@ public sealed partial class MainForm
         AddCategory(all, "incomplete", "ยังไม่เสร็จ");
         AddCategory(all, "failed", "ข้อผิดพลาด");
         AddCategory(null, "completed", "เสร็จแล้ว");
+        AddCategory(null, "sync", "Smart Sync");
         var priorityGroups = new TreeNode("คิวดาวน์โหลด")
         {
             ForeColor = MutedText, NodeFont = new Font("Segoe UI", 10, FontStyle.Bold),
@@ -1296,10 +1303,38 @@ public sealed partial class MainForm
 
     private void ToggleSmartSync()
     {
-        if (_smartSyncWindow is null || _smartSyncWindow.IsDisposed)
-            _smartSyncWindow = new SmartSyncForm();
-        if (_smartSyncWindow.Visible) _smartSyncWindow.Hide();
-        else { _smartSyncWindow.Show(this); _smartSyncWindow.Activate(); }
+        ShowSmartSyncPanel(!_syncPanelOpen);
+        if (_syncPanelOpen) SelectCategory("all");
+        RefreshRows();
+    }
+
+    private void ShowSmartSyncPanel(bool visible)
+    {
+        if (_entryHost is null || _workspaceRoot is null) return;
+        if (visible)
+        {
+            ShowInputPanel(false);
+            if (_smartSyncWindow is null || _smartSyncWindow.IsDisposed)
+            {
+                _smartSyncWindow = new SmartSyncForm();
+                _smartSyncWindow.WorkspaceChanged += RefreshRows;
+                _entryHost.Controls.Add(_smartSyncWindow);
+            }
+            _syncPanelOpen = true;
+            _smartSyncWindow.Visible = true;
+            _smartSyncWindow.BringToFront();
+            _workspaceRoot.RowStyles[2].Height = Math.Min(292, Math.Max(150, ClientSize.Height - 400));
+        }
+        else
+        {
+            _syncPanelOpen = false;
+            if (_smartSyncWindow is not null) _smartSyncWindow.Visible = false;
+            if (!_inputVisible) _workspaceRoot.RowStyles[2].Height = 0;
+        }
+        if (_toolbar is not null)
+            foreach (var item in _toolbar.Items.OfType<ToolStripButton>())
+                if (item.Text == "Smart Sync") item.Checked = visible;
+        _workspaceRoot.PerformLayout();
     }
 
     private void ToggleQuickEntry(bool video)
@@ -1342,6 +1377,7 @@ public sealed partial class MainForm
     private void ShowInputPanel(bool visible, bool focusFolder = false)
     {
         if (_workspaceRoot is null || _entryShell is null) return;
+        if (visible && _syncPanelOpen) ShowSmartSyncPanel(false);
         _inputVisible = visible;
         if (visible)
         {
@@ -1350,7 +1386,7 @@ public sealed partial class MainForm
         }
         else
         {
-            _workspaceRoot.RowStyles[2].Height = 0;
+            if (!_syncPanelOpen) _workspaceRoot.RowStyles[2].Height = 0;
             _entryShell.Visible = false;
         }
         if (_toolbar is not null)
@@ -1436,6 +1472,8 @@ public sealed partial class MainForm
                 "completed" => job.Status == "Completed",
                 _ => CategoryOf(job) == key
             });
+            if (key == "sync") count = _smartSyncWindow is null ? 0 : 2;
+            if (key == "all" && _smartSyncWindow is not null) count += 2;
             var beforeCount = node.Text.LastIndexOf(" (", StringComparison.Ordinal);
             var prefix = beforeCount >= 0 ? node.Text[..beforeCount] : node.Text;
             var newText = prefix + " (" + count + ")";
@@ -1453,6 +1491,13 @@ public sealed partial class MainForm
 
     private void RemoveSelectedJob()
     {
+        if (SelectedSyncLane() is not null)
+        {
+            if (_smartSyncWindow?.IsBusy == true) _smartSyncWindow.RequestStop();
+            else _smartSyncWindow?.ClearPreview();
+            RefreshRows();
+            return;
+        }
         var job = Selected();
         if (job is null) return;
         if (MessageBox.Show(this,

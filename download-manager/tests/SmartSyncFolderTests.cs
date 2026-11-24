@@ -131,7 +131,14 @@ internal static class SmartSyncFolderTests
                 throw new Exception("Smart scan missed equal-size changed content");
             File.Delete(Path.Combine(pc, "equal-size.txt")); File.Delete(Path.Combine(drive, "equal-size.txt"));
             var receipt = Path.Combine(root, "receipts.sqlite3");
-            var result = await SmartSyncFolders.ExecuteAsync(fast, 8, null, default, receipt);
+            var lanes = new SmartSyncLaneTracker();
+            lanes.Plan(fast);
+            lanes.Start();
+            var result = await SmartSyncFolders.ExecuteAsync(fast, 8, null, default, receipt, lanes.Complete);
+            var (up, down) = lanes.Snapshot();
+            if (up.Total != 1 || down.Total != 1 || up.Done != 1 || down.Done != 1 ||
+                up.DoneBytes != up.Bytes || down.DoneBytes != down.Bytes || up.Fraction != 1 || down.Fraction != 1)
+                throw new Exception("Directional progress must count verified files independently");
             using (var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + receipt + ";Pooling=False"))
             {
                 connection.Open();

@@ -317,7 +317,8 @@ public static class SmartSyncFolders
         plan.Decisions.Count(x => (x.Action is SyncAction.UploadNew or SyncAction.DownloadNew) && !Allowed(x.Action, plan.Direction)));
 
     public static async Task<SmartSyncFolderResult> ExecuteAsync(SmartSyncFolderPlan plan,
-        int parallelFiles, IProgress<int>? progress, CancellationToken ct, string? checkpointPath = null)
+        int parallelFiles, IProgress<int>? progress, CancellationToken ct, string? checkpointPath = null,
+        Action<SyncDecision, long>? fileCompleted = null)
     {
         ValidateRoots(plan.Pc, plan.Drive);
         using var journal = checkpointPath is null ? null : new SmartSyncReceiptStore(checkpointPath, plan.Pc, plan.Drive);
@@ -341,6 +342,7 @@ public static class SmartSyncFolders
             var sha = await CopyNewAsync(sourceRoot, destinationRoot, sourcePath, d.RelativePath,
                 expected, overwrite ? d.DestinationFingerprint : null, token).ConfigureAwait(false);
             journal?.Record(d, expected.Size, sha);
+            fileCompleted?.Invoke(d, expected.Size);
             var completed = Interlocked.Increment(ref copied);
             progress?.Report(completed);
         }, (_, _) => throw new InvalidDataException("SQLite ต้องตรวจสอบก่อนส่ง"), ct).ConfigureAwait(false);
@@ -535,4 +537,86 @@ public sealed class SmartSyncReceiptStore : IDisposable
         }
     }
     public void Dispose() => _connection.Dispose();
+}
+
+
+// Thread-safe directional totals for the two aggregate workspace rows.
+// A completed count is recorded only after verified publication and receipt.
+public sealed record SmartSyncLaneSnapshot(bool Upload, int Total, int Done, long Bytes, long DoneBytes,
+    string State, double ElapsedSeconds, string LastFile)
+{
+    public double Fraction => Total == 0 ? (State == "สำเร็จ" ? 1 : 0) : Math.Clamp(Done / (double)Total, 0, 1);
+    public double Rate => State == "กำลังรับส่ง" && ElapsedSeconds > 0 ? DoneBytes / ElapsedSeconds : 0;
+}
+public sealed class SmartSyncLaneTracker
+{
+    private readonly object _gate = new();
+    private readonly Stopwatch _watch = new();
+    private SmartSyncLaneSnapshot _up = new(true, 0, 0, 0, 0, "ยังไม่ตรวจสอบ", 0, "");
+    private SmartSyncLaneSnapshot _down = new(false, 0, 0, 0, 0, "ยังไม่ตรวจสอบ", 0, "");
+    public (SmartSyncLaneSnapshot Upload, SmartSyncLaneSnapshot Download) Snapshot()
+    {
+        lock (_gate)
+        {
+            var elapsed = _watch.Elapsed.TotalSeconds;
+            return (_up with { ElapsedSeconds = elapsed }, _down with { ElapsedSeconds = elapsed });
+        }
+    }
+    public void Reset(string state)
+    {
+        lock (_gate)
+        {
+            _watch.Reset();
+            _up = new(true, 0, 0, 0, 0, state, 0, "");
+            _down = new(false, 0, 0, 0, 0, state, 0, "");
+        }
+    }
+    public void Plan(SmartSyncFolderPlan plan)
+    {
+        lock (_gate)
+        {
+            _watch.Reset();
+            SmartSyncLaneSnapshot Lane(bool upload)
+            {
+                bool allowed = upload ? plan.Direction != SmartSyncDirection.ToPc : plan.Direction != SmartSyncDirection.ToDrive;
+                var work = allowed ? plan.Decisions.Where(d => upload
+                    ? d.Action is SyncAction.UploadNew or SyncAction.UploadUpdate
+                    : d.Action is SyncAction.DownloadNew or SyncAction.DownloadUpdate).ToArray() : Array.Empty<SyncDecision>();
+                var source = upload ? plan.PcFiles : plan.DriveFiles;
+                return new(upload, work.Length, 0, work.Sum(d => d.SourceFingerprint?.Size ??
+                    (source.TryGetValue(d.SourcePath ?? d.RelativePath, out var fp) ? fp.Size : 0)), 0,
+                    !allowed ? "ไม่อยู่ในทิศทาง" : work.Length == 0 ? "ไม่มีไฟล์ใหม่" : "พร้อมรับส่ง", 0, "");
+            }
+            _up = Lane(true); _down = Lane(false);
+        }
+    }
+    public void Start()
+    {
+        lock (_gate)
+        {
+            _watch.Restart();
+            if (_up.Total > 0) _up = _up with { State = "กำลังรับส่ง" };
+            if (_down.Total > 0) _down = _down with { State = "กำลังรับส่ง" };
+        }
+    }
+    public void Complete(SyncDecision decision, long bytes)
+    {
+        lock (_gate)
+        {
+            bool upload = decision.Action is SyncAction.UploadNew or SyncAction.UploadUpdate;
+            var lane = upload ? _up : _down;
+            lane = lane with { Done = lane.Done + 1, DoneBytes = lane.DoneBytes + bytes,
+                LastFile = decision.RelativePath, State = lane.Done + 1 == lane.Total ? "สำเร็จ" : "กำลังรับส่ง" };
+            if (upload) _up = lane; else _down = lane;
+        }
+    }
+    public void Finish(string state)
+    {
+        lock (_gate)
+        {
+            _watch.Stop();
+            if (_up.State is "กำลังรับส่ง" or "กำลังตรวจสอบ") _up = _up with { State = state };
+            if (_down.State is "กำลังรับส่ง" or "กำลังตรวจสอบ") _down = _down with { State = state };
+        }
+    }
 }
