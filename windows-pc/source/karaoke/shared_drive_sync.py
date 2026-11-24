@@ -236,6 +236,8 @@ def publish(source, drive_root, area, progress=None, cancel=None, plan=None):
                   for x in snapshot["items"]]
         if plan.get("root") != snapshot["root"] or plan.get("area") != area or expected != actual:
             raise ValueError("แหล่งเพลง/Drive เปลี่ยนหลังตรวจ กรุณาตรวจรายการใหม่ก่อนส่ง")
+    if snapshot["stats"]["conflict"]:
+        raise ValueError("พบชื่อไฟล์ชนกับไฟล์เดิม/ตำแหน่งซ้ำ ไม่ส่งไฟล์ใดจนกว่าจะตรวจรายการ")
     root = Path(snapshot["root"])
     outcome = dict(snapshot["stats"], phase="publish", published=0,
                    published_bytes=0, cancelled=False)
