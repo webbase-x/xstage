@@ -19,7 +19,7 @@ assert.ok(app.includes('dialog.showModal()')&&app.includes("dialog.addEventListe
   'Native folder dialogs must be dismissible without losing the import state');
 assert.ok(app.includes("const sameSession=()=>state.accountSub===account"),
   'Folder browsing must stop if the Google account/root changes');
-assert.ok(app.includes("!isRetiredDriveRoot(x.id)")&&app.includes("x.parents?.includes(current.id)"),
+assert.ok(app.includes("!isRetiredDriveRoot(x.id)")&&app.includes("item.parents?.includes(current.id)"),
   'Only descendants of the exact selected root may be offered');
 assert.ok(!app.includes('new google.picker.PickerBuilder()'),
   'Do not load the retired external Google Picker iframe or require API keys');
