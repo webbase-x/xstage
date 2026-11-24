@@ -16,6 +16,17 @@ public sealed class SmartSyncForm : Form
     private readonly Label _status = new() { Dock = DockStyle.Fill, AutoSize = false };
     private readonly TextBox _review = new() { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
     private readonly List<Control> _choices = new();
+    private readonly ProgressBar _activity = new() { Dock = DockStyle.Fill, Style = ProgressBarStyle.Blocks };
+    private readonly System.Windows.Forms.Timer _scanTicker = new() { Interval = 350 };
+    private readonly Stopwatch _scanWatch = new();
+    private SmartSyncScanProgress? _latestScan;
+    private long _lastAdvance;
+    private int _lastCount;
+    // Latest-value mailbox: no queued UI callback for each of 50,000 files.
+    private sealed class ScanMailbox(Action<SmartSyncScanProgress> report) : IProgress<SmartSyncScanProgress>
+    {
+        public void Report(SmartSyncScanProgress value) => report(value);
+    }
     private CancellationTokenSource? _cancel;
     private SmartSyncFolderPlan? _plan;
     private bool _shutdown;
@@ -33,7 +44,7 @@ public sealed class SmartSyncForm : Form
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 116));
-        foreach (int height in new[] { 72, 36, 36, 36, 36, 72, 58 })
+        foreach (int height in new[] { 72, 36, 36, 36, 36, 72, 106 })
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
@@ -74,7 +85,14 @@ public sealed class SmartSyncForm : Form
         _scan.Click += async (_, _) => await RunAsync(false);
         _start.Click += async (_, _) => await RunAsync(true);
         _stop.Click += (_, _) => RequestStop();
-        Full(_status, 6);
+        var activityPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+        activityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+        activityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        activityPanel.Controls.Add(_status, 0, 0);
+        activityPanel.Controls.Add(_activity, 0, 1);
+        Full(activityPanel, 6);
+        _scanTicker.Tick += (_, _) => RenderScanProgress();
+        FormClosed += (_, _) => _scanTicker.Dispose();
         _status.Text = "เลือกสองโฟลเดอร์แล้วกดตรวจสอบไฟล์";
         Full(_review, 7);
         Full(new Label { Text = "ไม่ลบหรือเขียนทับไฟล์เดิม · SQLite/ไฟล์ขัดแย้งต้องตรวจสอบแยก · Drive เป็นผู้ส่งขึ้นคลาวด์", Dock = DockStyle.Fill }, 8);
@@ -94,6 +112,52 @@ public sealed class SmartSyncForm : Form
 
     public void CloseForShutdown()
     { _shutdown = true; Close(); }
+
+    private void RenderScanProgress()
+    {
+        if (!IsBusy || _cancel?.IsCancellationRequested == true) return;
+        var current = Volatile.Read(ref _latestScan);
+        var elapsed = _scanWatch.Elapsed;
+        if (current is null)
+        {
+            _status.Text = $"กำลังเปิดโฟลเดอร์… · {elapsed:hh\\:mm\\:ss}";
+            return;
+        }
+        var count = current.PcFiles + current.DriveFiles;
+        if (count != _lastCount) { _lastCount = count; _lastAdvance = elapsed.Ticks; }
+        var rate = count / Math.Max(1, elapsed.TotalSeconds);
+        var stalled = TimeSpan.FromTicks(elapsed.Ticks - _lastAdvance);
+        _status.Text = $"ตรวจ {current.Phase} · PC {current.PcFiles:N0} · Drive {current.DriveFiles:N0} ไฟล์ · ข้าม {current.Review:N0}\n" +
+            $"{rate:N1} ไฟล์/วินาที · อ่าน {current.BytesHashed / 1048576d:N1} MB · {elapsed:hh\\:mm\\:ss}" +
+            (stalled.TotalSeconds >= 10 ? $" · ยังไม่มีไฟล์เสร็จ {stalled.TotalSeconds:N0} วินาที" : "") +
+            "\n" + current.RelativePath;
+    }
+
+    private async Task<SmartSyncFolderPlan> ScanWithProgressAsync(string pc, string drive,
+        SmartSyncDirection direction, CancellationToken token)
+    {
+        Volatile.Write(ref _latestScan, null);
+        _lastAdvance = 0; _lastCount = 0;
+        _scanWatch.Restart();
+        _review.Clear();
+        _activity.Style = ProgressBarStyle.Marquee;
+        _activity.MarqueeAnimationSpeed = 25;
+        _scanTicker.Start();
+        RenderScanProgress();
+        try
+        {
+            var progress = new ScanMailbox(value => Volatile.Write(ref _latestScan, value));
+            return await Task.Run(() => SmartSyncFolders.Scan(pc, drive, direction, token, progress), token);
+        }
+        finally
+        {
+            _scanTicker.Stop();
+            _scanWatch.Stop();
+            _activity.MarqueeAnimationSpeed = 0;
+            _activity.Style = ProgressBarStyle.Blocks;
+            _activity.Value = 0;
+        }
+    }
 
     private void DisplayPlan(SmartSyncFolderPlan plan, int copied = 0)
     {
@@ -124,13 +188,26 @@ public sealed class SmartSyncForm : Form
             {
                 _status.Text = "กำลังตรวจสอบไฟล์และแฮช...";
                 var plan = transfer && _plan is not null ? _plan :
-                    await Task.Run(() => SmartSyncFolders.Scan(pc, drive, direction, token), token);
+                    await ScanWithProgressAsync(pc, drive, direction, token);
                 _plan = plan;
                 DisplayPlan(plan);
-                if (!transfer) break;
-                var progress = new Progress<int>(n => { if (!IsDisposed && IsBusy) _status.Text = $"กำลังซิงค์ไฟล์ · สำเร็จ {n:N0} รายการ"; });
+                if (!transfer) { _activity.Value = 100; break; }
+                var total = plan.Decisions.Count(d =>
+                    (d.Action == SyncAction.UploadNew && direction != SmartSyncDirection.ToPc) ||
+                    (d.Action == SyncAction.DownloadNew && direction != SmartSyncDirection.ToDrive));
+                _activity.Value = 0;
+                var progress = new Progress<int>(n =>
+                {
+                    if (IsDisposed || !IsBusy || token.IsCancellationRequested) return;
+                    // Concurrent file completion events can be posted out of order.
+                    int percent = total == 0 ? 100 : (int)Math.Min(100L, 100L * n / total);
+                    if (percent < _activity.Value) return;
+                    _activity.Value = percent;
+                    _status.Text = $"กำลังซิงค์ไฟล์ · สำเร็จ {n:N0}/{total:N0} รายการ";
+                });
                 var result = await Task.Run(() => SmartSyncFolders.ExecuteAsync(plan, 4, progress, token), token);
                 DisplayPlan(plan, result.Copied);
+                _activity.Value = 100;
                 _plan = null;
                 if (repeat)
                 {
@@ -140,7 +217,7 @@ public sealed class SmartSyncForm : Form
             } while (repeat);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
-        { _plan = null; _status.Text = "หยุดแล้ว · ไฟล์ที่ตรวจสอบและบันทึกสำเร็จยังคงอยู่"; }
+        { _plan = null; _activity.Value = 0; _status.Text = "หยุดแล้ว · ไฟล์ที่ตรวจสอบและบันทึกสำเร็จยังคงอยู่"; }
         catch (Exception ex)
         { _plan = null; _status.Text = "หยุด: " + ex.Message; }
         finally

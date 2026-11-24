@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Diagnostics;
 
 namespace XStageDownloadManager;
 
@@ -7,6 +8,8 @@ public sealed record SmartSyncFolderPlan(string Pc, string Drive, SmartSyncDirec
     IReadOnlyList<SyncDecision> Decisions, IReadOnlyDictionary<string, SyncFingerprint> PcFiles,
     IReadOnlyDictionary<string, SyncFingerprint> DriveFiles, int DatabaseReviewCount);
 public sealed record SmartSyncFolderResult(int Copied, int Identical, int Review, int SkippedDirection);
+public sealed record SmartSyncScanProgress(string Phase, string RelativePath, int PcFiles, int DriveFiles,
+    long BytesHashed, int Review, int Folders, TimeSpan Elapsed);
 
 // Phase 1: operate only on explicitly selected mirrored local folders.
 // Google Drive for desktop owns account authentication and cloud transport.
@@ -38,16 +41,35 @@ public static class SmartSyncFolders
         return (pc, drive);
     }
 
-    private static (List<SyncEntry> Entries, int Review) Inventory(string root, CancellationToken ct)
+    private sealed class ScanReporter(IProgress<SmartSyncScanProgress>? progress)
+    {
+        private readonly Stopwatch _watch = Stopwatch.StartNew();
+        private int _pc, _drive, _review, _folders;
+        private long _bytes;
+        public void Publish(string phase, string relative, bool pc, int files = 0, long bytes = 0,
+            int review = 0, int folders = 0)
+        {
+            if (pc) _pc += files; else _drive += files;
+            _bytes += bytes; _review += review; _folders += folders;
+            progress?.Report(new SmartSyncScanProgress(phase, relative, _pc, _drive,
+                _bytes, _review, _folders, _watch.Elapsed));
+        }
+    }
+
+    private static (List<SyncEntry> Entries, int Review) Inventory(string root, CancellationToken ct,
+        ScanReporter reporter, bool pc)
     {
         var pending = new Stack<string>();
         var entries = new List<SyncEntry>();
         int review = 0;
         pending.Push(root);
+        var phase = pc ? "PC" : "Google Drive";
+        reporter.Publish(phase, ".", pc);
         while (pending.Count > 0)
         {
             ct.ThrowIfCancellationRequested();
             var directory = pending.Pop();
+            reporter.Publish(phase, Path.GetRelativePath(root, directory), pc, folders: 1);
             if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
                 throw new InvalidDataException("พบโฟลเดอร์ลิงก์หรือไฟล์แบบสตรีม กรุณาใช้ Drive แบบ Mirror");
             foreach (var path in Directory.EnumerateFileSystemEntries(directory))
@@ -58,17 +80,19 @@ public static class SmartSyncFolders
                     throw new InvalidDataException("พบไฟล์หรือโฟลเดอร์ลิงก์ กรุณาใช้โฟลเดอร์ Mirror ที่ดาวน์โหลดครบแล้ว");
                 if ((attributes & FileAttributes.Directory) != 0) { pending.Push(path); continue; }
                 var relative = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
+                reporter.Publish(phase, relative, pc);
                 if (SmartSyncTransfer.IsDatabaseSidecar(relative) || SmartSyncTransfer.IsDatabaseCandidate(relative))
-                { review++; continue; }
+                { review++; reporter.Publish(phase, relative, pc, review: 1); continue; }
                 // A crash may have left an unpublished staging file.
                 if (Path.GetFileName(path).StartsWith(".xstage-sync-", StringComparison.OrdinalIgnoreCase))
-                { review++; continue; }
+                { review++; reporter.Publish(phase, relative, pc, review: 1); continue; }
                 if (!SmartSyncPlanner.SafeRelativePath(relative))
                     throw new InvalidDataException("พบชื่อไฟล์ที่ไม่ปลอดภัยสำหรับ Windows");
                 SmartSyncTransfer.ResolveLocalPath(root, relative);
                 using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
                 var md5 = Convert.ToHexString(MD5.HashDataAsync(stream, ct).GetAwaiter().GetResult());
                 entries.Add(new SyncEntry(relative, new SyncFingerprint(stream.Length, md5)));
+                reporter.Publish(phase, relative, pc, files: 1, bytes: stream.Length);
             }
         }
         return (entries, review);
@@ -78,15 +102,23 @@ public static class SmartSyncFolders
         entries.GroupBy(x => x.RelativePath, Paths).Where(g => g.Count() == 1)
             .ToDictionary(g => g.Key, g => g.Single().Fingerprint, Paths);
 
-    public static SmartSyncFolderPlan Scan(string pc, string drive, SmartSyncDirection direction, CancellationToken ct)
+    public static SmartSyncFolderPlan Scan(string pc, string drive, SmartSyncDirection direction, CancellationToken ct,
+        IProgress<SmartSyncScanProgress>? progress = null)
     {
         if (!Enum.IsDefined(direction)) throw new ArgumentOutOfRangeException(nameof(direction));
+        var reporter = new ScanReporter(progress);
+        reporter.Publish("ตรวจสอบโฟลเดอร์", "", true);
+        ct.ThrowIfCancellationRequested();
         (pc, drive) = ValidateRoots(pc, drive);
-        var l = Inventory(pc, ct);
-        var r = Inventory(drive, ct);
+        var l = Inventory(pc, ct, reporter, true);
+        var r = Inventory(drive, ct, reporter, false);
+        reporter.Publish("เปรียบเทียบรายการ", "", false);
+        ct.ThrowIfCancellationRequested();
         // No verified historical baseline yet: differing existing files are
         // always conflicts. Identical files and new files are safe to handle.
         var decisions = SmartSyncPlanner.Plan(l.Entries, r.Entries, Array.Empty<SyncEntry>());
+        ct.ThrowIfCancellationRequested();
+        reporter.Publish("ตรวจสอบเสร็จ", "", false);
         return new SmartSyncFolderPlan(pc, drive, direction, decisions, Unique(l.Entries), Unique(r.Entries), l.Review + r.Review);
     }
 

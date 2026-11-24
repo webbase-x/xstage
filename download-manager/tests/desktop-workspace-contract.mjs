@@ -43,6 +43,9 @@ assert.ok(workspace.indexOf('Button("Smart Sync"') < workspace.indexOf('Button("
 assert.match(workspace, /_smartSyncWindow\.Visible\) _smartSyncWindow\.Hide\(\)/);
 assert.match(smartSyncUi, /SmartSyncFolders\.ExecuteAsync\(plan, 4/);
 assert.match(smartSyncUi, /Task\.Delay\(TimeSpan\.FromSeconds\(60\), token\)/);
+assert.match(smartSyncUi, /Volatile\.Read\(ref _latestScan\)/);
+assert.match(smartSyncUi, /_scanTicker\.Tick/);
+assert.match(smartSyncUi, /SmartSyncFolders\.Scan\(pc, drive, direction, token, progress\)/);
 assert.ok(testProject.includes('../SmartSyncFolders.cs'));
 const contracts = [
   ['changed source clears stale adaptive throughput', /if \(sourceChanged\)[\s\S]*?job\.PreviousBytes = 0;\s*job\.SpeedBytesPerSecond = 0;\s*job\.SmoothedSpeedBytesPerSecond = 0;/, engine],

@@ -7,6 +7,11 @@ internal static class SmartSyncFolderTests
         public void Report(int value) => values.Add(value);
     }
 
+    private sealed class ScanProgress(List<SmartSyncScanProgress> values) : IProgress<SmartSyncScanProgress>
+    {
+        public void Report(SmartSyncScanProgress value) => values.Add(value);
+    }
+
     public static async Task RunAsync()
     {
         var root = Path.Combine(Path.GetTempPath(), "xstage-sync-test-" + Guid.NewGuid().ToString("N"));
@@ -22,7 +27,22 @@ internal static class SmartSyncFolderTests
             File.WriteAllText(Path.Combine(pc, "same.txt"), "identical");
             File.WriteAllText(Path.Combine(drive, "same.txt"), "identical");
             File.WriteAllText(Path.Combine(pc, "songs.sqlite3"), "not copied");
-            var plan = SmartSyncFolders.Scan(pc, drive, SmartSyncDirection.Both, default);
+            var scanEvents = new List<SmartSyncScanProgress>();
+            var plan = SmartSyncFolders.Scan(pc, drive, SmartSyncDirection.Both, default, new ScanProgress(scanEvents));
+            var final = scanEvents.Last();
+            if (scanEvents.First().Phase != "ตรวจสอบโฟลเดอร์" ||
+                !scanEvents.Any(x => x.Phase == "PC" && x.RelativePath == "nested/new.txt") ||
+                !scanEvents.Any(x => x.Phase == "Google Drive" && x.RelativePath == "remote.txt") ||
+                final.Phase != "ตรวจสอบเสร็จ" || final.PcFiles != 3 || final.DriveFiles != 3 ||
+                final.Review != 1 || final.BytesHashed <= 0 ||
+                scanEvents.Zip(scanEvents.Skip(1)).Any(x => x.First.BytesHashed > x.Second.BytesHashed))
+                throw new Exception("Smart Sync scan telemetry is missing or incorrect.");
+            using (var cancelled = new CancellationTokenSource())
+            {
+                cancelled.Cancel();
+                try { SmartSyncFolders.Scan(pc, drive, SmartSyncDirection.Both, cancelled.Token); throw new Exception("Cancelled scan accepted"); }
+                catch (OperationCanceledException) { }
+            }
             var result = await SmartSyncFolders.ExecuteAsync(plan, 4, null, default);
             if (result.Copied != 2 || result.Identical != 1 || result.Review != 2 ||
                 File.ReadAllText(Path.Combine(drive, "nested", "new.txt")) != "new PC" ||
