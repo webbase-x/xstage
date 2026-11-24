@@ -203,3 +203,30 @@
 .xstage-drive-build-controls{display:flex;flex-wrap:wrap;gap:8px}
 .xstage-drive-build-controls button{flex:1 1 190px}
 #xstage-drive-cancel-db:not(:disabled){background:#4f2d32;border-color:#c17b7d}
+
+/* Clean Drive-first manager. Local import controls remain available on demand. */
+#cloud-import-dialog{max-width:min(700px,96vw)}
+#cloud-import-dialog .xstage-drive-sources{margin:0 0 12px;padding:0;border:0;background:transparent;gap:12px}
+#cloud-import-dialog .xstage-drive-source-row{padding:12px;border-radius:12px;gap:12px;background:#10283a}
+#cloud-import-dialog .xstage-drive-root-row{background:#0b2032}
+#cloud-import-dialog .xstage-drive-source-row>div{flex:1 1 auto;min-width:0}
+#cloud-import-dialog .xstage-drive-media-info{display:grid;gap:4px}
+#cloud-import-dialog .xstage-drive-media-actions{display:flex;flex:0 0 auto;gap:6px;align-items:center}
+#cloud-import-dialog .xstage-drive-open{background:#146561;border-color:#40bda9;white-space:nowrap}
+#cloud-import-dialog .xstage-drive-media-info output:empty{display:none}
+#cloud-import-dialog .xstage-drive-steps{color:#b8d8e5;font-size:.8rem}
+#cloud-import-dialog #xstage-drive-build-db{min-height:46px;font-size:.88rem}
+#cloud-import-dialog #xstage-drive-folder-status{padding:8px 10px;border-radius:8px;background:#0d2334;line-height:1.55}
+#cloud-import-dialog .xstage-drive-options,#cloud-import-dialog .cloud-import-local-options{border:1px solid #315b70;border-radius:10px;padding:10px 12px;background:#0c2234}
+#cloud-import-dialog summary{cursor:pointer;font-size:.83rem;font-weight:700;color:#c4e9ef;min-height:26px;line-height:26px}
+#cloud-import-dialog details[open]>summary{margin-bottom:10px}
+#cloud-import-dialog .xstage-drive-options button{margin:0 6px 6px 0}
+#cloud-import-dialog .cloud-import-panel:not(:has(#cloud-import-local-options[open]))>.cloud-import-footer{display:none}
+#cloud-import-dialog .cloud-import-local-options .cloud-import-lead{font-size:.73rem}
+@media(max-width:560px){
+  #cloud-import-dialog .xstage-drive-media-row{align-items:stretch;flex-direction:column;gap:8px}
+  #cloud-import-dialog .xstage-drive-media-actions{display:grid;grid-template-columns:1.3fr 1fr}
+  #cloud-import-dialog .xstage-drive-media-actions button{width:100%;min-width:0;white-space:normal;padding:9px 6px}
+  #cloud-import-dialog .xstage-drive-root-row{flex-direction:row;align-items:center}
+  #cloud-import-dialog .xstage-drive-root-row button{width:auto}
+}
