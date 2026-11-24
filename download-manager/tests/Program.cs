@@ -7,7 +7,11 @@ using System.Security.Cryptography;
 using System.Text;
 using XStageDownloadManager;
 
-if (args.Length == 0) SmartSyncPlannerTests.Run();
+if (args.Length == 0)
+{
+    SmartSyncPlannerTests.Run();
+    await SmartSyncBackgroundTests.RunAsync();
+}
 
 // CI smoke: instantiate and paint the exact desktop UI across window sizes.
 // Unlike source-only contracts, this reaches WinForms/GDI+ at runtime and
