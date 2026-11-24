@@ -17,14 +17,14 @@ assert.ok(html.includes('cloud-drive-folders.js?v=')&&
   html.includes('pc-extensions.js?v=1206-scoped-fx')&&
   html.includes('browser-midi.js?v=1206-scoped-soundfont'),
   'Page must load updated Drive folder, SoundFont and FX implementations');
-assert.ok(app.includes('async function chooseUserDriveFolder(kind)')&&
+assert.ok(app.includes('ensureLibraryLayout(drive,actual.id,')&&
   app.includes('xstage-drive-main-select')&&!app.includes('new google.picker.PickerBuilder()')&&
   app.includes('const xstageDriveFolders=window.XStageDriveFolders?.init({')&&
   app.includes('ensureAuth:ensureImporterGoogleAuth')&&
   app.includes('onFxChange:folderId=>window.dispatchEvent'),
   'Folder picker must use verified app OAuth and dispatch selected media sources');
 assert.ok(settings.includes("const STORE='xstage-drive-source-folders-v1'")&&
-  settings.includes('const verifiedSession=session()')&&
+  settings.includes('async function ensureLibraryLayout(')&&settings.includes('meta.name!==FIXED_NAMES[kind]')&&
   settings.includes('retired.has(parent)')&&
   settings.includes("if(cancelButton)cancelButton.disabled=!busy;")&&
   settings.includes('scope.XStageCloudImport.publishSingleCatalog({'),
@@ -59,7 +59,7 @@ assert.ok(html.includes('id="xstage-drive-main-select"'));
 assert.ok(settings.includes('if(parent===root)return first;'));
 assert.ok(app.includes('Array.isArray(x.parents)&&x.parents.includes(current.id)'));
 assert.ok(app.includes('!preferredRootId&&roots.length===1'));
-assert.ok(app.includes('browseAuthorizedDriveFolders({')&&app.includes('list:async id=>')&&app.includes('if(sameSession())return chooseUserDriveFolder(kind)'));
+assert.ok(settings.includes("ids.MIDI=await child(ids.SONGS,'MIDI'")&&!settings.includes("add('เปลี่ยนโฟลเดอร์'"));
 assert.ok(app.includes("dialog.addEventListener('cancel',event=>{event.preventDefault();finish();})"));
 assert.ok(soundfont.includes('showPermission(!fullRead&&!!chosenFolder'));
 assert.ok(importer.includes('xstage:drive-sources-open')&&settings.includes('xstage:drive-sources-open'));
