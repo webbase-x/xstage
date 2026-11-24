@@ -408,17 +408,15 @@
   <dialog id="windows-volume-dialog" class="windows-volume-dialog" aria-labelledby="windows-volume-title">
     <div class="windows-volume-modal">
       <h2 id="windows-volume-title">เชื่อมระดับเสียงหลัก Windows</h2>
-      <p>Chrome ควบคุมระดับเสียงระบบ Windows โดยตรงไม่ได้ ต้องเปิด <strong>XStageWindowsVolumeBridge.exe</strong> บนเครื่องนี้ก่อน การเชื่อมต้องกรอกรหัสที่โปรแกรมแสดง และสามารถยกเลิกได้ตลอดเวลา</p>
-      <p><a id="windows-volume-download" href="https://github.com/webbase-x/xstage/releases/download/windows-volume-bridge/XStageWindowsVolumeBridge.exe" download="XStageWindowsVolumeBridge.exe">ดาวน์โหลดโปรแกรม Windows (.exe) โดยตรง</a> · เปิดไฟล์ที่ดาวน์โหลดแล้วเพื่อรับรหัสเชื่อมต่อ</p>
-      <label for="windows-volume-code">รหัสเชื่อมต่อจากโปรแกรมช่วย (10 หลัก)</label>
-      <input id="windows-volume-code" type="text" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" autocomplete="off" placeholder="รหัส 10 หลัก">
+      <p>Chrome ควบคุมระดับเสียงระบบ Windows โดยตรงไม่ได้ ต้องเปิด <strong>XStageWindowsVolumeBridge.exe</strong> บนเครื่องนี้ก่อน อนุญาตในโปรแกรมช่วยครั้งแรก จากนั้นเชื่อมอัตโนมัติโดยไม่ต้องกรอกรหัส</p>
+      <p><a id="windows-volume-download" href="https://github.com/webbase-x/xstage/releases/download/windows-volume-bridge/XStageWindowsVolumeBridge.exe" download="XStageWindowsVolumeBridge.exe">ดาวน์โหลดโปรแกรม Windows (.exe) โดยตรง</a> · เปิดไฟล์ที่ดาวน์โหลดแล้วและอนุญาตครั้งแรก</p>
       <p id="windows-volume-status" role="status" aria-live="polite">ยังไม่เชื่อม · ขณะนี้แถบเสียงปรับเฉพาะเว็บ</p>
       <div class="windows-volume-modal-actions">
         <button id="windows-volume-pair" type="button">เชื่อมเสียง Windows</button>
         <button id="windows-volume-disconnect" type="button" hidden>ตัดการเชื่อมต่อ</button>
         <button id="windows-volume-close" type="button">ปิด</button>
       </div>
-      <small>โปรแกรมช่วยทำงานเฉพาะเครื่องนี้บน 127.0.0.1 โดยต้องอนุญาตการเชื่อมต่อและยืนยันรหัสก่อน ไม่มีการส่งรหัสหรือระดับเสียงไปยังเซิร์ฟเวอร์ X-Stage</small>
+      <small>โปรแกรมช่วยทำงานเฉพาะเครื่องนี้บน 127.0.0.1 โดยจดจำการอนุญาตของผู้ใช้ Windows ไม่มีการส่งระดับเสียงไปยังเซิร์ฟเวอร์ X-Stage</small>
     </div>
   </dialog>
   <dialog id="cloud-import-dialog" class="cloud-import-dialog" aria-labelledby="cloud-import-title">
@@ -586,7 +584,7 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="mobile-layout.js?v=1202-menu" defer></script>
   <script src="android-apk-download.js?v=1214" defer></script>
 
-  <script src="windows-volume-bridge.js?v=1137-system-volume-bridge" defer></script>
+  <script src="windows-volume-bridge.js?v=auto-connect-2" defer></script>
   <script src="stage-ui.js?v=1164-bottom-menu" defer></script>
   <script src="stage-lighting.js?v=1164-midi-eq-bars-1165-live-spectrum-1167-video-stage-eq-restored-r1" defer></script>
 </body>

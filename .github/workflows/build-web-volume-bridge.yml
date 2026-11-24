@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "windows-pc/source/karaoke/web_volume_bridge.py"
+      - "windows-pc/source/karaoke/web_volume_update.py"
       - "windows-pc/source/karaoke/system_volume.py"
       - "windows-pc/source/tests/test_web_volume_bridge.py"
       - "windows-pc/source/Start-Web-Volume-Bridge.ps1"
@@ -53,13 +54,14 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --disable-pip-version-check pyinstaller==6.16.0
+          Set-Content -Path windows-pc/source/karaoke/web_volume_build.py -Value "BUILD = $env:GITHUB_RUN_NUMBER" -Encoding ascii
           python -m PyInstaller --onefile --console --clean --name XStageWindowsVolumeBridge --paths windows-pc/source windows-pc/source/karaoke/web_volume_bridge.py
           if ($LASTEXITCODE -ne 0) { throw 'PyInstaller bridge build failed' }
           if (-not (Test-Path 'dist/XStageWindowsVolumeBridge.exe')) { throw 'Missing Windows EXE' }
       - name: Smoke-test locally running EXE (no audio hardware asserted)
         shell: pwsh
         run: |
-          $p = Start-Process -FilePath (Resolve-Path 'dist/XStageWindowsVolumeBridge.exe').Path -PassThru -RedirectStandardOutput 'volume-bridge.log'
+          $p = Start-Process -FilePath (Resolve-Path 'dist/XStageWindowsVolumeBridge.exe').Path -ArgumentList '--ci-smoke' -PassThru -RedirectStandardOutput 'volume-bridge.log'
           try {
             $ready = $false
             for ($i = 0; $i -lt 30; $i++) {
@@ -90,5 +92,5 @@ jobs:
             gh release create windows-volume-bridge --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "X-Stage Windows Volume Bridge" --notes "Standalone Windows volume helper." --latest=false
             if ($LASTEXITCODE -ne 0) { throw 'Release creation failed' }
           }
-          gh release upload windows-volume-bridge dist/XStageWindowsVolumeBridge.exe --repo "$env:GITHUB_REPOSITORY" --clobber
+          gh release upload windows-volume-bridge "dist/XStageWindowsVolumeBridge.exe#build-$env:GITHUB_RUN_NUMBER" --repo "$env:GITHUB_REPOSITORY" --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }

@@ -1,6 +1,6 @@
 /* Optional X-Stage Karaoke Online <-> Windows Core Audio companion.
- * Browsers cannot change Windows master volume themselves. No silent pairing,
- * no token persistence, and no connection to hosts other than loopback.
+ * Local Windows consent enables automatic pairing. Tokens remain in memory;
+ * no connection to hosts other than loopback.
  */
 'use strict';
 (function(){
@@ -8,7 +8,6 @@
   const $=id=>document.getElementById(id);
   const button=$('windows-volume-connect');
   const dialog=$('windows-volume-dialog');
-  const codeInput=$('windows-volume-code');
   const pairButton=$('windows-volume-pair');
   const disconnectButton=$('windows-volume-disconnect');
   const closeButton=$('windows-volume-close');
@@ -17,7 +16,7 @@
   if(!button||!dialog||!slider)return;
   let token='',connected=false,muted=false,level=80,syncing=false;
   let pollTimer=0,activePoll=false,pendingVolume=null,writing=false;
-  let currentRequestId=0;
+  let currentRequestId=0, pairing=false, autoEnabled=true;
 
   const clamp=value=>Math.max(0,Math.min(100,Math.round(Number(value)||0)));
   const show=message=>{if(status)status.textContent=message;};
@@ -121,17 +120,15 @@
     }
     return true;
   }
-  async function pair(){
-    if(connected)return;
-    const code=String(codeInput?.value||'').trim();
-    if(!/^\d{10}$/.test(code)){
-      show('กรอกรหัสเชื่อมต่อ 10 หลักที่แสดงในหน้าต่างโปรแกรมช่วยบน Windows');
-      return;
-    }
+  async function pair(automatic=false){
+    if(connected||pairing||(!autoEnabled&&automatic))return;
+    pairing=true;
+    const epoch=currentRequestId;
     pairButton.disabled=true;
     show('กำลังเชื่อมกับโปรแกรมช่วยบนเครื่องนี้…');
     try{
-      const result=await request('/v1/pair','POST',{code});
+      const result=await request('/v1/connect','POST',{});
+      if(epoch!==currentRequestId||!autoEnabled)return;
       if(!result.token||typeof result.token!=='string')throw Error('ไม่ได้รับโทเค็นที่ตรวจสอบได้');
       token=result.token;connected=true;muted=!!result.muted;
       currentRequestId++;
@@ -142,13 +139,14 @@
       reflect(result,true);
       indicator();
       show('เชื่อมแล้ว · ล้อเมาส์/แถบเสียงควบคุมระดับเสียงหลัก Windows และอ่านค่ากลับทุก 0.5 วินาที');
-      if(codeInput)codeInput.value='';
+      if(dialog.open&&dialog.close)dialog.close();
       pollTimer=setInterval(()=>{void poll();},500);
     }catch(error){
       show('เชื่อม Windows ไม่สำเร็จ: '+error.message+
         ' · เปิด XStageWindowsVolumeBridge.exe ก่อน และอนุญาต Local network access หาก Chrome ถาม');
       token='';connected=false;
     }finally{
+      pairing=false;
       if(pairButton)pairButton.disabled=connected;
       indicator();
     }
@@ -156,19 +154,16 @@
   button.addEventListener('click',()=>{
     if(!dialog.open){if(dialog.showModal)dialog.showModal();else dialog.setAttribute('open','');}
     if(connected)show('เชื่อมกับระดับเสียงหลัก Windows อยู่ · การหมุนล้อเมาส์จะเปลี่ยนเสียงระบบ');
-    else show('เปิดโปรแกรมช่วย Windows แล้วกรอกรหัสเชื่อมต่อ 10 หลัก · ไม่ติดตั้งหรือเปิดโปรแกรมให้เอง');
+    else show('เปิดโปรแกรมช่วย Windows รุ่นใหม่และอนุญาตครั้งแรก · ไม่ต้องกรอกรหัส');
   });
-  pairButton?.addEventListener('click',()=>{void pair();});
-  codeInput?.addEventListener('keydown',event=>{
-    if(event.key==='Enter'){event.preventDefault();void pair();}
-  });
-  disconnectButton?.addEventListener('click',()=>disconnect());
+  pairButton?.addEventListener('click',()=>{autoEnabled=true;void pair();});
+  disconnectButton?.addEventListener('click',()=>{autoEnabled=false;disconnect();});
   closeButton?.addEventListener('click',()=>{
     if(dialog.close)dialog.close();else dialog.removeAttribute('open');
   });
   window.addEventListener('pagehide',()=>{
     if(pollTimer)clearInterval(pollTimer);
-    pollTimer=0;token='';connected=false;
+    pollTimer=0;token='';connected=false;autoEnabled=false;currentRequestId++;
   });
   window.XStageWindowsVolumeBridge={
     get connected(){return connected;},
@@ -177,4 +172,9 @@
     setVolume,toggleMute,disconnect
   };
   indicator();
+  if(/Windows/i.test(navigator.userAgent||'')){
+    // Never open a modal automatically; retry only while disconnected.
+    void pair(true);
+    setInterval(()=>{if(autoEnabled&&!connected)void pair(true);},10000);
+  }
 })();

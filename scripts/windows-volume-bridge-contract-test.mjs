@@ -9,11 +9,13 @@ const stage=read('stage-ui.js');
 const bridgeCode=read('windows-volume-bridge.js');
 const css=read('xstage-ux.css');
 
-for(const id of ['windows-volume-connect','windows-volume-dialog','windows-volume-code',
+for(const id of ['windows-volume-connect','windows-volume-dialog',
   'windows-volume-pair','windows-volume-disconnect','windows-volume-close',
   'windows-volume-status','stage-volume-value']){
   assert.ok(html.includes('id="'+id+'"'),'Missing Windows volume control '+id);
 }
+assert.ok(!html.includes('id="windows-volume-code"'),'No manual code entry');
+assert.ok(html.includes('windows-volume-download'),'Direct EXE download required');
 assert.ok(html.includes('windows-volume-bridge.js?v='),'Bridge must be loaded on Karaoke Online');
 assert.ok(html.includes('stage-ui.js?v=1164-bottom-menu'),'Wheel updates must bypass cached stage UI');
 assert.ok(css.includes('.windows-volume-dialog')&&css.includes('.windows-volume-connect'));
@@ -31,7 +33,7 @@ assert.ok(!bridgeCode.includes('localStorage.')&&!bridgeCode.includes('sessionSt
 assert.ok(bridgeCode.includes("http://127.0.0.1:48731")&&!bridgeCode.includes('0.0.0.0'),
   'Bridge requests must target one local endpoint, never a LAN host');
 
-const elementIds=['windows-volume-connect','windows-volume-dialog','windows-volume-code',
+const elementIds=['windows-volume-connect','windows-volume-dialog',
   'windows-volume-pair','windows-volume-disconnect','windows-volume-close',
   'windows-volume-status','volume','player'];
 const dom=new Map(elementIds.map(id=>[id,{
@@ -48,8 +50,8 @@ let osLevel=63,osMuted=false,pairedToken='';
 const fakeFetch=async(url,options)=>{
   const path=String(url).replace('http://127.0.0.1:48731','');
   const response=(status,data)=>({ok:status>=200&&status<300,status,json:async()=>data});
-  if(path==='/v1/pair'&&options.method==='POST'){
-    assert.equal(JSON.parse(options.body).code,'1234567890');
+  if(path==='/v1/connect'&&options.method==='POST'){
+    assert.deepEqual(JSON.parse(options.body),{});
     pairedToken='TEST_SESSION_TOKEN_12345678901234567890123456789';
     return response(200,{token:pairedToken,volume:osLevel,muted:osMuted});
   }
@@ -70,7 +72,7 @@ class Event {constructor(type,init={}){this.type=type;this.bubbles=init.bubbles;
 class CustomEvent extends Event {constructor(type,init={}){super(type,init);this.detail=init.detail;}}
 const context={
   document:{getElementById:id=>dom.get(id)||null},
-  Event,CustomEvent,console,AbortController,fetch:fakeFetch,
+  Event,CustomEvent,console,AbortController,fetch:fakeFetch,navigator:{userAgent:'Test'},
   setTimeout,clearTimeout,
   setInterval:fn=>{tickers.push(fn);return tickers.length;},clearInterval(){},
   addEventListener(){},dispatchEvent:e=>events.push(e)
@@ -87,7 +89,6 @@ const emit=(id,type)=>{for(const fn of dom.get(id).listeners[type]||[])fn({type}
 const settle=()=>new Promise(resolve=>setTimeout(resolve,20));
 emit('windows-volume-connect','click');
 assert.equal(dom.get('windows-volume-dialog').open,true);
-dom.get('windows-volume-code').value='1234567890';
 emit('windows-volume-pair','click');
 await settle();
 assert.equal(bridge.connected,true);

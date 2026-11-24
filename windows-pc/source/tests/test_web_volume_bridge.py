@@ -6,6 +6,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from karaoke.web_volume_bridge import ALLOWED_ORIGIN, HOST, VolumeBridgeServer
+from karaoke.web_volume_update import asset_for_update, EXE, DOWNLOAD
 
 
 class FakeVolume:
@@ -91,6 +92,23 @@ class WebVolumeBridgeTests(unittest.TestCase):
         self.assertEqual(self.call("/v1/volume", auth=self.token,
                                    host="rebinding.invalid:48731")[0], 403)
         self.assertEqual(FakeVolume.state["volume"], 42)
+
+    def test_update_manifest_validation(self):
+        asset = {"name": EXE, "browser_download_url": DOWNLOAD, "label": "build-5", "digest": "sha256:" + "a"*64, "size": 100}
+        self.assertEqual(asset_for_update({"assets": [asset]}, 4), (5, "a"*64, 100))
+        self.assertIsNone(asset_for_update({"assets": [asset]}, 5))
+        self.assertIsNone(asset_for_update({"assets": [dict(asset, digest="invalid")]}, 4))
+        self.assertIsNone(asset_for_update({"assets": [dict(asset, browser_download_url="https://evil.invalid/a.exe")]}, 4))
+
+    def test_automatic_connect_requires_local_approval(self):
+        self.assertEqual(self.call("/v1/connect", "POST", {})[0], 403)
+        self.server.approved = True
+        self.assertEqual(self.call("/v1/connect", "POST", {}, origin="https://evil.example")[0], 403)
+        self.assertEqual(self.call("/v1/connect", "POST", {}, host="evil.invalid:48731")[0], 403)
+        status, data, _ = self.call("/v1/connect", "POST", {})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.call("/v1/connect", "POST", {})[1]["token"], data["token"])
+        self.assertEqual(self.call("/v1/volume", auth=data["token"])[0], 200)
 
     def test_preflight_restricts_origins(self):
         code, _, headers = self.call("/v1/volume", "OPTIONS")

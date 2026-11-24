@@ -1,12 +1,15 @@
 """Opt-in loopback companion for X-Stage Karaoke Online on Windows.
 
 A browser has no Windows Core Audio master-volume API. This helper runs only
-after the user launches it, binds to 127.0.0.1, requires a one-time pairing
-code and a bearer token, and allows only the official GitHub Pages origin.
+after the user launches it, binds to 127.0.0.1, requires local user approval
+and a bearer token, and allows only the official GitHub Pages origin.
 """
 from __future__ import annotations
 
 import hmac
+import ctypes
+import os
+from pathlib import Path
 import json
 import secrets
 import sys
@@ -15,6 +18,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from karaoke.system_volume import WindowsVolume
+from karaoke import web_volume_update
 
 HOST = "127.0.0.1"
 PORT = 48731
@@ -25,10 +29,11 @@ class VolumeBridgeServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address=(HOST, PORT), volume_factory=WindowsVolume, code=None):
+    def __init__(self, address=(HOST, PORT), volume_factory=WindowsVolume, code=None, approved=False):
         super().__init__(address, VolumeBridgeHandler)
         self.volume_factory = volume_factory
-        self.pair_code = code or str(secrets.randbelow(10**10)).zfill(10)
+        self.pair_code = code  # legacy test/explicit compatibility only
+        self.approved = approved
         self.session_token = ""
         self.failed_pairs = []
         self.guard = threading.Lock()
@@ -45,13 +50,21 @@ class VolumeBridgeServer(ThreadingHTTPServer):
         finally:
             controller.close()
 
+    def connect(self):
+        with self.guard:
+            if not self.approved:
+                return None
+            if not self.session_token:
+                self.session_token = secrets.token_urlsafe(32)
+            return self.session_token
+
     def pair(self, code):
         with self.guard:
             now = time.monotonic()
             self.failed_pairs = [v for v in self.failed_pairs if now - v < 60]
             if len(self.failed_pairs) >= 5:
                 return None
-            if not isinstance(code, str) or not hmac.compare_digest(code, self.pair_code):
+            if not self.pair_code or not isinstance(code, str) or not hmac.compare_digest(code, self.pair_code):
                 self.failed_pairs.append(now)
                 return None
             self.failed_pairs.clear()
@@ -127,7 +140,7 @@ class VolumeBridgeHandler(BaseHTTPRequestHandler):
         if not self._approved():
             return self._json(403, {"error": "Origin denied"})
         if self.path == "/v1/health":
-            return self._json(200, {"service": "XStageWindowsVolumeBridge", "paired": bool(self.server.session_token)})
+            return self._json(200, {"service": "XStageWindowsVolumeBridge", "paired": bool(self.server.session_token), "automatic": self.server.approved})
         if self.path != "/v1/volume":
             return self._json(404, {"error": "Not found"})
         if not self._authorized():
@@ -141,15 +154,17 @@ class VolumeBridgeHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._approved():
             return self._json(403, {"error": "Origin denied"})
-        if self.path != "/v1/pair":
+        if self.path not in ("/v1/pair", "/v1/connect"):
             return self._json(404, {"error": "Not found"})
         try:
             payload = self._request()
         except ValueError as error:
             return self._json(400, {"error": str(error)})
-        token = self.server.pair(payload.get("code"))
+        if self.headers.get_content_type() != "application/json":
+            return self._json(400, {"error": "Expected JSON content type"})
+        token = self.server.connect() if self.path == "/v1/connect" else self.server.pair(payload.get("code"))
         if not token:
-            return self._json(403, {"error": "Incorrect code or too many attempts"})
+            return self._json(403, {"error": "Local Windows approval required or legacy pairing denied"})
         try:
             level, muted = self.server.volume()
             return self._json(200, {"token": token, "volume": round(level, 2), "muted": muted})
@@ -182,12 +197,44 @@ class VolumeBridgeHandler(BaseHTTPRequestHandler):
             return self._json(503, {"error": str(error)})
 
 
+def consent():
+    # Approval is scoped to this Windows user and exact browser origin.
+    root = Path(os.environ["LOCALAPPDATA"]) / "XStage" / "VolumeBridge"
+    root.mkdir(parents=True, exist_ok=True)
+    marker = root / "approved-v1"
+    if marker.is_file():
+        return True
+    yes = ctypes.windll.user32.MessageBoxW(None,
+        "Allow X-Stage Karaoke Online (https://webbase-x.github.io) to control Windows master volume on this computer? You can revoke by deleting the approval file or closing the helper.",
+        "X-Stage Windows Volume Bridge", 0x24 | 0x100)
+    if yes != 6:
+        return False
+    marker.write_text(ALLOWED_ORIGIN, encoding="utf-8")
+    if getattr(sys, "frozen", False):
+        if ctypes.windll.user32.MessageBoxW(None,
+            "Start the volume helper automatically when you sign in to Windows?",
+            "X-Stage Windows Volume Bridge", 0x24 | 0x100) == 6:
+            try:
+                import winreg
+                with winreg.CreateKey(winreg.HKEY_CURRENT_USER,
+                    r"Software\Microsoft\Windows\CurrentVersion\Run") as key:
+                    winreg.SetValueEx(key, "XStageWindowsVolumeBridge", 0, winreg.REG_SZ, '"'+sys.executable+'"')
+            except OSError as error:
+                print("Startup registration failed:", error, flush=True)
+    return True
+
+
 def main():
     if sys.platform != "win32":
         raise SystemExit("X-Stage Windows Volume Bridge requires Windows 10/11")
-    with VolumeBridgeServer() as server:
-        print("X-Stage Windows Volume Bridge", flush=True)
-        print("Pairing code:", server.pair_code, flush=True)
+    smoke = '--ci-smoke' in sys.argv
+    if not smoke and '--no-update' not in sys.argv and web_volume_update.check_and_install():
+        return
+    approved = False if smoke else consent()
+    if not approved and not smoke:
+        return
+    with VolumeBridgeServer(approved=approved) as server:
+        print('X-Stage Windows Volume Bridge · automatic connection enabled', flush=True)
         print("Keep this window open while controlling Windows volume from Karaoke Online.", flush=True)
         print("Listening only on http://127.0.0.1:" + str(server.server_port), flush=True)
         print("Press Ctrl+C to stop and revoke access.", flush=True)
@@ -195,8 +242,6 @@ def main():
             server.serve_forever(poll_interval=.25)
         except KeyboardInterrupt:
             pass
-        finally:
-            server.shutdown()
 
 
 if __name__ == "__main__":
