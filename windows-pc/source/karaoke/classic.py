@@ -53,6 +53,10 @@ class ClassicApp(KaraokeApp):
         from .drive_online_catalog_ui import open_shared_drive_catalog
         return open_shared_drive_catalog(self)
 
+    def open_shared_drive_push(self):
+        from .shared_drive_sync_ui import open_drive_push
+        return open_drive_push(self)
+
     def _setup_style(self):
         super()._setup_style()
         style = ttk.Style(self)
@@ -81,6 +85,8 @@ class ClassicApp(KaraokeApp):
         songs.add_command(label='เพิ่มไฟล์เพลง…', command=self.add_files)
         songs.add_command(label='Google Drive · ใช้ DB/songs.sqlite3 ร่วมกับ Online…',
                           command=self.open_shared_google_drive_catalog)
+        songs.add_command(label='Google Drive · ส่งเพลง/SoundFont/FX จากเครื่อง…',
+                          command=self.open_shared_drive_push)
         songs.add_separator()
         songs.add_command(label='ออกจากโปรแกรม', command=self.close_app)
         play = tk.Menu(menu, tearoff=False)
