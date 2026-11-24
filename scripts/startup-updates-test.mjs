@@ -15,7 +15,7 @@ const start = app.indexOf("const WEB_AUTO_UPDATE_GUARD=");
 const end = app.indexOf('async function checkAppVersion(){',start);
 assert.ok(start>=0&&end>start,'automatic web update function must be available');
 const makeWebUpdate = new Function('androidTvNativeBridgeReady','playbackBusyForUpdate','sessionStorage','performAppUpdateReload',
-  'webGoogleAuthFlow','state',
+  'webGoogleAuthFlow','state','window',
   app.slice(start,end)+'\nreturn autoApplyWebUpdate;');
 
 function scenario({busy=false,native=false,oauth=false,recovering=false}={}){
@@ -25,7 +25,7 @@ function scenario({busy=false,native=false,oauth=false,recovering=false}={}){
     setItem:(key,value)=>data.set(key,value)
   };
   const apply=makeWebUpdate(()=>native,()=>busy,storage,()=>{reloads++;},
-    oauth?{id:1,phase:'waiting'}:null,{authRecovering:recovering});
+    oauth?{id:1,phase:'waiting'}:null,{authRecovering:recovering},{});
   return {apply,reloads:()=>reloads};
 }
 {
@@ -149,12 +149,17 @@ const reloadStart=app.indexOf('async function performAppUpdateReload(');
 const reloadEnd=app.indexOf('const WEB_AUTO_UPDATE_GUARD=',reloadStart);
 let navigated='',snapshots=0;
 const reload=new Function('window','state','location','URL','webGoogleAuthFlow','XSTAGE_RELEASE','savePlaybackResumeState','renderAppUpdateNotice','setStatus',
- 'let preserveUpdateResumeOnUnload=false,webUpdateManualMessage="",webUpdateStageController=null;'+app.slice(reloadStart,reloadEnd)+';return performAppUpdateReload;')(
+ 'let preserveUpdateResumeOnUnload=false,webUpdateManualMessage="",webUpdateStageController=null,webUpdatePhase="notice",webUpdateReloading=false;const WEB_UPDATE_HANDOFF="test-handoff";'+app.slice(reloadStart,reloadEnd)+';return performAppUpdateReload;')(
  {},{authRecovering:true,updateAvailable:{build:1146}},{href:'https://webbase-x.github.io/xstage/karaoke.html?keep=1',replace:url=>{navigated=url;}},URL,null,{build:1145},()=>{snapshots++;},()=>{},()=>{});
 assert.equal(await reload({manual:true}),true,'Manual update works while stored credentials recover');
 assert.match(navigated,/build=1146/);
 assert.match(navigated,/keep=1/);
 assert.equal(snapshots,1);
+assert.equal(await reload({manual:true}),false,'Second click must not start a second update');
+assert.equal(snapshots,1);
+assert.ok(app.includes("webUpdatePhase='applying'")&&app.includes("webUpdatePhase='complete'"));
+assert.ok(app.includes('ขั้นที่ 1/2')&&app.includes('ขั้นที่ 2/2'));
+assert.ok(apk.includes('xstage:web-update-check-complete')&&apk.includes('if(update?.busy||'));
 assert.ok(html.includes('id="app-update-direct"'),'A direct navigation fallback must be visible');
 
 assert.ok(app.includes('if(!newlyPublished&&!manuallyChecked)return;'),'same Android build must not reopen a dismissed notice during background checks');
