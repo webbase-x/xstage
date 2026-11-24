@@ -59,14 +59,20 @@ async function countSourceFiles(drive,start,check=()=>{},collect=null){
   const counts={total:0,xmid:0,xsk:0,sf2:0,sf3:0,fx:0,other:0};
   while(folders.length){
     check();
-    const {id,depth}=folders.shift();
-    if(!isId(id)||retired.has(id))fail('พบโฟลเดอร์ที่ไม่อนุญาต');
-    if(visited.has(id))continue;
-    visited.add(id);
-    if(visited.size>MAX_FOLDERS)fail('จำนวนโฟลเดอร์เกินขอบเขต');
-    const children=await drive.listChildren(id);
+    const batch=[];
+    while(folders.length&&batch.length<4){
+      const {id,depth}=folders.shift();
+      if(!isId(id)||retired.has(id))fail('พบโฟลเดอร์ที่ไม่อนุญาต');
+      if(visited.has(id))continue;
+      visited.add(id);
+      if(visited.size>MAX_FOLDERS)fail('จำนวนโฟลเดอร์เกินขอบเขต');
+      batch.push({id,depth});
+    }
+    const pages=await Promise.all(batch.map(x=>drive.listChildren(x.id)));
     check();
-    for(const item of children){
+    for(let page=0;page<pages.length;page++){
+      const {depth}=batch[page];
+      for(const item of pages[page]){
       if(!isId(item.id)||retired.has(item.id))fail('พบ File ID ที่ไม่อนุญาต');
       if(item.mimeType===FOLDER){
         if(depth>=MAX_DEPTH)fail('โครงสร้างโฟลเดอร์ลึกเกินขอบเขต');
@@ -83,6 +89,7 @@ async function countSourceFiles(drive,start,check=()=>{},collect=null){
       else if(['xmid','xsk','sf2','sf3'].includes(ext)){counts[ext]++;if(ext==='xmid'||ext==='xsk')collect?.({...item,ext});}
       else if(/^audio\//.test(item.mimeType||'')||/\.(wav|mp3|m4a|aac|ogg|flac|opus)$/i.test(name))counts.fx++;
       else counts.other++;
+      }
     }
   }
   return counts;
@@ -186,7 +193,7 @@ async function compareCatalog(files,rows,checkpoint,s,folder,check=()=>{}){
     const file=byId.get(media.fileId),sig=packageSignature(media);
     if(!file||!sig||sig!==packageSignature(file)||file.ext!==(row.xmid?'xmid':'xsk')){stale++;continue;}
     matchedRows++;validIds.add(file.id);packages.add(file.ext+':'+sig);
-    if(identity)midi.add(identity);
+    if(identity)midi.add(identity);else uncertain++;
   }
   const pending=[];
   for(const file of files){
@@ -299,6 +306,7 @@ function createWorkflow(options={}){
   function scheduleScan(){
     if(!$('cloud-import-dialog')?.open||busy||scope.document?.hidden)return;
     if(scanTimer)clearTimeout(scanTimer);
+    if(!scanTask&&comparisonState==='equal')compareStatus('กำลังยืนยันข้อมูลล่าสุด…','checking');
     scanTimer=setTimeout(()=>{scanTimer=null;if($('cloud-import-dialog')?.open&&!busy)void discoverDefaults().then(()=>scanCounts());},250);
   }
   scanButton?.addEventListener('click',()=>void scanCounts());
@@ -450,7 +458,7 @@ function createWorkflow(options={}){
     finally{render();}
   }
   async function rebuild(){
-    if(busy)return;
+    if(busy||comparisonState==='equal'||comparisonState==='checking')return;
     let initial;
     try{initial=session();}
     catch(error){display(error.message);return;}
@@ -617,7 +625,7 @@ function createWorkflow(options={}){
     if(busy||scope.document?.hidden)return;
     let s;try{s=session();}catch{return;}
     const chosen=readSelections(s.sub,s.rootId).music;
-    if(chosen?.id&&pending(s)===chosen.id)void rebuild();
+    if(chosen?.id&&pending(s)===chosen.id){comparisonState='unknown';void rebuild();}
   }
   for(const event of ['xstage:auth-ready','xstage:auth-refreshed','xstage:librarychange',
     'xstage:auth-cleared'])scope.addEventListener?.(event,()=>{if(event==='xstage:librarychange'||event==='xstage:auth-cleared'){closeFolderMenu();++scanSequence;scanTask=null;comparisonState='unknown';catalogCache=null;for(const n of Object.values(countNodes))if(n)n.textContent='';if(dbCount)dbCount.textContent='—';if(comparison)comparison.textContent='';}render();resume();scheduleScan();});
