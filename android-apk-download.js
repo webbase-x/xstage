@@ -81,6 +81,12 @@
   };
   function offerPublishedAndroidApk(apk){
     if(!apk||!isAndroidBrowser()||!dialog||!content||!title)return;
+    const update=window.XStageWebUpdateState?.();
+    if(update&&!update.checked){
+      window.addEventListener('xstage:web-update-check-complete',()=>offerPublishedAndroidApk(apk),{once:true});
+      return;
+    }
+    if(update?.busy||document.getElementById('app-update-notice')?.hidden===false)return;
     try{
       if(localStorage.getItem(ANDROID_APK_NEVER_ASK_KEY)==='1')return;
       if(sessionStorage.getItem(ANDROID_APK_OFFERED_KEY)===String(apk.build))return;
