@@ -1908,7 +1908,8 @@ function browseAuthorizedDriveFolders({rootId,kind,sameSession,list,allowGrant})
     catch(error){finish(null);}
   });
 }
-// App-owned picker: never open Google's global browsing iframe.
+// App-owned picker. Select any existing Drive folder by Folder ID, or create a
+// new named root only after user confirmation. Never choose based on name alone.
 async function openSharedLibraryPicker(){
   if(!state.token||!state.accountSub){setStatus('กรุณาเข้าสู่ระบบ Google ก่อน','error');return;}
   if(window.XStageDriveBuildBusy||xstageCloudImporter?.running){
@@ -1917,49 +1918,142 @@ async function openSharedLibraryPicker(){
   const account=state.accountSub,previousRoot=state.libraryRootId;
   const sameSession=()=>state.accountSub===account&&state.libraryRootId===previousRoot&&!!state.token;
   const dialog=document.createElement('dialog');dialog.className='cloud-import-dialog';
-  dialog.style.cssText='width:min(94vw,520px);max-height:82dvh;padding:16px;overflow:auto;background:#0c192b;color:#e7f6ff;border:1px solid #407d92;border-radius:14px';
-  dialog.setAttribute('aria-label','เลือกโฟลเดอร์หลัก X-Stage Karaoke Online');
-  const title=document.createElement('h3');title.textContent='เลือกโฟลเดอร์หลัก X-Stage Karaoke Online';
-  const status=document.createElement('p'),items=document.createElement('div');
-  status.setAttribute('role','status');dialog.append(title,status,items);
-  let closed=false;
-  const finish=()=>{if(closed)return;closed=true;if(dialog.open)dialog.close();dialog.remove();};
+  dialog.style.cssText='width:min(94vw,600px);max-height:86dvh;padding:17px;overflow:auto;background:#0c192b;color:#e7f6ff;border:1px solid #407d92;border-radius:14px';
+  dialog.setAttribute('aria-label','เลือกคลัง Google Drive');
+  const title=document.createElement('h3');title.textContent='คลังเพลง Google Drive · เลือกชื่อเองได้';
+  const status=document.createElement('p'),crumb=document.createElement('p'),
+        items=document.createElement('div');
+  status.setAttribute('role','status');
+  dialog.append(title,status,crumb);
   const button=(label,action,parent=dialog)=>{
     const el=document.createElement('button');el.type='button';el.textContent=label;
-    el.style.cssText='display:block;width:100%;margin:8px 0;padding:12px;background:#163748;color:#e7f6ff;border:1px solid #407d92;border-radius:8px;text-align:left';
+    el.style.cssText='display:block;width:100%;margin:8px 0;padding:11px;background:#163748;color:#e7f6ff;border:1px solid #407d92;border-radius:8px;text-align:left';
     el.addEventListener('click',action);parent.append(el);return el;
   };
-  const render=async()=>{
-    if(closed)return;
-    items.replaceChildren();status.textContent='กำลังตรวจคลัง XStageKaraoke ที่บัญชีนี้เข้าถึงได้…';
-    try{
-      const roots=(await driveList("name='"+driveLayout.root+"' and mimeType='application/vnd.google-apps.folder' and trashed=false",state.token))
-        .filter(x=>x.name===driveLayout.root&&/^[A-Za-z0-9_-]{5,256}$/.test(x.id)&&!isRetiredDriveRoot(x.id));
-      if(closed||!sameSession())return;
-      for(const root of roots){
-        button(libraryLabel(root)+' · …'+root.id.slice(-6)+(root.id===previousRoot?' · กำลังใช้งาน':''),async()=>{
-          if(closed||!sameSession())return;
-          if(window.XStageDriveBuildBusy||xstageCloudImporter?.running){status.textContent='กรุณาให้งานปัจจุบันเสร็จก่อน';return;}
-          savePreferredLibraryRoot(account,root.id);finish();
-          if(root.id===previousRoot)return;
-          clearPlaybackResumeState();
-          if(previousRoot){location.reload();return;}
-          try{await openDrive(state.token,++state.authId,state.tokenExpiresAt,account,false);}
-          catch(error){setSharedLibraryGate(true,error.message);}
-        },items);
-      }
-      status.textContent=roots.length?'เลือกคลังหลักหนึ่งโฟลเดอร์ · ระบบจะจำและไม่เปิดคลังอื่นโดยอัตโนมัติ':'ไม่พบโฟลเดอร์ XStageKaraoke ที่เข้าถึงได้';
-      if(!hasFullDriveRead())button('ขอสิทธิ์อ่านจาก Google เพื่อค้นหาคลัง',async()=>{
-        try{await ensureImporterGoogleAuth(true,true,true);if(sameSession())await render();}
-        catch(error){status.textContent=error.message;}
-      },items);
-    }catch(error){if(!closed)status.textContent=error.message;}
+  const input=(placeholder,value='')=>{
+    const el=document.createElement('input');el.type='text';el.placeholder=placeholder;el.value=value;
+    el.style.cssText='display:block;width:100%;padding:11px;box-sizing:border-box;background:#091625;color:#e7f6ff;border:1px solid #407d92;border-radius:7px;margin:9px 0';
+    dialog.append(el);return el;
   };
+  const stack=[{id:'root',name:'My Drive'}];
+  let closed=false,sequence=0,working=false;
+  const finish=()=>{if(closed)return;closed=true;sequence++;if(dialog.open)dialog.close();dialog.remove();};
+  const parentControl=button('ย้อนกลับ',()=>{
+    if(stack.length>1){stack.pop();void render();}
+  });
+  const selectControl=button('ใช้โฟลเดอร์นี้เป็นคลังหลัก',()=>{
+    if(stack.length>1)void activate(stack.at(-1).id);
+  });
+  dialog.append(items);
+  const folderName=input('ตั้งชื่อโฟลเดอร์ใหม่ (ค่าแนะนำ XStageKaraoke)','XStageKaraoke');
+  button('สร้างโฟลเดอร์ใหม่ใน My Drive',async()=>{
+    const name=folderName.value.trim();
+    if(!name||name.length>100||/[/\\\x00-\x1f]/.test(name)||
+       ['SONGS','DB','SOUNDFONT','FX','BACKUP','CACHE','LOGS'].includes(name.toUpperCase())){
+      status.textContent='ชื่อคลังหลักไม่ถูกต้องหรือชนกับชื่อโฟลเดอร์ระบบ';return;
+    }
+    if(!window.confirm('สร้างหรือเลือกโฟลเดอร์ชื่อ "'+name+'" ใน My Drive และตั้งค่าโครงสร้าง X-Stage?'))return;
+    if(working||!sameSession())return;
+    working=true;
+    try{
+      const Drive=window.XStageCloudImport?.Drive;
+      if(!Drive)throw Error('ตัวจัดการ Google Drive ยังไม่พร้อม');
+      const drive=new Drive(()=>state.token,()=>{
+        if(!sameSession())throw Error('บัญชีหรือคลังเปลี่ยนระหว่างการตั้งค่า');
+      });
+      drive.ensureAuth=force=>ensureImporterGoogleAuth(force);
+      const id=await drive.folder('root',name);
+      const actual=await selectedDriveRootById(id,state.token);
+      if(actual.name!==name)throw Error('ชื่อโฟลเดอร์ที่ได้ไม่ตรงกับที่ยืนยัน');
+      await activate(id);
+    }catch(error){if(!closed)status.textContent='ยังไม่ได้ตั้งค่าคลัง: '+error.message;}
+    finally{working=false;}
+  });
+  const folderLink=input('วางลิงก์โฟลเดอร์ Google Drive หรือ Folder ID');
+  button('ตรวจและใช้ Folder ID จากลิงก์',async()=>{
+    const raw=folderLink.value.trim();
+    const id=raw.match(/\/folders\/([A-Za-z0-9_-]{5,256})/)?.[1]||
+      (/^[A-Za-z0-9_-]{5,256}$/.test(raw)?raw:'');
+    if(!id||isRetiredDriveRoot(id)){status.textContent='Folder ID ไม่ถูกต้องหรือเป็นคลังที่ยกเลิก';return;}
+    await activate(id);
+  });
+  button('รีเฟรชโฟลเดอร์ในตำแหน่งนี้',()=>void render());
+  if(!hasFullDriveRead())button('ขอสิทธิ์อ่าน Google Drive เพิ่มเติม',async()=>{
+    try{await ensureImporterGoogleAuth(true,true,true);if(sameSession())await render();}
+    catch(error){status.textContent=error.message;}
+  });
   button('ปิด / ยกเลิก',finish);
   dialog.addEventListener('cancel',event=>{event.preventDefault();finish();});
   dialog.addEventListener('close',finish);
-  document.body.append(dialog);try{dialog.showModal();void render();}catch(error){finish();}
+  async function activate(id){
+    if(working||closed||!sameSession()||window.XStageDriveBuildBusy)return;
+    working=true;status.textContent='กำลังยืนยัน Folder ID และโครงสร้างของคลัง…';
+    try{
+      const actual=await selectedDriveRootById(id,state.token);
+      if(['SONGS','DB','SOUNDFONT','FX','BACKUP','CACHE','LOGS']
+          .includes(String(actual.name).toUpperCase()))
+        throw Error('กรุณาเลือกโฟลเดอร์หลัก ไม่ใช่ SONGS, DB หรือโฟลเดอร์ระบบ');
+      const Drive=window.XStageCloudImport?.Drive;
+      if(!Drive)throw Error('ตัวจัดการ Drive ยังไม่พร้อม');
+      const drive=new Drive(()=>state.token,()=>{
+        if(!sameSession())throw Error('บัญชีหรือคลังเปลี่ยนระหว่างตั้งค่า');
+      });
+      drive.ensureAuth=force=>ensureImporterGoogleAuth(force);
+      const children=await drive.listChildren(actual.id);
+      const dirs=['SONGS','DB','SOUNDFONT','FX','BACKUP','CACHE','LOGS'];
+      const missing=dirs.filter(name=>!children.some(x=>x.name===name&&
+        x.mimeType==='application/vnd.google-apps.folder'));
+      if(missing.length){
+        if(actual.ownedByMe===false)
+          throw Error('คลังที่แชร์ขาดโครงสร้าง '+missing.join(', ')+' · ให้เจ้าของตั้งค่าก่อน');
+        if(!window.confirm('คลัง "'+actual.name+'" ยังขาด '+missing.join(', ')+
+          '\nสร้างเฉพาะโฟลเดอร์ที่ขาดใน Folder ID นี้หรือไม่? (ไม่ลบไฟล์เดิม)'))
+          return;
+        for(const part of missing)await drive.ensurePath(actual.id,[part]);
+      }
+      if(!sameSession())throw Error('บัญชี Google เปลี่ยนแล้ว');
+      savePreferredLibraryRoot(account,actual.id);
+      finish();
+      if(actual.id===previousRoot)return;
+      clearPlaybackResumeState();
+      if(previousRoot){location.reload();return;}
+      try{await openDrive(state.token,++state.authId,state.tokenExpiresAt,account,false);}
+      catch(error){setSharedLibraryGate(true,error.message);}
+    }catch(error){if(!closed)status.textContent=String(error.message||error);}
+    finally{working=false;}
+  }
+  async function render(){
+    if(closed||!sameSession())return;
+    const current=stack.at(-1),request=++sequence;
+    crumb.textContent=stack.map(item=>item.name).join(' / ');
+    parentControl.disabled=stack.length===1;
+    selectControl.disabled=stack.length===1;
+    items.replaceChildren();status.textContent='กำลังอ่านโฟลเดอร์ใน Google Drive…';
+    try{
+      const rows=await driveList("'"+current.id+
+        "' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",state.token);
+      if(closed||request!==sequence||!sameSession())return;
+      const seen=new Set(stack.map(x=>x.id));
+      const folders=rows.filter(item=>item.mimeType==='application/vnd.google-apps.folder'&&
+        /^[A-Za-z0-9_-]{5,256}$/.test(item.id)&&!isRetiredDriveRoot(item.id)&&
+        item.parents?.includes(current.id)&&!seen.has(item.id));
+      folders.sort((a,b)=>String(a.name).localeCompare(String(b.name),'th'));
+      for(const folder of folders){
+        button('เปิด · '+folder.name+' · …'+folder.id.slice(-6),()=>{
+          if(stack.length>=10)return;
+          stack.push({id:folder.id,name:folder.name});void render();
+        },items);
+      }
+      status.textContent=folders.length
+        ?'เลือกโฟลเดอร์ที่มีอยู่ หรือสร้างคลังชื่อใหม่ · Folder ID จะถูกจดจำ'
+        :'ไม่มีโฟลเดอร์ย่อยในตำแหน่งนี้ · สามารถสร้างคลังใหม่ได้';
+    }catch(error){if(!closed&&request===sequence)status.textContent=error.message;}
+  }
+  document.body.append(dialog);
+  try{dialog.showModal();void render();}
+  catch{finish();}
 }
+
 $('gate-shared-library')?.addEventListener('click',openSharedLibraryPicker);
 $('xstage-drive-main-select')?.addEventListener('click',openSharedLibraryPicker);
 
