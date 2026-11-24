@@ -136,7 +136,8 @@ public static class SmartSyncFolders
 
     public static SmartSyncFolderPlan Scan(string pc, string drive, SmartSyncDirection direction, CancellationToken ct,
         IProgress<SmartSyncScanProgress>? progress = null, SmartSyncMode mode = SmartSyncMode.FullVerify,
-        XmidConflictPolicy policy = XmidConflictPolicy.Skip, bool quarantineCopies = false)
+        XmidConflictPolicy policy = XmidConflictPolicy.Skip, bool quarantineCopies = false,
+        Func<int, int, bool>? chooseDuplicateCleanup = null)
     {
         if (!Enum.IsDefined(direction)) throw new ArgumentOutOfRangeException(nameof(direction));
         if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
@@ -150,6 +151,20 @@ public static class SmartSyncFolders
             () => l = Inventory(pc, ct, reporter, true, mode),
             () => r = Inventory(drive, ct, reporter, false, mode));
         XmidDuplicateCleanup? cleanup = null;
+        // Ask once after inventory, before reading candidate content or moving
+        // any files. Counts are candidates, not verified duplicates.
+        if (chooseDuplicateCleanup is not null)
+        {
+            int pcCopies = l.Entries.Count(e => CopySuffix.IsMatch(Path.GetFileName(e.RelativePath)));
+            int driveCopies = r.Entries.Count(e => CopySuffix.IsMatch(Path.GetFileName(e.RelativePath)));
+            if (pcCopies + driveCopies > 0)
+            {
+                reporter.Publish("พบชื่อสำเนา · รอเลือกวิธีจัดการ", "", false);
+                ct.ThrowIfCancellationRequested();
+                quarantineCopies = chooseDuplicateCleanup(pcCopies, driveCopies);
+                ct.ThrowIfCancellationRequested();
+            }
+        }
         if (quarantineCopies)
         {
             var batch = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N");
@@ -661,7 +676,12 @@ public sealed class SmartSyncReceiptStore : IDisposable
 public sealed record SmartSyncLaneSnapshot(bool Upload, int Total, int Done, long Bytes, long DoneBytes,
     string State, double ElapsedSeconds, string LastFile)
 {
-    public double Fraction => Total == 0 ? (State == "สำเร็จ" ? 1 : 0) : Math.Clamp(Done / (double)Total, 0, 1);
+    // Zero work after a successful scan is complete, unlike an unscanned,
+    // canceled, failed or direction-disabled row.
+    public bool IsComplete => State is "สำเร็จ" or "ไม่มีไฟล์ใหม่";
+    public double Fraction => Total == 0 ? (IsComplete ? 1 : 0) : Math.Clamp(Done / (double)Total, 0, 1);
+    public string ProgressText => IsScanning ? "กำลังตรวจสอบ" :
+        Total > 0 || IsComplete ? $"{Fraction * 100:0.0}%" : "—";
     public bool IsScanning => State == "กำลังตรวจสอบ";
     public double Rate => State == "กำลังรับส่ง" && ElapsedSeconds > 0 ? DoneBytes / ElapsedSeconds : 0;
 }

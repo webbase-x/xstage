@@ -59,8 +59,31 @@ internal static class SmartSyncFolderTests
             var readOnly = SmartSyncFolders.Scan(dupPc, dupDrive, SmartSyncDirection.Both, default, null, SmartSyncMode.Fast);
             if (readOnly.DuplicateCleanup is not null || !File.Exists(Path.Combine(dupPc, "00001 (1).xmid")))
                 throw new Exception("Default Sync must not move existing copies");
+            int prompts = 0;
+            var declined = SmartSyncFolders.Scan(dupPc, dupDrive, SmartSyncDirection.Both, default, null, SmartSyncMode.Fast,
+                chooseDuplicateCleanup: (pcCount, driveCount) =>
+                {
+                    prompts++;
+                    if (pcCount != 4 || driveCount != 4) throw new Exception("Candidate count incorrect");
+                    return false;
+                });
+            if (prompts != 1 || declined.DuplicateCleanup is not null || !File.Exists(Path.Combine(dupPc, "00001 (1).xmid")))
+                throw new Exception("Declining duplicate cleanup must not move anything");
+            using (var stopAtPrompt = new CancellationTokenSource())
+            {
+                try
+                {
+                    SmartSyncFolders.Scan(dupPc, dupDrive, SmartSyncDirection.Both, stopAtPrompt.Token, null, SmartSyncMode.Fast,
+                        chooseDuplicateCleanup: (_, _) => { stopAtPrompt.Cancel(); return true; });
+                    throw new Exception("Cancellation at cleanup choice accepted");
+                }
+                catch (OperationCanceledException) { }
+            }
+            if (!File.Exists(Path.Combine(dupDrive, "00001 (1).xmid")))
+                throw new Exception("Cancellation at prompt must precede moves");
             var cleaned = SmartSyncFolders.Scan(dupPc, dupDrive, SmartSyncDirection.Both, default, null, SmartSyncMode.Fast,
-                quarantineCopies: true);
+                chooseDuplicateCleanup: (pcCount, driveCount) => { prompts++; return pcCount == 4 && driveCount == 4; });
+            if (prompts != 2) throw new Exception("Expected one cleanup choice per explicit scan");
             if (cleaned.DuplicateCleanup is not { PcArchived: 1, DriveArchived: 1, Preserved: 6 })
                 throw new Exception("Duplicate quarantine counts incorrect");
             foreach (var folder in new[] { dupPc, dupDrive })
@@ -179,6 +202,20 @@ internal static class SmartSyncFolderTests
             var bandBack = SmartSyncScanAnimation.Band(100, 1800);
             if (bandStart != (0, 25) || bandEnd != (75, 25) || bandBack != bandStart)
                 throw new Exception("Scan animation must bounce within the cell");
+            var emptyLanes = new SmartSyncLaneTracker();
+            emptyLanes.Reset("กำลังตรวจสอบ");
+            if (emptyLanes.Snapshot().Upload.Fraction != 0) throw new Exception("Scan is not complete");
+            var emptyPlan = fast with { Decisions = Array.Empty<SyncDecision>() };
+            emptyLanes.Plan(emptyPlan);
+            emptyLanes.Start();
+            emptyLanes.Finish("สำเร็จ");
+            var (emptyUp, emptyDown) = emptyLanes.Snapshot();
+            if (!emptyUp.IsComplete || !emptyDown.IsComplete || emptyUp.Fraction != 1 || emptyDown.Fraction != 1 ||
+                emptyUp.ProgressText != "100.0%" || emptyDown.State != "ไม่มีไฟล์ใหม่")
+                throw new Exception("Zero-work sync must show completed 100 percent");
+            emptyLanes.Plan(emptyPlan with { Direction = SmartSyncDirection.ToDrive });
+            if (emptyLanes.Snapshot().Download.IsComplete || emptyLanes.Snapshot().Download.ProgressText != "—")
+                throw new Exception("Disabled direction must not be presented as completed");
             var lanes = new SmartSyncLaneTracker();
             lanes.Reset("กำลังตรวจสอบ");
             if (!lanes.Snapshot().Upload.IsScanning || !lanes.Snapshot().Download.IsScanning)

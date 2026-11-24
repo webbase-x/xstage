@@ -1341,7 +1341,7 @@ public sealed partial class MainForm
             _syncPanelOpen = true;
             _smartSyncWindow.Visible = true;
             _smartSyncWindow.BringToFront();
-            _workspaceRoot.RowStyles[2].Height = Math.Min(250, Math.Max(150, ClientSize.Height - 400));
+            _workspaceRoot.RowStyles[2].Height = Math.Min(218, Math.Max(150, ClientSize.Height - 400));
         }
         else
         {
@@ -1492,6 +1492,11 @@ public sealed partial class MainForm
             });
             if (key == "sync") count = _smartSyncWindow is null ? 0 : 2;
             if (key == "all" && _smartSyncWindow is not null) count += 2;
+            if (key == "completed" && _smartSyncWindow is not null)
+            {
+                var (up, down) = _smartSyncWindow.Lanes.Snapshot();
+                count += (up.IsComplete ? 1 : 0) + (down.IsComplete ? 1 : 0);
+            }
             var beforeCount = node.Text.LastIndexOf(" (", StringComparison.Ordinal);
             var prefix = beforeCount >= 0 ? node.Text[..beforeCount] : node.Text;
             var newText = prefix + " (" + count + ")";

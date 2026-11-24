@@ -14,7 +14,6 @@ public sealed class SmartSyncForm : UserControl
     private readonly NumericUpDown _parallel = new() { Minimum = 1, Maximum = 32, Value = 8, Width = 72 };
     private readonly ComboBox _direction = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly CheckBox _background = new() { Text = "ตรวจไฟล์ใหม่ทุก 60 วินาที (ขณะโปรแกรมเปิด)", AutoSize = true };
-    private readonly CheckBox _cleanupCopies = new() { Text = "สำรองสำเนา (1), (2) ที่ SHA-256 ตรงกันทั้งสองฝั่ง", AutoSize = true };
     private readonly Button _sync = new() { Text = "Sync", AutoSize = true, MinimumSize = new Size(112, 32) };
     private readonly Label _status = new() { Dock = DockStyle.Fill, AutoSize = false };
     private readonly TextBox _review = new() { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
@@ -61,11 +60,11 @@ public sealed class SmartSyncForm : UserControl
         BackColor = MainForm.DarkTop;
         ForeColor = Color.White;
         Font = new Font("Segoe UI", 10);
-        var grid = new TableLayoutPanel { Dock = DockStyle.Top, Height = 250, Padding = new Padding(8), ColumnCount = 3, RowCount = 7 };
+        var grid = new TableLayoutPanel { Dock = DockStyle.Top, Height = 218, Padding = new Padding(8), ColumnCount = 3, RowCount = 6 };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
-        foreach (int height in new[] { 32, 32, 32, 32, 32, 32, 42 })
+        foreach (int height in new[] { 32, 32, 32, 32, 32, 42 })
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         void Full(Control control, int row) { grid.Controls.Add(control, 0, row); grid.SetColumnSpan(control, 3); }
         void Folder(string name, TextBox field, int row)
@@ -109,11 +108,9 @@ public sealed class SmartSyncForm : UserControl
         grid.Controls.Add(_conflict, 1, 4);
         grid.SetColumnSpan(_conflict, 2);
         _choices.Add(_conflict);
-        Full(_cleanupCopies, 5);
-        _choices.Add(_cleanupCopies);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true };
         actions.Controls.AddRange(new Control[] { _sync, _background });
-        Full(actions, 6);
+        Full(actions, 5);
         _sync.Click += async (_, _) =>
         {
             if (IsBusy) RequestStop();
@@ -266,7 +263,7 @@ public sealed class SmartSyncForm : UserControl
     }
 
     private async Task<SmartSyncFolderPlan> ScanWithProgressAsync(string pc, string drive,
-        SmartSyncDirection direction, SmartSyncMode mode, XmidConflictPolicy policy, CancellationToken token, bool quarantineCopies = false)
+        SmartSyncDirection direction, SmartSyncMode mode, XmidConflictPolicy policy, CancellationToken token, bool askAboutCopies)
     {
         Volatile.Write(ref _latestScan, null);
         _lastAdvance = 0; _lastCount = 0;
@@ -279,12 +276,49 @@ public sealed class SmartSyncForm : UserControl
         try
         {
             var progress = new ScanMailbox(value => Volatile.Write(ref _latestScan, value));
-            return await Task.Run(() => SmartSyncFolders.Scan(pc, drive, direction, token, progress, mode, policy, quarantineCopies), token);
+            // Capture an existing UI handle before entering the worker. The
+            // inline settings view may be hidden while the main form is visible.
+            Control owner = FindForm() ?? (Control)this;
+            _ = owner.Handle;
+            Func<int, int, bool>? choose = askAboutCopies ? (pcCount, driveCount) =>
+            {
+                token.ThrowIfCancellationRequested();
+                return (bool)owner.Invoke(new Func<bool>(() =>
+                    ChooseDuplicateCleanup(owner, pcCount, driveCount, token)));
+            } : null;
+            return await Task.Run(() => SmartSyncFolders.Scan(pc, drive, direction, token, progress, mode, policy,
+                chooseDuplicateCleanup: choose), token);
         }
         finally
         {
             _scanTicker.Stop();
             _scanWatch.Stop();
+        }
+    }
+
+    private bool ChooseDuplicateCleanup(Control owner, int pcCount, int driveCount, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        _scanTicker.Stop();
+        try
+        {
+            _status.Text = $"พบชื่อสำเนา PC {pcCount:N0} · Drive {driveCount:N0} · รอเลือกวิธีจัดการ";
+            WorkspaceChanged?.Invoke();
+            var choice = MessageBox.Show(owner,
+                $"พบชื่อ XMID ที่มีวงเล็บ (ยังไม่ได้ยืนยันเนื้อหา)\nPC: {pcCount:N0} ไฟล์ · Google Drive: {driveCount:N0} ไฟล์\n\n" +
+                "Yes / ใช่: ตรวจ SHA-256 และย้ายเฉพาะสำเนาที่ตรงกับต้นฉบับในโฟลเดอร์เดียวกันไปสำรอง แล้ว Sync ต่อ\n" +
+                "No / ไม่: เก็บไฟล์เดิมทั้งหมด แล้ว Sync ต่อ\n" +
+                "Cancel / ยกเลิก: หยุดงานก่อนรับส่ง\n\n" +
+                "สำรองใน " + SmartSyncFolders.DuplicateBackupFolder + " · ไม่ลบถาวร",
+                "พบสำเนา XMID · เลือกวิธีจัดการ", MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+            if (choice == DialogResult.Cancel) RequestStop();
+            token.ThrowIfCancellationRequested();
+            return choice == DialogResult.Yes;
+        }
+        finally
+        {
+            if (!IsDisposed && !token.IsCancellationRequested) _scanTicker.Start();
         }
     }
 
@@ -335,13 +369,7 @@ public sealed class SmartSyncForm : UserControl
             MessageBox.Show(this, "ใช้การเขียนทับกับ XMID ที่รหัสชนกันทุกไฟล์ในงานนี้หรือไม่? ระบบสำรองไฟล์เดิมไว้ · สองทางยึด PC · หลายฉบับที่กำกวมจะข้าม",
                 "ยืนยันการเขียนทับทั้งงาน", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
                 MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
-        var quarantineCopies = _cleanupCopies.Checked;
-        if (quarantineCopies && MessageBox.Show(this,
-            "สำรองสำเนา XMID ที่ SHA-256 ตรงกับต้นฉบับในโฟลเดอร์เดียวกันทั้ง PC และ Drive ก่อน Sync หรือไม่?\n" +
-            "ไม่ลบถาวร · เก็บชื่อเดิมและตำแหน่งไว้ใน " + SmartSyncFolders.DuplicateBackupFolder +
-            " · การย้ายบน Drive อาจซิงค์การเปลี่ยนแปลงขึ้นคลาวด์",
-            "ยืนยันการจัดการสำเนาทั้งสองฝั่ง", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
-            MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+        bool askAboutCopies = true;
         var repeat = _background.Checked;
         using var cancellation = new CancellationTokenSource();
         _cancel = cancellation;
@@ -358,8 +386,8 @@ public sealed class SmartSyncForm : UserControl
             do
             {
                 _status.Text = mode == SmartSyncMode.Fast ? "กำลังตรวจรายชื่อไฟล์ (ไม่อ่านเนื้อหาเดิม)..." : "กำลังตรวจสอบไฟล์และแฮช...";
-                var plan = await ScanWithProgressAsync(pc, drive, direction, mode, policy, token, quarantineCopies);
-                quarantineCopies = false; // No unattended cleanup on periodic passes.
+                var plan = await ScanWithProgressAsync(pc, drive, direction, mode, policy, token, askAboutCopies);
+                askAboutCopies = false; // No unattended cleanup or repeated prompts on periodic passes.
                 token.ThrowIfCancellationRequested();
                 Lanes.Plan(plan);
                 DisplayPlan(plan);
@@ -391,7 +419,6 @@ public sealed class SmartSyncForm : UserControl
             {
                 foreach (var control in _choices) control.Enabled = true;
                 _background.Enabled = true;
-                _cleanupCopies.Checked = false;
                 _sync.Enabled = true;
                 _sync.Text = "Sync";
                 _sync.ForeColor = Color.FromArgb(59, 228, 137);

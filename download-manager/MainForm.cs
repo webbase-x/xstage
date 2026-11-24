@@ -1215,7 +1215,7 @@ public sealed partial class MainForm : Form
             }
             else graphics.FillRectangle(green, rect.X, rect.Y, (int)Math.Round(rect.Width * lane.Fraction), rect.Height);
             using var font = new Font("Segoe UI", 8, FontStyle.Bold);
-            TextRenderer.DrawText(graphics, lane.IsScanning ? "กำลังตรวจสอบ" : lane.Total == 0 ? "—" : $"{lane.Fraction * 100:0.0}%", font, rect,
+            TextRenderer.DrawText(graphics, lane.ProgressText, font, rect,
                 lane.Fraction > .52 ? Color.White : Color.FromArgb(25, 70, 117),
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             e.Handled = true;
@@ -1288,7 +1288,7 @@ public sealed partial class MainForm : Form
                 "all" or "sync" => true,
                 "active" => lane.State is "กำลังรับส่ง" or "กำลังตรวจสอบ",
                 "queued" => lane.State == "พร้อมรับส่ง",
-                "completed" => lane.State == "สำเร็จ",
+                "completed" => lane.IsComplete,
                 "failed" => lane.State == "เกิดข้อผิดพลาด",
                 "incomplete" => lane.State is "กำลังรับส่ง" or "กำลังตรวจสอบ" or "พร้อมรับส่ง" or "หยุดชั่วคราว" or "เกิดข้อผิดพลาด",
                 _ => false
@@ -1322,12 +1322,12 @@ public sealed partial class MainForm : Form
         row.Cells["File"].Style.Font = _normalFileFont;
         row.Cells["File"].ToolTipText = lane.LastFile;
         row.Cells["Size"].Value = lane.Total > 0 ? FormatBytes(lane.Bytes) : "—";
-        row.Cells["Progress"].Value = lane.IsScanning ? "กำลังตรวจสอบ" : lane.Total > 0 ? $"{lane.Fraction * 100:0.0}%" : "—";
+        row.Cells["Progress"].Value = lane.ProgressText;
         row.Cells["Progress"].ToolTipText = $"{lane.Done:N0}/{lane.Total:N0} ไฟล์";
         row.Cells["Speed"].Value = lane.Rate > 0 ? FormatBytes((long)lane.Rate) + "/s" : "—";
         row.Cells["ETA"].Value = SyncEta(lane);
         row.Cells["Status"].Value = lane.State;
-        row.Cells["Status"].Style.ForeColor = lane.State == "สำเร็จ" ? Color.FromArgb(124, 235, 173) :
+        row.Cells["Status"].Style.ForeColor = lane.IsComplete ? Color.FromArgb(124, 235, 173) :
             lane.State == "เกิดข้อผิดพลาด" ? Color.FromArgb(255, 166, 166) : Color.FromArgb(215, 225, 238);
         row.Cells["FileType"].Value = "SYNC";
         row.Cells["QueueName"].Value = "Smart Sync";
@@ -1346,6 +1346,7 @@ public sealed partial class MainForm : Form
         _previewUrl.Text = "ล่าสุด: " + (lane.IsScanning && statusLines.Length > 2 ? statusLines[2] : lane.LastFile);
         _previewProgressFraction = lane.Fraction;
         _previewPercent.Text = lane.IsScanning ? "กำลังตรวจสอบ · ยังไม่ทราบจำนวนทั้งหมด" :
+            lane.IsComplete && lane.Total == 0 ? "100.0% · ไม่มีไฟล์ใหม่" :
             lane.Total == 0 ? lane.State : $"{lane.Fraction * 100:0.0}% · {lane.Done:N0}/{lane.Total:N0} ไฟล์";
         var diagnostic = _smartSyncWindow?.StatusText + Environment.NewLine + _smartSyncWindow?.ReviewText;
         if (_diagnosticText.Text != diagnostic) _diagnosticText.Text = diagnostic;
