@@ -1,5 +1,7 @@
 """The PC must read the hosted Online SQLite schema without migrating or writing it."""
 import hashlib
+import os
+from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
@@ -16,7 +18,7 @@ class MountedOnlineCatalogTests(unittest.TestCase):
         for directory in ("SONGS", "SOUNDFONT", "FX", "DB"):
             (self.root / directory).mkdir(parents=True)
         self.db_path = self.root / "DB" / "songs.sqlite3"
-        with sqlite3.connect(self.db_path) as db:
+        with closing(sqlite3.connect(self.db_path)) as db:
             db.executescript("""
                 CREATE TABLE catalog_meta (key TEXT PRIMARY KEY, value TEXT);
                 CREATE TABLE songs (
@@ -39,7 +41,8 @@ class MountedOnlineCatalogTests(unittest.TestCase):
         before = hashlib.sha256(self.db_path.read_bytes()).hexdigest()
         info = online.summary(str(self.root))
         self.assertEqual(info["songs"], 2)
-        self.assertEqual(info["database"], str(self.db_path))
+        self.assertTrue(os.path.samefile(info["database"], self.db_path),
+                        "Drive for Desktop may expose 8.3 and long Windows path aliases")
         rows = online.search(str(self.root), "เพลง")
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["code"], "00001")
@@ -48,21 +51,23 @@ class MountedOnlineCatalogTests(unittest.TestCase):
         self.assertEqual(before, hashlib.sha256(self.db_path.read_bytes()).hexdigest())
         self.assertFalse(Path(str(self.db_path) + "-wal").exists())
         self.assertFalse(Path(str(self.db_path) + "-shm").exists())
-        with sqlite3.connect(self.db_path) as db:
+        with closing(sqlite3.connect(self.db_path)) as db:
             fields = {row[1] for row in db.execute("PRAGMA table_info(songs)")}
         self.assertNotIn("duplicate_of", fields)
 
     def test_read_only_duplicate_report(self):
         self.assertEqual(online.duplicate_report(str(self.root)), [])
-        with sqlite3.connect(self.db_path) as db:
+        with closing(sqlite3.connect(self.db_path)) as db:
             db.execute("INSERT INTO songs VALUES (?,?,?,?,?,?,?,?)",
                        ("id3", "00003", "เพลงซ้ำ", "ศิลปิน", "XMID",
                         "MIDI/XMID/0/00003.xmid", "{}", "11111111111111111111111111111111"))
+            db.commit()
         self.assertEqual(online.duplicate_report(str(self.root))[0]["copies"], 2)
 
     def test_reject_incompatible_database(self):
-        with sqlite3.connect(self.db_path) as db:
+        with closing(sqlite3.connect(self.db_path)) as db:
             db.execute("UPDATE catalog_meta SET value='legacy' WHERE key='format'")
+            db.commit()
         with self.assertRaises(ValueError):
             online.summary(str(self.root))
 
