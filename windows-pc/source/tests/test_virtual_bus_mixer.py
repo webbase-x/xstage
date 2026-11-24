@@ -542,7 +542,7 @@ class VirtualBusMixerTests(unittest.TestCase):
         clean = {"overload": False, "invalid_pcm": False}
         self.assertEqual(mixer.health_flags_snapshot(), {0: clean, 1: clean})
         preset = mixer.snapshot()
-        mixer.process(0, pcm(float("nan"), 1.))
+        mixer.process(0, pcm(float("nan"), .5))
         mixer.process(1, pcm(.9, .25))
         expected = {
             0: {"overload": False, "invalid_pcm": True},
