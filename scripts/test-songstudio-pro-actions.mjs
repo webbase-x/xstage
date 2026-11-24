@@ -70,6 +70,20 @@ assert.ok(html.includes('id="drive-folder"')&&
   server.includes('"/api/import/google-drive"')&&
   server.includes('"/api/drive/check"'),
  'Google Drive song import and download must be accessible from the studio menu');
+assert.ok(html.includes('id="drive-push-source"')&&
+  html.includes('id="drive-push-area"')&&
+  html.includes('id="drive-push-preview"')&&
+  html.includes('id="drive-push-submit"')&&
+  js.includes('startJob("drive-push-preview"')&&
+  js.includes('startJob("drive-push"')&&
+  server.includes('"/api/drive/push-preview"')&&
+  server.includes('"/api/drive/push"')&&
+  server.includes('drivesync.inspect(')&&server.includes('drivesync.publish(')&&
+  stylesheet.includes('.drive-push-panel'),
+  'Drive for Desktop publisher must have preflight, explicit consent and local backend');
+assert.ok(server.includes('drivesync.resolve_root(')&&
+  server.includes('snapshot["stats"]["conflict"]'),
+  'Drive publisher must verify root and reject collisions before any writes');
 assert.ok(!server.includes('import tkinter as tk'),
  'Native Windows app must never open tkinter in the HTTP worker thread');
 assert.ok(server.includes('self.state.native_picker('),
