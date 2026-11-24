@@ -9,8 +9,8 @@ public sealed record DownloadManagerRelease(string Version, int Build, string Fi
 
 public static class UpdateChecker
 {
-    public const string CurrentVersion = "0.2.29";
-    public const int CurrentBuild = 32;
+    public const string CurrentVersion = "0.2.30";
+    public const int CurrentBuild = 33;
     public const string FeedUrl = "https://webbase-x.github.io/xstage/downloads/download-manager-preview-latest.json";
 
     private static readonly HttpClient Client = new(new HttpClientHandler

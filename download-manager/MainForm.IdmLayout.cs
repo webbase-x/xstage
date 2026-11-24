@@ -29,11 +29,11 @@ public sealed partial class MainForm
     private readonly Dictionary<string, Label> _overviewCounts = new();
     private readonly Dictionary<string, Image> _rowIcons = new();
 
-    private static readonly Color DarkTop = Color.FromArgb(4, 19, 43);
-    private static readonly Color DarkPanel = Color.FromArgb(6, 29, 60);
-    private static readonly Color DarkGrid = Color.FromArgb(5, 24, 49);
-    private static readonly Color MutedText = Color.FromArgb(176, 203, 233);
-    private static readonly Color Accent = Color.FromArgb(0, 189, 255);
+    internal static readonly Color DarkTop = Color.FromArgb(4, 19, 43);
+    internal static readonly Color DarkPanel = Color.FromArgb(6, 29, 60);
+    internal static readonly Color DarkGrid = Color.FromArgb(5, 24, 49);
+    internal static readonly Color MutedText = Color.FromArgb(176, 203, 233);
+    internal static readonly Color Accent = Color.FromArgb(0, 189, 255);
 
     private void CreateXStageWorkspace()
     {

@@ -1,6 +1,6 @@
 #define MyAppName "X-Stage Download Manager"
-#define MyAppVersion "0.2.29"
-#define MyAppBuild "32"
+#define MyAppVersion "0.2.30"
+#define MyAppBuild "33"
 
 [Setup]
 SourceDir=..\..

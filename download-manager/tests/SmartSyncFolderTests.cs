@@ -69,7 +69,31 @@ internal static class SmartSyncFolderTests
                 try { SmartSyncFolders.Scan(pc, drive, SmartSyncDirection.Both, cancelled.Token); throw new Exception("Cancelled scan accepted"); }
                 catch (OperationCanceledException) { }
             }
-            var result = await SmartSyncFolders.ExecuteAsync(plan, 4, null, default);
+            // Same size but different content is only a fast-mode skip, never verified equality.
+            File.WriteAllText(Path.Combine(pc, "equal-size.txt"), "AA");
+            File.WriteAllText(Path.Combine(drive, "equal-size.txt"), "BB");
+            var fastEvents = new List<SmartSyncScanProgress>();
+            var fast = SmartSyncFolders.Scan(pc, drive, SmartSyncDirection.Both, default, new ScanProgress(fastEvents), SmartSyncMode.Fast);
+            if (fastEvents.Last().BytesHashed != 0 || fast.Decisions.Single(x => x.RelativePath == "equal-size.txt").Action != SyncAction.Unchanged ||
+                fast.Decisions.Single(x => x.RelativePath == "conflict.txt").Action != SyncAction.Conflict)
+                throw new Exception("Fast scan must use metadata only and never plan an overwrite");
+            var smart = SmartSyncFolders.Scan(pc, drive, SmartSyncDirection.Both, default, null, SmartSyncMode.Smart);
+            if (smart.Decisions.Single(x => x.RelativePath == "equal-size.txt").Action != SyncAction.Conflict)
+                throw new Exception("Smart scan missed equal-size changed content");
+            File.Delete(Path.Combine(pc, "equal-size.txt")); File.Delete(Path.Combine(drive, "equal-size.txt"));
+            var receipt = Path.Combine(root, "receipts.sqlite3");
+            var result = await SmartSyncFolders.ExecuteAsync(fast, 8, null, default, receipt);
+            using (var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + receipt + ";Pooling=False"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT count(*) FROM receipts WHERE length(sha256)=64";
+                if (Convert.ToInt32(command.ExecuteScalar()) != 2)
+                    throw new Exception("Completed fast transfers were not checkpointed");
+            }
+            if (result.Identical != 2) throw new Exception("Fast skip count incorrect");
+            // Subsequent legacy tests use the count from the original plan.
+            result = result with { Identical = SmartSyncFolders.Summarize(plan).Identical };
             if (result.Copied != 2 || result.Identical != 1 || result.Review != 2 ||
                 File.ReadAllText(Path.Combine(drive, "nested", "new.txt")) != "new PC" ||
                 File.ReadAllText(Path.Combine(pc, "remote.txt")) != "new Drive" ||

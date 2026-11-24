@@ -8,6 +8,8 @@ public sealed class SmartSyncForm : Form
 {
     private readonly TextBox _pc = new() { ReadOnly = true, Dock = DockStyle.Fill };
     private readonly TextBox _drive = new() { ReadOnly = true, Dock = DockStyle.Fill };
+    private readonly ComboBox _mode = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+    private readonly NumericUpDown _parallel = new() { Minimum = 1, Maximum = 32, Value = 8, Width = 72 };
     private readonly ComboBox _direction = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly CheckBox _background = new() { Text = "ตรวจไฟล์ใหม่ทุก 60 วินาที (ขณะโปรแกรมเปิด)", AutoSize = true };
     private readonly Button _scan = new() { Text = "ตรวจสอบไฟล์", AutoSize = true };
@@ -38,15 +40,17 @@ public sealed class SmartSyncForm : Form
         _preferencesPath = preferencesPath ?? SmartSyncPreferencesStore.DefaultPath;
         Text = "Smart Sync · Google Drive for desktop";
         StartPosition = FormStartPosition.CenterParent;
-        Size = new Size(780, 620);
-        MinimumSize = new Size(640, 510);
+        Size = new Size(860, 700);
+        MinimumSize = new Size(690, 580);
+        BackColor = MainForm.DarkTop;
+        ForeColor = Color.White;
         Font = new Font("Segoe UI", 10);
         ShowInTaskbar = false;
-        var grid = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 3, RowCount = 9 };
+        var grid = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 3, RowCount = 10 };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 116));
-        foreach (int height in new[] { 72, 36, 36, 36, 36, 72, 106 })
+        foreach (int height in new[] { 60, 36, 36, 36, 36, 40, 72, 106 })
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
@@ -85,9 +89,18 @@ public sealed class SmartSyncForm : Form
         // Subscribe after restoring saved controls, not during initialization.
         grid.Controls.Add(_direction, 1, 4);
         _choices.Add(_direction);
+        grid.Controls.Add(new Label { Text = "โหมด Sync", Dock = DockStyle.Fill }, 0, 5);
+        _mode.Items.AddRange(new object[] { "Fast · ข้ามไฟล์ชื่อ/ขนาดตรงกัน", "Smart · ตรวจแฮชคู่ไฟล์", "Full Verify · ตรวจทุกไฟล์" });
+        _mode.SelectedIndex = 0;
+        grid.Controls.Add(_mode, 1, 5);
+        var lanes = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
+        lanes.Controls.Add(new Label { Text = "พร้อมกัน", AutoSize = true });
+        lanes.Controls.Add(_parallel);
+        grid.Controls.Add(lanes, 2, 5);
+        _choices.Add(_mode); _choices.Add(_parallel);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true };
         actions.Controls.AddRange(new Control[] { _scan, _start, _stop, _background });
-        Full(actions, 5);
+        Full(actions, 6);
         _scan.Click += async (_, _) => await RunAsync(false);
         _start.Click += async (_, _) => await RunAsync(true);
         _stop.Click += (_, _) => RequestStop();
@@ -96,13 +109,14 @@ public sealed class SmartSyncForm : Form
         activityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
         activityPanel.Controls.Add(_status, 0, 0);
         activityPanel.Controls.Add(_activity, 0, 1);
-        Full(activityPanel, 6);
+        Full(activityPanel, 7);
         _scanTicker.Tick += (_, _) => RenderScanProgress();
         FormClosed += (_, _) => _scanTicker.Dispose();
         _status.Text = "เลือกสองโฟลเดอร์แล้วกดตรวจสอบไฟล์";
-        Full(_review, 7);
-        Full(new Label { Text = "ไม่ลบหรือเขียนทับไฟล์เดิม · SQLite/ไฟล์ขัดแย้งต้องตรวจสอบแยก · Drive เป็นผู้ส่งขึ้นคลาวด์", Dock = DockStyle.Fill }, 8);
+        Full(_review, 8);
+        Full(new Label { Text = "ไม่ลบหรือเขียนทับไฟล์เดิม · SQLite/ไฟล์ขัดแย้งต้องตรวจสอบแยก · Drive เป็นผู้ส่งขึ้นคลาวด์", Dock = DockStyle.Fill }, 9);
         Controls.Add(grid);
+        ApplyWorkspaceTheme(grid);
         RestorePreferences();
         _direction.SelectedIndexChanged += (_, _) =>
         {
@@ -110,11 +124,60 @@ public sealed class SmartSyncForm : Form
             SavePreferences();
         };
         _background.CheckedChanged += (_, _) => SavePreferences();
+        _mode.SelectedIndexChanged += (_, _) => { InvalidatePlan(); SavePreferences(); };
+        _parallel.ValueChanged += (_, _) => SavePreferences();
         FormClosing += (_, e) =>
         {
             if (!_shutdown && e.CloseReason == CloseReason.UserClosing)
             { e.Cancel = true; Hide(); }
         };
+    }
+
+    private void ApplyWorkspaceTheme(Control parent)
+    {
+        parent.BackColor = MainForm.DarkPanel;
+        parent.ForeColor = Color.White;
+        foreach (Control control in parent.Controls)
+        {
+            control.ForeColor = Color.White;
+            switch (control)
+            {
+                case TextBox text:
+                    text.BackColor = MainForm.DarkGrid;
+                    text.ForeColor = Color.FromArgb(228, 235, 246);
+                    text.BorderStyle = BorderStyle.FixedSingle;
+                    break;
+                case ComboBox combo:
+                    combo.BackColor = MainForm.DarkGrid;
+                    combo.ForeColor = Color.White;
+                    combo.FlatStyle = FlatStyle.Flat;
+                    break;
+                case NumericUpDown number:
+                    number.BackColor = MainForm.DarkGrid;
+                    number.ForeColor = Color.White;
+                    break;
+                case Button button:
+                    button.FlatStyle = FlatStyle.Flat;
+                    button.UseVisualStyleBackColor = false;
+                    button.BackColor = MainForm.DarkGrid;
+                    button.FlatAppearance.BorderColor = button == _start ? Color.FromArgb(59, 228, 137) : MainForm.Accent;
+                    button.FlatAppearance.MouseOverBackColor = Color.FromArgb(31, 79, 91);
+                    button.ForeColor = button == _start ? Color.FromArgb(59, 228, 137) :
+                        button == _stop ? Color.FromArgb(250, 142, 158) : Color.White;
+                    button.MinimumSize = new Size(0, 30);
+                    break;
+                case Label label:
+                    label.ForeColor = MainForm.MutedText;
+                    break;
+                case CheckBox check:
+                    check.FlatStyle = FlatStyle.Flat;
+                    break;
+                case TableLayoutPanel or FlowLayoutPanel:
+                    ApplyWorkspaceTheme(control);
+                    break;
+            }
+        }
+        _status.ForeColor = Color.FromArgb(132, 220, 235);
     }
 
     private void RestorePreferences()
@@ -126,6 +189,8 @@ public sealed class SmartSyncForm : Form
             _drive.Text = saved.Drive;
             _direction.SelectedIndex = (int)saved.Direction;
             _background.Checked = saved.Background;
+            _mode.SelectedIndex = (int)saved.Mode;
+            _parallel.Value = saved.ParallelFiles;
             if (saved.Pc.Length > 0 || saved.Drive.Length > 0)
                 _status.Text = "เรียกคืนค่าที่เลือกครั้งล่าสุดแล้ว · กดตรวจสอบไฟล์ก่อนเริ่ม Sync";
         }
@@ -140,7 +205,8 @@ public sealed class SmartSyncForm : Form
         try
         {
             SmartSyncPreferencesStore.Save(_preferencesPath, new SmartSyncPreferences(
-                _pc.Text, _drive.Text, (SmartSyncDirection)_direction.SelectedIndex, _background.Checked));
+                _pc.Text, _drive.Text, (SmartSyncDirection)_direction.SelectedIndex, _background.Checked,
+                (SmartSyncMode)_mode.SelectedIndex, (int)_parallel.Value));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
@@ -178,7 +244,7 @@ public sealed class SmartSyncForm : Form
     }
 
     private async Task<SmartSyncFolderPlan> ScanWithProgressAsync(string pc, string drive,
-        SmartSyncDirection direction, CancellationToken token)
+        SmartSyncDirection direction, SmartSyncMode mode, CancellationToken token)
     {
         Volatile.Write(ref _latestScan, null);
         _lastAdvance = 0; _lastCount = 0;
@@ -191,7 +257,7 @@ public sealed class SmartSyncForm : Form
         try
         {
             var progress = new ScanMailbox(value => Volatile.Write(ref _latestScan, value));
-            return await Task.Run(() => SmartSyncFolders.Scan(pc, drive, direction, token, progress), token);
+            return await Task.Run(() => SmartSyncFolders.Scan(pc, drive, direction, token, progress, mode), token);
         }
         finally
         {
@@ -208,7 +274,8 @@ public sealed class SmartSyncForm : Form
         var s = SmartSyncFolders.Summarize(plan, copied);
         var up = plan.Decisions.Count(d => d.Action == SyncAction.UploadNew);
         var down = plan.Decisions.Count(d => d.Action == SyncAction.DownloadNew);
-        _status.Text = $"ไฟล์เหมือนกัน {s.Identical:N0} · ใหม่ PC→Drive {up:N0} · Drive→PC {down:N0} · ต้องตรวจสอบ {s.Review:N0} · ส่งแล้ว {copied:N0}";
+        var matchLabel = plan.Mode == SmartSyncMode.Fast ? "ชื่อ/ขนาดตรงกัน (ยังไม่ตรวจเนื้อหา)" : "ไฟล์เหมือนกัน";
+        _status.Text = $"{matchLabel} {s.Identical:N0} · ใหม่ PC→Drive {up:N0} · Drive→PC {down:N0} · ต้องตรวจสอบ {s.Review:N0} · ส่งแล้ว {copied:N0}";
         _review.Lines = plan.Decisions.Where(d => d.Action != SyncAction.Unchanged).Take(500)
             .Select(d => d.Action + "   " + d.RelativePath)
             .Prepend("รายการตัวอย่างสูงสุด 500 ไฟล์ · SQLite/sidecar ที่ข้าม: " + plan.DatabaseReviewCount).ToArray();
@@ -219,6 +286,8 @@ public sealed class SmartSyncForm : Form
         if (IsBusy || (transfer && _plan is null)) return;
         var pc = _pc.Text; var drive = _drive.Text;
         var direction = (SmartSyncDirection)_direction.SelectedIndex;
+        var mode = (SmartSyncMode)_mode.SelectedIndex;
+        var parallel = (int)_parallel.Value;
         var repeat = transfer && _background.Checked;
         using var cancellation = new CancellationTokenSource();
         _cancel = cancellation;
@@ -230,9 +299,9 @@ public sealed class SmartSyncForm : Form
         {
             do
             {
-                _status.Text = "กำลังตรวจสอบไฟล์และแฮช...";
+                _status.Text = mode == SmartSyncMode.Fast ? "กำลังตรวจรายชื่อไฟล์ (ไม่อ่านเนื้อหาเดิม)..." : "กำลังตรวจสอบไฟล์และแฮช...";
                 var plan = transfer && _plan is not null ? _plan :
-                    await ScanWithProgressAsync(pc, drive, direction, token);
+                    await ScanWithProgressAsync(pc, drive, direction, mode, token);
                 _plan = plan;
                 DisplayPlan(plan);
                 if (!transfer) { _activity.Value = 100; break; }
@@ -249,7 +318,7 @@ public sealed class SmartSyncForm : Form
                     _activity.Value = percent;
                     _status.Text = $"กำลังซิงค์ไฟล์ · สำเร็จ {n:N0}/{total:N0} รายการ";
                 });
-                var result = await Task.Run(() => SmartSyncFolders.ExecuteAsync(plan, 4, progress, token), token);
+                var result = await Task.Run(() => SmartSyncFolders.ExecuteAsync(plan, parallel, progress, token, SmartSyncReceiptStore.DefaultPath), token);
                 DisplayPlan(plan, result.Copied);
                 _activity.Value = 100;
                 _plan = null;

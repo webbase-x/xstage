@@ -1,13 +1,16 @@
 using System.Security.Cryptography;
 using System.Diagnostics;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 
 namespace XStageDownloadManager;
 
 public enum SmartSyncDirection { Both, ToDrive, ToPc }
+public enum SmartSyncMode { Fast, Smart, FullVerify }
 public sealed record SmartSyncFolderPlan(string Pc, string Drive, SmartSyncDirection Direction,
     IReadOnlyList<SyncDecision> Decisions, IReadOnlyDictionary<string, SyncFingerprint> PcFiles,
-    IReadOnlyDictionary<string, SyncFingerprint> DriveFiles, int DatabaseReviewCount);
+    IReadOnlyDictionary<string, SyncFingerprint> DriveFiles, int DatabaseReviewCount,
+    SmartSyncMode Mode = SmartSyncMode.FullVerify);
 public sealed record SmartSyncFolderResult(int Copied, int Identical, int Review, int SkippedDirection);
 public sealed record SmartSyncScanProgress(string Phase, string RelativePath, int PcFiles, int DriveFiles,
     long BytesHashed, int Review, int Folders, TimeSpan Elapsed);
@@ -47,18 +50,22 @@ public static class SmartSyncFolders
         private readonly Stopwatch _watch = Stopwatch.StartNew();
         private int _pc, _drive, _review, _folders;
         private long _bytes;
+        private readonly object _gate = new();
         public void Publish(string phase, string relative, bool pc, int files = 0, long bytes = 0,
             int review = 0, int folders = 0)
         {
-            if (pc) _pc += files; else _drive += files;
-            _bytes += bytes; _review += review; _folders += folders;
-            progress?.Report(new SmartSyncScanProgress(phase, relative, _pc, _drive,
-                _bytes, _review, _folders, _watch.Elapsed));
+            lock (_gate)
+            {
+                if (pc) _pc += files; else _drive += files;
+                _bytes += bytes; _review += review; _folders += folders;
+                progress?.Report(new SmartSyncScanProgress(phase, relative, _pc, _drive,
+                    _bytes, _review, _folders, _watch.Elapsed));
+            }
         }
     }
 
     private static (List<SyncEntry> Entries, int Review) Inventory(string root, CancellationToken ct,
-        ScanReporter reporter, bool pc)
+        ScanReporter reporter, bool pc, SmartSyncMode mode)
     {
         var pending = new Stack<string>();
         var entries = new List<SyncEntry>();
@@ -89,14 +96,28 @@ public static class SmartSyncFolders
                 { review++; reporter.Publish(phase, relative, pc, review: 1); continue; }
                 if (!SmartSyncPlanner.SafeRelativePath(relative))
                     throw new InvalidDataException("พบชื่อไฟล์ที่ไม่ปลอดภัยสำหรับ Windows");
-                SmartSyncTransfer.ResolveLocalPath(root, relative);
-                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-                var md5 = Convert.ToHexString(MD5.HashDataAsync(stream, ct).GetAwaiter().GetResult());
-                entries.Add(new SyncEntry(relative, new SyncFingerprint(stream.Length, md5)));
-                reporter.Publish(phase, relative, pc, files: 1, bytes: stream.Length);
+                var info = new FileInfo(path);
+                var fingerprint = new SyncFingerprint(info.Length, "", info.LastWriteTimeUtc.Ticks);
+                if (mode == SmartSyncMode.FullVerify)
+                    fingerprint = HashExisting(root, relative, fingerprint, ct);
+                entries.Add(new SyncEntry(relative, fingerprint));
+                reporter.Publish(phase, relative, pc, files: 1,
+                    bytes: mode == SmartSyncMode.FullVerify ? fingerprint.Size : 0);
             }
         }
         return (entries, review);
+    }
+
+    private static SyncFingerprint HashExisting(string root, string relative, SyncFingerprint expected, CancellationToken ct)
+    {
+        var path = SmartSyncTransfer.ResolveLocalPath(root, relative);
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (stream.Length != expected.Size || File.GetLastWriteTimeUtc(path).Ticks != expected.ModifiedUtcTicks)
+            throw new IOException("ไฟล์เปลี่ยนระหว่างตรวจสอบ · กรุณาตรวจใหม่");
+        var md5 = Convert.ToHexString(MD5.HashDataAsync(stream, ct).GetAwaiter().GetResult());
+        if (stream.Length != expected.Size || File.GetLastWriteTimeUtc(path).Ticks != expected.ModifiedUtcTicks)
+            throw new IOException("ไฟล์เปลี่ยนระหว่างตรวจสอบ · กรุณาตรวจใหม่");
+        return expected with { Md5 = md5 };
     }
 
     private static IReadOnlyDictionary<string, SyncFingerprint> Unique(IEnumerable<SyncEntry> entries) =>
@@ -104,23 +125,44 @@ public static class SmartSyncFolders
             .ToDictionary(g => g.Key, g => g.Single().Fingerprint, Paths);
 
     public static SmartSyncFolderPlan Scan(string pc, string drive, SmartSyncDirection direction, CancellationToken ct,
-        IProgress<SmartSyncScanProgress>? progress = null)
+        IProgress<SmartSyncScanProgress>? progress = null, SmartSyncMode mode = SmartSyncMode.FullVerify)
     {
         if (!Enum.IsDefined(direction)) throw new ArgumentOutOfRangeException(nameof(direction));
+        if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
         var reporter = new ScanReporter(progress);
         reporter.Publish("ตรวจสอบโฟลเดอร์", "", true);
         ct.ThrowIfCancellationRequested();
         (pc, drive) = ValidateRoots(pc, drive);
-        var l = Inventory(pc, ct, reporter, true);
-        var r = Inventory(drive, ct, reporter, false);
+        (List<SyncEntry> Entries, int Review) l = (new(), 0), r = (new(), 0);
+        Parallel.Invoke(new ParallelOptions { MaxDegreeOfParallelism = 2, CancellationToken = ct },
+            () => l = Inventory(pc, ct, reporter, true, mode),
+            () => r = Inventory(drive, ct, reporter, false, mode));
         reporter.Publish("เปรียบเทียบรายการ", "", false);
         ct.ThrowIfCancellationRequested();
         // No verified historical baseline yet: differing existing files are
         // always conflicts. Identical files and new files are safe to handle.
-        var decisions = SmartSyncPlanner.Plan(l.Entries, r.Entries, Array.Empty<SyncEntry>());
+        var decisions = SmartSyncPlanner.Plan(l.Entries, r.Entries, Array.Empty<SyncEntry>(), mode != SmartSyncMode.FullVerify);
+        if (mode == SmartSyncMode.Smart)
+        {
+            // Only equal-size shared paths require content verification.
+            // New files are verified during transfer; different sizes are conflicts.
+            var left = Unique(l.Entries);
+            var right = Unique(r.Entries);
+            decisions = decisions.Select(d =>
+            {
+                ct.ThrowIfCancellationRequested();
+                if (d.Action != SyncAction.Unchanged) return d;
+                reporter.Publish("ตรวจแฮชคู่ไฟล์", d.RelativePath, true);
+                var a = HashExisting(pc, d.RelativePath, left[d.RelativePath], ct);
+                reporter.Publish("ตรวจแฮชคู่ไฟล์", d.RelativePath, true, bytes: a.Size);
+                var b = HashExisting(drive, d.RelativePath, right[d.RelativePath], ct);
+                reporter.Publish("ตรวจแฮชคู่ไฟล์", d.RelativePath, false, bytes: b.Size);
+                return a.Md5 == b.Md5 ? d : d with { Action = SyncAction.Conflict };
+            }).ToArray();
+        }
         ct.ThrowIfCancellationRequested();
         reporter.Publish("ตรวจสอบเสร็จ", "", false);
-        return new SmartSyncFolderPlan(pc, drive, direction, decisions, Unique(l.Entries), Unique(r.Entries), l.Review + r.Review);
+        return new SmartSyncFolderPlan(pc, drive, direction, decisions, Unique(l.Entries), Unique(r.Entries), l.Review + r.Review, mode);
     }
 
     private static bool Allowed(SyncAction action, SmartSyncDirection direction) =>
@@ -133,9 +175,10 @@ public static class SmartSyncFolders
         plan.Decisions.Count(x => (x.Action is SyncAction.UploadNew or SyncAction.DownloadNew) && !Allowed(x.Action, plan.Direction)));
 
     public static async Task<SmartSyncFolderResult> ExecuteAsync(SmartSyncFolderPlan plan,
-        int parallelFiles, IProgress<int>? progress, CancellationToken ct)
+        int parallelFiles, IProgress<int>? progress, CancellationToken ct, string? checkpointPath = null)
     {
         ValidateRoots(plan.Pc, plan.Drive);
+        using var journal = checkpointPath is null ? null : new SmartSyncReceiptStore(checkpointPath, plan.Pc, plan.Drive);
         int copied = 0;
         var work = plan.Decisions.Where(x => Allowed(x.Action, plan.Direction)).ToArray();
         await SmartSyncTransfer.ExecuteAsync(work, parallelFiles, async (d, token) =>
@@ -146,14 +189,15 @@ public static class SmartSyncFolders
             var sourceMap = upload ? plan.PcFiles : plan.DriveFiles;
             if (!sourceMap.TryGetValue(d.RelativePath, out var expected))
                 throw new InvalidDataException("ข้อมูลไฟล์ต้นทางเปลี่ยน กรุณาตรวจสอบใหม่");
-            await CopyNewAsync(sourceRoot, destinationRoot, d.RelativePath, expected, token).ConfigureAwait(false);
+            var sha = await CopyNewAsync(sourceRoot, destinationRoot, d.RelativePath, expected, token).ConfigureAwait(false);
+            journal?.Record(d, expected.Size, sha);
             var completed = Interlocked.Increment(ref copied);
             progress?.Report(completed);
         }, (_, _) => throw new InvalidDataException("SQLite ต้องตรวจสอบก่อนส่ง"), ct).ConfigureAwait(false);
         return Summarize(plan, copied);
     }
 
-    private static async Task CopyNewAsync(string sourceRoot, string destinationRoot, string relative,
+    private static async Task<string> CopyNewAsync(string sourceRoot, string destinationRoot, string relative,
         SyncFingerprint expected, CancellationToken ct)
     {
         var source = SmartSyncTransfer.ResolveLocalPath(sourceRoot, relative);
@@ -168,18 +212,28 @@ public static class SmartSyncFolders
         {
             using var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true);
             if (input.Length != expected.Size ||
-                !string.Equals(Convert.ToHexString(await MD5.HashDataAsync(input, ct)), expected.Md5, StringComparison.OrdinalIgnoreCase))
+                (expected.ModifiedUtcTicks != 0 && File.GetLastWriteTimeUtc(source).Ticks != expected.ModifiedUtcTicks) ||
+                (expected.Md5.Length != 0 && !string.Equals(Convert.ToHexString(await MD5.HashDataAsync(input, ct)), expected.Md5, StringComparison.OrdinalIgnoreCase)))
                 throw new IOException("ต้นทางเปลี่ยนระหว่างตรวจสอบ กรุณาตรวจสอบใหม่");
             input.Position = 0;
-            var hash = await SHA256.HashDataAsync(input, ct);
-            input.Position = 0;
+            using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             await using (var output = new FileStream(staging, FileMode.CreateNew, FileAccess.Write, FileShare.None, 131072, true))
             {
                 created = true;
-                await input.CopyToAsync(output, ct);
+                var buffer = new byte[131072];
+                int read;
+                while ((read = await input.ReadAsync(buffer.AsMemory(), ct)) > 0)
+                {
+                    sha.AppendData(buffer, 0, read);
+                    await output.WriteAsync(buffer.AsMemory(0, read), ct);
+                }
                 await output.FlushAsync(ct);
                 output.Flush(true);
             }
+            var hash = sha.GetHashAndReset();
+            if (input.Length != expected.Size ||
+                (expected.ModifiedUtcTicks != 0 && File.GetLastWriteTimeUtc(source).Ticks != expected.ModifiedUtcTicks))
+                throw new IOException("ต้นทางเปลี่ยนระหว่างรับส่ง");
             using (var check = new FileStream(staging, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true))
             {
                 var copiedHash = await SHA256.HashDataAsync(check, ct);
@@ -191,6 +245,7 @@ public static class SmartSyncFolders
             SmartSyncTransfer.ResolveLocalPath(destinationRoot, relative);
             File.Move(staging, destination, overwrite: false);
             created = false;
+            return Convert.ToHexString(hash);
         }
         finally
         {
@@ -203,7 +258,8 @@ public static class SmartSyncFolders
 // Per-Windows-user preferences only. No access tokens, file inventory or
 // authorization to start a transfer is persisted here.
 public sealed record SmartSyncPreferences(string Pc = "", string Drive = "",
-    SmartSyncDirection Direction = SmartSyncDirection.Both, bool Background = false);
+    SmartSyncDirection Direction = SmartSyncDirection.Both, bool Background = false,
+    SmartSyncMode Mode = SmartSyncMode.Fast, int ParallelFiles = 8);
 
 public static class SmartSyncPreferencesStore
 {
@@ -215,7 +271,8 @@ public static class SmartSyncPreferencesStore
     {
         if (preferences is null || preferences.Pc is null || preferences.Drive is null ||
             preferences.Pc.Length > 32767 || preferences.Drive.Length > 32767 ||
-            !Enum.IsDefined(preferences.Direction))
+            !Enum.IsDefined(preferences.Direction) || !Enum.IsDefined(preferences.Mode) ||
+            preferences.ParallelFiles is < 1 or > 32)
             throw new InvalidDataException("ตัวเลือก Smart Sync ไม่ถูกต้อง");
         foreach (var path in new[] { preferences.Pc, preferences.Drive })
             if (path.Length > 0 && (!Path.IsPathFullyQualified(path) || path.Contains('\0')))
@@ -232,7 +289,11 @@ public static class SmartSyncPreferencesStore
             using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read);
             if (stream.Length > 1024 * 1024)
                 throw new InvalidDataException("ไฟล์ตัวเลือก Smart Sync ใหญ่เกินกำหนด");
-            return Validate(JsonSerializer.Deserialize<SmartSyncPreferences>(stream));
+            using var document = JsonDocument.Parse(stream);
+            var saved = document.RootElement.Deserialize<SmartSyncPreferences>();
+            if (saved is not null && !document.RootElement.TryGetProperty("ParallelFiles", out _))
+                saved = saved with { ParallelFiles = 8 };
+            return Validate(saved);
         }
         catch (FileNotFoundException) { return new(); }
         catch (DirectoryNotFoundException) { return new(); }
@@ -261,4 +322,54 @@ public static class SmartSyncPreferencesStore
             if (created) try { File.Delete(temporary); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
     }
+}
+
+// A local audit receipt, not authority to skip a missing destination.
+// A completed file is recorded only after its verified no-overwrite publication.
+public sealed class SmartSyncReceiptStore : IDisposable
+{
+    private readonly SqliteConnection _connection;
+    private readonly object _gate = new();
+    private readonly string _pc, _drive;
+    public static string DefaultPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "X-Stage", "Download Manager", "smart-sync-receipts.sqlite3");
+    public SmartSyncReceiptStore(string file, string pc, string drive)
+    {
+        file = Path.GetFullPath(file);
+        foreach (var root in new[] { pc, drive })
+        {
+            var prefix = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
+            if (file.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("ฐานประวัติ Sync ต้องอยู่นอกโฟลเดอร์ที่ซิงค์");
+        }
+        _pc = pc; _drive = drive;
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        _connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = file, Pooling = false }.ToString());
+        try
+        {
+            _connection.Open();
+            using var command = _connection.CreateCommand();
+            command.CommandText = "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; CREATE TABLE IF NOT EXISTS receipts(pc TEXT NOT NULL, drive TEXT NOT NULL, relative TEXT NOT NULL COLLATE NOCASE, direction TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL, completed TEXT NOT NULL, PRIMARY KEY(pc,drive,relative,direction));";
+            command.ExecuteNonQuery();
+        }
+        catch { _connection.Dispose(); throw; }
+    }
+    public void Record(SyncDecision decision, long size, string sha)
+    {
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = "INSERT OR REPLACE INTO receipts VALUES($pc,$drive,$relative,$direction,$size,$sha,$completed)";
+            command.Parameters.AddWithValue("$pc", _pc);
+            command.Parameters.AddWithValue("$drive", _drive);
+            command.Parameters.AddWithValue("$relative", decision.RelativePath);
+            command.Parameters.AddWithValue("$direction", decision.Action.ToString());
+            command.Parameters.AddWithValue("$size", size);
+            command.Parameters.AddWithValue("$sha", sha);
+            command.Parameters.AddWithValue("$completed", DateTimeOffset.UtcNow.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+    }
+    public void Dispose() => _connection.Dispose();
 }

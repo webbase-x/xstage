@@ -41,11 +41,13 @@ assert.match(workspace, /Button\("Smart Sync", "sync"[\s\S]*?ToggleSmartSync\(\)
 assert.match(workspace, /Overflow = name == "Smart Sync" \? ToolStripItemOverflow\.Never/);
 assert.ok(workspace.indexOf('Button("Smart Sync"') < workspace.indexOf('Button("เริ่ม"'));
 assert.match(workspace, /_smartSyncWindow\.Visible\) _smartSyncWindow\.Hide\(\)/);
-assert.match(smartSyncUi, /SmartSyncFolders\.ExecuteAsync\(plan, 4/);
+assert.match(smartSyncUi, /SmartSyncFolders\.ExecuteAsync\(plan, parallel, progress, token, SmartSyncReceiptStore\.DefaultPath\)/);
 assert.match(smartSyncUi, /Task\.Delay\(TimeSpan\.FromSeconds\(60\), token\)/);
 assert.match(smartSyncUi, /Volatile\.Read\(ref _latestScan\)/);
 assert.match(smartSyncUi, /_scanTicker\.Tick/);
-assert.match(smartSyncUi, /SmartSyncFolders\.Scan\(pc, drive, direction, token, progress\)/);
+assert.match(smartSyncUi, /SmartSyncFolders\.Scan\(pc, drive, direction, token, progress, mode\)/);
+assert.match(smartSyncUi, /ApplyWorkspaceTheme\(grid\)/);
+assert.match(smartSyncUi, /MainForm\.DarkGrid/);
 assert.match(smartSyncUi, /RestorePreferences\(\);[\s\S]*?_direction\.SelectedIndexChanged/);
 assert.match(smartSyncUi, /_background\.CheckedChanged \+= \(_, _\) => SavePreferences\(\)/);
 assert.match(smartSyncUi, /SmartSyncPreferencesStore\.Load\(_preferencesPath\)/);

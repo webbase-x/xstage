@@ -144,7 +144,10 @@ if (args.Contains("--ui-smoke", StringComparer.Ordinal))
                         BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(sync)!;
                     if (Field<TextBox>("_pc").Text != saved.Pc || Field<TextBox>("_drive").Text != saved.Drive ||
                         Field<ComboBox>("_direction").SelectedIndex != (int)saved.Direction ||
-                        !Field<CheckBox>("_background").Checked || sync.IsBusy || Field<Button>("_start").Enabled)
+                        !Field<CheckBox>("_background").Checked || sync.IsBusy || Field<Button>("_start").Enabled ||
+                        Field<ComboBox>("_mode").SelectedIndex != (int)SmartSyncMode.Fast ||
+                        Field<NumericUpDown>("_parallel").Value != 8 ||
+                        Field<TextBox>("_pc").BackColor != MainForm.DarkGrid)
                         throw new Exception("Smart Sync UI failed to restore saved settings safely");
                     Field<ComboBox>("_direction").SelectedIndex = (int)SmartSyncDirection.ToDrive;
                     Field<CheckBox>("_background").Checked = false;

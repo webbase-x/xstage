@@ -5,7 +5,7 @@ namespace XStageDownloadManager;
 // Pure, side-effect-free plan. A provider must revalidate both versions before
 // executing a transfer and checkpoint only after verified completion.
 public enum SyncAction { Unchanged, DownloadNew, UploadNew, DownloadUpdate, UploadUpdate, Conflict, ReviewDeletion }
-public sealed record SyncFingerprint(long Size, string Md5);
+public sealed record SyncFingerprint(long Size, string Md5, long ModifiedUtcTicks = 0);
 public sealed record SyncEntry(string RelativePath, SyncFingerprint Fingerprint);
 public sealed record SyncDecision(string RelativePath, SyncAction Action);
 
@@ -13,8 +13,8 @@ public static class SmartSyncPlanner
 {
     private static readonly StringComparer Paths = StringComparer.OrdinalIgnoreCase;
 
-    private static bool ValidFingerprint(SyncFingerprint f) =>
-        f.Size >= 0 && f.Md5 is not null && Regex.IsMatch(f.Md5, @"\A[0-9a-fA-F]{32}\z");
+    private static bool ValidFingerprint(SyncFingerprint f, bool metadataOnly = false) =>
+        f.Size >= 0 && f.Md5 is not null && ((metadataOnly && f.Md5.Length == 0) || Regex.IsMatch(f.Md5, @"\A[0-9a-fA-F]{32}\z"));
 
     private static bool Same(SyncFingerprint a, SyncFingerprint b) =>
         ValidFingerprint(a) && ValidFingerprint(b) && a.Size == b.Size &&
@@ -36,7 +36,7 @@ public static class SmartSyncPlanner
     }
 
     public static IReadOnlyList<SyncDecision> Plan(IEnumerable<SyncEntry> local,
-        IEnumerable<SyncEntry> remote, IEnumerable<SyncEntry> baseline)
+        IEnumerable<SyncEntry> remote, IEnumerable<SyncEntry> baseline, bool metadataOnly = false)
     {
         var l = local.ToLookup(x => x.RelativePath, Paths);
         var r = remote.ToLookup(x => x.RelativePath, Paths);
@@ -58,7 +58,7 @@ public static class SmartSyncPlanner
             var action = SyncAction.Conflict;
             if (SafeRelativePath(path) && !SmartSyncTransfer.IsDatabaseSidecar(path) && !collisions.Contains(path) &&
                 ls.Length <= 1 && rs.Length <= 1 && bs.Length <= 1 &&
-                ls.Concat(rs).Concat(bs).All(x => ValidFingerprint(x.Fingerprint)))
+                ls.Concat(rs).Concat(bs).All(x => ValidFingerprint(x.Fingerprint, metadataOnly)))
             {
                 var lf = ls.SingleOrDefault()?.Fingerprint;
                 var rf = rs.SingleOrDefault()?.Fingerprint;
@@ -67,7 +67,7 @@ public static class SmartSyncPlanner
                 else if (lf is null || rf is null)
                     action = bf is not null ? SyncAction.ReviewDeletion :
                         lf is null ? SyncAction.DownloadNew : SyncAction.UploadNew;
-                else if (Same(lf, rf)) action = SyncAction.Unchanged;
+                else if (metadataOnly ? lf.Size == rf.Size : Same(lf, rf)) action = SyncAction.Unchanged;
                 else if (bf is not null && Same(lf, bf)) action = SyncAction.DownloadUpdate;
                 else if (bf is not null && Same(rf, bf)) action = SyncAction.UploadUpdate;
             }
