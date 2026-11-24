@@ -259,6 +259,7 @@ function createWorkflow(options={}){
   }
   const defaultNames={music:'SONGS',soundfont:'SOUNDFONT',fx:'FX'};
   const scanButton=$('xstage-drive-scan-counts');
+  const rebuildButton=$('xstage-drive-rebuild-db');
   const countNodes=Object.fromEntries(KIND.map(k=>[k,$('xstage-drive-count-'+k)]));
   const dbCount=$('xstage-drive-db-count'),comparison=$('xstage-drive-compare-status');
   let scanTask=null,comparisonState='unknown',catalogCache=null,scanTimer=null;
@@ -453,6 +454,7 @@ function createWorkflow(options={}){
       }
     }
     if(scanButton)scanButton.disabled=!valid||busy;
+    if(rebuildButton)rebuildButton.disabled=!valid||busy||!pref.music?.id;
     const waiting=valid&&pref.music?.id&&isPaused(s,pref.music.id);
     if(buildButton){buildButton.disabled=busy||!pref.music?.id||(!waiting&&(comparisonState==='equal'||comparisonState==='checking'));
       buildButton.textContent=busy?(publishing?'กำลังยืนยันฐานเพลง…':stopRequested?'กำลังพักงาน…':'กำลังตรวจเพลง…'):waiting?'ทำงานต่อจากจุดที่หยุด':comparisonState==='equal'?'ฐานเพลงเป็นปัจจุบัน':comparisonState==='checking'?'กำลังตรวจฐานเพลง…':'ตรวจไฟล์และอัปเดตฐานเพลง';}
@@ -492,14 +494,22 @@ function createWorkflow(options={}){
     }catch(error){display('เลือกโฟลเดอร์ไม่ได้: '+String(error?.message||error));}
     finally{render();}
   }
-  async function rebuild(){
+  async function rebuild({fresh=false}={}){
     if(busy)return;
     let initial;
     try{initial=session();}
     catch(error){display(error.message);return;}
     const chosen=readSelections(initial.sub,initial.rootId).music;
     if(!chosen?.id){display('เลือกโฟลเดอร์เพลงบน Google Drive ก่อนสร้างฐาน');return;}
-    if(!isPaused(initial,chosen.id)&&(comparisonState==='equal'||comparisonState==='checking'))return;
+    if(!fresh&&!isPaused(initial,chosen.id)&&(comparisonState==='equal'||comparisonState==='checking'))return;
+    if(fresh){
+      const confirmed=scope.confirm?.(
+        'สร้างฐานเพลงร่วม PC / Online ใหม่จาก XMID/XSK ทุกไฟล์ใน XStageKaraoke/SONGS?\\n'+
+        'รายการใน DB เดิมจะถูกแทนที่โดยฐานใหม่ที่ตรวจสำเร็จแล้วเท่านั้น\\n'+
+        'ไฟล์ SONGS, SoundFont และ FX ไม่ถูกลบ และ Song Studio Pro ยังใช้ฐานผลิตเพลงของตัวเอง\\n'+
+        'หมายเหตุ: ตัวสร้าง DB จาก Drive รองรับ XMID/XSK เท่านั้นในขั้นนี้');
+      if(!confirmed)return;
+    }
     const work=async()=>{
       if(busy)return;
       ++scanSequence;scanTask=null;comparisonState='unknown';
@@ -518,11 +528,29 @@ function createWorkflow(options={}){
       drive.ensureAuth=force=>options.ensureAuth?.(force);
       drive.signal=()=>controller.signal;
       try{
-        await verifyFolder(drive,chosen.id,initial.rootId,'music');
+        const musicRoot=await verifyFolder(drive,chosen.id,initial.rootId,'music');
+        if(fresh&&(musicRoot.name!=='SONGS'||!musicRoot.parents?.includes(initial.rootId)))
+          fail('สร้างฐานร่วมใหม่ต้องเลือกโฟลเดอร์ SONGS โดยตรงใต้ XStageKaraoke เพื่อให้พาธเพลง PC และ Online ตรงกัน');
         checkpoint=await (options.openCheckpoint||openCheckpoint)();
         check();pauseBoundary();
         display('กำลังอ่าน DB/songs.sqlite3 ที่ใช้งานอยู่…');
-        const existing=await scope.XStageCloudImport.loadCatalog(drive,initial.rootId,{verifyChecksum:true});
+        const existing=fresh
+          ?await (async()=>{
+            // Full rebuild does not depend on the old table schema, but still
+            // pins the existing Drive file identity for safe replacement.
+            const folders=await drive.listChildren(initial.rootId);check();
+            const dirs=folders.filter(x=>x.name==='DB'&&x.mimeType===FOLDER);
+            if(dirs.length>1)fail('พบโฟลเดอร์ DB ซ้ำ');
+            const files=dirs.length?await drive.listChildren(dirs[0].id):[];
+            const active=files.filter(x=>x.name==='songs.sqlite3'&&x.mimeType!==FOLDER);
+            if(active.length>1)fail('พบฐาน songs.sqlite3 ซ้ำ');
+            const previous=active[0];
+            return {rows:new Map(),pointer:previous?{
+              directFile:true,catalogFileId:previous.id,
+              catalogMd5:String(previous.md5Checksum||'')
+            }:null};
+          })()
+          :await scope.XStageCloudImport.loadCatalog(drive,initial.rootId,{verifyChecksum:true});
         pauseBoundary();
         const rows=existing.rows;
         const originalCount=rows.size;
@@ -663,7 +691,7 @@ function createWorkflow(options={}){
           pauseBoundary();
         }
         check();pauseBoundary();
-        const needsPublication=Boolean(added||indexed.duplicates||indexed.backfilled);
+        const needsPublication=Boolean(fresh||added||indexed.duplicates||indexed.backfilled);
         if(needsPublication){
           publishing=true;render();
           display(existingLabel+' · เพิ่มใหม่ '+added+' · '+duplicateLabel()+' · กำลังสร้างและยืนยัน DB/songs.sqlite3 ครั้งเดียว…');
@@ -711,6 +739,7 @@ function createWorkflow(options={}){
     $('xstage-drive-folder-'+kind)?.addEventListener('click',()=>void manageFolder(kind));
   }
   buildButton?.addEventListener('click',()=>void rebuild());
+  rebuildButton?.addEventListener('click',()=>void rebuild({fresh:true}));
   cancelButton?.addEventListener('click',requestPause);
   function resume(){
     if(busy||scope.document?.hidden)return;
