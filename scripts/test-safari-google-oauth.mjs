@@ -40,6 +40,11 @@ function simulator(){
       const current=clients.at(-1);
       return {requestAccessToken(){current.requested++;}};
     }}}},
+    rememberedGoogleAccount:()=>null,
+    rememberedFullDriveRead:()=>false,
+    DRIVE_READ_SCOPE:'https://www.googleapis.com/auth/drive.readonly',
+    DRIVE_FILE_SCOPE:'https://www.googleapis.com/auth/drive.file',
+    grantedDriveReadAndWrite:()=>false,
     popupPreflightForTv:()=>true,
     androidTvNativeBridgeReady:()=>false,
     isLikelyAndroidTvBrowser:()=>false,

@@ -2414,6 +2414,9 @@ function login({automatic=false,remembered=false} = {}) {
         const expiresIn=Number(result.expires_in);
         const expiresAt=Date.now()+Math.max(0,Math.min(3600,Number.isFinite(expiresIn)?expiresIn:3600))*1000;
         const fullReadGranted=restoreRead&&grantedDriveReadAndWrite(result);
+        if(restoreRead&&!String(result.scope||'').split(/\s+/).includes(DRIVE_FILE_SCOPE)){
+          finish();setStatus('Google ยังไม่ได้ให้สิทธิ์ไฟล์ของแอป · กรุณาเข้าสู่ระบบด้วยบัญชีเดิมและอนุญาตสิทธิ์ที่จำเป็น','error');return;
+        }
         // Never persist a broad-scope token in the pending login store.
         if(!restoreRead)savePendingAuth(result.access_token,expiresAt);
         const known=knownAccount;

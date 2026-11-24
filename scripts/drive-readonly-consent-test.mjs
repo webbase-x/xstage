@@ -23,4 +23,5 @@ assert.ok(app.indexOf('if(requestRead&&!grantedDriveReadAndWrite(newToken))')<ap
 assert.ok(app.includes('if(readOnly)localStorage.removeItem(ACTIVE_AUTH_KEY)'));
 assert.ok(app.includes("prompt:readAll?'consent':''"));
 assert.ok(!app.includes("scope:'openid email https://www.googleapis.com/auth/drive'"));
+assert.ok(app.includes("if(restoreRead&&!String(result.scope||'').split("));
 console.log('PASS: optional read-only scope, file-write grant retained, account-token isolation, persistent storage protection');
