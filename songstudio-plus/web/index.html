@@ -158,6 +158,18 @@
               <button type="button" class="primary-btn" id="drive-download">ดาวน์โหลดและนำเข้าเพลง <span>↗</span></button>
             </div>
             <p class="drive-operation-status" id="drive-status" role="status" aria-live="polite">ยังไม่เชื่อมต่อ · เลือกคลัง XStageKaraoke หรือกดตรวจสอบโครงสร้าง</p>
+            <section class="drive-push-panel" aria-labelledby="drive-push-title">
+              <h3 id="drive-push-title">ส่งไฟล์จากเครื่องขึ้น Google Drive · ใช้กับ Karaoke Online</h3>
+              <p class="field-hint">เลือกโฟลเดอร์ต้นทางบนเครื่อง และโฟลเดอร์ XStageKaraoke ของ Google Drive for desktop ด้านบน ระบบส่งเฉพาะไฟล์ใหม่โดยไม่เขียนทับหรือลบไฟล์เดิม</p>
+              <label class="field-label" for="drive-push-source">โฟลเดอร์ไฟล์ต้นทาง</label>
+              <div class="input-wrap"><span class="folder-glyph">▤</span><input id="drive-push-source" spellcheck="false" autocomplete="off" placeholder="เช่น D:\\Music\\XStagePrepared"><button type="button" id="drive-push-browse" class="browse-btn">เลือกโฟลเดอร์</button></div>
+              <label class="field-label" for="drive-push-area">ประเภทที่จะส่ง</label>
+              <select id="drive-push-area" class="drive-push-select" aria-label="หมวดหมู่ปลายทาง"><option value="SONGS">SONGS · เพลง</option><option value="SOUNDFONT">SOUNDFONT · SF2/SF3</option><option value="FX">FX · เอฟเฟกต์</option></select>
+              <div class="drive-commands"><button id="drive-push-preview" type="button" class="quiet-btn">ตรวจรายการและไฟล์ซ้ำ</button><button id="drive-push-submit" type="button" class="primary-btn" disabled>ยืนยันส่งเข้า Google Drive</button></div>
+              <p id="drive-push-status" class="drive-operation-status" role="status" aria-live="polite">ยังไม่ได้ตรวจไฟล์ · ต้องตรวจรายการก่อนส่ง</p>
+              <p class="field-hint">ตรวจซ้ำด้วย SHA-256 ทั้งไฟล์ · รายการชื่อซ้ำแต่เนื้อหาต่างกันจะหยุดให้ตรวจเอง · SQLite ใน DB เป็นของ Karaoke Online เท่านั้น เมื่อ Google Drive ซิงก์สำเร็จให้กดตรวจไฟล์และอัปเดตฐานจาก Karaoke Online</p>
+            </section>
+
             <a class="drive-open-link" href="https://drive.google.com/drive/u/0/my-drive" target="_blank" rel="noopener noreferrer">เปิด Google Drive ในเบราว์เซอร์ ↗</a>
           </article>
           <article class="panel drive-layout">
@@ -169,7 +181,7 @@
               <div class="drive-tree-branch">AUDIO/ · MP3 · M4A · WAV · FLAC</div>
               <div class="drive-tree-branch">VIDEO/ · MP4 · MKV · WEBM</div>
               <div class="drive-tree-row"><strong>DB/</strong><span>เก็บ .sqlite3 ของ Karaoke Online · ไม่เขียนทับ</span></div>
-              <div class="drive-tree-row"><strong>SOUNDFONT/</strong><span>SF2 · SF3 · ไม่ดาวน์โหลดเข้าฐานเพลง</span></div>
+              <div class="drive-tree-row"><strong>SOUNDFONT/</strong><span>SF2 · SF3 · ไม่ดาวน์โหลดเข้าฐานเพลง</span></div><div class="drive-tree-row"><strong>FX/</strong><span>เสียงเอฟเฟกต์ร่วมกัน</span></div>
               <div class="drive-tree-muted">BACKUP/ · CACHE/ · LOGS/ (ไม่แตะต้อง)</div>
             </div>
             <div class="drive-safe-note"><strong>ปลอดภัยต่อคลังเดิม</strong><p>เก็บเพลงที่ดาวน์โหลดไว้ใน Downloads/XStageSongStudioPro/XStageKaraoke/SONGS · ข้ามไฟล์ที่ตรวจ SHA-256 แล้วตรงกัน · ไม่คัดลอก DB ของ Karaoke Online มาทับฐาน Song Studio</p></div>
