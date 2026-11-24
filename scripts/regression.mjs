@@ -927,8 +927,9 @@ assert.match(index,/<script src="midi-pro-engine\.js\?v=\d+(?:-[^"]+)?" defer><\
           'AudioWorklet MIDI engine must have a versioned local entry point');
 assert.ok(index.includes('id="xstage-soundfont-select"'),
           'SoundFont selector must be present in the stage menu');
-assert.ok(app.includes("window.XStageBrowserMidi.render(midiBytes"),
-          'Main player must send MIDI songs through the bundled synthesizer');
+assert.ok(app.includes("renderWithSoundFontRecovery(midiBytes,verifiedBank,token,controller")&&
+          app.includes("window.XStageBrowserMidi.render(bytes,{fontBytes,signal})"),
+          'Main player must route MIDI into the bundled synth with a safe SoundFont recovery');
 assert.ok(index.includes('id="karaoke-video"') &&
           index.includes('playsinline muted preload="metadata"'),
           'WEB and Android stage must have a safe muted video layer');
