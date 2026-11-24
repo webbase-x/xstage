@@ -9,10 +9,21 @@ internal static class Program
     {
         // Run the copied single-file updater before taking the GUI instance lock.
         // The installed app must exit so Inno Setup can replace its binary safely.
-        if (args.Length > 0 && args[0] == "--apply-verified-update")
+        if (args.Length > 0 && args[0] is "--apply-verified-update" or "--probe-update-helper")
         {
-            ApplicationConfiguration.Initialize();
-            Application.Run(new UpdateTransitionForm(args));
+            // The probe is CI-only readiness validation; it cannot launch an installer.
+            var probe = args[0] == "--probe-update-helper";
+            try
+            {
+                SelfUpdater.LogDownload(probe ? "Helper probe starting" : "Helper process entered Main");
+                ApplicationConfiguration.Initialize();
+                Application.Run(new UpdateTransitionForm(args, probe));
+            }
+            catch (Exception ex)
+            {
+                SelfUpdater.LogDownload("Helper startup failed: " + ex.GetType().Name + ": " + ex.Message);
+                Environment.ExitCode = 2;
+            }
             return;
         }
 

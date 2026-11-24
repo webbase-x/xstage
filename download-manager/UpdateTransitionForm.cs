@@ -15,10 +15,12 @@ public sealed class UpdateTransitionForm : Form
     private readonly ProgressBar _bar = new();
     private readonly Button _dismiss = new();
     private bool _finished;
+    private readonly bool _probeOnly;
 
-    public UpdateTransitionForm(string[] args)
+    public UpdateTransitionForm(string[] args, bool probeOnly = false)
     {
         _args = args;
+        _probeOnly = probeOnly;
         Text = "X-Stage Download Manager — อัปเดต";
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(580, 245);
@@ -90,15 +92,23 @@ public sealed class UpdateTransitionForm : Form
     {
         try
         {
-            if (_args.Length is not (9 or 11))
+            if (_probeOnly ? _args.Length != 2 : _args.Length is not (9 or 11))
                 throw new ArgumentException("ข้อมูลโปรแกรมอัปเดตไม่ครบ");
-            using var ready = EventWaitHandle.OpenExisting(_args[8]);
+            using var ready = EventWaitHandle.OpenExisting(_args[_probeOnly ? 1 : 8]);
             ready.Set();
+            SelfUpdater.LogDownload("PASS helper window shown and readiness signalled");
+            if (_probeOnly)
+            {
+                Finish(0, "Readiness probe only — no installation");
+                Close();
+                return;
+            }
         }
         catch (Exception ex)
         {
             // The parent retains its original UI. Do not leave an orphan
             // helper window behind if the readiness handshake failed.
+            SelfUpdater.LogDownload("Helper readiness failed: " + ex.GetType().Name + ": " + ex.Message);
             Finish(2, ex.Message);
             Close();
             return;

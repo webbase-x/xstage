@@ -30,7 +30,7 @@ public static class SelfUpdater
 
     public static string DownloadLogPath => Path.Combine(UpdateFolder, "update-download.log");
 
-    private static void LogDownload(string message)
+    internal static void LogDownload(string message)
     {
         try
         {
@@ -77,6 +77,7 @@ public static class SelfUpdater
         {
             if (await VerifyFileAsync(destination, expectedSha, expectedSize, cancellation))
             {
+                LogDownload("PASS cached installer size and SHA-256");
                 progress?.Report(100);
                 return destination;
             }
@@ -300,23 +301,39 @@ public static class SelfUpdater
                 using var process = Process.Start(info);
                 if (process is null)
                     throw new IOException("ไม่สามารถเริ่มกระบวนการติดตั้งอัปเดต");
-                if (!readyEvent.WaitOne(TimeSpan.FromSeconds(12)))
+                LogDownload($"Helper started PID={process.Id}; waiting for visible window (90s)");
+                var watch = Stopwatch.StartNew();
+                while (watch.Elapsed < TimeSpan.FromSeconds(90))
                 {
-                    try
+                    if (readyEvent.WaitOne(250) && !process.HasExited)
                     {
-                        if (!process.HasExited) process.Kill();
-                        process.WaitForExit(5000);
+                        LogDownload($"PASS helper ready after {watch.Elapsed.TotalSeconds:0.0}s");
+                        return;
                     }
-                    catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                    if (process.HasExited)
                     {
-                        LogDownload("Could not stop unacknowledged helper: " + ex.Message);
+                        LogDownload($"Helper exited before ready; code={process.ExitCode}");
+                        throw new UpdateHandoffException(
+                            $"ตัวช่วยติดตั้งปิดก่อนพร้อม (รหัส {process.ExitCode}) · ไฟล์อัปเดตผ่าน SHA-256 แล้ว", true);
                     }
-                    // Never try another location after a child process was
-                    // launched. It could otherwise produce two updater windows.
-                    throw new InvalidOperationException("หน้าต่างอัปเดตไม่พร้อม · โปรแกรมเดิมยังเปิดอยู่ กรุณาตรวจสอบอัปเดตอีกครั้ง");
                 }
-                return;
+                bool stopped = false;
+                try
+                {
+                    if (!process.HasExited) process.Kill();
+                    stopped = process.WaitForExit(5000);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    LogDownload("Could not stop unacknowledged helper: " + ex.Message);
+                }
+                LogDownload($"Helper readiness timeout; stopped={stopped}");
+                // Never start a second helper after launching one.
+                throw new UpdateHandoffException(stopped
+                    ? "ตัวช่วยติดตั้งไม่พร้อมภายใน 90 วินาที · ไฟล์อัปเดตผ่าน SHA-256 แล้ว"
+                    : "ไม่สามารถยืนยันว่าตัวช่วยติดตั้งหยุดแล้ว · ห้ามเปิดตัวติดตั้งซ้ำ", stopped);
             }
+            catch (UpdateHandoffException) { throw; }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
                                        System.ComponentModel.Win32Exception)
             {
@@ -327,10 +344,10 @@ public static class SelfUpdater
                 catch (UnauthorizedAccessException) { }
             }
         }
-        throw new IOException(
-            "Windows ไม่อนุญาตให้สร้างหรือเปิดตัวช่วยอัปเดตในโฟลเดอร์ที่ทดสอบ " +
-            "โปรดตรวจสอบสิทธิ์และ Windows Security โดยไม่ต้องปิดระบบป้องกัน " +
-            "รายละเอียด: " + DownloadLogPath, lastError);
+        throw new UpdateHandoffException(
+            "ไม่สามารถสร้างหรือเปิดตัวช่วยติดตั้ง · ไฟล์อัปเดตผ่าน SHA-256 แล้ว " +
+            "โปรดตรวจสอบสิทธิ์และ Windows Security โดยไม่ต้องปิดระบบป้องกัน",
+            true, lastError);
     }
 
 
@@ -468,4 +485,12 @@ public static class SelfUpdater
             return 1;
         }
     }
+}
+
+
+public sealed class UpdateHandoffException : IOException
+{
+    public bool CanInstallManually { get; }
+    public UpdateHandoffException(string message, bool canInstallManually, Exception? inner = null)
+        : base(message, inner) => CanInstallManually = canInstallManually;
 }

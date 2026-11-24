@@ -20,6 +20,7 @@ public sealed partial class MainForm : Form
     private readonly Label _details = new();
     private readonly Label _updateStatus = new();
     private bool _checkingUpdates;
+    private bool _updateHandoffInProgress;
     private readonly Font _finishedFileFont = new("Segoe UI", 10, FontStyle.Bold | FontStyle.Underline);
     private readonly Font _normalFileFont = new("Segoe UI", 10, FontStyle.Regular);
     private readonly CancellationTokenSource _browserStop = new();
@@ -83,6 +84,11 @@ public sealed partial class MainForm : Form
         }
         FormClosing += (_, e) =>
         {
+            if (_updateHandoffInProgress && e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                return;
+            }
             // Keep the UI process alive until separately recorded livestreams
             // have closed MKV headers or safely cancelled clip generation.
             // Never pause normal downloads for a close attempt we reject.
@@ -501,6 +507,7 @@ public sealed partial class MainForm : Form
         if (_checkingUpdates || IsDisposed) return;
         _checkingUpdates = true;
         DownloadManagerRelease? candidate = null;
+        string? verifiedInstaller = null;
         _updateStatus.Text = "กำลังตรวจสอบอัปเดต...";
         try
         {
@@ -543,6 +550,7 @@ public sealed partial class MainForm : Form
                     return;
                 }
                 installer = download.VerifiedSetup!;
+                verifiedInstaller = installer;
                 handoffCenter = download.HandoffCenter;
             }
             if (IsDisposed) return;
@@ -558,8 +566,24 @@ public sealed partial class MainForm : Form
             // The detached helper is the sole progress window. Do not open
             // another countdown dialog over it. Close only after its readiness
             // handshake; FormClosing still saves interrupted download intent.
-            SelfUpdater.LaunchInstallerHelper(installer, release, handoffCenter.X, handoffCenter.Y);
-            Close();
+            _updateHandoffInProgress = true;
+            var disabledWindows = OwnedForms.Where(window => window.Enabled).ToArray();
+            Enabled = false;
+            foreach (var window in disabledWindows) window.Enabled = false;
+            try
+            {
+                // Keep the UI message loop alive while the copied EXE starts.
+                await Task.Run(() => SelfUpdater.LaunchInstallerHelper(
+                    installer, release, handoffCenter.X, handoffCenter.Y));
+            }
+            finally
+            {
+                _updateHandoffInProgress = false;
+                if (!IsDisposed) Enabled = true;
+                foreach (var window in disabledWindows)
+                    if (!window.IsDisposed) window.Enabled = true;
+            }
+            if (!IsDisposed) Close();
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or
                                      System.Text.Json.JsonException or IOException or
@@ -571,7 +595,35 @@ public sealed partial class MainForm : Form
             var message = ex.Message +
                 "\n\nแอปเดิมยังใช้งานได้ ไม่ติดตั้งไฟล์ที่ตรวจสอบไม่ผ่าน" +
                 "\nไฟล์บันทึก: " + SelfUpdater.DownloadLogPath;
-            if (candidate is not null)
+            if (verifiedInstaller is not null)
+            {
+                // A helper failure is not a checksum failure. Keep verified
+                // bytes and offer their location only when no helper remains.
+                if (ex is UpdateHandoffException { CanInstallManually: true } &&
+                    File.Exists(verifiedInstaller))
+                {
+                    if (MessageBox.Show(this, ex.Message +
+                        "\n\nต้องการเปิดโฟลเดอร์ไฟล์ติดตั้งที่ตรวจสอบแล้วหรือไม่? ปิดโปรแกรมเดิมก่อนเปิด Setup EXE" +
+                        "\nไฟล์บันทึก: " + SelfUpdater.DownloadLogPath,
+                        "เปิดตัวช่วยติดตั้งไม่สำเร็จ · SHA-256 ผ่านแล้ว", MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Warning) == DialogResult.Yes)
+                    {
+                        try
+                        {
+                            var explorer = new ProcessStartInfo("explorer.exe") { UseShellExecute = true };
+                            explorer.ArgumentList.Add("/select," + verifiedInstaller);
+                            Process.Start(explorer);
+                        }
+                        catch (Exception openError)
+                        {
+                            _updateStatus.Text = "เปิดโฟลเดอร์ไม่ได้: " + openError.Message;
+                        }
+                    }
+                }
+                else MessageBox.Show(this, message, "ส่งต่อการติดตั้งไม่สำเร็จ",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            else if (candidate is not null)
             {
                 if (MessageBox.Show(this,
                     message + "\n\nต้องการเปิดหน้าดาวน์โหลด EXE อย่างเป็นทางการผ่านเบราว์เซอร์หรือไม่?",

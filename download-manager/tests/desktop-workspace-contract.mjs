@@ -19,11 +19,16 @@ const testProject = readFileSync(join(root, 'tests/DownloadEngine.Tests.csproj')
 const updateUi = readFileSync(join(root, 'UpdateTransitionForm.cs'), 'utf8');
 const updater = readFileSync(join(root, 'SelfUpdater.cs'), 'utf8');
 assert.ok(!main.includes('ShowRestartCountdownAsync'), 'Do not show a second countdown popup');
-assert.match(main, /using \(var download = new UpdateDownloadForm[\s\S]*?handoffCenter = download\.HandoffCenter;\s*\}[\s\S]*?SelfUpdater\.LaunchInstallerHelper\(installer, release, handoffCenter\.X, handoffCenter\.Y\);\s*Close\(\);/);
+assert.match(main, /using \(var download = new UpdateDownloadForm[\s\S]*?handoffCenter = download\.HandoffCenter;\s*\}[\s\S]*?await Task\.Run\(\(\) => SelfUpdater\.LaunchInstallerHelper\([\s\S]*?installer, release, handoffCenter\.X, handoffCenter\.Y\)\);[\s\S]*?if \(!IsDisposed\) Close\(\);/);
 assert.match(updateUi, /Location = CenterOnWorkingArea\(new Point\(x, y\), Size\)/);
 assert.match(updater, /centerX\.ToString[\s\S]*?centerY\.ToString/);
 assert.match(main, /OfType<LiveStreamCaptureForm>\(\)\.Any\(window => window\.IsBusy\)[\s\S]*?SelfUpdater\.LaunchInstallerHelper/);
-assert.match(updater, /process\.Kill\(\)[\s\S]*?throw new InvalidOperationException/);
+assert.match(updater, /process\.Kill\(\)[\s\S]*?throw new UpdateHandoffException/);
+assert.match(updater, /watch\.Elapsed < TimeSpan\.FromSeconds\(90\)/);
+assert.match(updater, /if \(process\.HasExited\)[\s\S]*?process\.ExitCode/);
+assert.match(main, /UpdateHandoffException \{ CanInstallManually: true \}/);
+assert.match(main, /เปิดตัวช่วยติดตั้งไม่สำเร็จ · SHA-256 ผ่านแล้ว/);
+assert.match(updateUi, /_probeOnly[\s\S]*?Readiness probe only/);
 for (let step = 2; step <= 6; step++) assert.ok(updater.includes('ขั้นที่ '+step+'/6'));
 assert.ok(updateUi.includes('ขั้นที่ 1/6') && updateUi.includes('ขั้นที่ 6/6'));
 assert.ok(updateUi.includes('_dismiss.Visible = true'));
