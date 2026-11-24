@@ -41,7 +41,8 @@ const retiredId='1RYekUHCC3qs661cUrbxkNauUz_SuqZvy';
 const parents=new Map([
   [music,root],[font,root],[fx,root]
 ]);
-const names=new Map([[music,'XMID'],[font,'SOUNDFONT'],[fx,'FX']]);
+const names=new Map([[music,'SONGS'],[font,'SOUNDFONT'],[fx,'FX']]);
+let createdFolders=0;
 let denied=false,cancelOnList=false,uploads=0,reads=0,published=0,lastRows=null,failOnce=false;
 let existingRows=[];
 class FakeDrive {
@@ -53,8 +54,12 @@ class FakeDrive {
   async listChildren(id){
     if(denied)throw Error('HTTP 403: folder contents unavailable');
     if(id===music&&cancelOnList){cancelOnList=false;workflow.cancel();}
-    if(id===music)return records;
-    return [];
+    const folders=[...parents].filter(([,parent])=>parent===id).map(([id])=>({id,name:names.get(id),mimeType:'application/vnd.google-apps.folder',parents:[parents.get(id)]}));
+    return id===music?[...records,...folders]:folders;
+  }
+  async ensurePath(parent,parts){let id=parent;for(const name of parts){let found=[...parents].find(([key,p])=>p===id&&names.get(key)===name)?.[0];if(!found){found='createdFolder'+(++createdFolders);parents.set(found,id);names.set(found,name);}id=found;}return id;
+  }
+  async renameFolder(id,name){names.set(id,name);
   }
   async getSqlite(id){reads++;if(failOnce&&id==='file00003'){failOnce=false;throw Error('Network timeout');}if(!blobs.has(id))throw Error('Unexpected media');return blobs.get(id);}
   async upload(){uploads++;throw Error('Builder must never upload songs');}
@@ -99,7 +104,7 @@ let current={sub:'account1',rootId:root,token:'token1'},pick={id:music,name:'XMI
 const savedMetadata=new Map();
 const workflow=window.XStageDriveFolders.init({
   openCheckpoint:async()=>({get:async key=>savedMetadata.get(key),put:async(key,value)=>savedMetadata.set(key,value)}),
-  session:()=>current,chooseFolder:async()=>pick,
+  session:()=>current,hasFullRead:()=>true,chooseFolder:async()=>pick,
   refresh:async()=>{},ensureAuth:async()=>{}
 });
 assert.equal(element('xstage-drive-build-db').disabled,true,'Build must require selection');
@@ -165,9 +170,9 @@ assert.equal(workflow.getFolderId('account1',root,'music'),music,
   'Retired Drive root must never replace a live source');
 pick={id:music,name:'XMID'};denied=true;
 await workflow.choose('music');
-assert.equal(workflow.getFolderId('account1',root,'music'),music,
-  'Failed Drive permission check must not rewrite saved selections');
+assert.equal(workflow.getFolderId('account1',root,'music'),'','Failed verification must clear unsafe selections');
 denied=false;
+await workflow.discoverDefaults();
 const selections=window.XStageDriveFolders.readSelections('account1',root);
 assert.equal(selections.fx.id,fx);
 assert.ok(!JSON.stringify([...values.values()]).includes('token1'),
@@ -180,7 +185,8 @@ const inventoryDrive={listChildren:async id=>id==='fontSource1234'?
 let openedUrl='',closedTabs=0;
 window.open=()=>({opener:window,location:{replace:url=>{openedUrl=url;}},close(){closedTabs++;}});
 await workflow.openDriveFolder('music');
-assert.equal(openedUrl,'https://drive.google.com/drive/folders/'+music);
+const midiFolder=[...parents].find(([id,p])=>p===music&&names.get(id)==='MIDI')[0];
+assert.equal(openedUrl,'https://drive.google.com/drive/folders/'+midiFolder);
 parents.set(music,outsideParent);openedUrl='';
 await workflow.openDriveFolder('music');
 assert.equal(openedUrl,'','Moved folder must never open outside the library');
@@ -190,15 +196,14 @@ const defaultRoot='defaultRoot1234',defaultMusic='defaultSongs1234';
 parents.set(defaultMusic,defaultRoot);names.set(defaultMusic,'SONGS');
 const originalList=FakeDrive.prototype.listChildren;
 FakeDrive.prototype.listChildren=async function(id){
-  if(id===defaultRoot)return [{id:defaultMusic,name:'SONGS',mimeType:folderMime}];
   return originalList.call(this,id);
 };
 current={sub:'account1',rootId:defaultRoot,token:'token1'};
 await workflow.discoverDefaults();
 assert.equal(workflow.getFolderId('account1',defaultRoot,'music'),defaultMusic);
 assert.equal(workflow.getFolderId('account1',root,'music'),music);
-assert.equal(workflow.getFolderId('account1',defaultRoot,'soundfont'),'');
-assert.equal(uploads,0,'Discovering standard folders must not upload or create any file');
+assert.ok(workflow.getFolderId('account1',defaultRoot,'soundfont'));
+assert.equal(uploads,0,'Provisioning standard folders must not upload song files');
 const inventory=await window.XStageDriveFolders.countSourceFiles(inventoryDrive,font);
 assert.equal(inventory.total,4);assert.equal(inventory.sf2,1);assert.equal(inventory.sf3,1);
 assert.equal(inventory.fx,1);assert.equal(inventory.xmid,1);
