@@ -17,6 +17,36 @@ public static class SmartSyncTransfer
         return false;
     }
 
+    // Resolve a provider path without traversing junctions/symlinks. The
+    // caller must still exclude concurrent filesystem changes during publish.
+    public static string ResolveLocalPath(string root, string relative)
+    {
+        if (!SmartSyncPlanner.SafeRelativePath(relative) || IsDatabaseSidecar(relative))
+            throw new InvalidDataException("Unsafe sync path");
+        root = Path.GetFullPath(root);
+        if (!Directory.Exists(root)) throw new DirectoryNotFoundException(root);
+        for (DirectoryInfo? ancestor = new DirectoryInfo(root); ancestor != null; ancestor = ancestor.Parent)
+            if ((ancestor.Attributes & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("Sync root traverses a reparse point");
+        var current = root;
+        var parts = relative.Split('/');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            current = Path.Combine(current, parts[i]);
+            try
+            {
+                var attributes = File.GetAttributes(current);
+                if ((attributes & FileAttributes.ReparsePoint) != 0 ||
+                    (i < parts.Length - 1 && (attributes & FileAttributes.Directory) == 0) ||
+                    (i == parts.Length - 1 && (attributes & FileAttributes.Directory) != 0))
+                    throw new InvalidDataException("Sync path collision or reparse point");
+            }
+            catch (FileNotFoundException) { }
+            catch (DirectoryNotFoundException) { }
+        }
+        return current;
+    }
+
     private static bool IsTransfer(SyncDecision d) => d.Action is
         SyncAction.DownloadNew or SyncAction.UploadNew or
         SyncAction.DownloadUpdate or SyncAction.UploadUpdate;

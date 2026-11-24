@@ -9,6 +9,15 @@ internal static class SmartSyncTransferTests
         Directory.CreateDirectory(folder);
         try
         {
+            var expected = Path.Combine(folder, "MIDI", "00001.mid");
+            if (SmartSyncTransfer.ResolveLocalPath(folder, "MIDI/00001.mid") != expected)
+                throw new Exception("Safe path resolution failed");
+            File.WriteAllText(Path.Combine(folder, "collision"), "keep");
+            foreach (var unsafePath in new[] { "../escape", "collision/file.mid", "songs.sqlite3-wal" })
+            {
+                try { SmartSyncTransfer.ResolveLocalPath(folder, unsafePath); throw new Exception("Unsafe path accepted"); }
+                catch (InvalidDataException) { }
+            }
             var source = Path.Combine(folder, "songs.sqlite3");
             var snapshot = Path.Combine(folder, "snapshot.sqlite3");
             using var db = new SqliteConnection(new SqliteConnectionStringBuilder
