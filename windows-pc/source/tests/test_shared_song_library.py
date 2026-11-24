@@ -82,8 +82,9 @@ class SharedSongLibraryTests(unittest.TestCase):
         self.assertEqual(row["path"],"")
 
     def test_reject_legacy_catalog_and_report_missing_drive(self):
-        with sqlite3.connect(self.database) as db:
-            db.execute("DELETE FROM catalog_meta WHERE key='pcSchema'")
+        with closing(sqlite3.connect(self.database)) as db:
+            with db:
+                db.execute("DELETE FROM catalog_meta WHERE key='pcSchema'")
         with self.assertRaises(ValueError):
             validate_shared(str(self.root))
         unavailable = UnavailableSharedSongLibrary(self.root,"ต้องสร้างฐานใหม่")
