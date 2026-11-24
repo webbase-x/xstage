@@ -511,6 +511,45 @@ const FAST_START_FONT_MAX_BYTES=48*1048576;
 let quickGmPromise=null,quickGmBytes=null;
 let context=null,selected=BUILTIN_GM_ID,fontCache=null,fontRefreshSequence=0,fontRefreshPromise=null;
 let fontLoadPromise=null, fontWarning='',builtinRetryAfter=0;
+// Private banks are cached only after an authenticated listing supplies a revision.
+function fontDisk(mode,operation){
+  if(!scope.indexedDB)return Promise.resolve(null);
+  return new Promise((resolve,reject)=>{
+    const open=scope.indexedDB.open('xstage-soundfont-local-v1',1);
+    open.onupgradeneeded=()=>open.result.createObjectStore('banks');
+    open.onerror=()=>reject(open.error);
+    open.onsuccess=()=>{
+      const db=open.result;
+      try{
+        const tx=db.transaction('banks',mode),request=operation(tx.objectStore('banks'));
+        tx.oncomplete=()=>{db.close();resolve(request.result);};
+        tx.onabort=tx.onerror=()=>{db.close();reject(tx.error);};
+      }catch(e){db.close();reject(e);}
+    };
+  });
+}
+function fontDiskKey(sub,root,id,revision){
+  return sub&&root&&id&&revision?JSON.stringify([sub,root,id,revision]):'';
+}
+async function readDiskFont(key,size){
+  if(!key)return null;
+  try{
+    const value=await fontDisk('readonly',store=>store.get(key));
+    if(!value)return null;
+    const bytes=new Uint8Array(value);
+    if(bytes.byteLength!==size)throw Error('Cached size mismatch');
+    validateFontContainer(bytes);
+    return bytes;
+  }catch{
+    try{await fontDisk('readwrite',store=>store.delete(key));}catch{}
+    return null;
+  }
+}
+async function saveDiskFont(key,bytes){
+  if(!key||!scope.indexedDB)return false;
+  try{await fontDisk('readwrite',store=>store.put(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),key));return true;}
+  catch{return false;}
+}
 function fontStatus(){
   return {loaded:!!fontCache,selectedId:selected,
     fileBytes:fontCache?.bytes.byteLength||0,
@@ -524,7 +563,7 @@ async function listFolder(parent,token){
   const list=[];let page='';
   do{
     const q=new URLSearchParams({q:"'"+parent+"' in parents and trashed=false",
-      fields:'nextPageToken,files(id,name,mimeType,size)',pageSize:'1000',supportsAllDrives:'true',includeItemsFromAllDrives:'true'});
+      fields:'nextPageToken,files(id,name,mimeType,size,version,md5Checksum)',pageSize:'1000',supportsAllDrives:'true',includeItemsFromAllDrives:'true'});
     if(page)q.set('pageToken',page);
     const response=await fetch('https://www.googleapis.com/drive/v3/files?'+q,
       {headers:{Authorization:'Bearer '+token},cache:'no-store'});
@@ -546,6 +585,14 @@ async function refreshFonts(auth){
   const status=$('xstage-soundfont-scan-status');
   const refresh=$('xstage-soundfont-refresh');
   if(refresh)refresh.onclick=()=>{if(context)void refreshFonts(context);};
+  const clear=$('xstage-soundfont-local-clear');
+  if(clear)clear.onclick=async()=>{
+    const option=select.selectedOptions?.[0],key=fontDiskKey(context?.sub,context?.rootId,option?.value,option?.dataset?.revision);
+    if(!key)return;
+    try{await fontDisk('readwrite',store=>store.delete(key));
+      const out=$('xstage-soundfont-local-status');if(out)out.textContent='ลบไฟล์ที่เก็บในเครื่องแล้ว';
+    }catch{if(status)status.textContent='ลบไฟล์ในเครื่องไม่สำเร็จ';}
+  };
   if(status)status.textContent='กำลังค้นหา SoundFont…';
   select.replaceChildren(new Option('กำลังตรวจสอบ SoundFont…',''));
   const pending=(async()=>{
@@ -587,6 +634,7 @@ async function refreshFonts(auth){
           seenIds.add(f.id);
           const option=new Option(f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB)',f.id);
           option.dataset.size=String(Number(f.size)||0);
+          option.dataset.revision=f.version||f.md5Checksum||'';
           choices.push(option);
         }
       }
@@ -754,6 +802,8 @@ async function selectedFont(token,signal){
     return null;
   }
   const id=selected,sub=context.sub;
+  const diskKey=fontDiskKey(sub,context.rootId,id,option?.dataset?.revision);
+  const diskStatus=$('xstage-soundfont-local-status');
   if(fontCache?.id===id&&fontCache?.sub===sub)return fontCache.bytes;
   if(fontLoadPromise?.id===id&&fontLoadPromise.sub===sub)
     return fontLoadPromise.promise;
@@ -764,6 +814,15 @@ async function selectedFont(token,signal){
       fontStatusChanged();
       return null;
     }
+    const cached=await readDiskFont(diskKey,listedSize);
+    if(signal?.aborted||selected!==id||context?.token!==token||context?.sub!==sub)
+      throw new DOMException('เปลี่ยนบัญชีหรือชุดเสียง','AbortError');
+    if(cached){
+      fontCache={id,sub,bytes:cached,parsed:null,label:option?.text||'SoundFont'};
+      fontWarning='';if(diskStatus)diskStatus.textContent='ใช้ SoundFont ที่เก็บในเครื่อง';
+      fontStatusChanged();return cached;
+    }
+    if(diskStatus)diskStatus.textContent='กำลังดาวน์โหลด SoundFont…';
     const res=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',
       {headers:{Authorization:'Bearer '+token},cache:'no-store',signal});
     if(!res.ok)fail('โหลด SoundFont จาก Drive ไม่สำเร็จ HTTP '+res.status);
@@ -793,6 +852,12 @@ async function selectedFont(token,signal){
     validateFontContainer(bytes);
     const label=$('xstage-soundfont-select')?.selectedOptions?.[0]?.text||'SoundFont';
     fontCache={id,sub,bytes,parsed:null,label};
+    if(diskKey&&bytes.byteLength===listedSize){
+      void saveDiskFont(diskKey,bytes).then(ok=>{
+        if(selected===id&&context?.sub===sub&&diskStatus)
+          diskStatus.textContent=ok?'บันทึก SoundFont ลงเครื่องแล้ว':'เก็บใน RAM เท่านั้น · พื้นที่จัดเก็บไม่พร้อม';
+      });
+    }
     fontWarning='';
     fontStatusChanged();
     return bytes;
