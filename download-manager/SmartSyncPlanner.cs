@@ -56,7 +56,7 @@ public static class SmartSyncPlanner
         {
             var ls = l[path].ToArray(); var rs = r[path].ToArray(); var bs = b[path].ToArray();
             var action = SyncAction.Conflict;
-            if (SafeRelativePath(path) && !collisions.Contains(path) &&
+            if (SafeRelativePath(path) && !SmartSyncTransfer.IsDatabaseSidecar(path) && !collisions.Contains(path) &&
                 ls.Length <= 1 && rs.Length <= 1 && bs.Length <= 1 &&
                 ls.Concat(rs).Concat(bs).All(x => ValidFingerprint(x.Fingerprint)))
             {

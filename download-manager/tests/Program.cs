@@ -11,6 +11,7 @@ if (args.Length == 0)
 {
     SmartSyncPlannerTests.Run();
     await SmartSyncBackgroundTests.RunAsync();
+    await SmartSyncTransferTests.RunAsync();
 }
 
 // CI smoke: instantiate and paint the exact desktop UI across window sizes.
