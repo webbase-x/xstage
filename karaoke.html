@@ -24,7 +24,7 @@
   </script>
   <link rel="stylesheet" href="style.css?v=1153-concert-lights">
   <link rel="stylesheet" href="xstage-ux.css?v=1164-mobile-controls-lights-thai-accents-1169-live-update-ui-google-remember-tv-online-parity-v1180-tv-dpad-search-queue-r1-1204-update">
-  <link rel="stylesheet" href="cloud-import.css?v=1213-library-counts">
+  <link rel="stylesheet" href="cloud-import.css?v=1214-library-counts">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
   logo.onload=function(){document.documentElement.classList.add('xstage-uploaded-logo-ready')};
@@ -35,7 +35,7 @@
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
-        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1213" alt="" width="48" height="48">
+        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1214" alt="" width="48" height="48">
         <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small><small id="karaoke-release-label">Karaoke Web v1.0.127 · Build 1127</small></span>
       </a>
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
@@ -69,7 +69,7 @@
             <span id="app-update-text">มี X-Stage เวอร์ชันใหม่</span>
             <div class="app-update-actions">
               <button id="app-update-action" type="button">อัปเดตตอนนี้</button>
-              <a id="app-update-direct" href="karaoke.html?build=1213" hidden>เปิดรุ่นใหม่โดยตรง</a>
+              <a id="app-update-direct" href="karaoke.html?build=1214" hidden>เปิดรุ่นใหม่โดยตรง</a>
               <button id="app-update-after-song" type="button" hidden>อัปเดตหลังจบเพลง</button>
             </div>
           </div>
@@ -78,7 +78,7 @@
             <div class="stage-brand-scene">
               <canvas id="stage-viz-left" class="stage-brand-side-viz" width="320" height="190"></canvas>
               <div class="stage-brand-lockup">
-                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1213" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
+                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1214" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
               </div>
               <canvas id="stage-viz-right" class="stage-brand-side-viz" width="320" height="190"></canvas>
             </div>
@@ -448,7 +448,7 @@
         </div>
         <div class="xstage-drive-database"><div class="xstage-drive-section-head"><h3>ฐานข้อมูลเพลง <span class="xstage-drive-db-format">SQLite</span></h3><button id="xstage-drive-scan-counts" type="button" disabled>ตรวจใหม่ ↻</button></div><output id="xstage-drive-db-count" aria-live="polite">— รายการ</output><p id="xstage-drive-compare-status" role="status" aria-live="polite" data-state="unknown">รอตรวจจำนวนและข้อมูลเพลง</p><div class="xstage-drive-build-controls">
           <button id="xstage-drive-build-db" type="button" disabled>ตรวจไฟล์และอัปเดตฐานเพลง</button>
-          <button id="xstage-drive-cancel-db" type="button" disabled hidden>ยกเลิกการสร้างฐาน</button>
+          <button id="xstage-drive-cancel-db" type="button" disabled hidden>พัก / ยกเลิกอย่างปลอดภัย</button>
         </div>
         <p id="xstage-drive-folder-status" role="status" aria-live="polite">เพิ่มเฉพาะเพลงใหม่ · ไม่ลบไฟล์เดิม</p></div>
         <details class="xstage-drive-options"><summary>สิทธิ์การเข้าถึง Google Drive</summary>
@@ -548,9 +548,9 @@
 // Standalone stage clock: survives player initialization or Google login failures.
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
-<script src="config.js?v=1213-fx-folder"></script>
+<script src="config.js?v=1214-fx-folder"></script>
 <script>
-window.XSTAGE_RELEASE={version:'1.0.213',build:1213};
+window.XSTAGE_RELEASE={version:'1.0.214',build:1214};
 document.addEventListener('DOMContentLoaded',function(){
   const label=document.getElementById('karaoke-release-label');
   if(!label)return;
@@ -575,15 +575,15 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="midi-pro-engine.js?v=1137-playback-restore-1168-screen-wake" defer></script>
   <script src="video-metadata-editor.js?v=1138-verified-video-selection" defer></script>
   <script src="video-transcode.js?v=1137" defer></script>
-  <script src="cloud-import.js?v=1213-verified-db" defer></script>
-  <script src="cloud-drive-folders.js?v=1213-incremental-update" defer></script>
-  <script src="tv-refresh.js?v=1213" defer></script>
-  <script src="app.js?v=1213-sequential-update" defer></script><script src="pc-extensions.js?v=1206-scoped-fx" defer></script>
+  <script src="cloud-import.js?v=1214-safe-publication" defer></script>
+  <script src="cloud-drive-folders.js?v=1214-safe-pause" defer></script>
+  <script src="tv-refresh.js?v=1214" defer></script>
+  <script src="app.js?v=1214-sequential-update" defer></script><script src="pc-extensions.js?v=1206-scoped-fx" defer></script>
   <script src="midi-keyboard-ui.js?v=1137-clean-title-1157-top-song-key-single-menu" defer></script>
-  <script src="native-audio-meter.js?v=1213" defer></script>
-  <script src="stage-controls.js?v=1213-monitor-only-eq" defer></script>
+  <script src="native-audio-meter.js?v=1214" defer></script>
+  <script src="stage-controls.js?v=1214-monitor-only-eq" defer></script>
   <script src="mobile-layout.js?v=1202-menu" defer></script>
-  <script src="android-apk-download.js?v=1213" defer></script>
+  <script src="android-apk-download.js?v=1214" defer></script>
 
   <script src="windows-volume-bridge.js?v=1137-system-volume-bridge" defer></script>
   <script src="stage-ui.js?v=1164-bottom-menu" defer></script>
