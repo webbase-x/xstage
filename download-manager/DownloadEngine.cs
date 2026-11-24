@@ -880,9 +880,9 @@ public sealed class DownloadEngine
         // Only use a real observed throughput sample. A fresh job has no
         // sample and retains the user's configured part count. Persisted Range
         // geometry is never adapted: changing it would corrupt resume bytes.
-        var recommendedParts = AdaptiveSegmentPlanner.Recommend(
+        var recommendedParts = AdaptiveSegmentPlanner.RecommendWithLimits(
             job.Parts, job.TotalBytes, job.SmoothedSpeedBytesPerSecond,
-            job.SegmentsUsed > 0);
+            job.SegmentsUsed > 0, GlobalLimitKib, job.FileSpeedLimitKib);
         var count = job.SegmentsUsed > 0
             ? SegmentCount(job.TotalBytes, job.SegmentsUsed)
             : SegmentCount(job.TotalBytes, recommendedParts);

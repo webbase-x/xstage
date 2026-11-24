@@ -9,8 +9,8 @@ public sealed record DownloadManagerRelease(string Version, int Build, string Fi
 
 public static class UpdateChecker
 {
-    public const string CurrentVersion = "0.2.23";
-    public const int CurrentBuild = 26;
+    public const string CurrentVersion = "0.2.24";
+    public const int CurrentBuild = 27;
     public const string FeedUrl = "https://webbase-x.github.io/xstage/downloads/download-manager-preview-latest.json";
 
     private static readonly HttpClient Client = new(new HttpClientHandler
@@ -28,8 +28,13 @@ public static class UpdateChecker
     // installer and may only link to the exact canonical GitHub EXE release asset.
     public static DownloadManagerRelease? Parse(string json)
     {
-        using var document = JsonDocument.Parse(json);
-        var obj = document.RootElement;
+        if (string.IsNullOrWhiteSpace(json) || json.Length > 65536) return null;
+        // A temporarily stale/malformed feed must not crash update checks.
+        JsonDocument document;
+        try { document = JsonDocument.Parse(json.TrimStart('\uFEFF')); }
+        catch (JsonException) { return null; }
+        using var parsed = document;
+        var obj = parsed.RootElement;
         if (obj.ValueKind != JsonValueKind.Object) return null;
         string field(string key) =>
             obj.TryGetProperty(key, out var el) && el.ValueKind == JsonValueKind.String
@@ -55,8 +60,11 @@ public static class UpdateChecker
 
     public static async Task<DownloadManagerRelease?> CheckAsync(CancellationToken cancellation = default)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, FeedUrl);
-        request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
+        // GitHub Pages/CDN can retain the previous manifest after publication.
+        // A per-check cache key avoids a stale "no newer version" response.
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            FeedUrl + "?check=" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true, NoStore = true };
         request.Headers.UserAgent.ParseAdd($"XStageDownloadManager/{CurrentVersion}");
         using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
         response.EnsureSuccessStatusCode();

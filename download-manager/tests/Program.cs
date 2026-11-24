@@ -902,6 +902,20 @@ try
     }
 
     // Very large files previously overflowed long when computing size * index.
+    // Capped fresh jobs must not create needless sockets. Resume keeps the
+    // original geometry even if the user lowers the cap after pausing.
+    foreach (var requested in new[] { 1, 8, 32 })
+    {
+        if (AdaptiveSegmentPlanner.RecommendWithLimits(requested, 1L << 30, 0, false, 64, 0) != 1 ||
+            AdaptiveSegmentPlanner.RecommendWithLimits(requested, 1L << 30, 0, false, 0, 128) != 1 ||
+            AdaptiveSegmentPlanner.RecommendWithLimits(requested, 1L << 30, 0, true, 64, 64) != requested ||
+            AdaptiveSegmentPlanner.RecommendWithLimits(requested, 1L << 30, 0, false, 0, 0) != requested)
+            throw new Exception("Adaptive capped fresh geometry or persisted resume geometry regressed.");
+    }
+    if (AdaptiveSegmentPlanner.RecommendWithLimits(32, 1L << 30, 64d * 1024 * 1024, false, 2048, 128) != 1 ||
+        AdaptiveSegmentPlanner.RecommendWithLimits(32, 1L << 30, 128d * 1024, false, 65536, 0) != 1)
+        throw new Exception("Adaptive cap must use the tighter of the observed rate and both configured limits.");
+
     // Verify exact coverage and continuity for 1, 8 and 32 segments.
     foreach (var size in new long[] { 1, 256 * 1024, 1L << 40, long.MaxValue })
     foreach (var count in new[] { 1, 8, 32 })
@@ -1794,6 +1808,10 @@ try
         UpdateChecker.IsNewer("0.1.1", 2) ||
         UpdateChecker.IsNewer("0.2.1", 4))
         throw new Exception("EXE-only manifest and version comparison failed.");
+    if (UpdateChecker.Parse("{broken") is not null ||
+        UpdateChecker.Parse(new string('x', 65537)) is not null ||
+        UpdateChecker.Parse("\uFEFF" + json) is null)
+        throw new Exception("Update manifest must reject malformed/oversized feeds and accept a UTF-8 BOM.");
     if (UpdateChecker.Parse(json.Replace("github.com", "untrusted.test")) is not null ||
         UpdateChecker.Parse(json.Replace(new string('a', 64), "bad")) is not null)
         throw new Exception("Untrusted update feeds must be rejected.");

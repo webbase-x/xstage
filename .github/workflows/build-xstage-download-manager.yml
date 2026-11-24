@@ -39,6 +39,12 @@ jobs:
           if ($issVersion.Groups['v'].Value -cne $version -or [int]$issBuild.Groups['b'].Value -ne $build) {
             throw "Version mismatch: UpdateChecker=$version Build $build; installer=$($issVersion.Groups['v'].Value) Build $($issBuild.Groups['b'].Value)"
           }
+          [xml]$project = Get-Content 'download-manager/XStageDownloadManager.csproj' -Raw
+          $projectVersion = [string]$project.Project.PropertyGroup.Version
+          $projectFileVersion = [string]$project.Project.PropertyGroup.FileVersion
+          if ($projectVersion -cne $version -or $projectFileVersion -cne "$version.$build") {
+            throw "Project version mismatch: $projectVersion / $projectFileVersion"
+          }
           $file = "X-Stage-Download-Manager-v$version-build$build-win-x64-Setup.exe"
           $artifact = "X-Stage-Download-Manager-v$version-build$build-Windows-EXE-ONLY"
           $tag = "xstage-download-manager-v$version-build$build-preview"
@@ -268,7 +274,7 @@ jobs:
           $published = Join-Path $verifyDir $file
           if (-not (Test-Path $published -PathType Leaf)) { throw 'Published EXE missing' }
           $actual = (Get-FileHash -Algorithm SHA256 $published).Hash.ToLowerInvariant()
-          if ($actual -cne $hash) { throw "Published checksum mismatch: $actual vs $hash" }
+          if ($actual -cne $hash -or (Get-Item $published).Length -ne $size) { throw "Published checksum or size mismatch: $actual vs $hash" }
           Write-Host "VERIFIED PUBLIC EXE $file SHA-256 $hash ($size bytes)"
           Write-Host "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/$file"
       - name: Update public download manifest only after release checksum verification
@@ -291,6 +297,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Could not fetch latest portal branch' }
           git reset --hard origin/main
           if ($LASTEXITCODE -ne 0) { throw 'Could not update portal branch' }
+          $feedPath = 'downloads/download-manager-preview-latest.json'
+          if (Test-Path $feedPath) {
+            $previousFeed = Get-Content $feedPath -Raw | ConvertFrom-Json
+            $priorVersion = [version]$previousFeed.version
+            if ($priorVersion -gt [version]$version -or
+                ($priorVersion -eq [version]$version -and [int]$previousFeed.build -gt $build)) {
+              throw 'Refusing to replace the public update feed with an older release'
+            }
+          }
           $manifest = [ordered]@{
             name = 'X-Stage Download Manager'
             version = $version
@@ -314,6 +329,14 @@ jobs:
             git push origin HEAD:main
             if ($LASTEXITCODE -ne 0) { throw 'Verified EXE published but portal feed push failed' }
           }
+          git fetch origin main
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch committed update manifest' }
+          $remoteManifest = git show origin/main:downloads/download-manager-preview-latest.json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not verify committed update manifest' }
+          $verifiedFeed = ($remoteManifest -join "`n") | ConvertFrom-Json
+          if ($verifiedFeed.version -cne $version -or [int]$verifiedFeed.build -ne $build -or
+              $verifiedFeed.sha256 -cne $sha -or [long]$verifiedFeed.size_bytes -ne $size -or
+              $verifiedFeed.download_url -cne $url) { throw 'Public feed identity does not match verified release' }
           Write-Host "PUBLIC PORTAL UPDATED: $url SHA256 $sha"
 
       - name: Report GitHub Releases publication denial without mislabeling CI artifact

@@ -298,6 +298,26 @@ public static class TransferSegmentGeometry
 /// </summary>
 public static class AdaptiveSegmentPlanner
 {
+    // A configured bandwidth ceiling is not a measured speed, but it provides
+    // a hard upper bound: opening 32 sockets for a 64 KiB/s job is wasteful.
+    // Keep the saved geometry unchanged even if limits change while paused.
+    public static int RecommendWithLimits(int requestedParts, long contentLength,
+        double measuredBytesPerSecond, bool hasPersistedSegments,
+        int globalLimitKib, int fileLimitKib)
+    {
+        if (globalLimitKib < 0 || fileLimitKib < 0)
+            throw new ArgumentOutOfRangeException(nameof(globalLimitKib));
+        if (hasPersistedSegments)
+            return Recommend(requestedParts, contentLength, measuredBytesPerSecond, true);
+        var cap = globalLimitKib == 0 ? fileLimitKib :
+            fileLimitKib == 0 ? globalLimitKib : Math.Min(globalLimitKib, fileLimitKib);
+        var observed = double.IsFinite(measuredBytesPerSecond) && measuredBytesPerSecond > 0
+            ? measuredBytesPerSecond : 0;
+        if (cap > 0)
+            observed = observed > 0 ? Math.Min(observed, cap * 1024d) : cap * 1024d;
+        return Recommend(requestedParts, contentLength, observed, false);
+    }
+
     public static int Recommend(int requestedParts, long contentLength,
         double measuredBytesPerSecond, bool hasPersistedSegments)
     {
