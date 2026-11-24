@@ -9,7 +9,7 @@ from pathlib import Path
 from . import shared_catalog_builder as builder
 
 
-def open_builder(app):
+def open_builder(app, initial_root=None):
     panel = tk.Toplevel(app)
     panel.title("X-Stage Karaoke PC · สร้างฐานใหม่สำหรับ PC / Online")
     panel.geometry("930x450")
@@ -24,7 +24,7 @@ def open_builder(app):
               style="Muted.TLabel").pack(anchor="w", pady=(6, 15))
     row = ttk.Frame(frame)
     row.pack(fill="x", pady=(2, 12))
-    folder = tk.StringVar(value=str(app.settings.get("shared_drive_root", "")))
+    folder = tk.StringVar(value=str(initial_root or app.settings.get("shared_drive_root", "")))
     ttk.Entry(row, textvariable=folder).pack(side="left", fill="x", expand=True, padx=(0, 8))
     def select():
         name = filedialog.askdirectory(parent=panel, title="เลือก XStageKaraoke บน Google Drive for desktop",
