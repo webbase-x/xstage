@@ -574,6 +574,7 @@ let googleRequests=0,googlePrompt=[],userInfoSub='SUB_A',activeRenewedToken='fre
 const activeAuth=[];
 const googleScope={
   state:simulatedState,
+  hasFullDriveRead:()=>false,
   cfg:{googleClientId:'test.apps.googleusercontent.com'},
   rememberedGoogleAccount:()=>({sub:'SUB_A',email:'owner@example.com'}),
   google:{accounts:{oauth2:{initTokenClient:config=>({
