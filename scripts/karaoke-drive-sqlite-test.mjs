@@ -97,6 +97,7 @@ await assert.rejects(codec.create('snapshot',[songA,{
 const sameSizeDifferentMidi=await codec.create('snapshot',[songA,{
   ...songA,webSongId:'drive/DIFFERENT',code:'00001-bbbbbbbb',
   originalFilename:'00001.XMID',originalRelativePath:'batch-B/00001.XMID',
+  xmid:{fileId:'file_03',path:'SONGS/batch-B/00001.XMID'},
   midiHash:'b'.repeat(32),midiSize:11294
 }],[],'otherBatch');
 assert.equal((await codec.read(sameSizeDifferentMidi)).songs.length,2,
