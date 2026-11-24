@@ -60,11 +60,11 @@ def resolve_root(value):
     root = Path(value.strip().strip('"')).expanduser()
     if root.name in AREAS:
         root = root.parent
-    if root.name != ROOT_NAME or root.is_symlink() or not root.is_dir():
-        raise ValueError("ปลายทางต้องเป็นโฟลเดอร์หลัก XStageKaraoke ที่มีอยู่แล้ว")
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("ปลายทางต้องเป็นโฟลเดอร์หลักของคลังเพลงใน Google Drive ที่มีอยู่แล้ว")
     root = root.resolve(strict=True)
-    if root.name != ROOT_NAME or not all((root / x).is_dir() for x in REQUIRED):
-        raise ValueError("ต้องพบ SONGS, DB และ SOUNDFONT ใต้ XStageKaraoke")
+    if not all((root / x).is_dir() for x in REQUIRED):
+        raise ValueError("ต้องพบ SONGS, DB และ SOUNDFONT ในคลังเพลง Google Drive ที่เลือก")
     if any((root / x).is_symlink() for x in REQUIRED):
         raise ValueError("โฟลเดอร์หลักต้องไม่เป็น symbolic link")
     return root
