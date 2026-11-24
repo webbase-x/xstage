@@ -374,7 +374,7 @@ assert.match(app,/checkAppVersion/);
 assert.match(app,/sharedLibraryFeatureReady/);
 assert.ok(app.includes('window.XStageSharedLibraryReady=sharedLibraryFeatureReady'),'shared-library readiness must be diagnosable without pretending Picker is configured');
 assert.ok(app.includes('function sharedLibraryFeatureReady(){return true;}')&&
-  app.includes('เลือกโฟลเดอร์หลัก XStageKaraoke ของคุณหรือที่ได้รับแชร์หนึ่งครั้ง')&&
+  app.includes('เลือกโฟลเดอร์เดิมหรือสร้างคลังชื่อใหม่ได้')&&
   app.includes('async function openSharedLibraryPicker()')&&
   !app.includes('new google.picker.PickerBuilder()'),
   'shared-library selection uses the app-owned OAuth picker, not a global Google Picker API key');
