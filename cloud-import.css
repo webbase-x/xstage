@@ -225,8 +225,18 @@
 #cloud-import-dialog .cloud-import-local-options .cloud-import-lead{font-size:.73rem}
 @media(max-width:560px){
   #cloud-import-dialog .xstage-drive-media-row{align-items:stretch;flex-direction:column;gap:8px}
-  #cloud-import-dialog .xstage-drive-media-actions{display:grid;grid-template-columns:1.3fr 1fr}
+  #cloud-import-dialog .xstage-drive-media-actions{display:grid;grid-template-columns:minmax(0,1fr)}
   #cloud-import-dialog .xstage-drive-media-actions button{width:100%;min-width:0;white-space:normal;padding:9px 6px}
   #cloud-import-dialog .xstage-drive-root-row{flex-direction:row;align-items:center}
   #cloud-import-dialog .xstage-drive-root-row button{width:auto}
 }
+
+/* One action per media source; the nested native dialog is keyboard accessible. */
+.xstage-drive-folder-menu{box-sizing:border-box;width:min(92vw,380px);max-width:100%;margin:auto;padding:18px;border:1px solid #367c94;border-radius:15px;background:#0c2033;color:#e9faff;box-shadow:0 16px 60px #0009}
+.xstage-drive-folder-menu::backdrop{background:#0008}
+.xstage-drive-folder-menu h3{margin:0 0 5px;font-size:1.05rem}
+.xstage-drive-folder-menu p{margin:0 0 14px;color:#a1d1e4;overflow-wrap:anywhere}
+.xstage-drive-folder-menu button{display:block;width:100%;min-height:44px;margin:8px 0 0;padding:9px 12px;border:1px solid #396a80;border-radius:9px;background:#153548;color:#e9faff;font:inherit;cursor:pointer}
+.xstage-drive-folder-menu button.primary{background:#146561;border-color:#40bda9}
+.xstage-drive-folder-menu button:focus-visible{outline:2px solid #6be8d6;outline-offset:2px}
+#cloud-import-dialog .xstage-drive-media-actions button{min-width:136px}
