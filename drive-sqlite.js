@@ -200,15 +200,24 @@ async function read(bytes){
     const columns=new Set((db.exec('PRAGMA table_info(songs)')[0]?.values||[])
       .map(row=>String(row[1])));
     const indexed=columns.has('midi_md5')&&columns.has('midi_size');
-    const rowsSql=indexed
-      ?'SELECT web_song_id,payload,midi_md5,midi_size FROM songs'
+    const shared=metadata.pcSchema==='shared-v1';
+    if(shared&&!['id','path','kind','search','duplicate_of','duplicate_state'].every(c=>columns.has(c)))
+      fail('ฐาน SQLite ไม่ครบโครงสร้าง PC/Online ร่วม');
+    const rowsSql=shared
+      ?'SELECT web_song_id,payload,midi_md5,midi_size,id,path,kind FROM songs'
+      :indexed?'SELECT web_song_id,payload,midi_md5,midi_size FROM songs'
       :'SELECT web_song_id,payload FROM songs';
     const songRows=(db.exec(rowsSql)[0]?.values)||[];
     const songs=[],rawMidiHashes=new Set();
-    for(const [id,payload,storedHash,storedSize] of songRows){
+    for(const [id,payload,storedHash,storedSize,pcSongId,portablePath,portableKind] of songRows){
       let song;
       try{song=JSON.parse(payload);}catch{fail('ข้อมูล JSON ในแถว SQLite ไม่ถูกต้อง');}
       if(!validId(id)||song?.webSongId!==id)fail('รหัสอ้างอิงในฐานเพลงไม่ตรงกัน');
+      if(shared){
+        const relative=String(song.originalRelativePath||'').replaceAll('\\','/');
+        if(pcSongId!==pcId(id)||portablePath!=='SONGS/'+relative||portableKind!==pcKind(song))
+          fail('รหัสหรือเส้นทางเพลง PC ไม่ตรงกับข้อมูล Online');
+      }
       if(indexed){
         const actualHash=String(song.midiHash||song.midi?.md5Checksum||'').toLowerCase();
         const normalized=/^[0-9a-f]{32}$/.test(actualHash)?actualHash:null;
