@@ -102,9 +102,15 @@ class CatalogMaintenanceTests(unittest.TestCase):
         self.assertTrue(KaraokeApp.start_catalog_maintenance(app, self.songs, 'clear'))
         app._index_thread.join(timeout=5)
         self.assertFalse(app._index_thread.is_alive())
-        kind, payload = app.messages.get_nowait()
+        events = []
+        while not app.messages.empty():
+            events.append(app.messages.get_nowait())
+        self.assertTrue(events)
+        self.assertTrue(all(kind == 'catalog_progress' for kind, _ in events[:-1]))
+        kind, payload = events[-1]
         self.assertEqual(kind, 'catalog_finished')
         self.assertIsNone(payload[1])
+        self.assertIsNotNone(payload[0])
         app.cancel_current_song.assert_called_once_with(advance=False)
         self.assertEqual(self.library.count(), 0)
         self.assertTrue(song.is_file())
