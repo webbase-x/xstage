@@ -980,7 +980,11 @@ class KaraokeApp(tk.Tk):
         if getattr(self,'_audio_probe_busy',False):
             self.report_load_error('กำลังทดสอบระบบเสียง กรุณารอ',quiet,kind='system')
             return False
-        song = self.library.get(item.song_id)
+        # A Google Drive Online song is resolved directly from the shared
+        # DB/songs.sqlite3 read-only adapter. Do not insert it into the local
+        # PC song index merely to play it once.
+        song = (getattr(self, '_shared_drive_playback_song', None)
+                if item.song_id == -1 else self.library.get(item.song_id))
         if not song or not Path(song["path"]).is_file():
             self.report_load_error("ไม่พบไฟล์เพลง อาจถูกย้ายหรือถอดไดรฟ์ออก", quiet, kind='file')
             return False
