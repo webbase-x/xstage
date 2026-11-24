@@ -1798,6 +1798,20 @@ try
         throw new Exception("Native Chrome/Edge extension IDs and allowed origins failed.");
     var isolatedEngineData = Path.Combine(folder, "isolated-engine");
     var manager = new DownloadEngine(isolatedEngineData);
+    var driveShare = DownloadEngine.NormalizeDriveFileUrl(new Uri("https://drive.google.com/file/d/AbC_123/view?resourcekey=0-test"));
+    if (driveShare.AbsoluteUri != "https://drive.google.com/uc?export=download&id=AbC_123&resourcekey=0-test")
+        throw new Exception("Drive share URL normalization failed");
+    if (DownloadEngine.NormalizeDriveFileUrl(new Uri("https://drive.google.com/open?id=AbC_123")).AbsoluteUri !=
+        "https://drive.google.com/uc?export=download&id=AbC_123")
+        throw new Exception("Drive open URL normalization failed");
+    if (DownloadEngine.NormalizeDriveFileUrl(new Uri("https://example.com/file/d/AbC_123/view")).Host != "example.com")
+        throw new Exception("Non-Drive URL changed");
+    try
+    {
+        DownloadEngine.NormalizeDriveFileUrl(new Uri("https://drive.google.com/drive/folders/AbC_123"));
+        throw new Exception("Drive folder accepted as a file");
+    }
+    catch (ArgumentException) { }
     if (DownloadEngine.TryParseUrl(null!, out _) ||
         DownloadEngine.TryParseUrl("", out _) ||
         DownloadEngine.TryParseUrl("  ", out _) ||

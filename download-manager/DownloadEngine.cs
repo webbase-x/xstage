@@ -142,6 +142,27 @@ public sealed class DownloadEngine
         return false;
     }
 
+    // Public Drive file shares can use the existing resumable HTTP engine.
+    // Preserve resource keys; never import browser cookies or bypass quotas.
+    public static Uri NormalizeDriveFileUrl(Uri uri)
+    {
+        if (!uri.IdnHost.Equals("drive.google.com", StringComparison.OrdinalIgnoreCase))
+            return uri;
+        if (uri.Scheme != Uri.UriSchemeHttps)
+            throw new ArgumentException("Google Drive ต้องใช้ HTTPS");
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        var match = System.Text.RegularExpressions.Regex.Match(uri.AbsolutePath,
+            @"^/file/d/([A-Za-z0-9_-]+)(?:/(?:view|preview|edit))?/?$");
+        var id = match.Success ? match.Groups[1].Value :
+            uri.AbsolutePath is "/open" or "/uc" ? query["id"] : null;
+        if (id is null || !System.Text.RegularExpressions.Regex.IsMatch(id, @"^[A-Za-z0-9_-]{1,256}$"))
+            throw new ArgumentException("กรุณาใช้ลิงก์แชร์ไฟล์ Google Drive ไม่ใช่โฟลเดอร์");
+        var key = query["resourcekey"];
+        return new Uri("https://drive.google.com/uc?export=download&id=" +
+            Uri.EscapeDataString(id) + (string.IsNullOrEmpty(key) ? "" :
+            "&resourcekey=" + Uri.EscapeDataString(key)));
+    }
+
     public void SetDefaultParts(int parts)
     {
         ValidateParts(parts);
@@ -358,6 +379,7 @@ public sealed class DownloadEngine
                            host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException(
                 "บริการสตรีมมิงนี้ต้องรับชมผ่านเว็บไซต์หรือแอปทางการ ไม่สามารถดาวน์โหลดเนื้อหาที่ป้องกัน DRM ได้");
+        uri = NormalizeDriveFileUrl(uri);
         var selectedParts = parts ?? DefaultParts;
         ValidateParts(selectedParts);
         var video = SocialVideoDownloader.IsVideoUrl(uri.ToString());
@@ -684,6 +706,10 @@ public sealed class DownloadEngine
                     retryAfter = DownloadRetryPolicy.RetryAfter(response.Headers);
                     response.EnsureSuccessStatusCode();
                 }
+                if (new Uri(job.Url).IdnHost.Equals("drive.google.com", StringComparison.OrdinalIgnoreCase) &&
+                    response.Content.Headers.ContentType?.MediaType?.Equals("text/html", StringComparison.OrdinalIgnoreCase) == true &&
+                    response.Content.Headers.ContentDisposition?.DispositionType?.Equals("attachment", StringComparison.OrdinalIgnoreCase) != true)
+                    throw new UnsafeHttpRangeException("Google Drive ส่งหน้าขออนุญาตหรือยืนยันดาวน์โหลดแทนไฟล์ กรุณาตรวจสิทธิ์และดาวน์โหลดผ่านเว็บไซต์ทางการ");
                 var range = response.Content.Headers.ContentRange;
                 var supported = response.StatusCode == HttpStatusCode.PartialContent &&
                     range?.HasLength == true && range.From == 0 && range.To == 0;

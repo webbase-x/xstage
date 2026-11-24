@@ -47,3 +47,6 @@ The long-term target is an IDM / aria2 / yt-dlp / JDownloader-class application 
 - Limit site rate/fragment concurrency and honor retry windows. Reject unsafe, expired or unauthorized media URLs instead of bypassing authentication.
 - UI sorting and filtering must not mutate the queue, overwrite files or cause actions on the wrong job.
 - Release every milestone independently with tests and verifiable EXE checksum; proceed to the next implementation only after the preceding gate passes.
+
+### Google Drive transfer extension (development)
+- Public file-share URL normalization with resource-key preservation; existing HTTP Range probing, retry, resume and concurrency apply when supported by Drive. Reject folder URLs and HTML permission/confirmation pages instead of saving them as completed files. No cookie import or quota bypass. Pending Windows CI, large-file confirmation handling, authorized private Drive API integration and real throughput tests.
