@@ -14,8 +14,8 @@ for(const id of ['xstage-drive-folder-music','xstage-drive-folder-soundfont',
   'cloud-import-upload-only'])
   assert.ok(html.includes('id="'+id+'"'),'Missing media source control: '+id);
 assert.ok(html.includes('cloud-drive-folders.js?v=')&&
-  html.includes('pc-extensions.js?v=1190-selected-drive-fx')&&
-  html.includes('browser-midi.js?v=1201-soundfont-all'),
+  html.includes('pc-extensions.js?v=1206-scoped-fx')&&
+  html.includes('browser-midi.js?v=1206-scoped-soundfont'),
   'Page must load updated Drive folder, SoundFont and FX implementations');
 assert.ok(app.includes('async function chooseUserDriveFolder(kind)')&&
   app.includes('xstage-drive-main-select')&&!app.includes('new google.picker.PickerBuilder()')&&
