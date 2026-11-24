@@ -667,7 +667,7 @@ function createWorkflow(options={}){
             const ident='browser/'+kind+'/'+item.packedMd5;
             if(rows.has(ident)){markDuplicate(rows.get(ident));continue;}
             const media={fileId:item.file.id,md5Checksum:item.packedMd5,
-              size:Number(item.file.size),path:chosen.name+'/'+item.file.relative};
+              size:Number(item.file.size),path:musicRoot.name+'/'+item.file.relative};
             const row={webSongId:ident,code,sourceCode:item.parsed.code,
               midiHash:item.midiHash,midiSize:item.midiSize,
               originalFilename:item.file.name,originalRelativePath:item.file.relative,
