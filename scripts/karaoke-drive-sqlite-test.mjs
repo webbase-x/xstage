@@ -120,5 +120,21 @@ const legacyBytes=legacyDb.export();legacyDb.close();
 assert.equal((await codec.read(legacyBytes)).songs.length,1,
   'Legacy SQLite catalogs with no MIDI fingerprint columns must remain readable');
 
+const pcPending={...songA,webSongId:'browser/xmid/local-pc-builder',
+  midiHash:'c'.repeat(32),midiSize:11294,
+  originalRelativePath:'MIDI/XMID/1/local-pc-builder.xmid',
+  originalFilename:'local-pc-builder.xmid',pendingDriveLink:true,
+  xmid:{fileId:'',path:'SONGS/MIDI/XMID/1/local-pc-builder.xmid',
+        md5Checksum:'d'.repeat(32),size:1024}};
+const pendingBytes=await codec.create('snapshot',[pcPending],[],'created-on-pc');
+const pending=await codec.read(pendingBytes);
+assert.equal(pending.songs[0].pendingDriveLink,true);
+assert.equal(pending.songs[0].xmid.path,pcPending.xmid.path);
+await assert.rejects(codec.create('snapshot',[{...pcPending,pendingDriveLink:false}],[],'bad'),
+  /ไม่มี Drive File ID/,'Unverified arbitrary links must not be imported as published songs');
+await assert.rejects(codec.create('snapshot',[{...pcPending,xmid:{...pcPending.xmid,
+  md5Checksum:'invalid'}}],[],'bad'),/ไม่มี MD5/,
+  'Pending PC-created tracks must have an exact Google Drive package fingerprint');
+
 await assert.rejects(codec.read(new Uint8Array(400)),/ไม่ใช่ฐานข้อมูล SQLite3/);
 console.log('PASS: real SQLite3 binary (SQLite format 3), schema, single canonical snapshot, legacy delta reader, Thai titles, integrity and corruption guard');
