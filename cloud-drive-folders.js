@@ -158,6 +158,9 @@ function openCheckpoint(){
 function pendingKey(s){return JOB+entryKey(s.sub,s.rootId);}
 function pending(s){try{return scope.localStorage?.getItem(pendingKey(s))||'';}catch{return '';}}
 function setPending(s,id){try{scope.localStorage?.setItem(pendingKey(s),id||'');}catch{}}
+function freshPendingKey(s){return pendingKey(s)+':fresh';}
+function isFreshPending(s){try{return scope.localStorage?.getItem(freshPendingKey(s))==='1';}catch{return false;}}
+function setFreshPending(s,fresh){try{scope.localStorage?.setItem(freshPendingKey(s),fresh?'1':'');}catch{}}
 function pausedKey(s){return pendingKey(s)+':paused';}
 function paused(s,folder){try{return scope.localStorage?.getItem(pausedKey(s))===folder;}catch{return false;}}
 function setPaused(s,folder){try{scope.localStorage?.setItem(pausedKey(s),folder||'');}catch{}}
@@ -501,8 +504,10 @@ function createWorkflow(options={}){
     catch(error){display(error.message);return;}
     const chosen=readSelections(initial.sub,initial.rootId).music;
     if(!chosen?.id){display('เลือกโฟลเดอร์เพลงบน Google Drive ก่อนสร้างฐาน');return;}
+    const resumingFresh=pending(initial)===chosen.id&&isFreshPending(initial);
+    if(resumingFresh)fresh=true;
     if(!fresh&&!isPaused(initial,chosen.id)&&(comparisonState==='equal'||comparisonState==='checking'))return;
-    if(fresh){
+    if(fresh&&!resumingFresh){
       const confirmed=scope.confirm?.(
         'สร้างฐานเพลงร่วม PC / Online ใหม่จาก XMID/XSK ทุกไฟล์ใน XStageKaraoke/SONGS?\\n'+
         'รายการใน DB เดิมจะถูกแทนที่โดยฐานใหม่ที่ตรวจสำเร็จแล้วเท่านั้น\\n'+
@@ -515,7 +520,7 @@ function createWorkflow(options={}){
       ++scanSequence;scanTask=null;comparisonState='unknown';
       busy=true;scope.XStageDriveBuildBusy=true;controller=new AbortController();stopRequested=false;publishing=false;
       activeJob={session:initial,folder:chosen.id};markPaused(initial,chosen.id,false);
-      setPending(initial,chosen.id);render();
+      setFreshPending(initial,fresh);setPending(initial,chosen.id);render();
       let checkpoint=null,persisted=0,sessionOnly=0,unverifiable=0,lastProgress='';
       const pauseBoundary=()=>{if(stopRequested)fail('พักงานตามคำสั่งผู้ใช้');};
       const check=()=>{
@@ -699,7 +704,7 @@ function createWorkflow(options={}){
             drive,rootId:initial.rootId,pointer:existing.pointer,rows,check,status:display
           });
         }
-        setPending(initial,'');markPaused(initial,chosen.id,false);
+        setPending(initial,'');setFreshPending(initial,false);markPaused(initial,chosen.id,false);
         display((needsPublication?'สร้างฐานเสร็จ':'ตรวจเสร็จ · ไม่มีข้อมูลใหม่ให้เผยแพร่')+
           ' · '+existingLabel+' · เพิ่มใหม่ '+added+' เพลง · ข้าม '+duplicateLabel()+
           ' · ข้ามจากฐาน '+skipped+' · ดาวน์โหลดตรวจจริง '+downloaded+' · ใช้จุดบันทึก '+reused+' · ใช้ผลไฟล์เหมือนกัน '+shared+
@@ -719,7 +724,7 @@ function createWorkflow(options={}){
             'บันทึกผลตรวจถาวรเพิ่ม '+persisted+' ไฟล์'+(sessionOnly?' · เก็บในแท็บนี้ '+sessionOnly+' ไฟล์ (อย่าปิดแท็บ)':'')+
             (unverifiable?' · ไม่มี checksum ต้องตรวจใหม่ '+unverifiable+' ไฟล์':'')+' · กด “ทำงานต่อจากจุดที่หยุด”');
         }else{
-        if(!interrupted)setPending(initial,'');
+        if(!interrupted){setPending(initial,'');setFreshPending(initial,false);}
         display((interrupted?'พักงานชั่วคราว · จะทำต่อเมื่อเชื่อมต่อหรือกลับมาเปิดแท็บ: ':'สร้างฐานไม่สำเร็จ: ')+reason+
           ' · DB เดิมยังคงอยู่ (หากเผยแพร่ไม่ผ่าน ระบบพยายามคืนฐานเดิม)');
         }
@@ -745,7 +750,9 @@ function createWorkflow(options={}){
     if(busy||scope.document?.hidden)return;
     let s;try{s=session();}catch{return;}
     const chosen=readSelections(s.sub,s.rootId).music;
-    if(chosen?.id&&pending(s)===chosen.id&&!isPaused(s,chosen.id)){comparisonState='unknown';void rebuild();}
+    if(chosen?.id&&pending(s)===chosen.id&&!isPaused(s,chosen.id)){
+      comparisonState='unknown';void rebuild({fresh:isFreshPending(s)});
+    }
   }
   for(const event of ['xstage:auth-ready','xstage:auth-refreshed','xstage:librarychange',
     'xstage:auth-cleared'])scope.addEventListener?.(event,()=>{if(event==='xstage:librarychange'||event==='xstage:auth-cleared'){closeFolderMenu();++scanSequence;scanTask=null;comparisonState='unknown';catalogCache=null;for(const n of Object.values(countNodes))if(n)n.textContent='';if(dbCount)dbCount.textContent='—';if(comparison)comparison.textContent='';}render();resume();scheduleScan();});
