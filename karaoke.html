@@ -24,7 +24,7 @@
   </script>
   <link rel="stylesheet" href="style.css?v=1153-concert-lights">
   <link rel="stylesheet" href="xstage-ux.css?v=1164-mobile-controls-lights-thai-accents-1169-live-update-ui-google-remember-tv-online-parity-v1180-tv-dpad-search-queue-r1-1204-update">
-  <link rel="stylesheet" href="cloud-import.css?v=1209-folder-menu">
+  <link rel="stylesheet" href="cloud-import.css?v=1210-library-layout">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
   logo.onload=function(){document.documentElement.classList.add('xstage-uploaded-logo-ready')};
@@ -424,34 +424,34 @@
   <dialog id="cloud-import-dialog" class="cloud-import-dialog" aria-labelledby="cloud-import-title">
     <div class="cloud-import-panel">
       <header class="cloud-import-header">
-        <div><span class="cloud-import-label">PRIVATE GOOGLE DRIVE</span><h2 id="cloud-import-title">จัดการคลัง Google Drive</h2></div>
+        <div class="xstage-drive-heading"><span class="cloud-import-label">X-STAGE · GOOGLE DRIVE</span><h2 id="cloud-import-title">จัดการคลัง Google Drive</h2></div>
         <button type="button" id="cloud-import-close" aria-label="ปิดหน้าต่างนำเข้า">✕</button>
       </header>
       <div class="cloud-import-body" id="cloud-import-body">
       <section id="xstage-drive-sources" class="xstage-drive-sources" aria-labelledby="xstage-drive-sources-title">
-        <h3 id="xstage-drive-sources-title">คลังเพลงของฉัน</h3>
-        <div class="xstage-drive-source-row xstage-drive-root-row"><div><strong>โฟลเดอร์หลัก</strong><output id="xstage-drive-main-name">ยังไม่ได้เลือกคลังหลัก</output></div><button id="xstage-drive-main-select" type="button" disabled>เปลี่ยนคลัง</button></div>
-        <p class="xstage-drive-steps">เปิดโฟลเดอร์และอัปโหลดไฟล์ใน Drive แล้วกดอัปเดตฐานเพลง</p>
+        <h3 id="xstage-drive-sources-title" class="xstage-drive-section-label">คลังของฉัน</h3>
+        <div class="xstage-drive-source-row xstage-drive-root-row"><span class="xstage-drive-icon xstage-drive-icon-root" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10H3z"/></svg></span><div class="xstage-drive-media-info"><strong>โฟลเดอร์หลัก</strong><output id="xstage-drive-main-name">ยังไม่ได้เลือกคลังหลัก</output></div><button id="xstage-drive-main-select" type="button" disabled>เปลี่ยนคลัง</button></div>
+        <div class="xstage-drive-section-head"><h3>แหล่งข้อมูล</h3><span>อัปโหลดผ่าน Drive</span></div>
         <div class="xstage-drive-source-list">
           <div class="xstage-drive-source-row xstage-drive-media-row">
-            <div class="xstage-drive-media-info"><strong>เพลง XMID / XSK</strong><output id="xstage-drive-folder-music-name">ยังไม่เลือกโฟลเดอร์</output><output id="xstage-drive-count-music" role="status" aria-live="polite"></output></div>
+            <span class="xstage-drive-icon xstage-drive-icon-music" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13M9 9l12-2"/><ellipse cx="6" cy="18" rx="3" ry="2.5"/><ellipse cx="18" cy="16" rx="3" ry="2.5"/></svg></span><div class="xstage-drive-media-info"><div class="xstage-drive-media-title"><strong>คลังเพลง</strong><span>XMID / XSK</span></div><output id="xstage-drive-folder-music-name">ยังไม่เลือกโฟลเดอร์</output><output id="xstage-drive-count-music" role="status" aria-live="polite"></output></div>
             <div class="xstage-drive-media-actions"><button id="xstage-drive-folder-music" class="xstage-drive-open" type="button" disabled>จัดการโฟลเดอร์</button></div>
           </div>
           <div class="xstage-drive-source-row xstage-drive-media-row">
-            <div class="xstage-drive-media-info"><strong>SoundFont SF2 / SF3</strong><output id="xstage-drive-folder-soundfont-name">ยังไม่เลือกโฟลเดอร์</output><output id="xstage-drive-count-soundfont" role="status" aria-live="polite"></output></div>
+            <span class="xstage-drive-icon xstage-drive-icon-soundfont" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 5v14m4-14v14m4-14v14M6 5v7m4-7v7m4-7v7m4-7v7"/></svg></span><div class="xstage-drive-media-info"><div class="xstage-drive-media-title"><strong>SoundFont</strong><span>SF2 / SF3</span></div><output id="xstage-drive-folder-soundfont-name">ยังไม่เลือกโฟลเดอร์</output><output id="xstage-drive-count-soundfont" role="status" aria-live="polite"></output></div>
             <div class="xstage-drive-media-actions"><button id="xstage-drive-folder-soundfont" class="xstage-drive-open" type="button" disabled>จัดการโฟลเดอร์</button></div>
           </div>
           <div class="xstage-drive-source-row xstage-drive-media-row">
-            <div class="xstage-drive-media-info"><strong>เสียงเอฟเฟกต์ FX</strong><output id="xstage-drive-folder-fx-name">ยังไม่เลือกโฟลเดอร์</output><output id="xstage-drive-count-fx" role="status" aria-live="polite"></output></div>
+            <span class="xstage-drive-icon xstage-drive-icon-fx" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h2l2-7 4 14 3-11 3 7 2-3h2"/></svg></span><div class="xstage-drive-media-info"><div class="xstage-drive-media-title"><strong>เสียงเอฟเฟกต์</strong><span>FX</span></div><output id="xstage-drive-folder-fx-name">ยังไม่เลือกโฟลเดอร์</output><output id="xstage-drive-count-fx" role="status" aria-live="polite"></output></div>
             <div class="xstage-drive-media-actions"><button id="xstage-drive-folder-fx" class="xstage-drive-open" type="button" disabled>จัดการโฟลเดอร์</button></div>
           </div>
         </div>
-        <div class="xstage-drive-build-controls">
+        <div class="xstage-drive-database"><div class="xstage-drive-section-head"><h3>ฐานข้อมูลเพลง</h3><span>SQLite</span></div><div class="xstage-drive-build-controls">
           <button id="xstage-drive-build-db" type="button" disabled>ตรวจไฟล์และอัปเดตฐานเพลง</button>
           <button id="xstage-drive-cancel-db" type="button" disabled hidden>ยกเลิกการสร้างฐาน</button>
         </div>
-        <p id="xstage-drive-folder-status" role="status" aria-live="polite">พร้อมตรวจไฟล์เมื่ออัปโหลดเสร็จ · ไม่เพิ่มเพลงซ้ำ</p>
-        <details class="xstage-drive-options"><summary>ตรวจนับไฟล์ / สิทธิ์ Google Drive</summary>
+        <p id="xstage-drive-folder-status" role="status" aria-live="polite">พร้อมตรวจไฟล์เมื่ออัปโหลดเสร็จ · ไม่เพิ่มเพลงซ้ำ</p></div>
+        <details class="xstage-drive-options"><summary>ตรวจนับไฟล์และสิทธิ์การเข้าถึง</summary>
           <button id="xstage-drive-scan-counts" type="button" disabled>ตรวจนับไฟล์ทุกโฟลเดอร์</button>
           <button id="xstage-drive-read-all" type="button" disabled>อนุญาตอ่านไฟล์จาก Google</button>
           <p id="xstage-drive-read-status" role="status" aria-live="polite">ตรวจสอบสิทธิ์อ่าน Google Drive</p>
