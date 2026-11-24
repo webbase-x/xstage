@@ -583,6 +583,14 @@ async function refreshFonts(auth){
   context={...auth,fontFolderId:chosenFolder};
   if(!sameLibrary){selected=BUILTIN_GM_ID;fontCache=null;fontLoadPromise=null;fontStatusChanged();}
   const status=$('xstage-soundfont-scan-status');
+  const permission=$('xstage-soundfont-authorize');
+  const sourceStatus=$('xstage-drive-font-permission-status');
+  const showPermission=(show,message='')=>{
+    if(sequence!==fontRefreshSequence)return;
+    if(permission){permission.hidden=!show;if(permission.style)permission.style.display=show?'':'none';}
+    if(sourceStatus)sourceStatus.textContent=message;
+  };
+  showPermission(false,auth?.token&&rootId?'กำลังตรวจรายการ SoundFont…':'');
   const refresh=$('xstage-soundfont-refresh');
   if(refresh)refresh.onclick=()=>{if(context)void refreshFonts(context);};
   const clear=$('xstage-soundfont-local-clear');
@@ -642,7 +650,10 @@ async function refreshFonts(auth){
         }
       }
       if(sequence!==fontRefreshSequence)return;
-      if(status)status.textContent=sourceName+' · พบ SoundFont '+(choices.length-1)+' ไฟล์'+(choices.length===1?' · ตรวจสอบสิทธิ์บัญชีและโฟลเดอร์ที่เลือก':'');
+      const count=choices.length-1;
+      const summary=sourceName+' · พบ SoundFont '+count+' ไฟล์';
+      if(status)status.textContent=summary+(count===0?' · ตรวจสอบในเมนูจัดการคลัง Google Drive':'');
+      showPermission(count===0&&!!chosenFolder,summary+(count===0?(chosenFolder?' · หากมีไฟล์อยู่ ให้เปิดสิทธิ์เฉพาะไฟล์ที่จำเป็น':' · เลือกโฟลเดอร์ SoundFont เพื่อยืนยันแหล่งข้อมูล'):' · พร้อมเลือกใช้งานจากเมนู SoundFont'));
       const storageKey='xstage-font-pref:'+sub+':'+rootId+':'+(chosenFolder||'default');
       let saved='';
       try{saved=localStorage.getItem(storageKey)||(!chosenFolder?localStorage.getItem('xstage-font-pref:'+sub+':'+rootId):'')||'';}catch{}
@@ -682,7 +693,7 @@ async function refreshFonts(auth){
         selected=select.value;fontCache=null;fontLoadPromise=null;fontWarning='';fontStatusChanged();
         try{localStorage.setItem(storageKey,selected);}catch{}
         // Selected SoundFont is retained for this app session and reused.
-        // Never cache private font bytes across Google accounts or on disk.
+        // Private disk cache is isolated by verified account, library, file and revision.
         if(selected&&context?.token)void selectedFont(context.token).catch(error=>{
           console.warn('SoundFont preload:',error.message);
           scope.dispatchEvent?.(new CustomEvent('xstage:font-memory-error',
@@ -696,6 +707,7 @@ async function refreshFonts(auth){
     }catch(error){
       if(sequence!==fontRefreshSequence)return;
       if(status)status.textContent='อ่านรายการไม่ได้: '+String(error.message);
+      showPermission(!!chosenFolder,'อ่านรายการไม่ได้: '+String(error.message));
       select.replaceChildren(...choices);
       const option=new Option('SoundFont: '+String(error.message).slice(0,80),'');
       option.disabled=true;select.append(option);

@@ -162,7 +162,11 @@ function createWorkflow(options={}){
       if(nodes[kind])nodes[kind].textContent=pref[kind]?.name||
         (valid?'ยังไม่เลือกโฟลเดอร์':'เชื่อม Google Drive ก่อน');
       const button=$('xstage-drive-folder-'+kind);
-      if(button)button.disabled=busy||!valid;
+      if(button){
+        button.disabled=busy||!valid;
+        button.title=busy?'กำลังสร้างฐานเพลง · เปลี่ยนโฟลเดอร์ได้เมื่อเสร็จหรือยกเลิก':
+          (!valid?'กรุณาเชื่อม Google Drive และเลือกคลังที่ใช้งานอยู่':'');
+      }
     }
     if(buildButton)buildButton.disabled=busy||!pref.music?.id;
     if(cancelButton)cancelButton.disabled=!busy;
@@ -367,6 +371,10 @@ function createWorkflow(options={}){
   }
   for(const event of ['xstage:auth-ready','xstage:auth-refreshed','xstage:librarychange',
     'xstage:auth-cleared'])scope.addEventListener?.(event,()=>{render();resume();});
+  scope.addEventListener?.('xstage:drive-sources-open',()=>{
+    render();
+    if(busy)display('กำลังสร้างฐานเพลง · เปลี่ยนโฟลเดอร์ได้เมื่อเสร็จหรือกดยกเลิกการสร้างฐาน');
+  });
   for(const event of ['online','pageshow','focus'])scope.addEventListener?.(event,resume);
   scope.document?.addEventListener?.('visibilitychange',resume);
   render();resume();

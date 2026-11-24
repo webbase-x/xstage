@@ -1085,6 +1085,7 @@ class Importer {
       if(this.dom.dialog.showModal)this.dom.dialog.showModal();
       else this.dom.dialog.setAttribute('open','');
     }
+    scope.dispatchEvent?.(new CustomEvent('xstage:drive-sources-open'));
     this.saved=await checkpoint(this.session().sub,undefined);
     if(this.saved&&['uploading','publishing','paused','running'].includes(this.saved.status)&&!this.selected){
       this.status('พบงานค้างของบัญชีนี้ · กด “เริ่ม” เพื่อทำต่อ (อาจต้องอนุญาตโฟลเดอร์เดิม)');

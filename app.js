@@ -1635,35 +1635,21 @@ async function loadGooglePickerApi(){
   });
 }
 $('xstage-soundfont-authorize')?.addEventListener('click',async()=>{
-  const status=$('xstage-soundfont-scan-status');
+  const status=$('xstage-drive-font-permission-status');
+  const sub=state.accountSub,rootId=state.libraryRootId;
   try{
-    if(!state.token||!state.accountSub||!state.libraryRootId)throw Error('กรุณาเชื่อม Google Drive ก่อน');
-    await ensureImporterGoogleAuth(false,false);
-    await loadGooglePickerApi();
-    const sub=state.accountSub,rootId=state.libraryRootId;
-    const view=new google.picker.DocsView(google.picker.ViewId.DOCS)
-      .setIncludeFolders(true).setSelectFolderEnabled(false).setMode(google.picker.DocsViewMode.LIST);
-    const picker=new google.picker.PickerBuilder().addView(view)
-      .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
-      .setOAuthToken(state.token).setDeveloperKey(String(cfg.googlePickerApiKey).trim())
-      .setAppId(String(cfg.googleAppId).trim()).setOrigin(location.origin)
-      .setTitle('เลือกไฟล์ SoundFont (.sf2 / .sf3)')
-      .setCallback(async data=>{
-        if(data?.[google.picker.Response.ACTION]!==google.picker.Action.PICKED)return;
-        try{
-          if(sub!==state.accountSub||rootId!==state.libraryRootId)throw Error('บัญชีหรือคลังเปลี่ยนแล้ว');
-          const ids=(data[google.picker.Response.DOCUMENTS]||[]).filter(d=>/\.sf[23]$/i.test(d[google.picker.Document.NAME]||''))
-            .map(d=>String(d[google.picker.Document.ID]||'')).filter(id=>/^[A-Za-z0-9_-]{5,256}$/.test(id)&&!isRetiredDriveRoot(id));
-          if(!ids.length)throw Error('กรุณาเลือกไฟล์ .sf2 หรือ .sf3');
-          const folder=window.XStageDriveFolders?.readSelections?.(sub,rootId)?.soundfont?.id;
-          if(!folder)throw Error('กรุณาเลือกโฟลเดอร์ SoundFont ก่อน');
-          await window.XStageBrowserMidi.refreshFonts({token:state.token,sub,rootId,ownedByMe:state.libraryRootOwnedByMe});
-        }catch(e){if(status)status.textContent=e.message;}
-      }).build();
-    picker.setVisible(true);
+    const choice=window.XStageDriveFolders?.readSelections?.(sub,rootId)?.soundfont;
+    if(!choice?.id)throw Error('เลือกโฟลเดอร์ SoundFont ที่ใช้งานอยู่ก่อน');
+    const ids=await chooseUserDriveSource('soundfont',true,choice.id);
+    if(!ids)return;
+    if(sub!==state.accountSub||rootId!==state.libraryRootId||
+       choice.id!==window.XStageDriveFolders?.readSelections?.(sub,rootId)?.soundfont?.id)
+      throw Error('บัญชีหรือโฟลเดอร์เปลี่ยนระหว่างอนุญาตไฟล์');
+    await window.XStageBrowserMidi?.refreshFonts({token:state.token,sub,rootId,ownedByMe:state.libraryRootOwnedByMe});
   }catch(e){if(status)status.textContent=e.message;}
 });
-async function chooseUserDriveFolder(kind){
+async function chooseUserDriveFolder(kind){return chooseUserDriveSource(kind);}
+async function chooseUserDriveSource(kind,authorizeFiles=false,parentId=''){
   const labels={music:'เพลง',soundfont:'SoundFont',fx:'FX'};
   if(!Object.hasOwn(labels,kind))throw Error('ประเภทโฟลเดอร์ไม่ถูกต้อง');
   if(!state.token||!state.accountSub||!state.libraryRootId)
@@ -1702,21 +1688,31 @@ async function chooseUserDriveFolder(kind){
     try{
       const view=new google.picker.DocsView(google.picker.ViewId.DOCS)
         .setIncludeFolders(true)
-        .setMimeTypes('application/vnd.google-apps.folder')
-        .setSelectFolderEnabled(true)
+        .setSelectFolderEnabled(!authorizeFiles)
         .setMode(google.picker.DocsViewMode.LIST);
-      picker=new google.picker.PickerBuilder()
-        .addView(view).setOAuthToken(token)
+      if(authorizeFiles){if(parentId)view.setParent(parentId);}
+      else view.setMimeTypes('application/vnd.google-apps.folder');
+      const builder=new google.picker.PickerBuilder();
+      if(authorizeFiles)builder.enableFeature(google.picker.Feature.MULTISELECT_ENABLED);
+      picker=builder.addView(view).setOAuthToken(token)
         .setDeveloperKey(String(cfg.googlePickerApiKey).trim())
         .setAppId(String(cfg.googleAppId).trim())
         .setOrigin(location.origin)
-        .setTitle('เลือกโฟลเดอร์'+labels[kind]+' บน Google Drive')
+        .setTitle(authorizeFiles?'อนุญาตไฟล์ SoundFont ในโฟลเดอร์ที่เลือก':'เลือกโฟลเดอร์'+labels[kind]+' บน Google Drive')
         .setCallback(data=>{
           const action=data?.[google.picker.Response.ACTION];
           if(action===google.picker.Action.CANCEL){finish(null);return;}
           if(action!==google.picker.Action.PICKED)return;
           if(account!==state.accountSub||rootId!==state.libraryRootId){
             finish(null,Error('บัญชีหรือคลัง XStageKaraoke เปลี่ยนระหว่างเลือกโฟลเดอร์'));return;
+          }
+          if(authorizeFiles){
+            const ids=(data?.[google.picker.Response.DOCUMENTS]||[])
+              .filter(d=>/\.sf[23]$/i.test(d[google.picker.Document.NAME]||''))
+              .map(d=>String(d[google.picker.Document.ID]||''))
+              .filter(id=>/^[A-Za-z0-9_-]{5,256}$/.test(id)&&!isRetiredDriveRoot(id));
+            if(!ids.length){finish(null,Error('กรุณาเลือกไฟล์ .sf2 หรือ .sf3'));return;}
+            finish(ids);return;
           }
           const doc=data?.[google.picker.Response.DOCUMENTS]?.[0]||{};
           const id=String(doc[google.picker.Document.ID]||'');

@@ -31,6 +31,8 @@ const select={
   replaceChildren(...options){this.options=options;this.value=options[0]?.value||'';},
   get selectedOptions(){return this.options.filter(x=>x.value===this.value);}
 };
+const permission={hidden:true,style:{display:'none'}},sourceStatus={textContent:''};
+let explicitFolder='';
 const saved=new Map([['xstage-font-pref:account:root',large]]);
 const fakeFetch=async(url,options={})=>{
   url=String(url);
@@ -64,7 +66,8 @@ const fakeFetch=async(url,options={})=>{
 };
 const ctx={
   navigator:{deviceMemory:8},
-  document:{getElementById:id=>id==='xstage-soundfont-select'?select:null},
+  document:{getElementById:id=>id==='xstage-soundfont-select'?select:id==='xstage-soundfont-authorize'?permission:id==='xstage-drive-font-permission-status'?sourceStatus:null},
+  XStageDriveFolders:{readSelections:()=>explicitFolder?{soundfont:{id:explicitFolder,name:'Selected'}}:{}},
   localStorage:{getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v)},
   fetch:fakeFetch,Option,CustomEvent,
   dispatchEvent(){},addEventListener(){},console,
@@ -98,4 +101,13 @@ assert.ok(/GM 6 MB/.test(midi.fontStatus().warning),
   'The player must tell the user why it uses the fast bank');
 assert.equal(largeDownloads,1,'The explicit large selection remains possible');
 assert.equal(midi.isFastGmBytes(quick),true);
+assert.equal(permission.hidden,true,'Already accessible SoundFonts require no extra grant');
+explicitFolder='empty-folder';
+await midi.refreshFonts(auth);
+assert.equal(permission.hidden,false,'Only empty explicit source offers the permission recovery');
+assert.match(sourceStatus.textContent,/พบ SoundFont 0 ไฟล์/);
+explicitFolder='font-root';
+await midi.refreshFonts(auth);
+assert.equal(permission.hidden,true,'Successful scan hides permission recovery again');
+assert.ok(select.options.some(option=>option.value==='nested-font'));
 console.log('PASS: 243 MB saved SF2 cannot block first MIDI; validated 6 MB GM bank is reused');

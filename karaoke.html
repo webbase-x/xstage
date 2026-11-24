@@ -119,14 +119,13 @@
           <nav id="mobile-stage-menu" class="mobile-stage-menu" aria-label="เมนูหน้าจอเล็ก" hidden>
             <div class="mobile-menu-head"><strong>เมนู X-Stage</strong><button type="button" id="mobile-menu-close" aria-label="ปิดเมนู">✕</button></div>
             <div id="mobile-menu-status" class="mobile-menu-status" role="status"></div>
-            <button type="button" id="cloud-import-open" hidden>☁ นำเข้าเพลง / SoundFont</button>
+            <button type="button" id="cloud-import-open" hidden>☁ จัดการคลัง Google Drive</button>
              <label class="xstage-font-control" for="xstage-soundfont-select"><span>ซาวด์ฟอนต์ MIDI</span>
                <select id="xstage-soundfont-select" aria-label="เลือก SoundFont สำหรับเพลง MIDI">
                  <option value="builtin:TimGM6mb">เสียงเครื่องดนตรี GM · TimGM6mb (6 MB)</option>
                </select>
-               <button type="button" id="xstage-soundfont-authorize">เลือกและอนุญาตไฟล์ SoundFont จาก Google Drive</button>
-               <button type="button" id="xstage-soundfont-refresh">รีเฟรช SoundFont</button>
-               <button type="button" id="xstage-soundfont-local-clear">ลบ SoundFont ที่เลือกออกจากเครื่อง</button>
+               <button type="button" id="xstage-soundfont-refresh">รีเฟรชรายการ SoundFont</button>
+               <button type="button" id="xstage-soundfont-local-clear">ลบแคช SoundFont ในเครื่อง</button>
                <output id="xstage-soundfont-local-status" role="status" aria-live="polite"></output>
                <output id="xstage-soundfont-scan-status" role="status" aria-live="polite"></output>
                <output id="xstage-font-memory" class="xstage-memory-indicator" data-level="low" role="status" aria-live="polite">SoundFont · ยังไม่โหลด</output>
@@ -384,7 +383,7 @@
   <dialog id="cloud-import-dialog" class="cloud-import-dialog" aria-labelledby="cloud-import-title">
     <div class="cloud-import-panel">
       <header class="cloud-import-header">
-        <div><span class="cloud-import-label">PRIVATE GOOGLE DRIVE</span><h2 id="cloud-import-title">นำเข้าเพลงและ SoundFont</h2></div>
+        <div><span class="cloud-import-label">PRIVATE GOOGLE DRIVE</span><h2 id="cloud-import-title">จัดการคลัง Google Drive</h2></div>
         <button type="button" id="cloud-import-close" aria-label="ปิดหน้าต่างนำเข้า">✕</button>
       </header>
       <div class="cloud-import-body" id="cloud-import-body">
@@ -399,6 +398,8 @@
           <div class="xstage-drive-source-row">
             <div><strong>SoundFont (SF2 / SF3)</strong><output id="xstage-drive-folder-soundfont-name">ยังไม่เลือกโฟลเดอร์</output></div>
             <button id="xstage-drive-folder-soundfont" type="button" disabled>เลือกโฟลเดอร์ SoundFont</button>
+            <button id="xstage-soundfont-authorize" type="button" hidden style="display:none">อนุญาตไฟล์ที่ Google ยังไม่เปิดสิทธิ์</button>
+            <output id="xstage-drive-font-permission-status" role="status" aria-live="polite"></output>
           </div>
           <div class="xstage-drive-source-row">
             <div><strong>FX (คลังเอฟเฟกต์)</strong><output id="xstage-drive-folder-fx-name">ยังไม่เลือกโฟลเดอร์</output></div>
@@ -522,14 +523,14 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="xmid-browser.js?v=1186-optional-artist" defer></script>
   <script src="memory-budget.js?v=1137" defer></script>
   <script src="ios-midi-audio.js?v=1151-queue-handoff-1168-screen-wake" defer></script>
-  <script src="browser-midi.js?v=1196-font-folder-case" defer></script>
+  <script src="browser-midi.js?v=1198-unified-font-source" defer></script>
   <script src="midi-pro-engine.js?v=1137-playback-restore-1168-screen-wake" defer></script>
   <script src="video-metadata-editor.js?v=1138-verified-video-selection" defer></script>
   <script src="video-transcode.js?v=1137" defer></script>
-  <script src="cloud-import.js?v=1188-drive-upload-only" defer></script>
-  <script src="cloud-drive-folders.js?v=5-existing-song-count" defer></script>
+  <script src="cloud-import.js?v=1198-source-dialog" defer></script>
+  <script src="cloud-drive-folders.js?v=6-source-dialog" defer></script>
   <script src="tv-refresh.js?v=1144" defer></script>
-  <script src="app.js?v=1197-font-picker" defer></script><script src="pc-extensions.js?v=1190-selected-drive-fx" defer></script>
+  <script src="app.js?v=1198-unified-font-source" defer></script><script src="pc-extensions.js?v=1190-selected-drive-fx" defer></script>
   <script src="midi-keyboard-ui.js?v=1137-clean-title-1157-top-song-key-single-menu" defer></script>
   <script src="native-audio-meter.js?v=1144-live-stage-eq" defer></script>
   <script src="stage-controls.js?v=1137-monitor-only-eq" defer></script>

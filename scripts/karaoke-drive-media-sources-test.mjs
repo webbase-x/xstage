@@ -15,10 +15,10 @@ for(const id of ['xstage-drive-folder-music','xstage-drive-folder-soundfont',
   assert.ok(html.includes('id="'+id+'"'),'Missing media source control: '+id);
 assert.ok(html.includes('cloud-drive-folders.js?v=')&&
   html.includes('pc-extensions.js?v=1190-selected-drive-fx')&&
-  html.includes('browser-midi.js?v=1187-selected-font-folder'),
+  html.includes('browser-midi.js?v=1198-unified-font-source'),
   'Page must load updated Drive folder, SoundFont and FX implementations');
 assert.ok(app.includes('async function chooseUserDriveFolder(kind)')&&
-  app.includes('.setSelectFolderEnabled(true)')&&
+  app.includes('.setSelectFolderEnabled(!authorizeFiles)')&&
   app.includes('const xstageDriveFolders=window.XStageDriveFolders?.init({')&&
   app.includes('ensureAuth:ensureImporterGoogleAuth')&&
   app.includes('onFxChange:folderId=>window.dispatchEvent'),
@@ -29,9 +29,9 @@ assert.ok(settings.includes("const STORE='xstage-drive-source-folders-v1'")&&
   settings.includes("if(cancelButton)cancelButton.disabled=!busy;")&&
   settings.includes('scope.XStageCloudImport.publishSingleCatalog({'),
   'Source choices must be account-scoped, prevent retired folders and build an atomic SQLite file');
-assert.ok(soundfont.includes('const chosenFolder=scope.XStageDriveFolders?.readSelections?.(sub,rootId)')&&
+assert.ok(soundfont.includes('const chosen=scope.XStageDriveFolders?.readSelections?.(sub,rootId)?.soundfont')&&
   soundfont.includes('context?.fontFolderId===chosenFolder')&&
-  soundfont.includes('const direct=await listFolder(sourceId,auth.token);')&&
+  soundfont.includes('const entries=await listFolder(id,auth.token);')&&
   soundfont.includes('/\\.sf[23]$/i.test(x.name)'),
   'MIDI player must enumerate both direct and nested SF2/SF3 from selected Drive folder');
 assert.ok(fx.includes('function stageEffects()')&&
@@ -49,4 +49,12 @@ assert.ok(importer.includes("const uploadOnly=!!this.dom.uploadOnly?.checked")&&
   'Upload-only mode must defer publishing while allowing empty FX folder in active root');
 assert.ok(!settings.includes('localStorage.setItem(STORE,JSON.stringify({token'),
   'Drive access tokens must never be stored in folder settings');
+const menu=html.slice(html.indexOf('id="mobile-stage-menu"'),html.indexOf('id="mobile-home-toggle"'));
+const sourcePanel=html.slice(html.indexOf('id="xstage-drive-sources"'),html.indexOf('class="cloud-import-lead"'));
+assert.ok(!menu.includes('xstage-soundfont-authorize'),'Playback menu must not grant Drive files');
+assert.equal((html.match(/id="xstage-soundfont-authorize"/g)||[]).length,1);
+assert.ok(sourcePanel.includes('id="xstage-soundfont-authorize" type="button" hidden'));
+assert.ok(app.includes("chooseUserDriveSource('soundfont',true,choice.id)")&&app.includes('view.setParent(parentId)'));
+assert.ok(soundfont.includes('showPermission(count===0&&!!chosenFolder'));
+assert.ok(importer.includes('xstage:drive-sources-open')&&settings.includes('xstage:drive-sources-open'));
 console.log('PASS: Google Drive music, SoundFont, FX source selection; deferred SQLite; scoped auth and media safety');
