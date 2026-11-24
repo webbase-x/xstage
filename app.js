@@ -99,7 +99,7 @@ function playbackBusyForUpdate(){
 let webUpdateStageBuild=0,webUpdateStageReady=false,webUpdateStagePromise=null;
 let webUpdateStageFinished=false,webUpdateManualMessage='',webUpdateStageController=null;
 let webUpdatePhase='notice',webUpdateCompletedBuild=0,webUpdateCheckTask=null,webUpdateCheckComplete=false;
-window.XStageWebUpdateState=()=>({checked:webUpdateCheckComplete,busy:!!state.updateAvailable||webUpdatePhase!=='notice'});
+if(typeof window!=='undefined')window.XStageWebUpdateState=()=>({checked:webUpdateCheckComplete,busy:!!state.updateAvailable||webUpdatePhase!=='notice'});
 const WEB_UPDATE_HANDOFF='xstage-web-update-handoff-v1';
 function renderAppUpdateNotice(){
   const {notice,text,action,after}=appUpdateElements();
@@ -351,7 +351,7 @@ function setupAppUpdateWatcher(){
     if(!playbackBusyForUpdate())void performAppUpdateReload();
   });
   $('app-update-direct')?.addEventListener('click',event=>{
-    if(!state.updateAvailable)return;event.preventDefault();void performAppUpdateReload({manual:true});
+    if(!state.updateAvailable||webUpdateManualMessage.startsWith('เปิดอัตโนมัติไม่ได้'))return;event.preventDefault();void performAppUpdateReload({manual:true});
   });
   $('desktop-update-version')?.addEventListener('click',()=>{void triggerImmediateVersionUpdate();});
   // An older native APK might finish loading the WebView before its deferred
