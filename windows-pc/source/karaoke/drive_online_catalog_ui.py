@@ -18,7 +18,7 @@ def open_shared_drive_catalog(app):
     window.transient(app)
     body = ttk.Frame(window, padding=18)
     body.pack(fill="both", expand=True)
-    ttk.Label(body, text="GOOGLE DRIVE · XSTAGEKARAOKE",
+    ttk.Label(body, text="GOOGLE DRIVE · คลังเพลงที่ผู้ใช้เลือก",
               font=("Leelawadee UI", 17, "bold")).pack(anchor="w")
     ttk.Label(body, text="อ่านฐาน DB/songs.sqlite3 จาก Google Drive บนเครื่องโดยตรง · ไม่แก้ SQLite ของ Online",
               style="Muted.TLabel").pack(anchor="w", pady=(3, 12))
@@ -29,13 +29,20 @@ def open_shared_drive_catalog(app):
     root_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
     def browse():
         chosen = filedialog.askdirectory(parent=window,
-            title="เลือก XStageKaraoke ใน Google Drive for desktop",
+            title="เลือกโฟลเดอร์หลักคลังเพลงใน Google Drive for desktop",
             initialdir=selected_root.get() or str(Path.home()))
         if chosen:
+            if str(Path(chosen).resolve()) != str(Path(selected_root.get() or chosen).resolve()):
+                drive_id.set("")
             selected_root.set(chosen)
             load()
     ttk.Button(row, text="เลือกโฟลเดอร์ Google Drive…", command=browse).pack(side="left")
-    summary = tk.StringVar(value="เลือกโฟลเดอร์ XStageKaraoke ที่ซิงก์อยู่บนเครื่อง")
+    id_row = ttk.Frame(body)
+    id_row.pack(fill="x", pady=(0, 7))
+    ttk.Label(id_row, text="Folder ID / ลิงก์ Google Drive").pack(side="left", padx=(0, 8))
+    drive_id = tk.StringVar(value=str(app.settings.get("shared_drive_folder_id", "")))
+    ttk.Entry(id_row, textvariable=drive_id).pack(side="left", fill="x", expand=True)
+    summary = tk.StringVar(value="เลือกโฟลเดอร์คลังเพลงที่ Google Drive for desktop ซิงก์กับ Folder ID นี้")
     ttk.Label(body, textvariable=summary, style="Muted.TLabel", wraplength=900).pack(anchor="w", pady=(3, 9))
     search_row = ttk.Frame(body)
     search_row.pack(fill="x")
@@ -152,10 +159,13 @@ def open_shared_drive_catalog(app):
         try:
             from .shared_song_library import validate_shared
             root = str(validate_shared(selected_root.get().strip()))
+            from .shared_drive_layout import drive_folder_id
+            verified_id = drive_folder_id(drive_id.get())
         except (ValueError, OSError) as error:
             messagebox.showerror("ยังใช้ฐานร่วมไม่ได้", str(error), parent=window)
             return
         app.settings["shared_drive_root"] = root
+        app.settings["shared_drive_folder_id"] = verified_id
         app.settings["library_mode"] = "google-drive"
         app.save_settings()
         summary.set("บันทึกแล้ว · X-Stage Karaoke PC จะใช้ DB/songs.sqlite3 จาก Google Drive "
