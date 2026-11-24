@@ -493,6 +493,9 @@ class KaraokeApp(tk.Tk):
         return Path(self.data_dir).parent / 'Songs'
 
     def show_catalog_maintenance(self):
+        if getattr(self, 'shared_drive_mode', False):
+            from .shared_catalog_builder_ui import open_builder
+            return open_builder(self)
         from .catalog_window import CatalogWindow
 
         window = getattr(self, 'catalog_window', None)
@@ -509,9 +512,20 @@ class KaraokeApp(tk.Tk):
         if self.scanning or getattr(self, '_cleanup_busy', False):
             self.catalog_window.finish(error='กรุณารอให้งานสร้างรายการเดิมเสร็จก่อน')
             return False
-        if mode in {'rebuild', 'safe_rebuild', 'clear'} and self.engine:
-            self.catalog_window.finish(error='กรุณาหยุดเพลงก่อนล้างหรือสร้างรายการใหม่')
+        if getattr(self, 'shared_drive_mode', False):
+            self.catalog_window.finish(error='ฐานร่วม PC / Online ต้องจัดการผ่านเมนูสร้างฐานใหม่สำหรับ PC / Online')
             return False
+        if mode in {'rebuild', 'safe_rebuild', 'clear'} and self.engine:
+            release = getattr(self, 'cancel_current_song', None)
+            if getattr(self.engine, 'playing', False) or not callable(release):
+                self.catalog_window.finish(error='กรุณาหยุดเพลง (F8) หรือยกเลิกเพลงปัจจุบัน (F7) ก่อนล้างหรือสร้างรายการใหม่')
+                return False
+            # Stop retains the loaded engine for replay. Release the stopped
+            # song without advancing the queue before changing the catalog.
+            release(advance=False)
+            if self.engine is not None:
+                self.catalog_window.finish(error='ยังไม่สามารถคืนทรัพยากรเพลงได้ กรุณายกเลิกเพลงปัจจุบันก่อน')
+                return False
 
         self.scanning = True
         self._catalog_auto_shutdown_requested = bool(auto_shutdown and mode in ('fast', 'full', 'safe_rebuild'))
