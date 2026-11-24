@@ -373,7 +373,11 @@ assert.match(app,/xstage:librarychange/);
 assert.match(app,/checkAppVersion/);
 assert.match(app,/sharedLibraryFeatureReady/);
 assert.ok(app.includes('window.XStageSharedLibraryReady=sharedLibraryFeatureReady'),'shared-library readiness must be diagnosable without pretending Picker is configured');
-assert.ok(app.includes("คลังที่แชร์ · ต้องตั้งค่า Google Picker"),'missing Picker configuration must be explicit in the shared-library gate');
+assert.ok(app.includes('function sharedLibraryFeatureReady(){return true;}')&&
+  app.includes('เลือกโฟลเดอร์หลัก XStageKaraoke ของคุณหรือที่ได้รับแชร์หนึ่งครั้ง')&&
+  app.includes('async function openSharedLibraryPicker()')&&
+  !app.includes('new google.picker.PickerBuilder()'),
+  'shared-library selection uses the app-owned OAuth picker, not a global Google Picker API key');
 
 assert.ok(!host.includes("action==='stop'"),'host must not expose legacy stop action');
 assert.ok(host.includes("action==='cancel-current'"),'host must cancel current song');
