@@ -147,8 +147,10 @@ async function create(kind,songs,removes=[],generation=''){
           row.midi?.path?.split('/').pop()||'').slice(0,255);
         const mediaPath=[row.xmid,row.xsk,row.midi,row.audio,row.video]
           .map(item=>item?.path).find(Boolean)||'';
-        const originalPath=String(row.originalRelativePath||
-          mediaPath.replace(/^SONGS\//i,'')).replaceAll('\\','/').slice(0,1024);
+        const cloudPath=String(mediaPath).replaceAll('\\','/');
+        const relativeCloudPath=/^SONGS\/(.+)$/i.exec(cloudPath)?.[1]||'';
+        const originalPath=String(relativeCloudPath||row.originalRelativePath||'')
+          .replaceAll('\\','/').slice(0,1024);
         // The relative path is the exact location under XStageKaraoke/SONGS.
         // Reject paths that cannot be mapped identically on PC and Online.
         if(!originalPath||originalPath.startsWith('/')||originalPath.split('/').some(p=>!p||p==='.'||p==='..'||p.includes(':')))
@@ -169,7 +171,9 @@ async function create(kind,songs,removes=[],generation=''){
           String(row.sourceFormat||''),String(row.code||''),String(row.title||''),
           String(row.artist||''),String(row.sourceFormat||''),
           originalFilename,originalPath,originalFileSize||null,
-          sourceCode,midiSize>0?midiSize:null,validHash,JSON.stringify(row)]);
+          sourceCode,midiSize>0?midiSize:null,validHash,
+          JSON.stringify(row.originalRelativePath===originalPath?row:
+            {...row,originalRelativePath:originalPath})]);
         upsert.reset();
       }
     }finally{upsert.free();}
