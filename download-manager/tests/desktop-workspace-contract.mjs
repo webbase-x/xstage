@@ -55,7 +55,7 @@ assert.match(smartSyncUi, /var plan = await ScanWithProgressAsync[\s\S]*?Lanes\.
 assert.match(smartSyncUi, /Task\.Delay\(TimeSpan\.FromSeconds\(60\), token\)/);
 assert.match(smartSyncUi, /Volatile\.Read\(ref _latestScan\)/);
 assert.match(smartSyncUi, /_scanTicker\.Tick/);
-assert.match(smartSyncUi, /SmartSyncFolders\.Scan\(pc, drive, direction, token, progress, mode, policy\)/);
+assert.match(smartSyncUi, /SmartSyncFolders\.Scan\(pc, drive, direction, token, progress, mode, policy, quarantineCopies\)/);
 assert.match(smartSyncUi, /ApplyWorkspaceTheme\(grid\)/);
 assert.match(smartSyncUi, /MainForm\.DarkGrid/);
 assert.match(smartSyncUi, /RestorePreferences\(\);[\s\S]*?_direction\.SelectedIndexChanged/);
@@ -64,6 +64,8 @@ assert.match(smartSyncUi, /SmartSyncPreferencesStore\.Load\(_preferencesPath\)/)
 assert.ok(testProject.includes('../SmartSyncFolders.cs'));
 assert.match(smartSyncUi, /_conflict\.SelectedIndexChanged[\s\S]*?SavePreferences/);
 assert.match(smartSyncUi, /ยืนยันการเขียนทับทั้งงาน/);
+assert.match(smartSyncUi, /ยืนยันการจัดการสำเนาทั้งสองฝั่ง/);
+assert.match(smartSyncUi, /quarantineCopies = false; \/\/ No unattended cleanup/);
 const contracts = [
   ['changed source clears stale adaptive throughput', /if \(sourceChanged\)[\s\S]*?job\.PreviousBytes = 0;\s*job\.SpeedBytesPerSecond = 0;\s*job\.SmoothedSpeedBytesPerSecond = 0;/, engine],
   ['protected subscription domains rejected before job creation', /host\.EndsWith\("\." \+ domain, StringComparison\.OrdinalIgnoreCase\)/, engine],

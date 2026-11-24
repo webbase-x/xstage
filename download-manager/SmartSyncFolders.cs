@@ -12,8 +12,10 @@ public enum XmidConflictPolicy { Skip, Overwrite, KeepHash }
 public sealed record SmartSyncFolderPlan(string Pc, string Drive, SmartSyncDirection Direction,
     IReadOnlyList<SyncDecision> Decisions, IReadOnlyDictionary<string, SyncFingerprint> PcFiles,
     IReadOnlyDictionary<string, SyncFingerprint> DriveFiles, int DatabaseReviewCount,
-    SmartSyncMode Mode = SmartSyncMode.FullVerify, XmidConflictPolicy ConflictPolicy = XmidConflictPolicy.Skip);
+    SmartSyncMode Mode = SmartSyncMode.FullVerify, XmidConflictPolicy ConflictPolicy = XmidConflictPolicy.Skip,
+    XmidDuplicateCleanup? DuplicateCleanup = null);
 public sealed record SmartSyncFolderResult(int Copied, int Identical, int Review, int SkippedDirection);
+public sealed record XmidDuplicateCleanup(int PcArchived, int DriveArchived, int Preserved, IReadOnlyList<string> Samples);
 public sealed record SmartSyncScanProgress(string Phase, string RelativePath, int PcFiles, int DriveFiles,
     long BytesHashed, int Review, int Folders, TimeSpan Elapsed);
 
@@ -23,6 +25,7 @@ public sealed record SmartSyncScanProgress(string Phase, string RelativePath, in
 public static class SmartSyncFolders
 {
     private static readonly StringComparer Paths = StringComparer.OrdinalIgnoreCase;
+    public const string DuplicateBackupFolder = ".xstage-sync-duplicates";
 
     private static string Root(string path)
     {
@@ -88,7 +91,12 @@ public static class SmartSyncFolders
                 var attributes = File.GetAttributes(path);
                 if ((attributes & FileAttributes.ReparsePoint) != 0)
                     throw new InvalidDataException("พบไฟล์หรือโฟลเดอร์ลิงก์ กรุณาใช้โฟลเดอร์ Mirror ที่ดาวน์โหลดครบแล้ว");
-                if ((attributes & FileAttributes.Directory) != 0) { pending.Push(path); continue; }
+                if ((attributes & FileAttributes.Directory) != 0)
+                {
+                    // Reserved backup tree: never include it in either direction.
+                    if (!Paths.Equals(path, Path.Combine(root, DuplicateBackupFolder))) pending.Push(path);
+                    continue;
+                }
                 var relative = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
                 reporter.Publish(phase, relative, pc);
                 if (SmartSyncTransfer.IsDatabaseSidecar(relative) || SmartSyncTransfer.IsDatabaseCandidate(relative))
@@ -128,7 +136,7 @@ public static class SmartSyncFolders
 
     public static SmartSyncFolderPlan Scan(string pc, string drive, SmartSyncDirection direction, CancellationToken ct,
         IProgress<SmartSyncScanProgress>? progress = null, SmartSyncMode mode = SmartSyncMode.FullVerify,
-        XmidConflictPolicy policy = XmidConflictPolicy.Skip)
+        XmidConflictPolicy policy = XmidConflictPolicy.Skip, bool quarantineCopies = false)
     {
         if (!Enum.IsDefined(direction)) throw new ArgumentOutOfRangeException(nameof(direction));
         if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
@@ -141,6 +149,15 @@ public static class SmartSyncFolders
         Parallel.Invoke(new ParallelOptions { MaxDegreeOfParallelism = 2, CancellationToken = ct },
             () => l = Inventory(pc, ct, reporter, true, mode),
             () => r = Inventory(drive, ct, reporter, false, mode));
+        XmidDuplicateCleanup? cleanup = null;
+        if (quarantineCopies)
+        {
+            var batch = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N");
+            var samples = new List<string>();
+            var pcCleanup = ArchiveCopies(pc, l.Entries, true, batch, reporter, samples, ct);
+            var driveCleanup = ArchiveCopies(drive, r.Entries, false, batch, reporter, samples, ct);
+            cleanup = new(pcCleanup.Archived, driveCleanup.Archived, pcCleanup.Preserved + driveCleanup.Preserved, samples.AsReadOnly());
+        }
         reporter.Publish("เปรียบเทียบรายการ", "", false);
         ct.ThrowIfCancellationRequested();
         // No verified historical baseline yet: differing existing files are
@@ -174,7 +191,7 @@ public static class SmartSyncFolders
             ? d with { Action = SyncAction.Conflict, Note = "ปลายทางซ้ำ · ตรวจสอบเอง" } : d).ToArray();
         ct.ThrowIfCancellationRequested();
         reporter.Publish("ตรวจสอบเสร็จ", "", false);
-        return new SmartSyncFolderPlan(pc, drive, direction, decisions, Unique(l.Entries), Unique(r.Entries), l.Review + r.Review, mode, policy);
+        return new SmartSyncFolderPlan(pc, drive, direction, decisions, Unique(l.Entries), Unique(r.Entries), l.Review + r.Review, mode, policy, cleanup);
     }
 
     // Numeric or letter-prefixed IDs, including Google copy suffixes and our
@@ -190,6 +207,105 @@ public static class SmartSyncFolders
     {
         int slash = path.LastIndexOf('/');
         return (slash < 0 ? "" : path[..(slash + 1)]) + name;
+    }
+
+    // Cleanup is explicitly opted in per session. Only an ordinary numbered
+    // copy beside an existing canonical filename is eligible. Hash variants,
+    // different bytes, and copies without a canonical file are preserved.
+    private static readonly Regex CopySuffix = new(@"\A(?<id>[A-Za-z]{0,4}[0-9]{1,16})(?: ?\([0-9]+\))+\.xmid\z",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static (int Archived, int Preserved) ArchiveCopies(string root, List<SyncEntry> entries,
+        bool pc, string batch, ScanReporter reporter, List<string> samples, CancellationToken ct)
+    {
+        int archived = 0, preserved = 0;
+        var remove = new HashSet<string>(StringComparer.Ordinal);
+        var byPath = entries.ToLookup(e => e.RelativePath, Paths);
+        var groups = entries.Where(e => CopySuffix.IsMatch(Path.GetFileName(e.RelativePath)))
+            .GroupBy(e => InFolder(e.RelativePath, CopySuffix.Match(Path.GetFileName(e.RelativePath)).Groups["id"].Value + ".xmid"), Paths);
+        void Note(string text)
+        {
+            if (samples.Count < 200) samples.Add((pc ? "PC · " : "Drive · ") + text);
+        }
+        foreach (var group in groups)
+        {
+            ct.ThrowIfCancellationRequested();
+            var originals = byPath[group.Key].ToArray();
+            if (originals.Length != 1)
+            {
+                foreach (var copy in group)
+                {
+                    preserved++;
+                    Note("เก็บไว้ · ไม่มีต้นฉบับที่ชัดเจน · " + copy.RelativePath);
+                }
+                continue;
+            }
+            var original = originals[0];
+            var originalPath = SmartSyncTransfer.ResolveLocalPath(root, original.RelativePath);
+            var candidates = group.ToArray();
+            // Skip different sizes without hydrating these files. They remain
+            // in the normal conflict planner, never archived by this routine.
+            if (!candidates.Any(e => e.Fingerprint.Size == original.Fingerprint.Size))
+            {
+                foreach (var copy in candidates) { preserved++; Note("เก็บไว้ · ขนาดต่างกัน · " + copy.RelativePath); }
+                continue;
+            }
+            using var keeper = new FileStream(originalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            Check(keeper, originalPath, original.Fingerprint);
+            reporter.Publish("ตรวจ SHA-256 สำเนา", original.RelativePath, pc);
+            var originalSha = SHA256.HashDataAsync(keeper, ct).GetAwaiter().GetResult();
+            Check(keeper, originalPath, original.Fingerprint);
+            reporter.Publish("ตรวจ SHA-256 สำเนา", original.RelativePath, pc, bytes: keeper.Length);
+            foreach (var copy in candidates)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (copy.Fingerprint.Size != original.Fingerprint.Size || byPath[copy.RelativePath].Count() != 1)
+                {
+                    preserved++;
+                    Note("เก็บไว้ · ขนาดต่างกันหรือชื่อกำกวม · " + copy.RelativePath);
+                    continue;
+                }
+                var source = SmartSyncTransfer.ResolveLocalPath(root, copy.RelativePath);
+                reporter.Publish("ตรวจ SHA-256 สำเนา", copy.RelativePath, pc);
+                // Share-delete permits same-volume rename while keeping the
+                // scanned bytes open and protected from ordinary writers.
+                using var stream = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+                Check(stream, source, copy.Fingerprint);
+                var sha = SHA256.HashDataAsync(stream, ct).GetAwaiter().GetResult();
+                Check(stream, source, copy.Fingerprint);
+                reporter.Publish("ตรวจ SHA-256 สำเนา", copy.RelativePath, pc, bytes: stream.Length);
+                if (!CryptographicOperations.FixedTimeEquals(originalSha, sha))
+                {
+                    preserved++;
+                    Note("เก็บไว้ · SHA-256 ต่างกัน · " + copy.RelativePath);
+                    continue;
+                }
+                ct.ThrowIfCancellationRequested();
+                var relativeBackup = DuplicateBackupFolder + "/" + batch + "/" + copy.RelativePath + ".bak";
+                var destination = SmartSyncTransfer.ResolveLocalPath(root, relativeBackup);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                SmartSyncTransfer.ResolveLocalPath(root, relativeBackup);
+                SmartSyncTransfer.ResolveLocalPath(root, copy.RelativePath);
+                Check(keeper, originalPath, original.Fingerprint);
+                Check(stream, source, copy.Fingerprint);
+                ct.ThrowIfCancellationRequested();
+                // No copy+delete fallback and no overwrite. The full relative
+                // original path is retained inside the batch for manual restore.
+                File.Move(source, destination, overwrite: false);
+                remove.Add(copy.RelativePath);
+                archived++;
+                Note("สำรองสำเนา SHA-256 ตรงกัน · " + copy.RelativePath + " → " + relativeBackup);
+                reporter.Publish("สำรองสำเนาซ้ำ", copy.RelativePath, pc);
+            }
+        }
+        entries.RemoveAll(e => remove.Contains(e.RelativePath));
+        return (archived, preserved);
+
+        static void Check(FileStream stream, string path, SyncFingerprint expected)
+        {
+            if (stream.Length != expected.Size || File.GetLastWriteTimeUtc(path).Ticks != expected.ModifiedUtcTicks)
+                throw new IOException("ไฟล์เปลี่ยนระหว่างตรวจสำเนา · หยุดอย่างปลอดภัย");
+        }
     }
 
     private static IReadOnlyList<SyncDecision> PlanXmid(string pc, string drive,

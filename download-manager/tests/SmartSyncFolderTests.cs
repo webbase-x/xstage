@@ -45,6 +45,49 @@ internal static class SmartSyncFolderTests
             try { SmartSyncPreferencesStore.Load(preferencesFile); throw new Exception("Corrupt preferences accepted"); }
             catch (System.Text.Json.JsonException) { }
             Console.WriteLine("PASS: Smart Sync preferences persist across restarts and reject invalid data");
+            var dupPc = Path.Combine(root, "dupPC"); var dupDrive = Path.Combine(root, "dupDrive");
+            Directory.CreateDirectory(dupPc); Directory.CreateDirectory(dupDrive);
+            foreach (var folder in new[] { dupPc, dupDrive })
+            {
+                File.WriteAllText(Path.Combine(folder, "00001.XMID"), "AAA");
+                File.WriteAllText(Path.Combine(folder, "00001 (1).xmid"), "AAA");
+                File.WriteAllText(Path.Combine(folder, "00001 (2).xmid"), "BBB");
+                File.WriteAllText(Path.Combine(folder, "00001 (3).xmid"), "longer");
+                File.WriteAllText(Path.Combine(folder, "00002 (1).xmid"), "only copy");
+                File.WriteAllText(Path.Combine(folder, "00001 (1).txt"), "not a song");
+            }
+            var readOnly = SmartSyncFolders.Scan(dupPc, dupDrive, SmartSyncDirection.Both, default, null, SmartSyncMode.Fast);
+            if (readOnly.DuplicateCleanup is not null || !File.Exists(Path.Combine(dupPc, "00001 (1).xmid")))
+                throw new Exception("Default Sync must not move existing copies");
+            var cleaned = SmartSyncFolders.Scan(dupPc, dupDrive, SmartSyncDirection.Both, default, null, SmartSyncMode.Fast,
+                quarantineCopies: true);
+            if (cleaned.DuplicateCleanup is not { PcArchived: 1, DriveArchived: 1, Preserved: 6 })
+                throw new Exception("Duplicate quarantine counts incorrect");
+            foreach (var folder in new[] { dupPc, dupDrive })
+            {
+                var backup = Directory.GetFiles(Path.Combine(folder, SmartSyncFolders.DuplicateBackupFolder), "*.bak", SearchOption.AllDirectories);
+                if (backup.Length != 1 || File.ReadAllText(backup[0]) != "AAA" ||
+                    File.Exists(Path.Combine(folder, "00001 (1).xmid")) ||
+                    File.ReadAllText(Path.Combine(folder, "00001.XMID")) != "AAA" ||
+                    File.ReadAllText(Path.Combine(folder, "00001 (2).xmid")) != "BBB" ||
+                    !File.Exists(Path.Combine(folder, "00001 (3).xmid")) ||
+                    !File.Exists(Path.Combine(folder, "00002 (1).xmid")) ||
+                    !File.Exists(Path.Combine(folder, "00001 (1).txt")))
+                    throw new Exception("Quarantine must keep canonical, different, unique and non-XMID files");
+            }
+            var again = SmartSyncFolders.Scan(dupPc, dupDrive, SmartSyncDirection.Both, default, null, SmartSyncMode.Fast,
+                quarantineCopies: true);
+            if (again.DuplicateCleanup is not { PcArchived: 0, DriveArchived: 0 } ||
+                again.Decisions.Any(d => d.RelativePath.Contains(SmartSyncFolders.DuplicateBackupFolder)))
+                throw new Exception("Quarantine must be repeat-safe and excluded from transfer");
+            using (var canceledCleanup = new CancellationTokenSource())
+            {
+                canceledCleanup.Cancel();
+                try { SmartSyncFolders.Scan(dupPc, dupDrive, SmartSyncDirection.Both, canceledCleanup.Token,
+                    null, SmartSyncMode.Fast, quarantineCopies: true); throw new Exception("Canceled cleanup accepted"); }
+                catch (OperationCanceledException) { }
+            }
+            Console.WriteLine("PASS: opt-in XMID duplicate quarantine, hash comparison, preservation, backup exclusion and repeat safety");
             var songPc = Path.Combine(root, "songPC"); var songDrive = Path.Combine(root, "songDrive");
             Directory.CreateDirectory(songPc); Directory.CreateDirectory(songDrive);
             File.WriteAllText(Path.Combine(songPc, "00001.xmid"), "A");

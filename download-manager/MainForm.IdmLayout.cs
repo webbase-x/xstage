@@ -1341,7 +1341,7 @@ public sealed partial class MainForm
             _syncPanelOpen = true;
             _smartSyncWindow.Visible = true;
             _smartSyncWindow.BringToFront();
-            _workspaceRoot.RowStyles[2].Height = Math.Min(218, Math.Max(150, ClientSize.Height - 400));
+            _workspaceRoot.RowStyles[2].Height = Math.Min(250, Math.Max(150, ClientSize.Height - 400));
         }
         else
         {
