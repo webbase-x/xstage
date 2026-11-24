@@ -8,6 +8,7 @@ public sealed class SmartSyncForm : Form
 {
     private readonly TextBox _pc = new() { ReadOnly = true, Dock = DockStyle.Fill };
     private readonly TextBox _drive = new() { ReadOnly = true, Dock = DockStyle.Fill };
+    private readonly ComboBox _conflict = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly ComboBox _mode = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly NumericUpDown _parallel = new() { Minimum = 1, Maximum = 32, Value = 8, Width = 72 };
     private readonly ComboBox _direction = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
@@ -46,11 +47,11 @@ public sealed class SmartSyncForm : Form
         ForeColor = Color.White;
         Font = new Font("Segoe UI", 10);
         ShowInTaskbar = false;
-        var grid = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 3, RowCount = 10 };
+        var grid = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 3, RowCount = 11 };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 116));
-        foreach (int height in new[] { 60, 36, 36, 36, 36, 40, 72, 106 })
+        foreach (int height in new[] { 60, 36, 36, 36, 36, 40, 36, 72, 106 })
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
@@ -98,9 +99,15 @@ public sealed class SmartSyncForm : Form
         lanes.Controls.Add(_parallel);
         grid.Controls.Add(lanes, 2, 5);
         _choices.Add(_mode); _choices.Add(_parallel);
+        grid.Controls.Add(new Label { Text = "รหัสเพลงชนกัน", Dock = DockStyle.Fill }, 0, 6);
+        _conflict.Items.AddRange(new object[] { "ข้าม · ไม่เปลี่ยนไฟล์", "ทับ · สำรองเดิม (สองทางยึด PC)", "เก็บทั้งคู่ · รหัส_SHA-256" });
+        _conflict.SelectedIndex = 0;
+        grid.Controls.Add(_conflict, 1, 6);
+        grid.SetColumnSpan(_conflict, 2);
+        _choices.Add(_conflict);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true };
         actions.Controls.AddRange(new Control[] { _scan, _start, _stop, _background });
-        Full(actions, 6);
+        Full(actions, 7);
         _scan.Click += async (_, _) => await RunAsync(false);
         _start.Click += async (_, _) => await RunAsync(true);
         _stop.Click += (_, _) => RequestStop();
@@ -109,12 +116,12 @@ public sealed class SmartSyncForm : Form
         activityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
         activityPanel.Controls.Add(_status, 0, 0);
         activityPanel.Controls.Add(_activity, 0, 1);
-        Full(activityPanel, 7);
+        Full(activityPanel, 8);
         _scanTicker.Tick += (_, _) => RenderScanProgress();
         FormClosed += (_, _) => _scanTicker.Dispose();
         _status.Text = "เลือกสองโฟลเดอร์แล้วกดตรวจสอบไฟล์";
-        Full(_review, 8);
-        Full(new Label { Text = "ไม่ลบหรือเขียนทับไฟล์เดิม · SQLite/ไฟล์ขัดแย้งต้องตรวจสอบแยก · Drive เป็นผู้ส่งขึ้นคลาวด์", Dock = DockStyle.Fill }, 9);
+        Full(_review, 9);
+        Full(new Label { Text = "ไม่ลบไฟล์ · ทับเฉพาะ XMID พร้อมสำรอง · SQLite ไม่รับส่ง · Drive เป็นผู้ส่งขึ้นคลาวด์", Dock = DockStyle.Fill }, 10);
         Controls.Add(grid);
         ApplyWorkspaceTheme(grid);
         RestorePreferences();
@@ -126,6 +133,7 @@ public sealed class SmartSyncForm : Form
         _background.CheckedChanged += (_, _) => SavePreferences();
         _mode.SelectedIndexChanged += (_, _) => { InvalidatePlan(); SavePreferences(); };
         _parallel.ValueChanged += (_, _) => SavePreferences();
+        _conflict.SelectedIndexChanged += (_, _) => { InvalidatePlan(); SavePreferences(); };
         FormClosing += (_, e) =>
         {
             if (!_shutdown && e.CloseReason == CloseReason.UserClosing)
@@ -191,6 +199,7 @@ public sealed class SmartSyncForm : Form
             _background.Checked = saved.Background;
             _mode.SelectedIndex = (int)saved.Mode;
             _parallel.Value = saved.ParallelFiles;
+            _conflict.SelectedIndex = (int)saved.ConflictPolicy;
             if (saved.Pc.Length > 0 || saved.Drive.Length > 0)
                 _status.Text = "เรียกคืนค่าที่เลือกครั้งล่าสุดแล้ว · กดตรวจสอบไฟล์ก่อนเริ่ม Sync";
         }
@@ -206,7 +215,7 @@ public sealed class SmartSyncForm : Form
         {
             SmartSyncPreferencesStore.Save(_preferencesPath, new SmartSyncPreferences(
                 _pc.Text, _drive.Text, (SmartSyncDirection)_direction.SelectedIndex, _background.Checked,
-                (SmartSyncMode)_mode.SelectedIndex, (int)_parallel.Value));
+                (SmartSyncMode)_mode.SelectedIndex, (int)_parallel.Value, (XmidConflictPolicy)_conflict.SelectedIndex));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
@@ -244,7 +253,7 @@ public sealed class SmartSyncForm : Form
     }
 
     private async Task<SmartSyncFolderPlan> ScanWithProgressAsync(string pc, string drive,
-        SmartSyncDirection direction, SmartSyncMode mode, CancellationToken token)
+        SmartSyncDirection direction, SmartSyncMode mode, XmidConflictPolicy policy, CancellationToken token)
     {
         Volatile.Write(ref _latestScan, null);
         _lastAdvance = 0; _lastCount = 0;
@@ -257,7 +266,7 @@ public sealed class SmartSyncForm : Form
         try
         {
             var progress = new ScanMailbox(value => Volatile.Write(ref _latestScan, value));
-            return await Task.Run(() => SmartSyncFolders.Scan(pc, drive, direction, token, progress, mode), token);
+            return await Task.Run(() => SmartSyncFolders.Scan(pc, drive, direction, token, progress, mode, policy), token);
         }
         finally
         {
@@ -272,12 +281,13 @@ public sealed class SmartSyncForm : Form
     private void DisplayPlan(SmartSyncFolderPlan plan, int copied = 0)
     {
         var s = SmartSyncFolders.Summarize(plan, copied);
-        var up = plan.Decisions.Count(d => d.Action == SyncAction.UploadNew);
-        var down = plan.Decisions.Count(d => d.Action == SyncAction.DownloadNew);
+        var up = plan.Decisions.Count(d => d.Action is SyncAction.UploadNew or SyncAction.UploadUpdate);
+        var down = plan.Decisions.Count(d => d.Action is SyncAction.DownloadNew or SyncAction.DownloadUpdate);
+        var replacements = plan.Decisions.Count(d => d.Action is SyncAction.UploadUpdate or SyncAction.DownloadUpdate);
         var matchLabel = plan.Mode == SmartSyncMode.Fast ? "ชื่อ/ขนาดตรงกัน (ยังไม่ตรวจเนื้อหา)" : "ไฟล์เหมือนกัน";
-        _status.Text = $"{matchLabel} {s.Identical:N0} · ใหม่ PC→Drive {up:N0} · Drive→PC {down:N0} · ต้องตรวจสอบ {s.Review:N0} · ส่งแล้ว {copied:N0}";
+        _status.Text = $"{matchLabel} {s.Identical:N0} · ใหม่ PC→Drive {up:N0} · Drive→PC {down:N0} · ทับ {replacements:N0} · ตรวจสอบ {s.Review:N0} · ส่งแล้ว {copied:N0}";
         _review.Lines = plan.Decisions.Where(d => d.Action != SyncAction.Unchanged).Take(500)
-            .Select(d => d.Action + "   " + d.RelativePath)
+            .Select(d => d.Action + "   " + (d.SourcePath is null ? "" : d.SourcePath + " → ") + d.RelativePath + (d.Note is null ? "" : " · " + d.Note))
             .Prepend("รายการตัวอย่างสูงสุด 500 ไฟล์ · SQLite/sidecar ที่ข้าม: " + plan.DatabaseReviewCount).ToArray();
     }
 
@@ -288,6 +298,11 @@ public sealed class SmartSyncForm : Form
         var direction = (SmartSyncDirection)_direction.SelectedIndex;
         var mode = (SmartSyncMode)_mode.SelectedIndex;
         var parallel = (int)_parallel.Value;
+        var policy = (XmidConflictPolicy)_conflict.SelectedIndex;
+        if (transfer && policy == XmidConflictPolicy.Overwrite &&
+            MessageBox.Show(this, "ใช้การเขียนทับกับ XMID ที่รหัสชนกันทุกไฟล์ในงานนี้หรือไม่? ระบบสำรองไฟล์เดิมไว้ · สองทางยึด PC · หลายฉบับที่กำกวมจะข้าม",
+                "ยืนยันการเขียนทับทั้งงาน", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
         var repeat = transfer && _background.Checked;
         using var cancellation = new CancellationTokenSource();
         _cancel = cancellation;
@@ -301,13 +316,13 @@ public sealed class SmartSyncForm : Form
             {
                 _status.Text = mode == SmartSyncMode.Fast ? "กำลังตรวจรายชื่อไฟล์ (ไม่อ่านเนื้อหาเดิม)..." : "กำลังตรวจสอบไฟล์และแฮช...";
                 var plan = transfer && _plan is not null ? _plan :
-                    await ScanWithProgressAsync(pc, drive, direction, mode, token);
+                    await ScanWithProgressAsync(pc, drive, direction, mode, policy, token);
                 _plan = plan;
                 DisplayPlan(plan);
                 if (!transfer) { _activity.Value = 100; break; }
                 var total = plan.Decisions.Count(d =>
-                    (d.Action == SyncAction.UploadNew && direction != SmartSyncDirection.ToPc) ||
-                    (d.Action == SyncAction.DownloadNew && direction != SmartSyncDirection.ToDrive));
+                    ((d.Action is SyncAction.UploadNew or SyncAction.UploadUpdate) && direction != SmartSyncDirection.ToPc) ||
+                    ((d.Action is SyncAction.DownloadNew or SyncAction.DownloadUpdate) && direction != SmartSyncDirection.ToDrive));
                 _activity.Value = 0;
                 var progress = new Progress<int>(n =>
                 {

@@ -2,15 +2,17 @@ using System.Security.Cryptography;
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using System.Text.RegularExpressions;
 
 namespace XStageDownloadManager;
 
 public enum SmartSyncDirection { Both, ToDrive, ToPc }
 public enum SmartSyncMode { Fast, Smart, FullVerify }
+public enum XmidConflictPolicy { Skip, Overwrite, KeepHash }
 public sealed record SmartSyncFolderPlan(string Pc, string Drive, SmartSyncDirection Direction,
     IReadOnlyList<SyncDecision> Decisions, IReadOnlyDictionary<string, SyncFingerprint> PcFiles,
     IReadOnlyDictionary<string, SyncFingerprint> DriveFiles, int DatabaseReviewCount,
-    SmartSyncMode Mode = SmartSyncMode.FullVerify);
+    SmartSyncMode Mode = SmartSyncMode.FullVerify, XmidConflictPolicy ConflictPolicy = XmidConflictPolicy.Skip);
 public sealed record SmartSyncFolderResult(int Copied, int Identical, int Review, int SkippedDirection);
 public sealed record SmartSyncScanProgress(string Phase, string RelativePath, int PcFiles, int DriveFiles,
     long BytesHashed, int Review, int Folders, TimeSpan Elapsed);
@@ -125,10 +127,12 @@ public static class SmartSyncFolders
             .ToDictionary(g => g.Key, g => g.Single().Fingerprint, Paths);
 
     public static SmartSyncFolderPlan Scan(string pc, string drive, SmartSyncDirection direction, CancellationToken ct,
-        IProgress<SmartSyncScanProgress>? progress = null, SmartSyncMode mode = SmartSyncMode.FullVerify)
+        IProgress<SmartSyncScanProgress>? progress = null, SmartSyncMode mode = SmartSyncMode.FullVerify,
+        XmidConflictPolicy policy = XmidConflictPolicy.Skip)
     {
         if (!Enum.IsDefined(direction)) throw new ArgumentOutOfRangeException(nameof(direction));
         if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
+        if (!Enum.IsDefined(policy)) throw new ArgumentOutOfRangeException(nameof(policy));
         var reporter = new ScanReporter(progress);
         reporter.Publish("ตรวจสอบโฟลเดอร์", "", true);
         ct.ThrowIfCancellationRequested();
@@ -141,7 +145,8 @@ public static class SmartSyncFolders
         ct.ThrowIfCancellationRequested();
         // No verified historical baseline yet: differing existing files are
         // always conflicts. Identical files and new files are safe to handle.
-        var decisions = SmartSyncPlanner.Plan(l.Entries, r.Entries, Array.Empty<SyncEntry>(), mode != SmartSyncMode.FullVerify);
+        var decisions = SmartSyncPlanner.Plan(l.Entries.Where(e => XmidCode(e.RelativePath) is null),
+            r.Entries.Where(e => XmidCode(e.RelativePath) is null), Array.Empty<SyncEntry>(), mode != SmartSyncMode.FullVerify);
         if (mode == SmartSyncMode.Smart)
         {
             // Only equal-size shared paths require content verification.
@@ -161,13 +166,147 @@ public static class SmartSyncFolders
             }).ToArray();
         }
         ct.ThrowIfCancellationRequested();
+        decisions = decisions.Concat(PlanXmid(pc, drive, l.Entries, r.Entries, direction, mode, policy, reporter, ct)).ToArray();
+        // Avoid duplicate output paths across all planned publications.
+        var duplicate = decisions.Where(d => Allowed(d.Action, direction)).GroupBy(d => d.RelativePath, Paths)
+            .Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet(Paths);
+        decisions = decisions.Select(d => Allowed(d.Action, direction) && duplicate.Contains(d.RelativePath)
+            ? d with { Action = SyncAction.Conflict, Note = "ปลายทางซ้ำ · ตรวจสอบเอง" } : d).ToArray();
+        ct.ThrowIfCancellationRequested();
         reporter.Publish("ตรวจสอบเสร็จ", "", false);
-        return new SmartSyncFolderPlan(pc, drive, direction, decisions, Unique(l.Entries), Unique(r.Entries), l.Review + r.Review, mode);
+        return new SmartSyncFolderPlan(pc, drive, direction, decisions, Unique(l.Entries), Unique(r.Entries), l.Review + r.Review, mode, policy);
+    }
+
+    // Numeric or letter-prefixed IDs, including Google copy suffixes and our
+    // full SHA-256 variant names. Never normalize non-XMID filenames.
+    private static readonly Regex SongName = new(@"\A(?<id>[a-zA-Z]{0,4}[0-9]{1,16})(?:_[a-fA-F0-9]{64})?(?: ?\([0-9]+\))*\.xmid\z",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    public static string? XmidCode(string relative)
+    {
+        var match = SongName.Match(Path.GetFileName(relative));
+        return match.Success ? match.Groups["id"].Value : null;
+    }
+    private static string InFolder(string path, string name)
+    {
+        int slash = path.LastIndexOf('/');
+        return (slash < 0 ? "" : path[..(slash + 1)]) + name;
+    }
+
+    private static IReadOnlyList<SyncDecision> PlanXmid(string pc, string drive,
+        IEnumerable<SyncEntry> left, IEnumerable<SyncEntry> right, SmartSyncDirection direction,
+        SmartSyncMode mode, XmidConflictPolicy policy, ScanReporter reporter, CancellationToken ct)
+    {
+        var l = left.Where(e => XmidCode(e.RelativePath) is not null).ToLookup(e => XmidCode(e.RelativePath)!, Paths);
+        var r = right.Where(e => XmidCode(e.RelativePath) is not null).ToLookup(e => XmidCode(e.RelativePath)!, Paths);
+        var result = new List<SyncDecision>();
+        var leftPaths = left.Select(e => e.RelativePath).ToHashSet(Paths);
+        var rightPaths = right.Select(e => e.RelativePath).ToHashSet(Paths);
+        var cache = new Dictionary<(bool, string), (SyncFingerprint Fp, string Sha)>();
+        (SyncFingerprint Fp, string Sha) Verify(bool local, SyncEntry e)
+        {
+            var key = (local, e.RelativePath);
+            if (cache.TryGetValue(key, out var found)) return found;
+            ct.ThrowIfCancellationRequested();
+            reporter.Publish("ตรวจแฮชรหัสเพลง", e.RelativePath, local);
+            var path = SmartSyncTransfer.ResolveLocalPath(local ? pc : drive, e.RelativePath);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var fp = e.Fingerprint;
+            if (stream.Length != fp.Size || File.GetLastWriteTimeUtc(path).Ticks != fp.ModifiedUtcTicks)
+                throw new IOException("ไฟล์เพลงเปลี่ยนระหว่างตรวจสอบ");
+            var sha = Convert.ToHexString(SHA256.HashDataAsync(stream, ct).GetAwaiter().GetResult()).ToLowerInvariant();
+            stream.Position = 0;
+            var md5 = Convert.ToHexString(MD5.HashDataAsync(stream, ct).GetAwaiter().GetResult());
+            if (stream.Length != fp.Size || File.GetLastWriteTimeUtc(path).Ticks != fp.ModifiedUtcTicks ||
+                (fp.Md5.Length != 0 && !Paths.Equals(fp.Md5, md5)))
+                throw new IOException("ไฟล์เพลงเปลี่ยนระหว่างตรวจสอบ");
+            reporter.Publish("ตรวจแฮชรหัสเพลง", e.RelativePath, local, bytes: fp.Size * 2);
+            return cache[key] = (fp with { Md5 = md5 }, sha);
+        }
+        foreach (var code in l.Select(g => g.Key).Concat(r.Select(g => g.Key)).Distinct(Paths).OrderBy(x => x, Paths))
+        {
+            ct.ThrowIfCancellationRequested();
+            SyncEntry[] Sort(IEnumerable<SyncEntry> entries) => entries
+                .OrderBy(e => !Paths.Equals(Path.GetFileName(e.RelativePath), code + ".xmid"))
+                .ThenBy(e => e.RelativePath, Paths).ToArray();
+            var a = Sort(l[code]); var b = Sort(r[code]);
+            if (a.Select(e => e.RelativePath).Distinct(Paths).Count() != a.Length ||
+                b.Select(e => e.RelativePath).Distinct(Paths).Count() != b.Length)
+            {
+                result.Add(new SyncDecision((a.FirstOrDefault() ?? b[0]).RelativePath, SyncAction.Conflict,
+                    Note: "รหัสซ้ำแบบตัวพิมพ์ · ตรวจสอบเอง"));
+                continue;
+            }
+            void Pass(bool local, SyncEntry[] sources, SyncEntry[] targets)
+            {
+                var occupied = local ? rightPaths : leftPaths;
+                var planned = new List<SyncEntry>();
+                foreach (var source in sources)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var candidates = targets.Select(e => (Local: !local, Entry: e))
+                        .Concat(planned.Select(e => (Local: local, Entry: e))).ToArray();
+                    void Review(string note) => result.Add(new SyncDecision(source.RelativePath, SyncAction.Conflict, Note: note));
+                    void New(string destination, SyncFingerprint fingerprint, string? note)
+                    {
+                        if (!occupied.Add(destination)) { Review("ชื่อปลายทางชนกัน · ตรวจสอบเอง"); return; }
+                        result.Add(new SyncDecision(destination, local ? SyncAction.UploadNew : SyncAction.DownloadNew,
+                            source.RelativePath, fingerprint, null, note));
+                        planned.Add(source);
+                    }
+                    if (candidates.Length == 0)
+                    {
+                        var name = Regex.Replace(Path.GetFileName(source.RelativePath), @"(?: ?\([0-9]+\))+(?=\.xmid$)", "", RegexOptions.IgnoreCase);
+                        New(InFolder(source.RelativePath, name), source.Fingerprint, "รหัสใหม่ · ตัดวงเล็บสำเนา");
+                        continue;
+                    }
+                    var sameSize = candidates.Where(t => t.Entry.Fingerprint.Size == source.Fingerprint.Size).ToArray();
+                    // Fast skips equal-size original names, but explicitly hashed
+                    // variants are content identities and must be verified.
+                    bool hashedName = Path.GetFileName(source.RelativePath).Contains('_') ||
+                        sameSize.Any(t => Path.GetFileName(t.Entry.RelativePath).Contains('_'));
+                    if (mode == SmartSyncMode.Fast && !hashedName && sameSize.Length > 0)
+                    {
+                        result.Add(new SyncDecision(source.RelativePath, SyncAction.Unchanged, Note: "รหัส/ขนาดตรงกัน · ข้าม"));
+                        continue;
+                    }
+                    var incoming = Verify(local, source);
+                    var existing = candidates.Select(t => Verify(t.Local, t.Entry)).ToArray();
+                    if (existing.Any(t => t.Sha == incoming.Sha))
+                    {
+                        result.Add(new SyncDecision(source.RelativePath, SyncAction.Unchanged, Note: "SHA-256 ตรงกัน · ข้าม"));
+                        continue;
+                    }
+                    var note = $"รหัส {code} · SHA-256 {incoming.Sha[..12]} / {existing[0].Sha[..12]}";
+                    if (policy == XmidConflictPolicy.KeepHash)
+                    {
+                        New(InFolder(source.RelativePath, code + "_" + incoming.Sha + ".xmid"), incoming.Fp,
+                            note + " · เก็บทั้งสองฉบับ");
+                    }
+                    else if (policy == XmidConflictPolicy.Overwrite && sources.Length == 1 &&
+                        targets.Length == 1 && planned.Count == 0)
+                    {
+                        result.Add(new SyncDecision(targets[0].RelativePath,
+                            local ? SyncAction.UploadUpdate : SyncAction.DownloadUpdate,
+                            source.RelativePath, incoming.Fp, existing[0].Fp, note + " · ทับพร้อมสำรอง"));
+                    }
+                    else Review(note + (policy == XmidConflictPolicy.Overwrite
+                        ? " · หลายฉบับ กำกวม ไม่ทับ" : " · ข้ามตามนโยบาย"));
+                }
+            }
+            if (direction != SmartSyncDirection.ToPc) Pass(true, a, b);
+            // A single matched pair needs only one decision in Skip mode.
+            // In both-way overwrite mode PC is explicitly authoritative.
+            if (direction != SmartSyncDirection.ToDrive &&
+                !(direction == SmartSyncDirection.Both && a.Length > 0 && b.Length > 0 &&
+                  (policy == XmidConflictPolicy.Overwrite || (policy == XmidConflictPolicy.Skip && a.Length == 1 && b.Length == 1))))
+                Pass(false, b, a);
+        }
+        return result;
     }
 
     private static bool Allowed(SyncAction action, SmartSyncDirection direction) =>
-        (action == SyncAction.UploadNew && direction != SmartSyncDirection.ToPc) ||
-        (action == SyncAction.DownloadNew && direction != SmartSyncDirection.ToDrive);
+        ((action is SyncAction.UploadNew or SyncAction.UploadUpdate) && direction != SmartSyncDirection.ToPc) ||
+        ((action is SyncAction.DownloadNew or SyncAction.DownloadUpdate) && direction != SmartSyncDirection.ToDrive);
 
     public static SmartSyncFolderResult Summarize(SmartSyncFolderPlan plan, int copied = 0) => new(copied,
         plan.Decisions.Count(x => x.Action == SyncAction.Unchanged),
@@ -183,13 +322,21 @@ public static class SmartSyncFolders
         var work = plan.Decisions.Where(x => Allowed(x.Action, plan.Direction)).ToArray();
         await SmartSyncTransfer.ExecuteAsync(work, parallelFiles, async (d, token) =>
         {
-            var upload = d.Action == SyncAction.UploadNew;
+            var upload = d.Action is SyncAction.UploadNew or SyncAction.UploadUpdate;
             var sourceRoot = upload ? plan.Pc : plan.Drive;
             var destinationRoot = upload ? plan.Drive : plan.Pc;
             var sourceMap = upload ? plan.PcFiles : plan.DriveFiles;
-            if (!sourceMap.TryGetValue(d.RelativePath, out var expected))
+            var sourcePath = d.SourcePath ?? d.RelativePath;
+            if (!sourceMap.TryGetValue(sourcePath, out var observed))
                 throw new InvalidDataException("ข้อมูลไฟล์ต้นทางเปลี่ยน กรุณาตรวจสอบใหม่");
-            var sha = await CopyNewAsync(sourceRoot, destinationRoot, d.RelativePath, expected, token).ConfigureAwait(false);
+            var expected = d.SourceFingerprint ?? observed;
+            bool overwrite = d.Action is SyncAction.UploadUpdate or SyncAction.DownloadUpdate;
+            if (overwrite && (plan.ConflictPolicy != XmidConflictPolicy.Overwrite ||
+                XmidCode(sourcePath) is null || !Paths.Equals(XmidCode(sourcePath), XmidCode(d.RelativePath)) ||
+                d.DestinationFingerprint is null))
+                throw new InvalidDataException("ไม่อนุญาตให้เขียนทับรายการนี้");
+            var sha = await CopyNewAsync(sourceRoot, destinationRoot, sourcePath, d.RelativePath,
+                expected, overwrite ? d.DestinationFingerprint : null, token).ConfigureAwait(false);
             journal?.Record(d, expected.Size, sha);
             var completed = Interlocked.Increment(ref copied);
             progress?.Report(completed);
@@ -197,12 +344,14 @@ public static class SmartSyncFolders
         return Summarize(plan, copied);
     }
 
-    private static async Task<string> CopyNewAsync(string sourceRoot, string destinationRoot, string relative,
-        SyncFingerprint expected, CancellationToken ct)
+    private static async Task<string> CopyNewAsync(string sourceRoot, string destinationRoot, string sourceRelative, string relative,
+        SyncFingerprint expected, SyncFingerprint? replaceExpected, CancellationToken ct)
     {
-        var source = SmartSyncTransfer.ResolveLocalPath(sourceRoot, relative);
+        if (SmartSyncTransfer.IsDatabaseCandidate(sourceRelative) || SmartSyncTransfer.IsDatabaseSidecar(sourceRelative))
+            throw new InvalidDataException("SQLite ต้องตรวจสอบก่อนส่ง");
+        var source = SmartSyncTransfer.ResolveLocalPath(sourceRoot, sourceRelative);
         var destination = SmartSyncTransfer.ResolveLocalPath(destinationRoot, relative);
-        if (File.Exists(destination)) throw new IOException("ปลายทางมีไฟล์ใหม่แล้ว กรุณาตรวจสอบอีกครั้ง");
+        if (replaceExpected is null && File.Exists(destination)) throw new IOException("ปลายทางมีไฟล์ใหม่แล้ว กรุณาตรวจสอบอีกครั้ง");
         var parent = Path.GetDirectoryName(destination)!;
         Directory.CreateDirectory(parent);
         SmartSyncTransfer.ResolveLocalPath(destinationRoot, relative);
@@ -243,7 +392,17 @@ public static class SmartSyncFolders
             }
             ct.ThrowIfCancellationRequested();
             SmartSyncTransfer.ResolveLocalPath(destinationRoot, relative);
-            File.Move(staging, destination, overwrite: false);
+            if (replaceExpected is null)
+                File.Move(staging, destination, overwrite: false);
+            else
+            {
+                var actual = HashExisting(destinationRoot, relative, replaceExpected, ct);
+                if (!Paths.Equals(actual.Md5, replaceExpected.Md5))
+                    throw new IOException("ปลายทางเปลี่ยนหลังตรวจสอบ · ไม่ทับ");
+                ct.ThrowIfCancellationRequested();
+                var backup = Path.Combine(parent, ".xstage-sync-backup-" + Guid.NewGuid().ToString("N") + ".bak");
+                File.Replace(staging, destination, backup, ignoreMetadataErrors: false);
+            }
             created = false;
             return Convert.ToHexString(hash);
         }
@@ -259,7 +418,8 @@ public static class SmartSyncFolders
 // authorization to start a transfer is persisted here.
 public sealed record SmartSyncPreferences(string Pc = "", string Drive = "",
     SmartSyncDirection Direction = SmartSyncDirection.Both, bool Background = false,
-    SmartSyncMode Mode = SmartSyncMode.Fast, int ParallelFiles = 8);
+    SmartSyncMode Mode = SmartSyncMode.Fast, int ParallelFiles = 8,
+    XmidConflictPolicy ConflictPolicy = XmidConflictPolicy.Skip);
 
 public static class SmartSyncPreferencesStore
 {
@@ -272,7 +432,7 @@ public static class SmartSyncPreferencesStore
         if (preferences is null || preferences.Pc is null || preferences.Drive is null ||
             preferences.Pc.Length > 32767 || preferences.Drive.Length > 32767 ||
             !Enum.IsDefined(preferences.Direction) || !Enum.IsDefined(preferences.Mode) ||
-            preferences.ParallelFiles is < 1 or > 32)
+            preferences.ParallelFiles is < 1 or > 32 || !Enum.IsDefined(preferences.ConflictPolicy))
             throw new InvalidDataException("ตัวเลือก Smart Sync ไม่ถูกต้อง");
         foreach (var path in new[] { preferences.Pc, preferences.Drive })
             if (path.Length > 0 && (!Path.IsPathFullyQualified(path) || path.Contains('\0')))

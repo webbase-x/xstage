@@ -45,6 +45,40 @@ internal static class SmartSyncFolderTests
             try { SmartSyncPreferencesStore.Load(preferencesFile); throw new Exception("Corrupt preferences accepted"); }
             catch (System.Text.Json.JsonException) { }
             Console.WriteLine("PASS: Smart Sync preferences persist across restarts and reject invalid data");
+            var songPc = Path.Combine(root, "songPC"); var songDrive = Path.Combine(root, "songDrive");
+            Directory.CreateDirectory(songPc); Directory.CreateDirectory(songDrive);
+            File.WriteAllText(Path.Combine(songPc, "00001.xmid"), "A");
+            File.WriteAllText(Path.Combine(songDrive, "00001 (1).xmid"), "A");
+            File.WriteAllText(Path.Combine(songPc, "a00002.xmid"), "new content");
+            File.WriteAllText(Path.Combine(songDrive, "a00002 (2).xmid"), "old");
+            File.WriteAllText(Path.Combine(songDrive, "00003 (1).xmid"), "new song");
+            var songPlan = SmartSyncFolders.Scan(songPc, songDrive, SmartSyncDirection.Both, default, null, SmartSyncMode.Fast);
+            if (!songPlan.Decisions.Any(d => d.Action == SyncAction.Conflict && d.Note!.Contains("SHA-256")) ||
+                songPlan.Decisions.Any(d => d.Action == SyncAction.DownloadNew && d.RelativePath.Contains("00001")) ||
+                !songPlan.Decisions.Any(d => d.Action == SyncAction.DownloadNew && d.RelativePath == "00003.xmid"))
+                throw new Exception("XMID alias skip/normalization or hash conflict failed");
+            await SmartSyncFolders.ExecuteAsync(songPlan, 2, null, default);
+            var overwrite = SmartSyncFolders.Scan(songPc, songDrive, SmartSyncDirection.Both, default, null, SmartSyncMode.Fast, XmidConflictPolicy.Overwrite);
+            await SmartSyncFolders.ExecuteAsync(overwrite, 2, null, default);
+            if (File.ReadAllText(Path.Combine(songDrive, "a00002 (2).xmid")) != "new content" ||
+                !Directory.GetFiles(songDrive, ".xstage-sync-backup-*.bak").Any(x => File.ReadAllText(x) == "old"))
+                throw new Exception("XMID replacement must preserve backup and PC priority");
+            File.WriteAllText(Path.Combine(songPc, "00004.xmid"), "PC");
+            File.WriteAllText(Path.Combine(songDrive, "00004.xmid"), "Drive");
+            var keep = SmartSyncFolders.Scan(songPc, songDrive, SmartSyncDirection.Both, default, null, SmartSyncMode.Fast, XmidConflictPolicy.KeepHash);
+            var copies = await SmartSyncFolders.ExecuteAsync(keep, 2, null, default);
+            if (copies.Copied != 2 || Directory.GetFiles(songPc, "00004_*.xmid").Length != 1 ||
+                Directory.GetFiles(songDrive, "00004_*.xmid").Length != 1 ||
+                File.ReadAllText(Path.Combine(songPc, "00004.xmid")) != "PC" ||
+                File.ReadAllText(Path.Combine(songDrive, "00004.xmid")) != "Drive")
+                throw new Exception("Hash variants must preserve both originals");
+            var repeat = await SmartSyncFolders.ExecuteAsync(
+                SmartSyncFolders.Scan(songPc, songDrive, SmartSyncDirection.Both, default, null, SmartSyncMode.Fast, XmidConflictPolicy.KeepHash),
+                2, null, default);
+            if (repeat.Copied != 0) throw new Exception("Hash variants must not grow on repeated runs");
+            SmartSyncPreferencesStore.Save(preferencesFile, changed with { ConflictPolicy = XmidConflictPolicy.KeepHash });
+            if (SmartSyncPreferencesStore.Load(preferencesFile).ConflictPolicy != XmidConflictPolicy.KeepHash)
+                throw new Exception("XMID conflict choice was not persisted");
             Directory.CreateDirectory(Path.Combine(pc, "nested"));
             File.WriteAllText(Path.Combine(pc, "nested", "new.txt"), "new PC");
             File.WriteAllText(Path.Combine(drive, "remote.txt"), "new Drive");

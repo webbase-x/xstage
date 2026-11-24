@@ -7,7 +7,9 @@ namespace XStageDownloadManager;
 public enum SyncAction { Unchanged, DownloadNew, UploadNew, DownloadUpdate, UploadUpdate, Conflict, ReviewDeletion }
 public sealed record SyncFingerprint(long Size, string Md5, long ModifiedUtcTicks = 0);
 public sealed record SyncEntry(string RelativePath, SyncFingerprint Fingerprint);
-public sealed record SyncDecision(string RelativePath, SyncAction Action);
+public sealed record SyncDecision(string RelativePath, SyncAction Action,
+    string? SourcePath = null, SyncFingerprint? SourceFingerprint = null,
+    SyncFingerprint? DestinationFingerprint = null, string? Note = null);
 
 public static class SmartSyncPlanner
 {
