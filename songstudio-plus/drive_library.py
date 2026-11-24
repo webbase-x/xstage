@@ -54,8 +54,6 @@ def resolve_root(value=""):
     for candidate in candidates:
         if candidate.name.upper() in REQUIRED:
             candidate = candidate.parent
-        if candidate.name != ROOT_NAME:
-            continue
         try:
             if candidate.is_dir():
                 root = candidate.resolve(strict=True)
@@ -66,8 +64,8 @@ def resolve_root(value=""):
         raise ValueError(
             "ไม่พบ XStageKaraoke ใน Google Drive สำหรับเดสก์ท็อป "
             "กรุณาเลือกโฟลเดอร์ XStageKaraoke ที่ซิงก์อยู่บนเครื่อง")
-    if root.name != ROOT_NAME or not all((root / part).is_dir() for part in REQUIRED):
-        raise ValueError("โครงสร้าง Drive ต้องมี XStageKaraoke/SONGS, DB และ SOUNDFONT")
+    if not all((root / part).is_dir() for part in REQUIRED):
+        raise ValueError("คลังที่เลือกต้องมี SONGS, DB และ SOUNDFONT")
     return root
 
 
