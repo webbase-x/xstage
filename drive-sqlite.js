@@ -8,6 +8,21 @@
 'use strict';
 const VERSION=1;
 const FORMAT='xstage-sqlite3-v1';
+// PC and Online share a portable song table. Local paths are resolved only
+// after opening the Drive for desktop root on each Windows machine.
+function pcId(webSongId){
+  const bytes=new TextEncoder().encode(String(webSongId));
+  let hash=14695981039346656037n;
+  for(const byte of bytes)hash=BigInt.asUintN(64,(hash^BigInt(byte))*1099511628211n);
+  return Number((hash&((1n<<53n)-1n))||1n);
+}
+function pcKind(row){
+  const fmt=String(row.sourceFormat||'').toLowerCase();
+  if(/mp4|webm|mkv|avi|mov|video/.test(fmt))return 'VIDEO';
+  if(/mp3|m4a|wav|aac|flac|ogg|audio/.test(fmt))return 'AUDIO';
+  return 'MIDI';
+}
+function pcSearch(row){return [row.code,row.title,row.artist].map(x=>String(x||'')).join(' ').normalize('NFC').toLowerCase();}
 const CDN='https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/';
 const CDN_FALLBACK='https://cdn.jsdelivr.net/npm/sql.js@1.13.0/dist/';
 const MAX_BYTES=192*1048576;
@@ -51,7 +66,23 @@ function createSchema(db,kind,generation){
     key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL
   );
   CREATE TABLE songs (
-    web_song_id TEXT PRIMARY KEY NOT NULL,
+    id INTEGER PRIMARY KEY NOT NULL,
+    web_song_id TEXT UNIQUE NOT NULL,
+    path TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    search TEXT NOT NULL,
+    favorite INTEGER NOT NULL DEFAULT 0,
+    playable INTEGER NOT NULL DEFAULT 1,
+    format TEXT NOT NULL DEFAULT '',
+    first_lyric TEXT NOT NULL DEFAULT '',
+    rhythm TEXT NOT NULL DEFAULT '',
+    key_signature TEXT NOT NULL DEFAULT '',
+    bpm TEXT NOT NULL DEFAULT '',
+    source_catalog TEXT NOT NULL DEFAULT '',
+    user_edited INTEGER NOT NULL DEFAULT 0,
+    duplicate_of INTEGER NOT NULL DEFAULT 0,
+    duplicate_state TEXT NOT NULL DEFAULT '',
+    duplicate_preferred INTEGER NOT NULL DEFAULT 0,
     code TEXT NOT NULL, title TEXT NOT NULL, artist TEXT NOT NULL,
     source_format TEXT NOT NULL,
     original_filename TEXT NOT NULL DEFAULT '',
@@ -70,9 +101,12 @@ function createSchema(db,kind,generation){
   CREATE INDEX songs_code_idx ON songs(code);
   CREATE INDEX songs_title_idx ON songs(title);
   CREATE INDEX songs_artist_idx ON songs(artist);
+  CREATE INDEX songs_code ON songs(code);
+  CREATE INDEX songs_title ON songs(title COLLATE NOCASE,id);
+  CREATE INDEX songs_duplicate ON songs(duplicate_of);
   CREATE TABLE removed_songs (web_song_id TEXT PRIMARY KEY NOT NULL);`);
   const insert=db.prepare('INSERT INTO catalog_meta(key,value) VALUES (?,?)');
-  for(const [key,value] of Object.entries({format:FORMAT,schemaVersion:VERSION,kind,generation})){
+  for(const [key,value] of Object.entries({format:FORMAT,schemaVersion:VERSION,kind,generation,pcSchema:'shared-v1',pathBase:'SONGS'})){
     insert.run([key,String(value)]);insert.reset();
   }
   insert.free();
@@ -86,8 +120,8 @@ async function create(kind,songs,removes=[],generation=''){
     createSchema(db,kind,generation);
     db.run('BEGIN TRANSACTION');
     const upsert=db.prepare(
-      'INSERT INTO songs(web_song_id,code,title,artist,source_format,original_filename,original_relative_path,original_file_size,source_code,midi_size,midi_md5,payload) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
-    const seen=new Set(),midiHashes=new Map();
+      'INSERT INTO songs(id,web_song_id,path,kind,search,format,code,title,artist,source_format,original_filename,original_relative_path,original_file_size,source_code,midi_size,midi_md5,payload) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+    const seen=new Set(),midiHashes=new Map(),pcIds=new Map();
     try{
       for(const row of songs){
         if(!row||!validId(row.webSongId)||seen.has(row.webSongId))
@@ -110,12 +144,21 @@ async function create(kind,songs,removes=[],generation=''){
           row.xmid?.path?.split('/').pop()||
           row.xsk?.path?.split('/').pop()||
           row.midi?.path?.split('/').pop()||'').slice(0,255);
-        const originalPath=String(row.originalRelativePath||'').slice(0,1024);
+        const originalPath=String(row.originalRelativePath||'').replaceAll('\\','/').slice(0,1024);
+        // The relative path is the exact location under XStageKaraoke/SONGS.
+        // Reject paths that cannot be mapped identically on PC and Online.
+        if(!originalPath||originalPath.startsWith('/')||originalPath.split('/').some(p=>!p||p==='.'||p==='..'||p.includes(':')))
+          fail('พาธเพลงไม่ตรงโครงสร้าง SONGS: '+originalPath);
+        const stableId=pcId(row.webSongId);
+        const collision=pcIds.get(stableId);
+        if(collision&&collision!==row.webSongId)fail('รหัสเพลง PC ชนกัน กรุณาตรวจฐาน');
+        pcIds.set(stableId,row.webSongId);
         const originalFileSize=Number(row.originalFileSize||0);
         if(originalFileSize&&(!Number.isSafeInteger(originalFileSize)||originalFileSize<0))
           fail('ขนาดไฟล์ต้นฉบับไม่ถูกต้อง');
         const sourceCode=String(row.sourceCode||row.code||'').slice(0,140);
-        upsert.run([row.webSongId,String(row.code||''),String(row.title||''),
+        upsert.run([stableId,row.webSongId,'SONGS/'+originalPath,pcKind(row),pcSearch(row),
+          String(row.sourceFormat||''),String(row.code||''),String(row.title||''),
           String(row.artist||''),String(row.sourceFormat||''),
           originalFilename,originalPath,originalFileSize||null,
           sourceCode,midiSize>0?midiSize:null,validHash,JSON.stringify(row)]);
