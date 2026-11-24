@@ -504,7 +504,7 @@ function createWorkflow(options={}){
         checkpoint=await (options.openCheckpoint||openCheckpoint)();
         check();
         display('กำลังอ่าน DB/songs.sqlite3 ที่ใช้งานอยู่…');
-        const existing=await scope.XStageCloudImport.loadCatalog(drive,initial.rootId);
+        const existing=await scope.XStageCloudImport.loadCatalog(drive,initial.rootId,{verifyChecksum:true});
         const rows=existing.rows;
         const originalCount=rows.size;
         const baseLabel='ฐานเดิม '+originalCount+' เพลง';
@@ -545,7 +545,9 @@ function createWorkflow(options={}){
         progress(skipped);
         // Reuse one verified result for byte-identical packages, including
         // copies under a different Drive ID. Never infer MIDI equality from a filename.
-        const inFlight=new Map();
+        const inFlight=new Map(),signatureCounts=new Map();
+        const signatureOf=file=>{const sig=packageSignature(file);return sig?file.ext+':'+sig:'';};
+        for(const file of remaining){const sig=signatureOf(file);if(sig)signatureCounts.set(sig,(signatureCounts.get(sig)||0)+1);}
         const inspect=async file=>{
           check();
           const key=checkpointKey(initial,chosen.id,file);
@@ -555,15 +557,17 @@ function createWorkflow(options={}){
               /^[a-f0-9]{32}$/i.test(saved.midiHash)&&Number.isSafeInteger(saved.midiSize)&&
               saved.midiSize>0&&saved.parsed?.document&&saved.identity){
             reused++;
+            const sig=signatureOf(file);
+            if(sig&&signatureCounts.get(sig)>1&&!inFlight.has(sig))inFlight.set(sig,Promise.resolve(saved));
             return {...saved,file};
           }
-          const sig=packageSignature(file),signature=sig?file.ext+':'+sig:'';
+          const signature=signatureOf(file);
           let task=signature&&inFlight.get(signature);
           if(task)shared++;
           else{
             downloaded++;
             task=inspectPackage(drive,file,check);
-            if(signature)inFlight.set(signature,task);
+            if(signature&&signatureCounts.get(signature)>1)inFlight.set(signature,task);
           }
           const result=await task;
           const item={...result,file};
@@ -623,9 +627,12 @@ function createWorkflow(options={}){
             const k=code.toLowerCase();if(!codes.has(k))codes.set(k,[]);
             codes.get(k).push(row);added++;
           }
-          // Keep at most a batch of decoded metadata in memory; subsequent
-          // identical packages can use the persisted per-file checkpoint or verified signature.
-          inFlight.clear();
+          // Retain decoded metadata only for signatures that still have copies
+          // to process, including copies in later batches. No song bytes retained.
+          for(const file of batch){const sig=signatureOf(file);if(!sig)continue;
+            const left=(signatureCounts.get(sig)||1)-1;
+            if(left){signatureCounts.set(sig,left);}else{signatureCounts.delete(sig);inFlight.delete(sig);}
+          }
           progress(skipped+offset);
         }
         check();
