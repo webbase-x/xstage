@@ -181,6 +181,26 @@ async function inspectPackage(drive,file,check){
 // and verified MIDI identities; duplicates need not occupy another DB row.
 const packageSignature=file=>/^[a-f0-9]{32}$/i.test(file?.md5Checksum||'')&&Number.isSafeInteger(Number(file.size))&&Number(file.size)>0
   ?String(file.md5Checksum).toLowerCase()+':'+Number(file.size):'';
+// Only trust rows whose source is still present with the same package checksum and size.
+function verifiedPackageRows(files,rows){
+  const byId=new Map(files.map(file=>[file.id,file])),known=new Map();
+  for(const row of rows.values()){
+    const media=row.xmid||row.xsk,kind=row.xmid?'xmid':'xsk';
+    const file=media&&byId.get(media.fileId),sig=packageSignature(media);
+    const hash=String(row.midiHash||row.midi?.md5Checksum||'').toLowerCase();
+    const size=Number(row.midiSize||row.midi?.size||0);
+    if(file&&file.ext===kind&&sig&&sig===packageSignature(file)&&/^[a-f0-9]{32}$/.test(hash)&&Number.isSafeInteger(size)&&size>0)
+      known.set(kind+':'+sig,row);
+  }
+  return known;
+}
+function inspectionLimits(navigator={}){
+  const conn=navigator.connection||{},memory=Number(navigator.deviceMemory)||0;
+  const low=conn.saveData||/^(slow-2g|2g|3g)$/.test(conn.effectiveType||'')||(memory>0&&memory<=2);
+  if(low)return {workers:4,bytes:16*1024*1024};
+  if(memory>=8&&conn.effectiveType==='4g')return {workers:12,bytes:48*1024*1024};
+  return {workers:8,bytes:24*1024*1024};
+}
 async function compareCatalog(files,rows,checkpoint,s,folder,check=()=>{}){
   const byId=new Map(files.map(f=>[f.id,f])),validIds=new Set(),packages=new Set(),midi=new Set(),midiSeen=new Set();
   let stale=0,other=0,duplicateRows=0,matchedRows=0,uncertain=0,newFiles=0,duplicates=0;
@@ -503,14 +523,29 @@ function createWorkflow(options={}){
         const listing=await walkMusic(drive,chosen.id,check,message=>display(existingLabel+' · '+message));
         if(!listing.files.length)
           fail('ไม่พบ XMID/XSK ที่อ่านได้ในโฟลเดอร์นี้ · ยังไม่ได้แก้ไข DB');
-        let added=0,duplicates=0,alreadyRegistered=0,duplicateInBatch=0,invalid=0,reused=0;
+        let added=0,duplicates=0,alreadyRegistered=0,duplicateInBatch=0,invalid=0,reused=0,skipped=0,downloaded=0,shared=0;
+        const known=verifiedPackageRows(listing.files,rows),remaining=[];
         const markDuplicate=row=>{
           duplicates++;
           if(existingIds.has(row.webSongId))alreadyRegistered++;
           else duplicateInBatch++;
         };
         const duplicateLabel=()=> 'MIDI ซ้ำ '+duplicates+' (มีในฐานแล้ว '+alreadyRegistered+' · ซ้ำในรอบนี้ '+duplicateInBatch+')';
-        display(existingLabel+' · พบไฟล์ '+listing.files.length+' · เริ่มตรวจไฟล์…');
+        const progress=processed=>display(existingLabel+' · ตรวจ '+processed+' / '+listing.files.length+
+          ' ('+Math.floor(processed*100/listing.files.length)+'%) · ข้ามจากฐาน '+skipped+
+          ' · ดาวน์โหลดตรวจจริง '+downloaded+' · ใช้จุดบันทึก '+reused+' · ใช้ผลไฟล์เหมือนกัน '+shared+
+          ' · เพิ่มใหม่ '+added+' · '+duplicateLabel()+' · ไฟล์ผิดรูปแบบ '+invalid+
+          ' · คาดว่าฐานรวม '+(retainedCount+added)+' เพลง');
+        for(const file of listing.files){
+          check();
+          const sig=packageSignature(file),row=sig&&known.get(file.ext+':'+sig);
+          if(row){markDuplicate(row);skipped++;}else remaining.push(file);
+        }
+        const limits=inspectionLimits(scope.navigator);
+        progress(skipped);
+        // Reuse one verified result for byte-identical packages, including
+        // copies under a different Drive ID. Never infer MIDI equality from a filename.
+        const inFlight=new Map();
         const inspect=async file=>{
           check();
           const key=checkpointKey(initial,chosen.id,file);
@@ -522,7 +557,16 @@ function createWorkflow(options={}){
             reused++;
             return {...saved,file};
           }
-          const item=await inspectPackage(drive,file,check);
+          const sig=packageSignature(file),signature=sig?file.ext+':'+sig:'';
+          let task=signature&&inFlight.get(signature);
+          if(task)shared++;
+          else{
+            downloaded++;
+            task=inspectPackage(drive,file,check);
+            if(signature)inFlight.set(signature,task);
+          }
+          const result=await task;
+          const item={...result,file};
           check();
           if(key&&checkpoint){
             const {file:ignored,...metadata}=item;
@@ -532,9 +576,14 @@ function createWorkflow(options={}){
         };
         // Bounded parallel reads, sequential catalog merge. The SQLite file
         // is published once, and only after all Drive assets are verified.
-        for(let offset=0;offset<listing.files.length;offset+=4){
+        for(let offset=0;offset<remaining.length;){
           check();
-          const batch=listing.files.slice(offset,offset+4);
+          const batch=[];let bytes=0;
+          while(offset<remaining.length&&batch.length<limits.workers){
+            const file=remaining[offset],size=Number(file.size)||limits.bytes;
+            if(batch.length&&bytes+size>limits.bytes)break;
+            batch.push(file);bytes+=size;offset++;
+          }
           const outcomes=await Promise.allSettled(batch.map(file=>
             inspect(file)));
           for(let i=0;i<outcomes.length;i++){
@@ -574,11 +623,10 @@ function createWorkflow(options={}){
             const k=code.toLowerCase();if(!codes.has(k))codes.set(k,[]);
             codes.get(k).push(row);added++;
           }
-          if(offset%16===0||offset+4>=listing.files.length)
-            display(existingLabel+' · ตรวจ '+Math.min(offset+4,listing.files.length)+' / '+listing.files.length+
-              ' ('+Math.floor(Math.min(offset+4,listing.files.length)*100/listing.files.length)+'%)'+
-              ' · เพิ่มใหม่ '+added+' · '+duplicateLabel()+' · ไฟล์ผิดรูปแบบ '+invalid+
-              ' · ใช้จุดบันทึก '+reused+' · คาดว่าฐานรวม '+(retainedCount+added)+' เพลง');
+          // Keep at most a batch of decoded metadata in memory; subsequent
+          // identical packages can use the persisted per-file checkpoint or verified signature.
+          inFlight.clear();
+          progress(skipped+offset);
         }
         check();
         const needsPublication=Boolean(added||indexed.duplicates||indexed.backfilled);
@@ -591,6 +639,7 @@ function createWorkflow(options={}){
         setPending(initial,'');
         display((needsPublication?'สร้างฐานเสร็จ':'ตรวจเสร็จ · ไม่มีข้อมูลใหม่ให้เผยแพร่')+
           ' · '+existingLabel+' · เพิ่มใหม่ '+added+' เพลง · ข้าม '+duplicateLabel()+
+          ' · ข้ามจากฐาน '+skipped+' · ดาวน์โหลดตรวจจริง '+downloaded+' · ใช้จุดบันทึก '+reused+' · ใช้ผลไฟล์เหมือนกัน '+shared+
           ' · ไฟล์ผิดรูปแบบ '+invalid+
           ' · รูปแบบอื่นที่ยังไม่ได้ทำดัชนี '+listing.otherCount+
           ' · ฐานเพลงรวม '+rows.size+' เพลง');
@@ -640,5 +689,5 @@ function createWorkflow(options={}){
     getSelection:(sub,root,kind)=>readSelections(sub,root)[kind]||null,
     cancel:()=>controller?.abort()};
 }
-scope.XStageDriveFolders={init:createWorkflow,readSelections,walkMusic,verifyFolder,countSourceFiles,compareCatalog};
+scope.XStageDriveFolders={init:createWorkflow,readSelections,walkMusic,verifyFolder,countSourceFiles,compareCatalog,verifiedPackageRows,inspectionLimits};
 })(typeof window!=='undefined'?window:globalThis);
