@@ -641,12 +641,13 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
   const older=(await drive.listChildren(dbRoot)).filter(x=>
     x.name==='songs.sqlite3'&&x.mimeType!==MIME_FOLDER);
   if(older.length)backupRoot=await drive.ensurePath(rootId,['BACKUP']);
-  for(let i=0;i<older.length;i++){
-    check();
-    status?.('สำรองฐานก่อนหน้า '+(i+1)+'/'+older.length);
-    await drive.moveToFolder(older[i].id,dbRoot,backupRoot);
-  }
+  // Include moving the previous database in the rollback-protected region.
   try{
+    for(let i=0;i<older.length;i++){
+      check();
+      status?.('สำรองฐานก่อนหน้า '+(i+1)+'/'+older.length);
+      await drive.moveToFolder(older[i].id,dbRoot,backupRoot);
+    }
     await drive.moveToFolder(staged.id,cacheRoot,dbRoot,'songs.sqlite3');
     const active=(await drive.listChildren(dbRoot)).filter(x=>
       /\.sqlite3$/i.test(x.name)&&x.mimeType!==MIME_FOLDER);
@@ -1231,6 +1232,7 @@ class Importer {
   }
   stop(message){
     if(!this.running)return;
+    if(this.catalogPublishing){this.pauseAfterPublication=true;this.status('กำลังบันทึกฐานเพลงอย่างปลอดภัย · จะพักเมื่อยืนยันฐานเสร็จ');return;}
     this.stopRequested=true;
     this.controller?.abort();
     this.status(message+' · กด “เริ่ม” เพื่อทำต่อหลังเชื่อม Google Drive');
@@ -1338,7 +1340,7 @@ class Importer {
     if(this.selectedSub!==auth.sub){this.status('บัญชี Google เปลี่ยน · กรุณาเลือกโฟลเดอร์อีกครั้งเพื่อป้องกันนำเข้าผิดบัญชี');return;}
     this.account=auth.sub;
     this.videoEditor?.releasePreview();
-    this.running=true;this.stopRequested=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,metadataPending:0,fonts:0,errors:0};
+    this.running=true;this.stopRequested=false;this.catalogPublishing=false;this.pauseAfterPublication=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,metadataPending:0,fonts:0,errors:0};
     this.progress(0,1);this.refreshButtons();
     this.controller=new AbortController();
     const drive=new Drive(()=>this.session()?.token,()=>this.check());
@@ -1471,13 +1473,17 @@ class Importer {
         if(!revisions.length&&!normalizePending)return;
         for(let attempt=0;attempt<3;attempt++){
           try{
-            ({pointer}=await publishSingleCatalog({
-              drive,rootId,pointer,rows,check:()=>this.check(),
-              status:message=>this.status(message)
-            }));
+            this.catalogPublishing=true;
+            try{
+              ({pointer}=await publishSingleCatalog({
+                drive,rootId,pointer,rows,check:()=>this.check(),
+                status:message=>this.status(message)
+              }));
+            }finally{this.catalogPublishing=false;}
             revisions=[];normalizePending=false;
             await this.save({status:'publishing',done:finished,total:work.length,
               generation:pointer.generation,songCount:rows.size});
+            if(this.pauseAfterPublication){this.stopRequested=true;this.check();}
             return;
           }catch(error){
             if(attempt>=2||!/จากอีกอุปกรณ์|อีกเครื่องสร้าง songs.sqlite3/.test(
@@ -1997,7 +2003,7 @@ class Importer {
         error:aborted(error)?'paused':this.authRequired?
           'auth-required: '+String(error.message||error):String(error.message||error)});
     }finally{
-      this.running=false;this.controller=null;this.renderSelection();this.refreshButtons();
+      this.running=false;this.catalogPublishing=false;this.pauseAfterPublication=false;this.controller=null;this.renderSelection();this.refreshButtons();
     }
   }
 }
