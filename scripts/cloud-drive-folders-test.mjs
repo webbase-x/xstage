@@ -177,6 +177,28 @@ const inventoryDrive={listChildren:async id=>id==='fontSource1234'?
   [{id:'sf2nested123',name:'nested',mimeType:folderMime},{id:'bank0001',name:'a.SF2'}]:
   [{id:'bank0001',name:'a.SF2'},{id:'bank0002',name:'b.sf3'},
    {id:'fx000001',name:'c.wav',mimeType:'audio/wav'},{id:'song0001',name:'d.XMID'}]};
+let openedUrl='',closedTabs=0;
+window.open=()=>({opener:window,location:{replace:url=>{openedUrl=url;}},close(){closedTabs++;}});
+await workflow.openDriveFolder('music');
+assert.equal(openedUrl,'https://drive.google.com/drive/folders/'+music);
+parents.set(music,outsideParent);openedUrl='';
+await workflow.openDriveFolder('music');
+assert.equal(openedUrl,'','Moved folder must never open outside the library');
+assert.equal(closedTabs,1);
+parents.set(music,root);
+const defaultRoot='defaultRoot1234',defaultMusic='defaultSongs1234';
+parents.set(defaultMusic,defaultRoot);names.set(defaultMusic,'SONGS');
+const originalList=FakeDrive.prototype.listChildren;
+FakeDrive.prototype.listChildren=async function(id){
+  if(id===defaultRoot)return [{id:defaultMusic,name:'SONGS',mimeType:folderMime}];
+  return originalList.call(this,id);
+};
+current={sub:'account1',rootId:defaultRoot,token:'token1'};
+await workflow.discoverDefaults();
+assert.equal(workflow.getFolderId('account1',defaultRoot,'music'),defaultMusic);
+assert.equal(workflow.getFolderId('account1',root,'music'),music);
+assert.equal(workflow.getFolderId('account1',defaultRoot,'soundfont'),'');
+assert.equal(uploads,0,'Discovering standard folders must not upload or create any file');
 const inventory=await window.XStageDriveFolders.countSourceFiles(inventoryDrive,font);
 assert.equal(inventory.total,4);assert.equal(inventory.sf2,1);assert.equal(inventory.sf3,1);
 assert.equal(inventory.fx,1);assert.equal(inventory.xmid,1);
