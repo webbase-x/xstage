@@ -19,7 +19,12 @@ const noteName=n=>names[n%12]+Math.floor(n/12-1);
 let source=null,parsed=null,getTime=()=>0,getPlaying=()=>false,preview=()=>false;
 let events=[],position=0,lastTime=-1,active=new Map(),rendered=new Map();
 let start=36,raf=0,previousFrame=0,heldPointers=new Map(),heldKeyboard=new Map();
-let resizeObserver=null,userDismissed=false;
+let resizeObserver=null,userDismissed=false,manualOpen=false;
+const compact=scope.matchMedia?.('(max-width: 820px), (max-height: 540px) and (pointer: coarse), (pointer: coarse) and (hover: none)');
+const manualOnly=()=>!!compact?.matches;
+compact?.addEventListener?.('change',()=>{
+  if(manualOnly()&&!manualOpen&&!panel.hidden)toggle(false);
+});
 for(let ch=1;ch<=16;ch++){
   const option=document.createElement('option');
   option.value=String(ch-1);option.textContent='ช่อง '+ch;
@@ -160,11 +165,11 @@ function up(owner,sourceMap){
 }
 trigger.addEventListener('click',()=>{
   const open=panel.hidden;
-  userDismissed=!open;
+  userDismissed=!open;manualOpen=open;
   toggle(open,{focus:open});
 });
 close.addEventListener('click',()=>{
-  userDismissed=true;toggle(false);trigger.focus({preventScroll:true});
+  userDismissed=true;manualOpen=false;toggle(false);trigger.focus({preventScroll:true});
 });
 range.addEventListener('change',redraw);
 channel.addEventListener('change',updateNotes);
@@ -188,7 +193,7 @@ scope.addEventListener('pointerup',event=>up(event.pointerId,heldPointers));
 scope.addEventListener('pointercancel',event=>up(event.pointerId,heldPointers));
 const canType=target=>target&&/INPUT|SELECT|TEXTAREA/.test(target.tagName||'');
 panel.addEventListener('keydown',event=>{
-  if(event.key==='Escape'){toggle(false);trigger.focus();return;}
+  if(event.key==='Escape'){userDismissed=true;manualOpen=false;toggle(false);trigger.focus();return;}
   if(canType(event.target)||event.altKey||event.ctrlKey||event.metaKey)return;
   const offset=pianoLetters.indexOf(String(event.key).toLowerCase());
   if(offset<0)return;
@@ -219,10 +224,13 @@ function setSong({bytes=null,getCurrentTime=null,isPlaying=null,previewNote=null
     return;
   }
   trigger.hidden=false;
-  // A newly loaded MIDI opens the top PC-style piano automatically unless
-  // the listener explicitly closed it; changing songs preserves that choice.
-  if(!userDismissed)toggle(true);
+  // Compact/touch layouts never open the piano just because MIDI starts.
+  // An explicitly opened piano stays open across MIDI tracks.
+  if(manualOnly()){
+    if(manualOpen&&!panel.hidden){ensureEvents();drawKeys();}
+    else toggle(false);
+  }else if(!userDismissed)toggle(true);
   else if(!panel.hidden){ensureEvents();drawKeys();}
 }
-scope.XStageMIDIPiano={setSong,close:()=>toggle(false)};
+scope.XStageMIDIPiano={setSong,close:()=>{manualOpen=false;userDismissed=true;toggle(false);}};
 })(typeof window!=='undefined'?window:globalThis);

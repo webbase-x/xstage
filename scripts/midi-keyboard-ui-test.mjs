@@ -66,7 +66,8 @@ const document={
   createElement:tag=>{const el=new El(tag);el.tagName=tag.toUpperCase();return el;}
 };
 const preview=[];
-const browser={addEventListener(){},console:{warn(){}},
+const compact={matches:false,addEventListener(type,fn){this.change=fn;}};
+const browser={addEventListener(){},matchMedia:()=>compact,console:{warn(){}},
   XStageBrowserMidi:{parseMidi:()=>({notes:[
     {start:1,end:2,channel:0,key:60},
     {start:1.2,end:1.8,channel:1,key:64}
@@ -89,6 +90,14 @@ assert.equal(elements['midi-keyboard-panel'].hidden,true,'The menu action collap
 elements['midi-keyboard-toggle'].emit('click');
 assert.equal(elements['midi-keyboard-panel'].hidden,false,'The menu action restores the piano');
 assert.equal(elements['midi-keyboard-toggle'].attributes['aria-expanded'],'true');
+compact.matches=true;compact.change();
+assert.equal(elements['midi-keyboard-panel'].hidden,false,'Explicitly opened piano survives compact layout');
+elements['midi-keyboard-close'].emit('click');
+browser.XStageMIDIPiano.setSong({bytes:Uint8Array.of(1,2,3),getCurrentTime:()=>1.5,isPlaying:()=>true,previewNote:(note,on)=>{preview.push([note,on]);return true;}});
+assert.equal(elements['midi-keyboard-panel'].hidden,true,'Mobile MIDI playback never opens piano automatically');
+assert.equal(elements['midi-keyboard-toggle'].hidden,false,'Mobile can still open the piano manually');
+elements['midi-keyboard-toggle'].emit('click');
+assert.equal(elements['midi-keyboard-panel'].hidden,false,'Mobile manual action opens piano');
 const pianoKeys=()=>elements['midi-piano-keys'].children[0].children;
 assert.equal(pianoKeys().length,61,'PC compact piano must show exactly 61 keys');
 assert.equal(elements['midi-keyboard-notes'].textContent,'C4 E4');
