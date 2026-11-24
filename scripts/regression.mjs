@@ -808,6 +808,19 @@ assert.ok(releaseMatch,'config release metadata must exist');
 assert.equal(version.version,releaseMatch[1],'version.json version must match config');
 assert.equal(Number(version.build),Number(releaseMatch[2]),'version.json build must match config');
 assert.equal(pkg.version,version.version,'package version must match release');
+const htmlRelease=index.match(/window\.XSTAGE_RELEASE\s*=\s*\{\s*version:\s*'([^']+)',\s*build:\s*(\d+)\s*\}/);
+assert.ok(htmlRelease,'The running HTML must declare its own release');
+assert.equal(htmlRelease[1],version.version);
+assert.equal(Number(htmlRelease[2]),Number(version.build));
+assert.ok(index.indexOf('src="config.js?v=')<htmlRelease.index,
+  'HTML release must be assigned AFTER config, even when stale config is cached');
+const cachedOldHtml={XSTAGE_RELEASE:{version:'1.0.144',build:1144}};
+new Function('window',config)(cachedOldHtml);
+assert.equal(cachedOldHtml.XSTAGE_RELEASE.build,1144,
+  'New config must not overwrite the version of an older running HTML shell');
+const standalone={};new Function('window',config)(standalone);
+assert.equal(standalone.XSTAGE_RELEASE.build,version.build);
+
 const localAssetVersions=[...index.matchAll(/(?:src|href)="([^"]+)\?v=(\d+)(?:-[\w-]+)?"/g)]
   .map(match=>({asset:match[1],build:Number(match[2])}));
 assert.ok(localAssetVersions.length>0,'karaoke page must version its local assets');
