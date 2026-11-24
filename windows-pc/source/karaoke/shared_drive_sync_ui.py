@@ -146,7 +146,12 @@ def open_drive_push(app):
         source = source_var.get().strip()
         root = root_var.get().strip()
         area = area_var.get().strip()
-        if (source != plan["source"] or root != plan["root"] or area != plan["area"]):
+        try:
+            same_source = str(Path(source).expanduser().resolve(strict=True)) == plan["source"]
+            same_root = str(sync.resolve_root(root)) == plan["root"]
+        except (ValueError, OSError):
+            same_source = same_root = False
+        if not same_source or not same_root or area != plan["area"]:
             reset()
             status.set("พาธเปลี่ยน กรุณาตรวจรายการใหม่ก่อนส่ง")
             return
