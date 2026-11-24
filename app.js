@@ -899,6 +899,15 @@ const ACTIVE_AUTH_KEY = 'xstage-google-token-v2';
 const PENDING_AUTH_KEY = 'xstage-google-pending-token-v1';
 const LEGACY_ACTIVE_AUTH_KEY = 'xstage-tab-google-token-v1';
 const AUTH_EXPIRY_MARGIN_MS = 90_000;
+const DRIVE_READ_SCOPE='https://www.googleapis.com/auth/drive.readonly';
+const DRIVE_FILE_SCOPE='https://www.googleapis.com/auth/drive.file';
+let fullDriveReadToken='';
+function hasFullDriveRead(){return !!state.token&&fullDriveReadToken===state.token;}
+function grantedDriveReadAndWrite(result){
+  const scopes=new Set(String(result?.scope||'').split(/\s+/));
+  return scopes.has(DRIVE_READ_SCOPE)&&scopes.has(DRIVE_FILE_SCOPE);
+}
+window.XStageDriveReadAccess=hasFullDriveRead;
 // Google Identity Services token callbacks can arrive after Safari refocuses.
 // Only Google callbacks, an explicit new attempt, or the full timeout can settle a flow.
 let webGoogleAuthFlow=null;
@@ -908,6 +917,7 @@ function authRecordValid(current){
     Number.isFinite(current.expiresAt)&&current.expiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS);
 }
 function clearActiveAuth(){
+  fullDriveReadToken='';
   try{sessionStorage.removeItem(ACTIVE_AUTH_KEY);sessionStorage.removeItem(LEGACY_ACTIVE_AUTH_KEY);}catch{}
   try{localStorage.removeItem(ACTIVE_AUTH_KEY);}catch{}
 }
@@ -932,10 +942,12 @@ function readPendingAuth(){
 }
 function saveActiveAuth(token,expiresAt,sub){
   if(!authRecordValid({token,expiresAt,sub}))return;
-  const value=JSON.stringify({token,expiresAt,sub});
+  const readOnly=!!token&&token===fullDriveReadToken;
+  const value=JSON.stringify({token,expiresAt,sub,readOnly});
   try{sessionStorage.setItem(ACTIVE_AUTH_KEY,value);}catch{}
-  // This is still only Google's short-lived access token; never a password/refresh token.
-  try{localStorage.setItem(ACTIVE_AUTH_KEY,value);}catch{}
+  // Expanded read tokens stay in this tab only, never persistent localStorage.
+  try{if(readOnly)localStorage.removeItem(ACTIVE_AUTH_KEY);
+      else localStorage.setItem(ACTIVE_AUTH_KEY,value);}catch{}
 }
 function readActiveAuth(){
   const stores=[];
@@ -944,7 +956,10 @@ function readActiveAuth(){
   for(const store of stores){
     try{
       const current=JSON.parse(store.getItem(ACTIVE_AUTH_KEY)||store.getItem(LEGACY_ACTIVE_AUTH_KEY)||'null');
-      if(authRecordValid(current))return current;
+      if(authRecordValid(current)){
+        if(current.readOnly===true&&store===sessionStorage)fullDriveReadToken=current.token;
+        return current;
+      }
     }catch{}
   }
   clearActiveAuth();return null;
@@ -2371,6 +2386,7 @@ function login({automatic=false,remembered=false} = {}) {
     const client = google.accounts.oauth2.initTokenClient({
       client_id:cfg.googleClientId,
       scope:'openid email https://www.googleapis.com/auth/drive.file',
+      include_granted_scopes:false,
       callback: async result => {
         if(authId!==state.authId||settled)return;
         if(result?.error){finish();setStatus(googleAuthErrorMessage(result),'error');return;}
@@ -2434,7 +2450,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   player.pause(); player.removeAttribute('src'); player.load();
   resetSongVideo();
   if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
-  state.objectUrl = ''; state.token = '';state.tokenExpiresAt=0; state.accountSub = ''; state.manifest = null;
+  state.objectUrl = ''; state.token = '';fullDriveReadToken='';state.tokenExpiresAt=0; state.accountSub = ''; state.manifest = null;
   state.songs = [];state.shown = [];state.queue = [];state.history = [];
   state.catalogPointerId='';state.catalogDbDirId='';state.catalogGeneration='';state.catalogCache.clear();
   state.libraryRootId='';state.libraryRootCanShare=false;state.libraryRootOwnedByMe=false;state.libraryRootOwnerEmail='';state.availableLibraries=[];
@@ -5119,11 +5135,15 @@ let importerGoogleRenewalRetryAfter=0;
 // the SAME verified account without resetting catalog/queue or prompting users
 // once per chunk. GIS prompt:'' reuses an existing consent when Google allows it;
 // it can still require a real user gesture after revocation/blocked cookies.
-async function ensureImporterGoogleAuth(force=false,interactive=false){
+async function ensureImporterGoogleAuth(force=false,interactive=false,readAll=false){
+  const requestRead=readAll||hasFullDriveRead();
   const margin=3*60*1000;
   if(!force&&state.token&&state.accountSub&&
      state.tokenExpiresAt>Date.now()+margin)return true;
-  if(importerGoogleRenewal)return importerGoogleRenewal;
+  if(importerGoogleRenewal){
+    if(!readAll)return importerGoogleRenewal;
+    throw Error('กำลังต่ออายุสิทธิ์ Google อยู่ · โปรดลองอีกครั้ง');
+  }
   if(!state.accountSub||!state.token)
     throw Error('ยังไม่มีบัญชี Google ที่ยืนยันแล้ว · กรุณาเชื่อมต่อบัญชีเพื่อทำต่อ');
   if(!interactive&&Date.now()<importerGoogleRenewalRetryAfter)
@@ -5146,7 +5166,8 @@ async function ensureImporterGoogleAuth(force=false,interactive=false){
         try{
           const client=google.accounts.oauth2.initTokenClient({
             client_id:cfg.googleClientId,
-            scope:'openid email https://www.googleapis.com/auth/drive.file',
+            scope:'openid email https://www.googleapis.com/auth/drive.file'+(requestRead?' '+DRIVE_READ_SCOPE:''),
+            include_granted_scopes:false,
             callback:result=>{
               if(result?.error||!result?.access_token)
                 settle(Error('Google ต้องการการยืนยันสิทธิ์อีกครั้ง'));
@@ -5158,7 +5179,7 @@ async function ensureImporterGoogleAuth(force=false,interactive=false){
           // Google account ID. Reuse its consent and never switch accounts.
           const hint=rememberedGoogleAccount();
           client.requestAccessToken({
-            prompt:'',
+            prompt:readAll?'consent':'',
             ...(hint?.email?{login_hint:hint.email}:{})
           });
         }catch(error){settle(error);}
@@ -5179,6 +5200,9 @@ async function ensureImporterGoogleAuth(force=false,interactive=false){
       const expiresAt=Date.now()+Math.min(expiresIn,3600)*1000;
       if(state.authId!==authId||state.accountSub!==expectedSub)
         throw Error('บัญชี Google เปลี่ยนระหว่างตรวจสอบ');
+      if(requestRead&&!grantedDriveReadAndWrite(newToken))
+        throw Error('Google ยังไม่ได้อนุญาตทั้งการอ่านไฟล์ทั้งหมดและสิทธิ์ไฟล์ของแอป · สิทธิ์เดิมยังใช้ได้');
+      fullDriveReadToken=requestRead?newToken.access_token:'';
       state.token=newToken.access_token;
       state.tokenExpiresAt=expiresAt;
       saveActiveAuth(state.token,expiresAt,expectedSub);
@@ -5230,6 +5254,39 @@ document.addEventListener('visibilitychange',()=>{
 });
 updateGoogleRenewNotice();
 
+function updateDriveReadNotice(){
+  const button=$('xstage-drive-read-all'),status=$('xstage-drive-read-status');
+  if(!button||!status)return;
+  const full=hasFullDriveRead(),connected=!!state.token&&!!state.accountSub;
+  button.hidden=full;
+  button.disabled=!connected||androidTvNativeBridgeReady();
+  status.textContent=full?'Google อนุญาตให้อ่านไฟล์ทั้งหมดแล้ว · ค้นหาเฉพาะโฟลเดอร์ที่เลือก':
+    'ขณะนี้เห็นเฉพาะไฟล์ที่แอปได้รับสิทธิ์ · กดอนุญาตอ่านไฟล์ทั้งหมดเพื่อไม่ต้องเลือกไฟล์ทีละไฟล์';
+}
+$('xstage-drive-read-all')?.addEventListener('click',async()=>{
+  const button=$('xstage-drive-read-all'),status=$('xstage-drive-read-status');
+  if(!button||button.disabled||!state.token||!state.accountSub)return;
+  if(window.XStageDriveBuildBusy){if(status)status.textContent='กรุณาให้การสร้างฐานเพลงเสร็จก่อนเปลี่ยนสิทธิ์';return;}
+  const sub=state.accountSub,rootId=state.libraryRootId;
+  button.disabled=true;
+  if(status)status.textContent='กำลังขออนุญาตอ่านไฟล์ทั้งหมดจาก Google…';
+  try{
+    await ensureImporterGoogleAuth(true,true,true);
+    if(sub!==state.accountSub||rootId!==state.libraryRootId)return;
+    updateDriveReadNotice();
+    if(rootId){
+      await window.XStageBrowserMidi?.refreshFonts({token:state.token,rootId,sub,ownedByMe:state.libraryRootOwnedByMe});
+      window.dispatchEvent(new CustomEvent('xstage:drive-fx-folder-change'));
+      void xstageDriveFolders?.scanCounts();
+    }
+  }catch(error){
+    updateDriveReadNotice();
+    if(status)status.textContent='ยังไม่เปิดสิทธิ์อ่านทั้งหมด · '+String(error.message||error)+' · ใช้สิทธิ์เดิมต่อได้';
+  }
+});
+for(const event of ['xstage:auth-ready','xstage:auth-refreshed','xstage:librarychange','xstage:auth-cleared','xstage:drive-sources-open'])
+  window.addEventListener(event,updateDriveReadNotice);
+window.XStageDriveFontAuth=()=>({token:state.token,rootId:state.libraryRootId,sub:state.accountSub,ownedByMe:state.libraryRootOwnedByMe});
 window.XStageEnsureImporterGoogleAuth=ensureImporterGoogleAuth;
 const xstageCloudImporter=window.XStageCloudImport?.init({
   // The browser importer obtains only an in-memory short-lived token and the
@@ -5250,6 +5307,7 @@ const xstageCloudImporter=window.XStageCloudImport?.init({
 const xstageDriveFolders=window.XStageDriveFolders?.init({
   session:()=>({token:state.token,sub:state.accountSub,
     rootId:state.libraryRootId}),
+  hasFullRead:hasFullDriveRead,
   chooseFolder:chooseUserDriveFolder,
   ensureAuth:ensureImporterGoogleAuth,
   onSoundfontChange:()=>{

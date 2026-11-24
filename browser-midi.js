@@ -560,7 +560,7 @@ function fontStatusChanged(){
   scope.dispatchEvent?.(new CustomEvent('xstage:font-memory',{detail:fontStatus()}));
 }
 async function listFolder(parent,token){
-  const list=[];let page='';
+  const list=[],seenPages=new Set();let page='';
   do{
     const q=new URLSearchParams({q:"'"+parent+"' in parents and trashed=false",
       fields:'nextPageToken,files(id,name,mimeType,size,version,md5Checksum)',pageSize:'1000',supportsAllDrives:'true',includeItemsFromAllDrives:'true'});
@@ -569,6 +569,8 @@ async function listFolder(parent,token){
       {headers:{Authorization:'Bearer '+token},cache:'no-store'});
     if(!response.ok)fail('อ่านรายการ SoundFont บน Drive ไม่สำเร็จ HTTP '+response.status);
     const json=await response.json();list.push(...(json.files||[]));page=json.nextPageToken||'';
+    if(page&&seenPages.has(page))fail('Google Drive ส่งหน้ารายการซ้ำ');
+    if(page)seenPages.add(page);
   }while(page);
   return list;
 }
@@ -592,7 +594,7 @@ async function refreshFonts(auth){
   };
   showPermission(false,auth?.token&&rootId?'กำลังตรวจรายการ SoundFont…':'');
   const refresh=$('xstage-soundfont-refresh');
-  if(refresh)refresh.onclick=()=>{if(context)void refreshFonts(context);};
+  if(refresh)refresh.onclick=()=>{const current=scope.XStageDriveFontAuth?.()||context;if(current)void refreshFonts(current);};
   const clear=$('xstage-soundfont-local-clear');
   if(clear)clear.onclick=async()=>{
     const option=select.selectedOptions?.[0],key=fontDiskKey(context?.sub,context?.rootId,option?.value,option?.dataset?.revision);
@@ -631,7 +633,9 @@ async function refreshFonts(auth){
           if(sequence!==fontRefreshSequence)return;
           const id=pendingFolders.shift();
           if(visited.has(id))continue;
+          if((scope.XSTAGE_RETIRED_DRIVE_ROOT_IDS||[]).includes(id))fail('พบคลังที่ยกเลิก');
           visited.add(id);
+          if(visited.size>20000)fail('จำนวนโฟลเดอร์ SoundFont เกินขอบเขต');
           const entries=await listFolder(id,auth.token);
           for(const entry of entries){
             if(entry.mimeType==='application/vnd.google-apps.folder'){
@@ -653,7 +657,7 @@ async function refreshFonts(auth){
       const count=choices.length-1;
       const summary=sourceName+' · พบ SoundFont '+count+' ไฟล์';
       if(status)status.textContent=summary+(count===0?' · ตรวจสอบในเมนูจัดการคลัง Google Drive':'');
-      showPermission(count===0&&!!chosenFolder,summary+(count===0?(chosenFolder?' · หากมีไฟล์อยู่ ให้เปิดสิทธิ์เฉพาะไฟล์ที่จำเป็น':' · เลือกโฟลเดอร์ SoundFont เพื่อยืนยันแหล่งข้อมูล'):' · พร้อมเลือกใช้งานจากเมนู SoundFont'));
+      showPermission(!scope.XStageDriveReadAccess?.()&&count===0&&!!chosenFolder,summary+(count===0?(chosenFolder?' · หากมีไฟล์อยู่ ให้เปิดสิทธิ์เฉพาะไฟล์ที่จำเป็น':' · เลือกโฟลเดอร์ SoundFont เพื่อยืนยันแหล่งข้อมูล'):' · พร้อมเลือกใช้งานจากเมนู SoundFont'));
       const storageKey='xstage-font-pref:'+sub+':'+rootId+':'+(chosenFolder||'default');
       let saved='';
       try{saved=localStorage.getItem(storageKey)||(!chosenFolder?localStorage.getItem('xstage-font-pref:'+sub+':'+rootId):'')||'';}catch{}
@@ -707,7 +711,7 @@ async function refreshFonts(auth){
     }catch(error){
       if(sequence!==fontRefreshSequence)return;
       if(status)status.textContent='อ่านรายการไม่ได้: '+String(error.message);
-      showPermission(!!chosenFolder,'อ่านรายการไม่ได้: '+String(error.message));
+      showPermission(!scope.XStageDriveReadAccess?.()&&!!chosenFolder,'อ่านรายการไม่ได้: '+String(error.message));
       select.replaceChildren(...choices);
       const option=new Option('SoundFont: '+String(error.message).slice(0,80),'');
       option.disabled=true;select.append(option);

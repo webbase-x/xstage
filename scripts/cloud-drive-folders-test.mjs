@@ -164,4 +164,12 @@ const selections=window.XStageDriveFolders.readSelections('account1',root);
 assert.equal(selections.fx.id,fx);
 assert.ok(!JSON.stringify([...values.values()]).includes('token1'),
   'OAuth token must never be persisted in folder choices');
+const folderMime='application/vnd.google-apps.folder';
+const inventoryDrive={listChildren:async id=>id==='fontSource1234'?
+  [{id:'sf2nested123',name:'nested',mimeType:folderMime},{id:'bank0001',name:'a.SF2'}]:
+  [{id:'bank0001',name:'a.SF2'},{id:'bank0002',name:'b.sf3'},
+   {id:'fx000001',name:'c.wav',mimeType:'audio/wav'},{id:'song0001',name:'d.XMID'}]};
+const inventory=await window.XStageDriveFolders.countSourceFiles(inventoryDrive,font);
+assert.equal(inventory.total,4);assert.equal(inventory.sf2,1);assert.equal(inventory.sf3,1);
+assert.equal(inventory.fx,1);assert.equal(inventory.xmid,1);
 console.log('PASS: Three user-picked Drive folders, account-scoped preferences, retired-folder safety, deferred one-time DB, and raw MIDI dedup');

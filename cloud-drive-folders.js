@@ -54,6 +54,40 @@ async function verifyFolder(drive,id,root,kind){
   if(depth>=MAX_DEPTH+30)fail('โครงสร้างโฟลเดอร์ลึกเกินขอบเขตที่อนุญาต');
   return first;
 }
+// Metadata only; do not download, copy or modify any file during inventory.
+async function countSourceFiles(drive,start,check=()=>{}){
+  const folders=[{id:start,depth:0}],visited=new Set(),files=new Set();
+  const counts={total:0,xmid:0,xsk:0,sf2:0,sf3:0,fx:0,other:0};
+  while(folders.length){
+    check();
+    const {id,depth}=folders.shift();
+    if(!isId(id)||retired.has(id))fail('พบโฟลเดอร์ที่ไม่อนุญาต');
+    if(visited.has(id))continue;
+    visited.add(id);
+    if(visited.size>MAX_FOLDERS)fail('จำนวนโฟลเดอร์เกินขอบเขต');
+    const children=await drive.listChildren(id);
+    check();
+    for(const item of children){
+      if(!isId(item.id)||retired.has(item.id))fail('พบ File ID ที่ไม่อนุญาต');
+      if(item.mimeType===FOLDER){
+        if(depth>=MAX_DEPTH)fail('โครงสร้างโฟลเดอร์ลึกเกินขอบเขต');
+        folders.push({id:item.id,depth:depth+1});
+        continue;
+      }
+      if(files.has(item.id))continue;
+      files.add(item.id);
+      if(files.size>MAX_FILES)fail('จำนวนไฟล์เกินขอบเขต');
+      counts.total++;
+      const name=String(item.name||'');
+      const ext=name.split('.').pop().toLowerCase();
+      if(item.mimeType==='application/vnd.google-apps.shortcut')counts.other++;
+      else if(['xmid','xsk','sf2','sf3'].includes(ext))counts[ext]++;
+      else if(/^audio\//.test(item.mimeType||'')||/\.(wav|mp3|m4a|aac|ogg|flac|opus)$/i.test(name))counts.fx++;
+      else counts.other++;
+    }
+  }
+  return counts;
+}
 async function walkMusic(drive,start,check,progress){
   const folders=[{id:start,path:'',depth:0}],seen=new Set();
   const files=[];let count=0;
@@ -142,7 +176,35 @@ function createWorkflow(options={}){
   const nodes=Object.fromEntries(KIND.map(k=>[k,$('xstage-drive-folder-'+k+'-name')]));
   const status=$('xstage-drive-folder-status'),buildButton=$('xstage-drive-build-db'),
     cancelButton=$('xstage-drive-cancel-db');
-  let busy=false,controller=null;
+  let busy=false,controller=null,scanSequence=0;
+  const scanButton=$('xstage-drive-scan-counts');
+  const countNodes=Object.fromEntries(KIND.map(k=>[k,$('xstage-drive-count-'+k)]));
+  async function scanCounts(only=''){
+    const seq=++scanSequence;
+    let s;try{s=session();}catch{return;}
+    const check=()=>{
+      const now=session();
+      if(seq!==scanSequence||now.sub!==s.sub||now.rootId!==s.rootId)fail('เปลี่ยนบัญชีหรือคลังแล้ว');
+    };
+    const choices=readSelections(s.sub,s.rootId);
+    const drive=new scope.XStageCloudImport.Drive(()=>options.session()?.token,()=>{});
+    drive.ensureAuth=force=>options.ensureAuth?.(force);
+    const format=n=>Number(n).toLocaleString('th-TH');
+    for(const kind of KIND.filter(k=>!only||k===only)){
+      const node=countNodes[kind],choice=choices[kind];if(!node)continue;
+      if(!choice?.id){node.textContent='ยังไม่เลือกโฟลเดอร์';continue;}
+      node.textContent='กำลังตรวจนับทุกโฟลเดอร์ย่อย…';
+      try{
+        check();await verifyFolder(drive,choice.id,s.rootId,kind);check();
+        const c=await countSourceFiles(drive,choice.id,check);check();
+        const detail=kind==='music'?'XMID '+format(c.xmid)+' · XSK '+format(c.xsk):
+          kind==='soundfont'?'SF2 '+format(c.sf2)+' · SF3 '+format(c.sf3):'ไฟล์เสียง FX '+format(c.fx);
+        node.textContent='พบ '+format(c.total)+' ไฟล์ · '+detail+
+          (options.hasFullRead?.()?'':' · เฉพาะไฟล์ที่ได้รับสิทธิ์');
+      }catch(error){if(seq!==scanSequence)return;node.textContent='ตรวจนับไม่ครบ · '+String(error.message||error);}
+    }
+  }
+  scanButton?.addEventListener('click',()=>void scanCounts());
   function session(){
     const s=options.session?.()||{};
     if(!s.token||!s.sub||!isId(s.rootId)||retired.has(s.rootId))
@@ -168,6 +230,7 @@ function createWorkflow(options={}){
           (!valid?'กรุณาเชื่อม Google Drive และเลือกคลังที่ใช้งานอยู่':'');
       }
     }
+    if(scanButton)scanButton.disabled=!valid;
     if(buildButton)buildButton.disabled=busy||!pref.music?.id;
     if(cancelButton)cancelButton.disabled=!busy;
   }
@@ -198,6 +261,7 @@ function createWorkflow(options={}){
         ' ไฟล์ในระดับนี้ · ไม่มีการคัดลอกหรือย้ายไฟล์');
       if(kind==='soundfont')options.onSoundfontChange?.(choice.id);
       if(kind==='fx')options.onFxChange?.(choice.id);
+      void scanCounts(kind);
     }catch(error){display('เลือกโฟลเดอร์ไม่ได้: '+String(error?.message||error));}
     finally{render();}
   }
@@ -378,9 +442,9 @@ function createWorkflow(options={}){
   for(const event of ['online','pageshow','focus'])scope.addEventListener?.(event,resume);
   scope.document?.addEventListener?.('visibilitychange',resume);
   render();resume();
-  return {render,choose,rebuild,getFolderId:selectedId,
+  return {render,choose,rebuild,scanCounts,getFolderId:selectedId,
     getSelection:(sub,root,kind)=>readSelections(sub,root)[kind]||null,
     cancel:()=>controller?.abort()};
 }
-scope.XStageDriveFolders={init:createWorkflow,readSelections,walkMusic,verifyFolder};
+scope.XStageDriveFolders={init:createWorkflow,readSelections,walkMusic,verifyFolder,countSourceFiles};
 })(typeof window!=='undefined'?window:globalThis);
