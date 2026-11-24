@@ -842,7 +842,7 @@ function renderLibrarySelector(roots,activeId){
     ui.librarySelect.append(option);
   }
   if(activeId)ui.librarySelect.value=String(activeId);
-  ui.librarySwitcher.hidden=state.availableLibraries.length<2;
+  ui.librarySwitcher.hidden=true;
 }
 async function loadLatestCachedCatalog(sub,rootId=''){
   if(!sub||isRetiredDriveRoot(rootId))return null;
@@ -1628,11 +1628,11 @@ function setSharedLibraryGate(active,message=''){
   if(active){
     ui.gate.hidden=false;
     ui.gateLogin.hidden=true;
-    const ready=sharedLibraryFeatureReady();
+    const ready=!!state.token;
     if(button){
       button.hidden=false;
       button.disabled=!ready;
-      button.textContent=ready?'ใช้คลังเพลงจากผู้แชร์':'คลังที่แชร์ · ต้องตั้งค่า Google Picker';
+      button.textContent=ready?'เลือกโฟลเดอร์หลัก XStageKaraoke':'เชื่อม Google ก่อนเลือกคลัง';
     }
     if(copy)copy.textContent=ready
       ? 'บัญชีนี้ได้รับเชิญให้ใช้คลังเพลงของผู้แชร์ กรุณาอนุญาต X-Stage ให้เปิดโฟลเดอร์นั้นหนึ่งครั้ง'
@@ -1690,8 +1690,9 @@ $('xstage-soundfont-authorize')?.addEventListener('click',async()=>{
   try{
     const choice=window.XStageDriveFolders?.readSelections?.(sub,rootId)?.soundfont;
     if(!choice?.id)throw Error('เลือกโฟลเดอร์ SoundFont ที่ใช้งานอยู่ก่อน');
-    const ids=await chooseUserDriveSource('soundfont',true,choice.id);
-    if(!ids)return;
+    const drive=new window.XStageCloudImport.Drive(()=>state.token,()=>{});
+    await window.XStageDriveFolders.verifyFolder(drive,choice.id,rootId,'soundfont');
+    await ensureImporterGoogleAuth(true,true,true);
     if(sub!==state.accountSub||rootId!==state.libraryRootId||
        choice.id!==window.XStageDriveFolders?.readSelections?.(sub,rootId)?.soundfont?.id)
       throw Error('บัญชีหรือโฟลเดอร์เปลี่ยนระหว่างอนุญาตไฟล์');
@@ -1715,9 +1716,13 @@ async function chooseUserDriveFolder(kind){
       if(!sameSession())throw Error('บัญชีหรือคลังเปลี่ยนแล้ว');
       return folders;
     },
-    allowGrant:sharedLibraryFeatureReady()
+    allowGrant:!hasFullDriveRead()
   });
-  if(result?.grant&&sameSession())return chooseUserDriveSource(kind);
+  if(result?.grant&&sameSession()){
+    await ensureImporterGoogleAuth(true,true,true);
+    if(sameSession())return chooseUserDriveFolder(kind);
+    return null;
+  }
   return result;
 }
 function browseAuthorizedDriveFolders({rootId,kind,sameSession,list,allowGrant}){
@@ -1750,9 +1755,9 @@ function browseAuthorizedDriveFolders({rootId,kind,sameSession,list,allowGrant})
     });
     dialog.append(items);
     button('ลองโหลดรายการใหม่',()=>void render());
-    if(allowGrant)button('ไม่พบโฟลเดอร์ · ขอสิทธิ์เพิ่มเติมผ่าน Google Picker',()=>finish({grant:true}));
+    if(allowGrant)button('ไม่พบโฟลเดอร์ · ขอสิทธิ์อ่านจาก Google',()=>finish({grant:true}));
     const help=document.createElement('p');
-    help.textContent='แสดงเฉพาะโฟลเดอร์ที่บัญชีนี้อนุญาตแล้ว หาก Google Picker แจ้งเรื่องคุกกี้ ให้ปิดและเปิด X-Stage ผ่าน Safari หรือเบราว์เซอร์บนคอมพิวเตอร์เพื่ออนุญาตไฟล์ก่อน ไม่จำเป็นต้องเปลี่ยนการตั้งค่าความเป็นส่วนตัว';
+    help.textContent='แสดงเฉพาะโฟลเดอร์ภายในคลังหลัก XStageKaraoke · ย้อนกลับได้ไม่เกินคลังหลัก';
     dialog.append(help);
     dialog.addEventListener('cancel',event=>{event.preventDefault();finish(null);});
     dialog.addEventListener('close',()=>finish(null));
@@ -1770,7 +1775,7 @@ function browseAuthorizedDriveFolders({rootId,kind,sameSession,list,allowGrant})
         const seen=new Set(stack.map(x=>x.id));
         const choices=folders.filter(x=>x.mimeType==='application/vnd.google-apps.folder'&&
           /^[A-Za-z0-9_-]{5,256}$/.test(x.id)&&!isRetiredDriveRoot(x.id)&&
-          !seen.has(x.id)&&!['DB','CACHE','BACKUP','LOGS'].includes(String(x.name).toUpperCase()));
+          Array.isArray(x.parents)&&x.parents.includes(current.id)&&!seen.has(x.id)&&!['DB','CACHE','BACKUP','LOGS'].includes(String(x.name).toUpperCase()));
         choices.sort((a,b)=>String(a.name).localeCompare(String(b.name)));
         for(const folder of choices){
           if(seen.has(folder.id))continue;seen.add(folder.id);
@@ -1788,164 +1793,60 @@ function browseAuthorizedDriveFolders({rootId,kind,sameSession,list,allowGrant})
     catch(error){finish(null);}
   });
 }
-async function chooseUserDriveSource(kind,authorizeFiles=false,parentId=''){
-  const labels={music:'เพลง',soundfont:'SoundFont',fx:'FX'};
-  if(!Object.hasOwn(labels,kind))throw Error('ประเภทโฟลเดอร์ไม่ถูกต้อง');
-  if(!state.token||!state.accountSub||!state.libraryRootId)
-    throw Error('กรุณาเชื่อม Google และเลือกคลัง XStageKaraoke ก่อน');
-  if(!sharedLibraryFeatureReady())
-    throw Error('ยังไม่ได้ตั้งค่า Google Picker API key / App ID');
-  await ensureImporterGoogleAuth(false,false);
-  await loadGooglePickerApi();
-  const account=state.accountSub,rootId=state.libraryRootId,token=state.token;
-  // Native <dialog>.showModal() lives in the browser top layer. Google Picker
-  // uses its own iframe overlay outside that top layer, so no z-index can put
-  // Picker above an open modal dialog. Suspend ONLY the dialog presentation;
-  // do not call the importer's close() method (which would stop uploads).
-  const importDialog=$('cloud-import-dialog');
-  return new Promise((resolve,reject)=>{
-    let complete=false,picker=null,dialogSuspended=false,escapeButton=null;
-    const restoreDialog=()=>{
-      if(!dialogSuspended||!importDialog||importDialog.open)return;
-      dialogSuspended=false;
-      try{
-        if(typeof importDialog.showModal==='function')importDialog.showModal();
-        else importDialog.setAttribute('open','');
-      }catch(error){
-        console.warn('X-Stage import dialog could not regain focus:',error);
-      }
-    };
-    const finish=(value,error)=>{
-      if(complete)return;complete=true;
-      escapeButton?.remove();
-      // Dismiss the Google overlay before returning the importer to top layer.
-      try{picker?.setVisible(false);}catch(closeError){
-        console.warn('Google Picker close:',closeError);
-      }
-      restoreDialog();
-      if(error)reject(error);else resolve(value);
-    };
-    try{
-      const view=new google.picker.DocsView(google.picker.ViewId.DOCS)
-        .setIncludeFolders(true)
-        .setSelectFolderEnabled(!authorizeFiles)
-        .setMode(google.picker.DocsViewMode.LIST);
-      if(authorizeFiles){if(parentId)view.setParent(parentId);}
-      else view.setMimeTypes('application/vnd.google-apps.folder');
-      const builder=new google.picker.PickerBuilder();
-      if(authorizeFiles)builder.enableFeature(google.picker.Feature.MULTISELECT_ENABLED);
-      picker=builder.addView(view).setOAuthToken(token)
-        .setDeveloperKey(String(cfg.googlePickerApiKey).trim())
-        .setAppId(String(cfg.googleAppId).trim())
-        .setOrigin(location.origin)
-        .setTitle(authorizeFiles?'อนุญาตไฟล์ SoundFont ในโฟลเดอร์ที่เลือก':'เลือกโฟลเดอร์'+labels[kind]+' บน Google Drive')
-        .setCallback(data=>{
-          const action=data?.[google.picker.Response.ACTION];
-          if(action===google.picker.Action.CANCEL){finish(null);return;}
-          if(action!==google.picker.Action.PICKED)return;
-          if(account!==state.accountSub||rootId!==state.libraryRootId){
-            finish(null,Error('บัญชีหรือคลัง XStageKaraoke เปลี่ยนระหว่างเลือกโฟลเดอร์'));return;
-          }
-          if(authorizeFiles){
-            const ids=(data?.[google.picker.Response.DOCUMENTS]||[])
-              .filter(d=>/\.sf[23]$/i.test(d[google.picker.Document.NAME]||''))
-              .map(d=>String(d[google.picker.Document.ID]||''))
-              .filter(id=>/^[A-Za-z0-9_-]{5,256}$/.test(id)&&!isRetiredDriveRoot(id));
-            if(!ids.length){finish(null,Error('กรุณาเลือกไฟล์ .sf2 หรือ .sf3'));return;}
-            finish(ids);return;
-          }
-          const doc=data?.[google.picker.Response.DOCUMENTS]?.[0]||{};
-          const id=String(doc[google.picker.Document.ID]||'');
-          const name=String(doc[google.picker.Document.NAME]||'');
-          if(!/^[A-Za-z0-9_-]{5,256}$/.test(id)||isRetiredDriveRoot(id)){
-            finish(null,Error('ไม่สามารถเลือกโฟลเดอร์ที่ยกเลิกหรือ Folder ID ไม่ถูกต้อง'));return;
-          }
-          finish({id,name});
-        }).build();
-      if(importDialog?.open){
-        importDialog.close();
-        dialogSuspended=true;
-      }
-      picker.setVisible(true);
-      // A blocked cross-site cookie can leave the Google iframe without a callback.
-      // Keep an application-owned escape path above it, even on iOS.
-      if(!complete&&typeof document!=='undefined'&&document.body){
-        escapeButton=document.createElement('button');escapeButton.type='button';
-        escapeButton.textContent='ปิด Google Picker / กลับไปจัดการคลัง';
-        escapeButton.style.cssText='position:fixed;top:calc(env(safe-area-inset-top, 0px) + 8px);right:8px;z-index:2147483647;background:#12394b;color:white;padding:12px;border:1px solid #77c4dc;border-radius:8px;max-width:90vw';
-        escapeButton.addEventListener('click',()=>finish(null));document.body.append(escapeButton);
-      }
-    }catch(error){finish(null,error);}
-  });
-}
+// App-owned picker: never open Google's global browsing iframe.
 async function openSharedLibraryPicker(){
-  if(!state.token){setSharedLibraryGate(true,'กรุณาเข้าสู่ระบบด้วยอีเมลที่ได้รับเชิญก่อน');return;}
-  const key=String(cfg.googlePickerApiKey||'').trim();
-  const appId=String(cfg.googleAppId||'').trim();
-  if(!key||!appId){
-    setSharedLibraryGate(true,'คลังที่แชร์ยังไม่พร้อม · ต้องตั้งค่า Google Picker API key ที่จำกัดเฉพาะโดเมน X-Stage และ Google Picker/Drive API');
-    return;
+  if(!state.token||!state.accountSub){setStatus('กรุณาเข้าสู่ระบบ Google ก่อน','error');return;}
+  if(window.XStageDriveBuildBusy||xstageCloudImporter?.running){
+    setStatus('กรุณาให้งานนำเข้าหรือสร้างฐานเสร็จก่อนเปลี่ยนคลัง','error');return;
   }
-  ui.gateStatus.textContent='กำลังเปิดรายการโฟลเดอร์ที่แชร์…';
-  try{
-    await loadGooglePickerApi();
-    const view=new google.picker.DocsView(google.picker.ViewId.DOCS)
-      .setIncludeFolders(true)
-      .setMimeTypes('application/vnd.google-apps.folder')
-      .setSelectFolderEnabled(true)
-      .setOwnedByMe(false)
-      .setQuery(driveLayout.root)
-      .setMode(google.picker.DocsViewMode.LIST);
-    const picker=new google.picker.PickerBuilder()
-      .addView(view)
-      .setOAuthToken(state.token)
-      .setDeveloperKey(key)
-      .setAppId(appId)
-      .setOrigin(location.origin)
-      .setTitle('ใช้ '+driveLayout.root+' ของผู้แชร์โดยตรง · ไม่มีการคัดลอกไฟล์')
-      .setCallback(async data=>{
-        const action=data?.[google.picker.Response.ACTION];
-        if(action===google.picker.Action.CANCEL){
-          ui.gateStatus.textContent='ยังไม่ได้เลือกคลังที่แชร์';
-          return;
-        }
-        if(action!==google.picker.Action.PICKED)return;
-        const doc=data?.[google.picker.Response.DOCUMENTS]?.[0];
-        const id=String(doc?.[google.picker.Document.ID]||'');
-        const name=String(doc?.[google.picker.Document.NAME]||'');
-        if(!id){
-          ui.gateStatus.textContent='ไม่ได้รับรหัสโฟลเดอร์จาก Google Picker';
-          return;
-        }
-        if(isRetiredDriveRoot(id)){
-          ui.gateStatus.textContent='คลัง Google Drive นี้ถูกยกเลิกแล้ว กรุณาเลือกคลังใหม่';
-          return;
-        }
-        if(name&&name!==driveLayout.root){
-          ui.gateStatus.textContent='กรุณาเลือกโฟลเดอร์ '+driveLayout.root+' ที่เจ้าของแชร์ให้';
-          return;
-        }
-        ui.gateStatus.textContent='อนุญาตคลังที่แชร์แล้ว · กำลังเปิดเพลง…';
-        setSharedLibraryGate(false);
-        if(!state.accountSub){
-          setSharedLibraryGate(true,'ไม่พบข้อมูลบัญชี Google กรุณาเข้าสู่ระบบใหม่');
-          return;
-        }
-        savePreferredLibraryRoot(state.accountSub,id);
-        const idNow=state.authId;
-        try{
-          await openDrive(state.token,idNow,state.tokenExpiresAt,state.accountSub,false);
-        }catch(error){
-          setSharedLibraryGate(true,error?.message||'ยังเปิดคลังที่แชร์ไม่ได้ กรุณาเลือก '+driveLayout.root+' อีกครั้ง');
-        }
-      })
-      .build();
-    picker.setVisible(true);
-  }catch(error){
-    setSharedLibraryGate(true,error?.message||'ไม่สามารถเปิด Google Picker ได้');
-  }
+  const account=state.accountSub,previousRoot=state.libraryRootId;
+  const sameSession=()=>state.accountSub===account&&state.libraryRootId===previousRoot&&!!state.token;
+  const dialog=document.createElement('dialog');dialog.className='cloud-import-dialog';
+  dialog.style.cssText='width:min(94vw,520px);max-height:82dvh;padding:16px;overflow:auto;background:#0c192b;color:#e7f6ff;border:1px solid #407d92;border-radius:14px';
+  dialog.setAttribute('aria-label','เลือกโฟลเดอร์หลัก X-Stage Karaoke Online');
+  const title=document.createElement('h3');title.textContent='เลือกโฟลเดอร์หลัก X-Stage Karaoke Online';
+  const status=document.createElement('p'),items=document.createElement('div');
+  status.setAttribute('role','status');dialog.append(title,status,items);
+  let closed=false;
+  const finish=()=>{if(closed)return;closed=true;if(dialog.open)dialog.close();dialog.remove();};
+  const button=(label,action,parent=dialog)=>{
+    const el=document.createElement('button');el.type='button';el.textContent=label;
+    el.style.cssText='display:block;width:100%;margin:8px 0;padding:12px;background:#163748;color:#e7f6ff;border:1px solid #407d92;border-radius:8px;text-align:left';
+    el.addEventListener('click',action);parent.append(el);return el;
+  };
+  const render=async()=>{
+    if(closed)return;
+    items.replaceChildren();status.textContent='กำลังตรวจคลัง XStageKaraoke ที่บัญชีนี้เข้าถึงได้…';
+    try{
+      const roots=(await driveList("name='"+driveLayout.root+"' and mimeType='application/vnd.google-apps.folder' and trashed=false",state.token))
+        .filter(x=>x.name===driveLayout.root&&/^[A-Za-z0-9_-]{5,256}$/.test(x.id)&&!isRetiredDriveRoot(x.id));
+      if(closed||!sameSession())return;
+      for(const root of roots){
+        button(libraryLabel(root)+' · …'+root.id.slice(-6)+(root.id===previousRoot?' · กำลังใช้งาน':''),async()=>{
+          if(closed||!sameSession())return;
+          if(window.XStageDriveBuildBusy||xstageCloudImporter?.running){status.textContent='กรุณาให้งานปัจจุบันเสร็จก่อน';return;}
+          savePreferredLibraryRoot(account,root.id);finish();
+          if(root.id===previousRoot)return;
+          clearPlaybackResumeState();
+          if(previousRoot){location.reload();return;}
+          try{await openDrive(state.token,++state.authId,state.tokenExpiresAt,account,false);}
+          catch(error){setSharedLibraryGate(true,error.message);}
+        },items);
+      }
+      status.textContent=roots.length?'เลือกคลังหลักหนึ่งโฟลเดอร์ · ระบบจะจำและไม่เปิดคลังอื่นโดยอัตโนมัติ':'ไม่พบโฟลเดอร์ XStageKaraoke ที่เข้าถึงได้';
+      if(!hasFullDriveRead())button('ขอสิทธิ์อ่านจาก Google เพื่อค้นหาคลัง',async()=>{
+        try{await ensureImporterGoogleAuth(true,true,true);if(sameSession())await render();}
+        catch(error){status.textContent=error.message;}
+      },items);
+    }catch(error){if(!closed)status.textContent=error.message;}
+  };
+  button('ปิด / ยกเลิก',finish);
+  dialog.addEventListener('cancel',event=>{event.preventDefault();finish();});
+  dialog.addEventListener('close',finish);
+  document.body.append(dialog);try{dialog.showModal();void render();}catch(error){finish();}
 }
 $('gate-shared-library')?.addEventListener('click',openSharedLibraryPicker);
+$('xstage-drive-main-select')?.addEventListener('click',openSharedLibraryPicker);
 
 // Player reads exclusively XStageKaraoke/DB/songs.sqlite3.
 
@@ -2157,7 +2058,15 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     const sharedRoots=roots.filter(item=>!item.ownedByMe).sort((a,b)=>
       String(b.sharedWithMeTime||'').localeCompare(String(a.sharedWithMeTime||'')));
     const preferred=preferredRootId&&roots.find(item=>String(item.id)===preferredRootId);
-    const root=preferred||ownedRoots[0]||sharedRoots[0]||roots[0];
+    const root=preferred||(!preferredRootId&&roots.length===1?roots[0]:null);
+    if(!root){
+      state.libraryRootId='';state.manifest=null;state.songs=[];state.shown=[];state.queue=[];
+      releaseQueuePreload();renderSongs();renderQueue();hideCatalogLoading();
+      setSearchAvailability(false);ui.songTotal.textContent='0 เพลง';
+      ui.resultCount.textContent='กรุณาเลือกคลังหลัก';
+      setSharedLibraryGate(true,preferredRootId?'คลังหลักเดิมไม่สามารถเข้าถึงได้ · เลือกใหม่เอง':'พบหลายคลัง · กรุณาเลือกโฟลเดอร์หลักก่อน');
+      return;
+    }
     if(preferredRootId&&String(root.id)!==preferredRootId&&instant){
       // Do not keep showing a cache for a library that is no longer accessible.
       instant=null;
@@ -5335,6 +5244,9 @@ document.addEventListener('visibilitychange',()=>{
 updateGoogleRenewNotice();
 
 function updateDriveReadNotice(){
+  const main=$('xstage-drive-main-name'),pick=$('xstage-drive-main-select');
+  if(main)main.textContent=state.libraryRootId?'XStageKaraoke · …'+state.libraryRootId.slice(-6):'ยังไม่ได้เลือกคลังหลัก';
+  if(pick)pick.disabled=!state.token||!state.accountSub||!!window.XStageDriveBuildBusy;
   const button=$('xstage-drive-read-all'),status=$('xstage-drive-read-status');
   if(!button||!status)return;
   const full=hasFullDriveRead(),connected=!!state.token&&!!state.accountSub;
