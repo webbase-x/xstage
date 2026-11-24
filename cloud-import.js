@@ -1344,6 +1344,7 @@ class Importer {
       // Pin new uploads to the folder actually selected in Karaoke Online.
       // Do not silently use the first same-name root or create a third copy.
       const activeRootId=String(auth.rootId||'');
+      if(!activeRootId&&roots.length)fail('กรุณาเลือกโฟลเดอร์หลัก XStageKaraoke ก่อนนำเข้า · ไม่สลับคลังอัตโนมัติ');
       if(activeRootId&&!roots.some(item=>String(item.id)===activeRootId))
         fail('โฟลเดอร์ XStageKaraoke ที่เลือกไม่พบแล้ว · กรุณาเปิดคลังเพลงใหม่');
       let rootId=chooseImportRoot(roots,activeRootId);
