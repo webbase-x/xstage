@@ -24,7 +24,7 @@
   </script>
   <link rel="stylesheet" href="style.css?v=1153-concert-lights">
   <link rel="stylesheet" href="xstage-ux.css?v=1164-mobile-controls-lights-thai-accents-1169-live-update-ui-google-remember-tv-online-parity-v1180-tv-dpad-search-queue-r1-1204-update">
-  <link rel="stylesheet" href="cloud-import.css?v=1189-folder-cancel-controls">
+  <link rel="stylesheet" href="cloud-import.css?v=1208-clean-drive">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
   logo.onload=function(){document.documentElement.classList.add('xstage-uploaded-logo-ready')};
@@ -429,40 +429,38 @@
       </header>
       <div class="cloud-import-body" id="cloud-import-body">
       <section id="xstage-drive-sources" class="xstage-drive-sources" aria-labelledby="xstage-drive-sources-title">
-        <h3 id="xstage-drive-sources-title">เลือกแหล่งข้อมูลบน Google Drive</h3>
-        <p>เลือกโฟลเดอร์หลักครั้งเดียว จากนั้นเลือกเพลง, SoundFont และ FX เฉพาะภายในคลังนี้ · ไม่ย้ายหรือลบไฟล์เดิม</p>
-        <div class="xstage-drive-source-row"><div><strong>โฟลเดอร์หลัก X-Stage Karaoke Online</strong><output id="xstage-drive-main-name">ยังไม่ได้เลือกคลังหลัก</output></div><button id="xstage-drive-main-select" type="button" disabled>เลือก / เปลี่ยนโฟลเดอร์หลัก</button></div>
-        <div class="xstage-drive-build-controls">
-          <button id="xstage-drive-scan-counts" type="button" disabled>ตรวจนับไฟล์ทุกโฟลเดอร์</button>
-        </div>
+        <h3 id="xstage-drive-sources-title">คลังเพลงของฉัน</h3>
+        <div class="xstage-drive-source-row xstage-drive-root-row"><div><strong>โฟลเดอร์หลัก</strong><output id="xstage-drive-main-name">ยังไม่ได้เลือกคลังหลัก</output></div><button id="xstage-drive-main-select" type="button" disabled>เปลี่ยนคลัง</button></div>
+        <p class="xstage-drive-steps">1. เปิด Drive แล้วอัปโหลดไฟล์ · 2. เมื่ออัปโหลดเสร็จ กดอัปเดตฐานเพลง</p>
         <div class="xstage-drive-source-list">
-          <div class="xstage-drive-source-row">
-            <div><strong>เพลง XMID / XSK</strong><output id="xstage-drive-folder-music-name">ยังไม่เลือกโฟลเดอร์</output></div>
-            <button id="xstage-drive-folder-music" type="button" disabled>เลือกโฟลเดอร์เพลงบน Drive</button>
-            <output id="xstage-drive-count-music" role="status" aria-live="polite"></output>
+          <div class="xstage-drive-source-row xstage-drive-media-row">
+            <div class="xstage-drive-media-info"><strong>เพลง XMID / XSK</strong><output id="xstage-drive-folder-music-name">ยังไม่เลือกโฟลเดอร์</output><output id="xstage-drive-count-music" role="status" aria-live="polite"></output></div>
+            <div class="xstage-drive-media-actions"><button id="xstage-drive-open-music" class="xstage-drive-open" type="button" disabled>เปิด Google Drive ↗</button><button id="xstage-drive-folder-music" type="button" disabled>เลือกโฟลเดอร์</button></div>
           </div>
-          <div class="xstage-drive-source-row">
-            <div><strong>SoundFont (SF2 / SF3)</strong><output id="xstage-drive-folder-soundfont-name">ยังไม่เลือกโฟลเดอร์</output></div>
-            <button id="xstage-drive-folder-soundfont" type="button" disabled>เลือกโฟลเดอร์ SoundFont</button>
-            <output id="xstage-drive-count-soundfont" role="status" aria-live="polite"></output>
-            <button id="xstage-drive-read-all" type="button" disabled>อนุญาตอ่านไฟล์ทั้งหมดบน Google Drive</button>
-            <p id="xstage-drive-read-status" role="status" aria-live="polite">ตรวจสอบสิทธิ์อ่าน Google Drive</p>
-            <button id="xstage-soundfont-authorize" type="button" hidden style="display:none">อนุญาตอ่าน SoundFont จาก Google</button>
-            <output id="xstage-drive-font-permission-status" role="status" aria-live="polite"></output>
+          <div class="xstage-drive-source-row xstage-drive-media-row">
+            <div class="xstage-drive-media-info"><strong>SoundFont SF2 / SF3</strong><output id="xstage-drive-folder-soundfont-name">ยังไม่เลือกโฟลเดอร์</output><output id="xstage-drive-count-soundfont" role="status" aria-live="polite"></output></div>
+            <div class="xstage-drive-media-actions"><button id="xstage-drive-open-soundfont" class="xstage-drive-open" type="button" disabled>เปิด Google Drive ↗</button><button id="xstage-drive-folder-soundfont" type="button" disabled>เลือกโฟลเดอร์</button></div>
           </div>
-          <div class="xstage-drive-source-row">
-            <div><strong>FX (คลังเอฟเฟกต์)</strong><output id="xstage-drive-folder-fx-name">ยังไม่เลือกโฟลเดอร์</output></div>
-            <button id="xstage-drive-folder-fx" type="button" disabled>เลือกโฟลเดอร์ FX</button>
-            <output id="xstage-drive-count-fx" role="status" aria-live="polite"></output>
+          <div class="xstage-drive-source-row xstage-drive-media-row">
+            <div class="xstage-drive-media-info"><strong>เสียงเอฟเฟกต์ FX</strong><output id="xstage-drive-folder-fx-name">ยังไม่เลือกโฟลเดอร์</output><output id="xstage-drive-count-fx" role="status" aria-live="polite"></output></div>
+            <div class="xstage-drive-media-actions"><button id="xstage-drive-open-fx" class="xstage-drive-open" type="button" disabled>เปิด Google Drive ↗</button><button id="xstage-drive-folder-fx" type="button" disabled>เลือกโฟลเดอร์</button></div>
           </div>
         </div>
         <div class="xstage-drive-build-controls">
-          <button id="xstage-drive-build-db" type="button" disabled>ตรวจไฟล์บน Drive และสร้าง DB/songs.sqlite3</button>
-          <button id="xstage-drive-cancel-db" type="button" disabled>ยกเลิกการสร้างฐาน</button>
+          <button id="xstage-drive-build-db" type="button" disabled>ตรวจไฟล์และอัปเดตฐานเพลง</button>
+          <button id="xstage-drive-cancel-db" type="button" disabled hidden>ยกเลิกการสร้างฐาน</button>
         </div>
-        <p class="xstage-drive-warning">ตัวสร้าง DB จะอ่าน XMID/XSK ที่แอปเข้าถึงได้และข้าม MIDI ที่เนื้อหาเหมือนกัน · ไฟล์ชนิดอื่นยังไม่รวมในโหมดสร้างฐานภายหลัง · ต้องอนุญาตสิทธิ์อ่านไฟล์ภายในโฟลเดอร์ด้วย</p>
-        <p id="xstage-drive-folder-status" role="status" aria-live="polite">เลือกโฟลเดอร์จาก Google Drive เพื่อสร้างฐานเพลงภายหลัง</p>
+        <p id="xstage-drive-folder-status" role="status" aria-live="polite">พร้อมตรวจไฟล์เมื่ออัปโหลดเสร็จ · ไม่เพิ่มเพลงซ้ำ</p>
+        <details class="xstage-drive-options"><summary>ตรวจนับไฟล์ / สิทธิ์ Google Drive</summary>
+          <button id="xstage-drive-scan-counts" type="button" disabled>ตรวจนับไฟล์ทุกโฟลเดอร์</button>
+          <button id="xstage-drive-read-all" type="button" disabled>อนุญาตอ่านไฟล์จาก Google</button>
+          <p id="xstage-drive-read-status" role="status" aria-live="polite">ตรวจสอบสิทธิ์อ่าน Google Drive</p>
+          <button id="xstage-soundfont-authorize" type="button" hidden style="display:none">อนุญาตอ่าน SoundFont จาก Google</button>
+          <output id="xstage-drive-font-permission-status" role="status" aria-live="polite"></output>
+          <p class="xstage-drive-warning">สร้างฐาน DB/songs.sqlite3 โดยตรวจ MIDI ซ้ำ ไม่ย้ายหรือลบไฟล์เดิม</p>
+        </details>
       </section>
+      <details id="cloud-import-local-options" class="cloud-import-local-options"><summary>นำเข้าจากเครื่อง (วิธีสำรอง)</summary>
       <p class="cloud-import-lead">ชื่อไฟล์ XMID เช่น 00001.XMID อาจซ้ำได้ทุกครั้งที่สร้าง · ตรวจขนาดไบต์และ MD5 ของ MIDI ภายในเพื่อข้ามเฉพาะเนื้อ MIDI ที่ซ้ำจริง · นำเข้าได้หลายรอบหลายเครื่อง · ใช้ฐาน DB/songs.sqlite3 ไฟล์เดียว</p>
       <p class="cloud-import-note" id="cloud-import-ios-help">iPhone/iPad: Safari 18.4 ขึ้นไปสามารถเลือกโฟลเดอร์ในแอป Files ได้โดยแตะ “เลือกโฟลเดอร์เพลง” หากเบราว์เซอร์รุ่นเก่าแสดงเฉพาะไฟล์รายตัว อาจไม่ส่งโครงสร้างโฟลเดอร์ครบ ระบบจะตรวจรายการก่อนนำเข้า และจะไม่อัปโหลดชุดเพลงที่องค์ประกอบไม่ครบ</p>
       <div class="cloud-import-actions">
@@ -530,6 +528,7 @@
       <label class="cloud-import-consent"><input type="checkbox" id="cloud-import-allow-create"> หากไม่มี XStageKaraoke ที่บัญชีนี้เข้าถึงได้ ยืนยันว่าเป็นคลังใหม่ว่างและอนุญาตให้สร้าง (ไม่ลบคลังเดิม)</label>
       <p id="cloud-import-detail" class="cloud-import-detail">รองรับ XMID และไฟล์รูปแบบอื่น ๆ จาก X-Stage Song Studio Pro รวมถึง XSK2, MP3/M4A/WAV/AAC/FLAC/OGG พร้อม LRC/JSON, MIDI/KAR, NCN (MID + LYR + CUR), SoundFont SF2/SF3 และ Video Karaoke MP4/WebM (มีหรือไม่มี LRC/JSON หากเนื้อร้องฝังในภาพ) · AVI/MPEG/MPG/DAT/VOB/MKV/MOV/WMV/FLV เก็บไฟล์ต้นฉบับไว้ใน Drive และสร้าง MP4 สำหรับเว็บเมื่อเบราว์เซอร์เล่นต้นฉบับไม่ได้ (สูงสุด 192 MB/ไฟล์) · ใช้ Song Studio PC สำหรับวิดีโอขนาดใหญ่ · รูปแบบที่เล่นต้นฉบับโดยตรงได้ขึ้นกับ Codec/เบราว์เซอร์ · วิดีโอไม่มีเนื้อร้องต้องใส่ LRC พร้อมเวลาจริง</p>
       <small class="cloud-import-safety-note">ปิดหน้าต่างจะพักงานไว้ เมื่อเปิดอีกครั้งกด “เริ่ม” เพื่อทำต่อ โดยเลือกโฟลเดอร์เดิมหากระบบร้องขอ · ระบบไม่เก็บรหัสผ่านหรือโทเค็น Google</small>
+      </details>
       </div>
       <footer class="cloud-import-footer" aria-label="คำสั่งนำเข้าเพลง">
         <div class="cloud-import-progress">
@@ -577,8 +576,8 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="midi-pro-engine.js?v=1137-playback-restore-1168-screen-wake" defer></script>
   <script src="video-metadata-editor.js?v=1138-verified-video-selection" defer></script>
   <script src="video-transcode.js?v=1137" defer></script>
-  <script src="cloud-import.js?v=1206-pinned-root" defer></script>
-  <script src="cloud-drive-folders.js?v=1207-root-scope" defer></script>
+  <script src="cloud-import.js?v=1208-local-fallback" defer></script>
+  <script src="cloud-drive-folders.js?v=1208-direct-drive" defer></script>
   <script src="tv-refresh.js?v=1207" defer></script>
   <script src="app.js?v=1207-sequential-update" defer></script><script src="pc-extensions.js?v=1206-scoped-fx" defer></script>
   <script src="midi-keyboard-ui.js?v=1137-clean-title-1157-top-song-key-single-menu" defer></script>
