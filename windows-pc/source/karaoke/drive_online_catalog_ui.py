@@ -74,14 +74,15 @@ def open_shared_drive_catalog(app):
         root_text = selected_root.get().strip()
         revision[0] += 1
         current = revision[0]
+        lookup = query.get().strip()
         busy[0] = True
         summary.set("กำลังอ่าน SQLite จาก Google Drive PC (อ่านอย่างเดียว)…")
         def work():
             try:
                 info = catalog.summary(root_text)
-                rows = catalog.search(info["root"], query.get().strip(), 150)
+                rows = catalog.search(info["root"], lookup, 150)
                 error = None
-            except (OSError, ValueError, RuntimeError, Exception) as exc:
+            except Exception as exc:
                 info, rows, error = None, None, str(exc)
             def finish():
                 if closing[0] or current != revision[0]:
