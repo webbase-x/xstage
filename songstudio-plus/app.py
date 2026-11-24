@@ -501,15 +501,15 @@ class Handler(BaseHTTPRequestHandler):
                         return {"cancelled":True}
                     with self.state.lock:
                         self.state.drive_push_plan=snapshot
-                    return {"stats":snapshot["stats"],"area":area,"root":snapshot["root"]}
+                    return {"stats":snapshot["stats"],"area":area,"root":snapshot["root"],"source":snapshot["source"]}
                 result=self.state.start_job("drive-push-preview",preview_drive)
             elif path=="/api/drive/push":
                 with self.state.lock:
                     snapshot=self.state.drive_push_plan
                 if not snapshot:
                     raise ValueError("กรุณาตรวจสอบไฟล์ก่อนกดส่งเข้า Google Drive")
-                if (body.get("source","")!=snapshot["source"] or
-                    body.get("folder","")!=snapshot["root"] or
+                if (str(Path(body.get("source","")).expanduser().resolve())!=snapshot["source"] or
+                    str(drivesync.resolve_root(body.get("folder","")))!=snapshot["root"] or
                     body.get("area","SONGS")!=snapshot["area"]):
                     raise ValueError("แหล่งหรือปลายทางไม่ตรงกับรายการที่ตรวจ กรุณาตรวจใหม่")
                 if snapshot["stats"]["conflict"]:
