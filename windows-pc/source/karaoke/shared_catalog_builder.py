@@ -214,7 +214,59 @@ def _record(relative, file, old):
     return record
 
 
-def build(root_value, progress=None, cancel=None, publish=True):
+def _file_stamp(file):
+    stat = file.stat()
+    return json.dumps([stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns,
+                       stat.st_ino, stat.st_dev], separators=(",", ":"))
+
+
+def _verified_rows(songs, root, references, cache_dir, cancel, full_verify):
+    """Cache verified metadata locally, never in the synchronized catalog."""
+    if cache_dir is None:
+        for relative, file in songs:
+            _stop(cancel)
+            yield relative, _record(relative, file, references), False
+        return
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = hashlib.sha256(os.path.normcase(str(root)).encode("utf-8")).hexdigest()
+    with closing(sqlite3.connect(cache_dir / ("shared-index-v1-" + key + ".sqlite3"), timeout=15)) as cache:
+        cache.execute("CREATE TABLE IF NOT EXISTS checked (path TEXT PRIMARY KEY, stamp TEXT NOT NULL, payload TEXT NOT NULL)")
+        cache.commit()
+        pending = 0
+        try:
+            for relative, file in songs:
+                _stop(cancel)
+                stamp = _file_stamp(file)
+                saved = None if full_verify else cache.execute(
+                    "SELECT payload FROM checked WHERE path=? AND stamp=?", (relative, stamp)).fetchone()
+                if saved:
+                    row = json.loads(saved[0])
+                else:
+                    row = _record(relative, file, {})
+                    if _file_stamp(file) != stamp:
+                        raise ValueError("ไฟล์เปลี่ยนระหว่างตรวจ: " + relative)
+                    cache.execute("INSERT OR REPLACE INTO checked VALUES (?,?,?)",
+                                  (relative, stamp, json.dumps(row, ensure_ascii=False)))
+                    pending += 1
+                    if pending >= 100:
+                        cache.commit()
+                        pending = 0
+                if _file_stamp(file) != stamp:
+                    raise ValueError("ไฟล์เปลี่ยนระหว่างตรวจ: " + relative)
+                media = row[file.suffix.lower()[1:]]
+                media["fileId"] = references.get((media["path"].casefold(), media["md5Checksum"]), "")
+                if media["fileId"]:
+                    row.pop("pendingDriveLink", None)
+                else:
+                    row["pendingDriveLink"] = True
+                yield relative, row, bool(saved)
+        finally:
+            # Safe cancellation preserves all metadata already verified.
+            cache.commit()
+
+
+def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=None, full_verify=False):
     """Create fresh verified snapshot; atomically replace after explicit consent."""
     root = _root(root_value)
     songs = _files(root, cancel)
@@ -226,14 +278,14 @@ def build(root_value, progress=None, cancel=None, publish=True):
     original_signature = _hash(old_file) if old_file.exists() else None
     references = _old_refs(old_file)
     rows, midi_hashes, paths, codes, ids = [], set(), set(), set(), set()
-    duplicates = 0
-    for index, (relative, file) in enumerate(songs, 1):
+    duplicates = reused = 0
+    for index, (relative, row, cached) in enumerate(_verified_rows(songs, root, references, cache_dir, cancel, full_verify), 1):
+        reused += int(cached)
         _stop(cancel)
         key = relative.casefold()
         if key in paths:
             raise ValueError("พบชื่อไฟล์ซ้ำบน Windows: " + relative)
         paths.add(key)
-        row = _record(relative, file, references)
         if row["midiHash"] in midi_hashes:
             duplicates += 1
             continue
@@ -251,13 +303,13 @@ def build(root_value, progress=None, cancel=None, publish=True):
         rows.append((number, row))
         if progress and (index % 25 == 0 or index == len(songs)):
             progress(dict(scanned=index, total=len(songs), accepted=len(rows),
-                          duplicates=duplicates), "ตรวจแพ็กเกจ XMID/XSK")
+                          duplicates=duplicates, reused=reused), "ตรวจแพ็กเกจ XMID/XSK")
     _stop(cancel)
     if not rows:
         raise ValueError("ไม่พบ MIDI ที่อ่านได้และไม่ซ้ำกัน")
     if not publish:
         return {"scanned": len(songs), "accepted": len(rows),
-                "duplicates": duplicates,
+                "duplicates": duplicates, "reused": reused,
                 "pending_drive_ids": sum(bool(row.get("pendingDriveLink")) for _, row in rows)}
     for directory in ("DB", "CACHE", "BACKUP"):
         (root / directory).mkdir(parents=True, exist_ok=True)
@@ -316,7 +368,7 @@ def build(root_value, progress=None, cancel=None, publish=True):
         _stop(cancel)
         os.replace(stage, old_file)  # same Drive volume, atomic local replacement
         return {"scanned": len(songs), "accepted": len(rows),
-                "duplicates": duplicates, "generation": generation,
+                "duplicates": duplicates, "reused": reused, "generation": generation,
                 "database": str(old_file),
                 "pending_drive_ids": sum(bool(row.get("pendingDriveLink")) for _, row in rows)}
     finally:
