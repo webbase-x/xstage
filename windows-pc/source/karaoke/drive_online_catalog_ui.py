@@ -128,26 +128,32 @@ def open_shared_drive_catalog(app):
                 "ตรวจ Google Drive for desktop ก่อน ไม่เดาตำแหน่งไฟล์จากชื่อเพลง",
                 parent=window)
             return
-        if not messagebox.askyesno("ใช้ไฟล์เพลงจาก Google Drive PC",
-            "นำไฟล์นี้เข้าแค็ตตาล็อกการเล่นชั่วคราวของ PC แล้วเล่นเลย?\n"
-            "ข้อมูลเพลงหลักยังอ่านจาก DB/songs.sqlite3 บน Google Drive และไม่แก้ไขฐานนั้น",
-            parent=window):
-            return
         try:
-            from .library import QueueItem
-            ids = app.library.add_files([Path(path)])
-            if not ids:
-                raise ValueError("ไฟล์ชนิดนี้ยังเล่นผ่านเครื่องเล่น PC ไม่ได้")
-            app.start_song(QueueItem(int(ids[0])))
+            from .library import QueueItem, SUPPORTED
+            if Path(path).suffix.lower() not in SUPPORTED:
+                raise ValueError("รูปแบบไฟล์นี้ยังเล่นบน Karaoke PC ไม่ได้")
+            # The shared SQLite is authoritative. Playback reads its local
+            # media path without ever inserting a second song registry row.
+            app._shared_drive_playback_song = {
+                "id": -1, "path": path,
+                "code": str(song.get("code") or ""),
+                "title": str(song.get("title") or "ไม่ระบุชื่อเพลง"),
+                "artist": str(song.get("artist") or ""),
+                "kind": "MIDI" if Path(path).suffix.lower() in
+                        (".mid", ".midi", ".kar", ".emk", ".xsk", ".xmid") else "AUDIO",
+                "favorite": 0, "format": str(song.get("source_format") or "")
+            }
+            if not app.start_song(QueueItem(-1)):
+                raise ValueError("เครื่องเล่น PC ยังไม่สามารถเปิดเพลงนี้ได้")
         except Exception as error:
             messagebox.showerror("เปิดเพลงไม่สำเร็จ", str(error), parent=window)
 
     refresh = ttk.Button(search_row, text="ตรวจฐาน / ค้นหา", command=load)
     refresh.pack(side="left", padx=(8, 0))
     search_input.bind("<Return>", lambda event: load())
-    ttk.Button(actions, text="เล่นไฟล์ที่เลือกใน PC", command=play_selected).pack(side="left")
+    ttk.Button(actions, text="เล่นจากฐาน Google Drive ใน PC", command=play_selected).pack(side="left")
     ttk.Button(actions, text="ปิด", command=window.destroy).pack(side="right")
-    ttk.Label(body, text="การเล่นไฟล์อาจใช้ดัชนีภายใน PC เพื่อคิวและประวัติ แต่ไม่มีการเขียน DB/songs.sqlite3 ของ Google Drive",
+    ttk.Label(body, text="เลือกเล่นเพลงจาก SQLite ของ Google Drive โดยตรง · ไม่เพิ่มแถวเพลงเข้า SQLite ในเครื่องหรือแก้ฐาน Online · ต้องมีไฟล์เพลงซิงก์บนเครื่อง",
               style="Muted.TLabel", wraplength=900).pack(anchor="w")
 
     def close():
