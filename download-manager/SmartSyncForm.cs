@@ -33,7 +33,7 @@ public sealed class SmartSyncForm : Form
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 116));
-        foreach (int height in new[] { 72, 36, 36, 36, 36, 44, 58 })
+        foreach (int height in new[] { 72, 36, 36, 36, 36, 72, 58 })
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
@@ -68,7 +68,7 @@ public sealed class SmartSyncForm : Form
         _direction.SelectedIndexChanged += (_, _) => InvalidatePlan();
         grid.Controls.Add(_direction, 1, 4);
         _choices.Add(_direction);
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
+        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true };
         actions.Controls.AddRange(new Control[] { _scan, _start, _stop, _background });
         Full(actions, 5);
         _scan.Click += async (_, _) => await RunAsync(false);

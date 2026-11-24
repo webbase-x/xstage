@@ -67,7 +67,7 @@ public static class SmartSyncFolders
                     throw new InvalidDataException("พบชื่อไฟล์ที่ไม่ปลอดภัยสำหรับ Windows");
                 SmartSyncTransfer.ResolveLocalPath(root, relative);
                 using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-                var md5 = Convert.ToHexString(MD5.HashData(stream));
+                var md5 = Convert.ToHexString(MD5.HashDataAsync(stream, ct).GetAwaiter().GetResult());
                 entries.Add(new SyncEntry(relative, new SyncFingerprint(stream.Length, md5)));
             }
         }
@@ -148,8 +148,9 @@ public static class SmartSyncFolders
             }
             using (var check = new FileStream(staging, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true))
             {
+                var copiedHash = await SHA256.HashDataAsync(check, ct);
                 if (check.Length != expected.Size ||
-                    !CryptographicOperations.FixedTimeEquals(hash, await SHA256.HashDataAsync(check, ct)))
+                    !CryptographicOperations.FixedTimeEquals(hash, copiedHash))
                     throw new IOException("ตรวจ SHA-256 ไม่ตรง");
             }
             ct.ThrowIfCancellationRequested();
