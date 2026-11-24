@@ -168,6 +168,7 @@ def inspect(source, drive_root, area, cancel=None, progress=None):
     known = _inventory(dest, cancel) if dest.is_dir() else defaultdict(list)
     hashes = {}
     selected = {}
+    seen_new = set()
     entries = []
     stats = dict(area=area, scanned=0, new=0, identical=0,
                  duplicate=0, conflict=0, bytes=0, skipped_sidecars=0)
@@ -177,14 +178,16 @@ def inspect(source, drive_root, area, cancel=None, progress=None):
         dst = dest / relative
         _safe_path(root, dst)
         key = str(relative).casefold()
+        size = src.stat().st_size
+        source_hash = _digest(src, cancel)
         if key in selected:
             status = "conflict"
         else:
             selected[key] = src
-            size = src.stat().st_size
-            source_hash = _digest(src, cancel)
             if dst.exists():
                 status = "identical" if dst.is_file() and dst.stat().st_size == size and _digest(dst, cancel) == source_hash else "conflict"
+            elif (size, source_hash) in seen_new:
+                status = "duplicate"
             else:
                 status = "new"
                 for candidate in known[size]:
@@ -195,15 +198,8 @@ def inspect(source, drive_root, area, cancel=None, progress=None):
                     if candidate_hash == source_hash:
                         status = "duplicate"
                         break
-            if status == "new":
-                # A second source file with identical bytes is also a duplicate.
-                for other in entries:
-                    if other["status"] == "new" and other["bytes"] == size and other["sha256"] == source_hash.hex():
-                        status = "duplicate"
-                        break
-        if key in selected and selected[key] == src:
-            size = src.stat().st_size
-            source_hash = _digest(src, cancel) if "source_hash" not in locals() else source_hash
+                if status == "new":
+                    seen_new.add((size, source_hash))
         entry = dict(source=str(src), relative=str(relative), status=status,
                      bytes=size, sha256=source_hash.hex())
         entries.append(entry)
@@ -212,8 +208,6 @@ def inspect(source, drive_root, area, cancel=None, progress=None):
             stats["bytes"] += size
         if progress and stats["scanned"] % 20 == 0:
             progress(dict(stats), "ตรวจไฟล์ " + str(stats["scanned"]) + " รายการ")
-        # Reset per-entry values (never carry an earlier file hash to a collision).
-        del source_hash, size
     return dict(root=str(root), source=str(source), area=area,
                 stats=stats, items=entries)
 
