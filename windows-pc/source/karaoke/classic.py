@@ -79,11 +79,15 @@ class ClassicApp(KaraokeApp):
         self.config(menu=menu)
         songs = tk.Menu(menu, tearoff=False)
         menu.add_cascade(label='เพลง', menu=songs)
-        songs.add_command(label='เชื่อมคลังเพลงรุ่นเก่า…', command=self.connect_catalog)
-        songs.add_command(label='เพิ่มโฟลเดอร์เพลง…', command=self.add_folder)
-        songs.add_command(label='เชื่อมคลัง XStageSong จาก Song Studio…',
-                          command=self.connect_songstudio_pc_library)
-        songs.add_command(label='เพิ่มไฟล์เพลง…', command=self.add_files)
+        if self.shared_drive_mode:
+            songs.add_command(label='ฐานเพลงร่วม · ค้นหาจาก Google Drive PC',command=self.open_shared_google_drive_catalog)
+            songs.add_command(label='ส่งเพลง / SoundFont / FX ไป XStageKaraoke',command=self.open_shared_drive_push)
+        else:
+            songs.add_command(label='เชื่อมคลังเพลงรุ่นเก่า…', command=self.connect_catalog)
+            songs.add_command(label='เพิ่มโฟลเดอร์เพลง…', command=self.add_folder)
+            songs.add_command(label='เชื่อมคลัง XStageSong จาก Song Studio…',
+                              command=self.connect_songstudio_pc_library)
+            songs.add_command(label='เพิ่มไฟล์เพลง…', command=self.add_files)
         songs.add_command(label='Google Drive · ใช้ DB/songs.sqlite3 ร่วมกับ Online…',
                           command=self.open_shared_google_drive_catalog)
         songs.add_command(label='Google Drive · ส่งเพลง/SoundFont/FX จากเครื่อง…',
@@ -673,6 +677,11 @@ class ClassicApp(KaraokeApp):
             self.show_error(error)
 
     def restore_data(self):
+        if self.shared_drive_mode:
+            return messagebox.showinfo("กู้คืนฐานเพลงร่วม",
+                "DB/songs.sqlite3 ของ Google Drive ใช้ร่วมกับ Karaoke Online "
+                "จึงไม่กู้คืนฐาน PC เดิมทับไฟล์นี้\n"
+                "ใช้คำสั่งสร้างฐานใหม่จาก Karaoke Online แทน",parent=self)
         if self.engine is not None or self.recorder or self.scanning or self.remote:
             return messagebox.showinfo('กู้คืนข้อมูล','ยกเลิกเพลง (F7) หยุดบันทึกเสียง หยุดรีโมท และรอการสร้างรายการให้เสร็จก่อน',parent=self)
         folder=filedialog.askdirectory(parent=self,title='เลือกโฟลเดอร์สำรอง X-Stage Karaoke PC')
