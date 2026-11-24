@@ -61,6 +61,10 @@ class ClassicApp(KaraokeApp):
         from .shared_drive_sync_ui import open_drive_push
         return open_drive_push(self)
 
+    def open_shared_db_builder(self):
+        from .shared_catalog_builder_ui import open_builder
+        return open_builder(self)
+
     def _watch_shared_drive_catalog(self):
         if getattr(self, "closing", False) or not self.shared_drive_mode:
             return
@@ -101,19 +105,18 @@ class ClassicApp(KaraokeApp):
         self.config(menu=menu)
         songs = tk.Menu(menu, tearoff=False)
         menu.add_cascade(label='เพลง', menu=songs)
-        if self.shared_drive_mode:
-            songs.add_command(label='ฐานเพลงร่วม · ค้นหาจาก Google Drive PC',command=self.open_shared_google_drive_catalog)
-            songs.add_command(label='ส่งเพลง / SoundFont / FX ไป XStageKaraoke',command=self.open_shared_drive_push)
-        else:
+        if not self.shared_drive_mode:
             songs.add_command(label='เชื่อมคลังเพลงรุ่นเก่า…', command=self.connect_catalog)
             songs.add_command(label='เพิ่มโฟลเดอร์เพลง…', command=self.add_folder)
             songs.add_command(label='เชื่อมคลัง XStageSong จาก Song Studio…',
                               command=self.connect_songstudio_pc_library)
             songs.add_command(label='เพิ่มไฟล์เพลง…', command=self.add_files)
-        songs.add_command(label='Google Drive · ใช้ DB/songs.sqlite3 ร่วมกับ Online…',
+        songs.add_command(label='Google Drive · เลือกฐานเพลง PC / Online…',
                           command=self.open_shared_google_drive_catalog)
         songs.add_command(label='Google Drive · ส่งเพลง/SoundFont/FX จากเครื่อง…',
                           command=self.open_shared_drive_push)
+        songs.add_command(label='สร้างฐานใหม่สำหรับ PC / Online…',
+                          command=self.open_shared_db_builder)
         songs.add_separator()
         songs.add_command(label='ออกจากโปรแกรม', command=self.close_app)
         play = tk.Menu(menu, tearoff=False)
