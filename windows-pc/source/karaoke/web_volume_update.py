@@ -27,7 +27,12 @@ $backup = $target + '.previous'
 try {
   Wait-Process -Id ([int]$env:XSTAGE_PARENT) -Timeout 45 -ErrorAction SilentlyContinue
   if (Get-Process -Id ([int]$env:XSTAGE_PARENT) -ErrorAction SilentlyContinue) { throw 'Old process still running' }
-  [System.IO.File]::Replace($new, $target, $backup, $true)
+  # PyInstaller's outer onefile process can still hold the EXE briefly.
+  for ($i = 0; $i -lt 30; $i++) {
+    try { [System.IO.File]::Replace($new, $target, $backup, $true); break }
+    catch { if ($i -eq 29) { throw }; Start-Sleep -Milliseconds 500 }
+  }
+  $env:PYINSTALLER_RESET_ENVIRONMENT = '1'
   try {
     Start-Process -FilePath $target -ArgumentList '--no-update' -ErrorAction Stop
   } catch {
