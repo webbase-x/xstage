@@ -92,14 +92,49 @@ def open_builder(app):
         status.set("กำลังตรวจ XMID/XSK2 ใน SONGS…")
         def work():
             error = None
+            reader_stopped = False
             try:
+                # Windows refuses to atomically replace an open SQLite file.
+                # Close the long-lived PC search reader without touching the
+                # playback engine; reopen search after publication.
+                if publish and getattr(app, "shared_drive_mode", False) and str(
+                        getattr(getattr(app, "library", None), "root", "")) == str(
+                        Path(requested).resolve()):
+                    condition = getattr(app, "_search_condition", None)
+                    if condition is not None:
+                        with condition:
+                            app._search_stopping = True
+                            condition.notify_all()
+                        reader = getattr(app, "_active_reader", None)
+                        if reader is not None:
+                            try:
+                                reader.interrupt()
+                            except Exception:
+                                pass
+                        worker = getattr(app, "_search_thread", None)
+                        if worker is not None:
+                            worker.join(timeout=6)
+                            if worker.is_alive():
+                                raise ValueError("ตัวอ่าน SQLite ของ PC ยังใช้งานอยู่ · หยุดค้นหาก่อนสร้างฐาน")
+                        app._active_reader = None
+                        app._search_thread = None
+                        reader_stopped = True
                 result = builder.build(requested, progress=update, cancel=stop,
                                        publish=publish)
             except Exception as exc:
                 result, error = None, str(exc)
+            finally:
+                if reader_stopped:
+                    app._search_stopping = False
             def finish():
                 if state["closed"]:
                     return
+                if reader_stopped and getattr(app, "shared_drive_mode", False):
+                    # Recreate only the search worker, not the active player.
+                    try:
+                        app.refresh_library()
+                    except (OSError, ValueError):
+                        pass
                 state["busy"] = False
                 inspect.configure(state="normal")
                 cancel.configure(state="disabled")
