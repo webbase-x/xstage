@@ -446,13 +446,12 @@
             <div class="xstage-drive-media-actions"><button id="xstage-drive-folder-fx" class="xstage-drive-open" type="button" disabled>จัดการโฟลเดอร์</button></div>
           </div>
         </div>
-        <div class="xstage-drive-database"><div class="xstage-drive-section-head"><h3>ฐานข้อมูลเพลง</h3><span>SQLite</span></div><div class="xstage-drive-build-controls">
+        <div class="xstage-drive-database"><div class="xstage-drive-section-head"><h3>ฐานข้อมูลเพลง <span class="xstage-drive-db-format">SQLite</span></h3><button id="xstage-drive-scan-counts" type="button" disabled>ตรวจใหม่ ↻</button></div><output id="xstage-drive-db-count" aria-live="polite">— รายการ</output><p id="xstage-drive-compare-status" role="status" aria-live="polite" data-state="unknown">รอตรวจจำนวนและข้อมูลเพลง</p><div class="xstage-drive-build-controls">
           <button id="xstage-drive-build-db" type="button" disabled>ตรวจไฟล์และอัปเดตฐานเพลง</button>
           <button id="xstage-drive-cancel-db" type="button" disabled hidden>ยกเลิกการสร้างฐาน</button>
         </div>
-        <p id="xstage-drive-folder-status" role="status" aria-live="polite">พร้อมตรวจไฟล์เมื่ออัปโหลดเสร็จ · ไม่เพิ่มเพลงซ้ำ</p></div>
-        <details class="xstage-drive-options"><summary>ตรวจนับไฟล์และสิทธิ์การเข้าถึง</summary>
-          <button id="xstage-drive-scan-counts" type="button" disabled>ตรวจนับไฟล์ทุกโฟลเดอร์</button>
+        <p id="xstage-drive-folder-status" role="status" aria-live="polite">เพิ่มเฉพาะเพลงใหม่ · ไม่ลบไฟล์เดิม</p></div>
+        <details class="xstage-drive-options"><summary>สิทธิ์การเข้าถึง Google Drive</summary>
           <button id="xstage-drive-read-all" type="button" disabled>อนุญาตอ่านไฟล์จาก Google</button>
           <p id="xstage-drive-read-status" role="status" aria-live="polite">ตรวจสอบสิทธิ์อ่าน Google Drive</p>
           <button id="xstage-soundfont-authorize" type="button" hidden style="display:none">อนุญาตอ่าน SoundFont จาก Google</button>
