@@ -33,7 +33,7 @@ for(const [name,source] of [['app',app],['midi',midi],['importer',importer],['me
 assert.match(app,/controller\?\.abort\(\);\s*\},seconds\*1000/,'Media timeout must abort work');
 assert.match(app,/if \(reuseExistingSession && state\.token && state\.accountSub===account\.sub && state\.libraryRootId && !isRetiredDriveRoot\(state\.libraryRootId\)\)/,
   'Same-account refresh must bypass catalog and playback reset');
-assert.match(app,/openDrive\(result\.access_token,authId,expiresAt,known\?\.sub\|\|'',true\)/,
+assert.match(app,/openDrive\(result\.access_token,authId,expiresAt,known\?\.sub\|\|'',true,fullReadGranted\)/,
   'OAuth renewal must reuse the session only for the verified same Google account');
 assert.match(app,/await openDrive\(token,id,state\.tokenExpiresAt\);/,'Importer must force catalog reload after publishing');
 assert.match(app,/scheduleLyricsDraw/,'Lyrics redraw must be event driven');
