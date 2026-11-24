@@ -198,6 +198,8 @@ class UnavailableSharedSongLibrary:
         return 0
     def has_songs(self):
         return False
+    def file_signature(self):
+        raise ValueError(self.reason)
     def open_reader(self):
         raise ValueError(self.reason)
     @contextmanager
