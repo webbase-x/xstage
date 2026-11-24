@@ -33,7 +33,9 @@ def shared_root(value):
 
 def _open_read_only(root):
     db_path = root / "DB" / "songs.sqlite3"
-    db = sqlite3.connect(db_path.as_uri() + "?mode=ro", uri=True, timeout=5)
+    # Online publishes complete single-file snapshots; immutable read-only mode
+    # prevents SQLite from creating -wal/-shm files in the shared Drive folder.
+    db = sqlite3.connect(db_path.as_uri() + "?mode=ro&immutable=1", uri=True, timeout=5)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA query_only=ON")
     db.execute("PRAGMA trusted_schema=OFF")
