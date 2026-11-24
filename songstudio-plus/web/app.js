@@ -35,7 +35,7 @@
                  manualHeard:false,manualPoll:null,manualClockTimer:null,manualMidiSample:0,
                  manualMidiAt:0,manualCueUndo:new Map(),manualDirty:false,manualFindings:[],manualOnlyIssues:false,
                  manualLayout:{menu:false,queue:false,stage:false,focus:false},
-                 updateTarget:null,updateInstallIntent:false,updateBusy:false,updateNoticeDismissed:false,updateNoticeShown:false,jobsRefreshing:false,lastJobRevision:-1,lastJobPaint:0};
+                 updateTarget:null,updateInstallIntent:false,updateBusy:false,updateNoticeDismissed:false,updateNoticeShown:false,jobsRefreshing:false,lastJobRevision:-1,lastJobPaint:0,drivePushReady:false,drivePushStats:null,drivePushSpec:null};
   let manualTimeline=null;
   let confirmationPending=false;
   let lyricDialogLoading=false;
@@ -965,7 +965,8 @@
     try{
       const endpoint=kind==="import"?"/api/import":
         kind==="import-file"?"/api/import/file":
-        kind==="song-download"?"/api/import/download":kind==="drive-import"?"/api/import/google-drive":kind==="recover"?"/api/recover-lyrics":
+        kind==="song-download"?"/api/import/download":kind==="drive-import"?"/api/import/google-drive":
+        kind==="drive-push-preview"?"/api/drive/push-preview":kind==="drive-push"?"/api/drive/push":kind==="recover"?"/api/recover-lyrics":
         kind==="swipe-audit"?"/api/swipe/scan":kind==="db-audit"?"/api/db/audit":
         kind==="db-clean"?"/api/db/cleanup":
         kind==="db-compact"?"/api/db/compact":"/api/build";
@@ -1004,6 +1005,8 @@
       $("song-download-start").disabled=!state.ready||Boolean(state.activeJob);
       $("drive-download").disabled=!state.ready||Boolean(state.activeJob);
       $("drive-check").disabled=!state.ready||Boolean(state.activeJob);
+      $("drive-push-preview").disabled=!state.ready||Boolean(state.activeJob);
+      $("drive-push-submit").disabled=!state.ready||Boolean(state.activeJob)||!state.drivePushReady;
       $("recover-lyrics").disabled=!state.ready||Boolean(state.activeJob);
       $("risk-scan").disabled=!state.ready||Boolean(state.activeJob);
       $("db-health-check").disabled=!state.ready||Boolean(state.activeJob);
@@ -1112,6 +1115,28 @@
             "ยกเลิกแล้ว · ฐานข้อมูลคืนค่าเดิมทั้งชุด":
             "แทนที่ไม่สำเร็จ ฐานข้อมูลยังไม่เปลี่ยน: "+(job.error||job.message));
         }
+      }
+      if(job.kind==="drive-push-preview"||job.kind==="drive-push"){
+        const preview=job.kind==="drive-push-preview";
+        const result=job.result||{};
+        const stats=preview?(result.stats||{}):(job.status==="completed"?result:p);
+        if(preview&&job.status!=="running"){
+          state.drivePushReady=job.status==="completed"&&Number(stats.new||0)>0&&Number(stats.conflict||0)===0;
+          state.drivePushStats=state.drivePushReady?stats:null;
+          state.drivePushSpec=state.drivePushReady?{source:result.source,folder:result.root,area:result.area}:null;
+        }else if(!preview&&job.status!=="running"){
+          state.drivePushReady=false;state.drivePushSpec=null;
+        }
+        $("drive-push-submit").disabled=!state.ready||Boolean(state.activeJob)||!state.drivePushReady;
+        text("drive-push-status",job.status==="failed"?
+          "ตรวจ/ส่งไฟล์ไม่สำเร็จ: "+String(job.error||job.message):
+          job.status==="running"?(preview?"กำลังตรวจ SHA-256 · ":"กำลังส่งเข้า Google Drive บนเครื่อง · ")+String(job.message||""):
+          job.status==="cancelled"?"หยุดงานแล้ว · ไฟล์ที่ส่งสำเร็จคงอยู่":
+          preview?"ตรวจแล้ว "+number(stats.scanned)+" · ใหม่ "+number(stats.new)+
+            " · ตรงกัน "+number(stats.identical)+" · ซ้ำเนื้อหา "+number(stats.duplicate)+
+            " · ชื่อชน "+number(stats.conflict)+
+            (Number(stats.conflict)?" · ต้องแก้ชื่อชนก่อนส่ง":Number(stats.new)?" · พร้อมยืนยันส่ง":" · ไม่มีไฟล์ใหม่"):
+          "ส่งสำเร็จ "+number(result.published)+" ไฟล์ · รอ Google Drive ซิงก์ แล้วอัปเดตฐานใน Karaoke Online");
       }
       if(job.kind==="drive-import"){
         const latest=job.status==="completed"?"ดาวน์โหลดและนำเข้าเสร็จสิ้น":
