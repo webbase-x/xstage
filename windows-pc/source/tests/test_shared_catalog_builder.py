@@ -9,6 +9,7 @@ import struct
 import tempfile
 import threading
 import unittest
+from contextlib import closing
 import zipfile
 from pathlib import Path
 
@@ -72,7 +73,7 @@ class SharedPcBuilderTests(unittest.TestCase):
         row=library.search("10001")[0]
         self.assertEqual(row["title"],"เพลงทดสอบ")
         self.assertTrue(library.get(row["id"])["path"].endswith("10001.xmid"))
-        with sqlite3.connect(self.root/"DB/songs.sqlite3") as db:
+        with closing(sqlite3.connect(self.root/"DB/songs.sqlite3")) as db:
             self.assertEqual(db.execute("PRAGMA quick_check").fetchone()[0],"ok")
             self.assertEqual(db.execute(
                 "SELECT value FROM catalog_meta WHERE key='pcSchema'").fetchone()[0],
@@ -116,7 +117,7 @@ class SharedPcBuilderTests(unittest.TestCase):
     def test_preserve_verified_drive_id_on_rebuild(self):
         build(self.root)
         db_path=self.root/"DB/songs.sqlite3"
-        with sqlite3.connect(db_path) as db:
+        with closing(sqlite3.connect(db_path)) as db:
             source=db.execute("SELECT payload FROM songs").fetchone()[0]
             row=json.loads(source)
             row["xmid"]["fileId"]="verifiedDriveSongId123"
@@ -125,7 +126,7 @@ class SharedPcBuilderTests(unittest.TestCase):
                        (json.dumps(row,ensure_ascii=False),))
         result=build(self.root)
         self.assertEqual(result["pending_drive_ids"],0)
-        with sqlite3.connect(db_path) as db:
+        with closing(sqlite3.connect(db_path)) as db:
             record=json.loads(db.execute("SELECT payload FROM songs").fetchone()[0])
         self.assertEqual(record["xmid"]["fileId"],"verifiedDriveSongId123")
         self.assertEqual(len(list((self.root/"BACKUP").glob("*.bak"))),1)
