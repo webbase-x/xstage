@@ -71,6 +71,10 @@ assert.equal(sharedRows.find(r=>r[1]==='drive/X100')[3],'MIDI');
 assert.equal(sharedRows.find(r=>r[1]==='drive/X200')[3],'AUDIO');
 
 assert.equal(db.exec('SELECT count(*) FROM songs')[0].values[0][0],2);
+const ordered=db.exec('SELECT ordinal,web_song_id FROM songs ORDER BY ordinal')[0].values;
+assert.deepEqual(ordered,[[0,'drive/X100'],[1,'drive/X200']],
+  'Portable snapshot records caller order separately from stable hashed PC song IDs');
+
 const details=db.exec("SELECT original_filename,original_relative_path,original_file_size,source_code,midi_size,midi_md5 FROM songs WHERE web_song_id='drive/X100'")[0].values[0];
 assert.deepEqual(details,['00001.XMID','batch-A/00001.XMID',32768,
   '00001',11294,'a'.repeat(32)],'Filename, source code and raw MIDI content identity must persist in SQLite');
@@ -81,7 +85,8 @@ db.close();
 const parsed=await codec.read(bytes);
 assert.equal(parsed.kind,'snapshot');
 assert.equal(parsed.generation,'releaseA');
-assert.deepEqual(JSON.parse(JSON.stringify(parsed.songs)),[songA,songB]);
+assert.deepEqual(JSON.parse(JSON.stringify(parsed.songs)),[songA,songB],
+  'SQLite round-trip must return the caller song order despite hashed PC primary keys');
 const deltaBytes=await codec.create('delta',[{...songA,title:'เพลงแก้ไข'}],['drive/X200'],'releaseB');
 const delta=await codec.read(deltaBytes);
 assert.equal(delta.kind,'delta');
