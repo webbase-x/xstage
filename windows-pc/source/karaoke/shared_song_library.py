@@ -103,8 +103,11 @@ class SharedSongLibrary:
         return SharedReader(self)
 
     def search(self, text="", favorite=False, limit=1000, playable_only=False):
-        with self.open_reader() as reader:
+        reader = self.open_reader()
+        try:
             return reader.search(text, favorite, limit, playable_only)
+        finally:
+            reader.close()
 
     def get(self, song_id):
         with self.connect() as db:
