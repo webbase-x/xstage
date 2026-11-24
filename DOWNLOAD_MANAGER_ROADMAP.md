@@ -67,3 +67,5 @@ The long-term target is an IDM / aria2 / yt-dlp / JDownloader-class application 
 
 ### Build 28 candidate (v0.2.25; release gate pending)
 - Single detached update progress window replaces simultaneous countdown and helper popups. Six explicit stages, verified setup retained during active live recording, no second helper after handshake timeout. Existing download state is retained; Windows UAC remains separate. Source contracts and WinForms render smoke added. No release or field-test claim before verification.
+
+- Build 28 UI follow-up: both quick-entry toolbar buttons toggle the same panel, switching modes without losing drafts. Video mode shows quality/output controls before a URL is entered. Linked UpdateTransitionForm into the test project to fix CS0246 in Windows run 45393858982; added real toolbar-click smoke coverage. Release gate remains pending.

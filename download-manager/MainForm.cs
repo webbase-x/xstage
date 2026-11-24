@@ -175,7 +175,7 @@ public sealed partial class MainForm : Form
     {
         var entry = _inputLayout;
         if (entry is null) return;
-        bool showVideo = SocialVideoDownloader.InputContainsVideo(_url.Text);
+        bool showVideo = _videoEntryRequested || SocialVideoDownloader.InputContainsVideo(_url.Text);
         entry.SuspendLayout();
         foreach (var control in _videoOptionControls) control.Visible = showVideo;
         for (int row = 0; row < 5; row++)

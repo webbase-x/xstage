@@ -32,6 +32,7 @@
     <Compile Include="../MediaIntegrity.cs" Link="MediaIntegrity.cs" />
     <Compile Include="../UpdateChecker.cs" Link="UpdateChecker.cs" />
     <Compile Include="../SelfUpdater.cs" Link="SelfUpdater.cs" />
+    <Compile Include="../UpdateTransitionForm.cs" Link="UpdateTransitionForm.cs" />
     <Compile Include="../BrowserIntegration.cs" Link="BrowserIntegration.cs" />
     <Compile Include="../NativeMessagingBridge.cs" Link="NativeMessagingBridge.cs" />
     <Compile Include="../BrowserCaptureProbe.cs" Link="BrowserCaptureProbe.cs" />

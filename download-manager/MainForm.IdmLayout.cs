@@ -18,6 +18,7 @@ public sealed partial class MainForm
     private TableLayoutPanel? _workspaceRoot;
     private Panel? _entryShell;
     private bool _inputVisible;
+    private bool _videoEntryRequested;
     private string _categoryFilter = "all";
     private List<DownloadJob> _visibleJobs = new();
     private string? _sortColumn;
@@ -139,7 +140,7 @@ public sealed partial class MainForm
             return item;
         }
 
-        var addUrl = Action("เพิ่มลิงก์ (Ctrl+N)", (_, _) => ShowAddUrlFromClipboard());
+        var addUrl = Action("เพิ่มลิงก์ (Ctrl+N)", (_, _) => ToggleQuickEntry(false));
         addUrl.ShortcutKeys = Keys.Control | Keys.N;
         var renameFile = Action("เปลี่ยนชื่อไฟล์ที่เสร็จแล้ว (F2)",
             (_, _) => WithSelectedJob(RenameCompletedJob));
@@ -203,7 +204,7 @@ public sealed partial class MainForm
             Action("บันทึกไลฟ์สด · ตัดคลิปตามช่วงหยุดพูด...",
                 (_, _) => OpenLiveCapture()),
             new ToolStripSeparator(),
-            Action("เพิ่มลิงก์วิดีโอ...", (_, _) => ShowAddUrlFromClipboard()),
+            Action("เพิ่มลิงก์วิดีโอ...", (_, _) => ToggleQuickEntry(true)),
             Action("ดาวน์โหลดวิดีโอใหม่ / เปลี่ยนคุณภาพ...",
                 (_, _) => WithSelectedJob(job =>
                 {
@@ -314,7 +315,7 @@ public sealed partial class MainForm
             bar.Items.Add(item);
         }
         Button("เพิ่มงาน", "add", Color.FromArgb(59, 228, 137),
-            (_, _) => ShowAddUrlFromClipboard(), "เพิ่ม URL (Ctrl+N)");
+            (_, _) => ToggleQuickEntry(false), "คลิกเปิด/ซ่อนช่องเพิ่ม URL (Ctrl+N)");
         Button("เริ่ม", "play", Color.FromArgb(98, 166, 255),
             (_, _) => SelectedAction(_engine.Start), "เริ่ม / ต่อรายการที่เลือก");
         Button("พัก", "pause", Color.FromArgb(142, 187, 255),
@@ -328,7 +329,7 @@ public sealed partial class MainForm
         Button("จำกัดความเร็ว", "gauge", Color.FromArgb(94, 222, 126),
             (_, _) => ConfigurePerformance(), "ตั้งค่าความเร็วและจำนวนงาน", 125);
         Button("ดาวน์โหลดวิดีโอ", "video", Color.FromArgb(175, 130, 246),
-            (_, _) => ShowAddUrlFromClipboard(), "เพิ่ม URL สำหรับดาวน์โหลดสื่อ", 129);
+            (_, _) => ToggleQuickEntry(true), "คลิกเปิด/ซ่อนช่องดาวน์โหลดวิดีโอ", 129);
         Button("บันทึกไลฟ์สด", "video", Color.FromArgb(236, 130, 207),
             (_, _) => OpenLiveCapture(), "เปิดโหมดบันทึกไลฟ์และตัดคลิปตามช่วงเงียบ", 118);
         Button("วิเคราะห์ปัญหา", "alert", Color.FromArgb(148, 176, 252),
@@ -1282,6 +1283,17 @@ public sealed partial class MainForm
         }
     }
 
+    private void ToggleQuickEntry(bool video)
+    {
+        if (_inputVisible && _videoEntryRequested == video)
+        {
+            ShowInputPanel(false);
+            return;
+        }
+        _videoEntryRequested = video;
+        ShowAddUrlFromClipboard();
+    }
+
     private void ShowAddUrlFromClipboard()
     {
         ShowInputPanel(true);
@@ -1321,6 +1333,14 @@ public sealed partial class MainForm
         {
             _workspaceRoot.RowStyles[2].Height = 0;
             _entryShell.Visible = false;
+        }
+        if (_toolbar is not null)
+        {
+            foreach (var item in _toolbar.Items.OfType<ToolStripButton>())
+            {
+                if (item.Text == "เพิ่มงาน") item.Checked = visible && !_videoEntryRequested;
+                if (item.Text == "ดาวน์โหลดวิดีโอ") item.Checked = visible && _videoEntryRequested;
+            }
         }
         _workspaceRoot.PerformLayout();
         if (visible)

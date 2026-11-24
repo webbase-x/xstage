@@ -25,6 +25,10 @@ assert.match(updater, /process\.Kill\(\)[\s\S]*?throw new InvalidOperationExcept
 for (let step = 2; step <= 6; step++) assert.ok(updater.includes('ขั้นที่ '+step+'/6'));
 assert.ok(updateUi.includes('ขั้นที่ 1/6') && updateUi.includes('ขั้นที่ 6/6'));
 assert.ok(updateUi.includes('_dismiss.Visible = true'));
+assert.match(workspace, /Button\("เพิ่มงาน"[\s\S]*?ToggleQuickEntry\(false\)/);
+assert.match(workspace, /Button\("ดาวน์โหลดวิดีโอ"[\s\S]*?ToggleQuickEntry\(true\)/);
+assert.match(workspace, /if \(_inputVisible && _videoEntryRequested == video\)[\s\S]*?ShowInputPanel\(false\)/);
+assert.ok(testProject.includes('../UpdateTransitionForm.cs'));
 const contracts = [
   ['changed source clears stale adaptive throughput', /if \(sourceChanged\)[\s\S]*?job\.PreviousBytes = 0;\s*job\.SpeedBytesPerSecond = 0;\s*job\.SmoothedSpeedBytesPerSecond = 0;/, engine],
   ['protected subscription domains rejected before job creation', /host\.EndsWith\("\." \+ domain, StringComparison\.OrdinalIgnoreCase\)/, engine],

@@ -97,6 +97,32 @@ if (args.Contains("--ui-smoke", StringComparer.Ordinal))
                 using var graphics = Graphics.FromImage(target);
                 graphics.DrawImage(rendered, 0, 0, 40, 40);
             }
+            // Exercise the real toolbar clicks without adding any download.
+            var toolbar = (ToolStrip)(typeof(MainForm).GetField("_toolbar",
+                BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(main)!);
+            var urlInput = (TextBox)(typeof(MainForm).GetField("_url",
+                BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(main)!);
+            var addButton = toolbar.Items.OfType<ToolStripButton>().Single(x => x.Text == "เพิ่มงาน");
+            var videoButton = toolbar.Items.OfType<ToolStripButton>().Single(x => x.Text == "ดาวน์โหลดวิดีโอ");
+            urlInput.Text = "https://example.test/draft.zip";
+            addButton.PerformClick();
+            if (root.RowStyles[2].Height <= 0 || !addButton.Checked)
+                throw new Exception("Add toolbar did not open quick entry.");
+            addButton.PerformClick();
+            if (root.RowStyles[2].Height != 0 || addButton.Checked)
+                throw new Exception("Add toolbar did not hide quick entry.");
+            videoButton.PerformClick();
+            if (root.RowStyles[2].Height != 268 || !videoButton.Checked)
+                throw new Exception("Video toolbar did not open video settings.");
+            videoButton.PerformClick();
+            if (root.RowStyles[2].Height != 0 || videoButton.Checked ||
+                urlInput.Text != "https://example.test/draft.zip")
+                throw new Exception("Video toggle must hide without deleting draft.");
+            addButton.PerformClick();
+            videoButton.PerformClick();
+            if (!videoButton.Checked || addButton.Checked || root.RowStyles[2].Height != 268)
+                throw new Exception("Switching mode must reuse the same visible panel.");
+            videoButton.PerformClick();
             // Instantiate the actual detached updater UI without showing it:
             // painting must not launch installation or signal a real handshake.
             using (var transition = new UpdateTransitionForm(new[] {
