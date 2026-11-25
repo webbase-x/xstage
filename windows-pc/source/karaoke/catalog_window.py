@@ -265,7 +265,7 @@ class CatalogWindow:
         if key not in self.page_views:
             if key == 'build':
                 from .shared_catalog_builder_ui import open_builder
-                view = open_builder(self.app, initial_root=initial_root or remembered_drive_root(self.app.settings) or self.source,
+                view = open_builder(self.app, initial_root=initial_root or self.app.settings.get('catalog_source') or remembered_drive_root(self.app.settings) or self.source,
                                     parent=self.pages[key])
             elif key == 'drive':
                 from .drive_online_catalog_ui import open_shared_drive_catalog

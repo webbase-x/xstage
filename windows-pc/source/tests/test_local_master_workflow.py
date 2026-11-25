@@ -77,6 +77,27 @@ class LocalMasterWorkflowTests(TestCase):
         self.assertEqual(kind(native), "pc")
         self.assertTrue(self.file.exists())
 
+    def test_independent_media_source_and_online_database_copy(self):
+        from karaoke.shared_drive_layout import setup
+        root = self.drive / "XStageKaraoke"
+        setup(root)
+        pending = self.home / "DB/.online-pending.sqlite3"
+        result = build(root, deduplicate=False, local_database=pending,
+                       source_songs=self.source)
+        self.assertEqual(result["accepted"], 1)
+        self.assertEqual(list((root / "SONGS").rglob("*.xmid")), [])
+        self.assertTrue(self.file.is_file())
+        self.assertTrue((root / "DB/songs.sqlite3").is_file())
+        settings = {"pending_online_master": {"root": str(root),
+                    "source_songs": str(self.source), "generation": result["generation"]}}
+        native = activate(self.home, self.data, settings, installed=True)
+        library = SharedSongLibrary(root, settings, database=native)
+        self.assertEqual(library.count(), 1)
+        rows = library.search("10001")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(Path(library.get(rows[0]["id"])["path"]).resolve(), self.file.resolve())
+        self.assertEqual(Path(settings["shared_source_songs"]).resolve(), self.source.resolve())
+
     def test_installed_legacy_migration_preserves_database(self):
         legacy = self.data / "songs.sqlite3"
         lib = SongLibrary(legacy)

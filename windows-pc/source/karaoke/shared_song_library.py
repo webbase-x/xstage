@@ -96,6 +96,7 @@ class SharedSongLibrary:
         self.fts = False
         self.settings = settings if isinstance(settings, dict) else {}
         self.save_settings = save_settings
+        self.source_songs = Path(self.settings['shared_source_songs']) if database is not None and self.settings.get('shared_source_songs') else self.root / 'SONGS'
         from .library import search_rank
         self._rank = search_rank
 
@@ -109,18 +110,18 @@ class SharedSongLibrary:
         # Search lists never hydrate 1,000 Drive placeholders just to render
         # titles; the exact media path and filesystem are verified on play.
         parts = raw.split("/")
-        safe = len(parts) >= 3 and parts[0] == "SONGS" and all(
+        safe = len(parts) >= 2 and parts[0] == "SONGS" and all(
             part not in ("", ".", "..") and ":" not in part and chr(92) not in part
             for part in parts)
         if not safe:
             row["path"] = ""
             row["playable"] = 0
         elif verify:
-            absolute = _local_media(self.root, raw)
+            absolute = _local_media(self.root, raw, source_songs=self.source_songs)
             row["path"] = absolute or ""
             row["playable"] = int(bool(row.get("playable")) and bool(absolute))
         else:
-            row["path"] = str(self.root.joinpath(*parts))
+            row["path"] = str(self.source_songs.joinpath(*parts[1:]))
             row["playable"] = int(bool(row.get("playable")))
         favorites = self.settings.get("shared_favorite_song_ids", [])
         row["favorite"] = int(row["id"] in favorites) if isinstance(favorites, list) else 0

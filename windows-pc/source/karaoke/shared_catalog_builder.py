@@ -170,8 +170,10 @@ def _old_ids(path):
         return {}
 
 
-def _files(root, cancel):
-    songs = root / "SONGS"
+def _files(root, cancel, source_songs=None):
+    songs = Path(source_songs).resolve(strict=True) if source_songs is not None else root / "SONGS"
+    if not songs.is_dir():
+        raise ValueError("ไม่พบโฟลเดอร์ต้นทางเพลง")
     files = []
     for directory, folders, names in os.walk(songs, followlinks=False):
         _stop(cancel)
@@ -287,10 +289,10 @@ def _verified_rows(songs, root, references, cache_dir, cancel, full_verify, fing
             cache.commit()
 
 
-def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=None, full_verify=False, deduplicate=True, local_database=None):
+def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=None, full_verify=False, deduplicate=True, local_database=None, source_songs=None):
     """Create fresh verified snapshot; atomically replace after explicit consent."""
     root = _root(root_value)
-    songs = _files(root, cancel)
+    songs = _files(root, cancel, source_songs)
     if not songs:
         raise ValueError("ไม่มี XMID/XSK ที่พร้อมสร้างฐานในโฟลเดอร์ SONGS ของคลังที่เลือก")
     old_file = root / "DB/songs.sqlite3"
@@ -301,7 +303,7 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
     old_ids = _old_ids(old_file) if not deduplicate else {}
     rows, midi_hashes, paths, codes, ids = [], set(), set(), set(), set()
     duplicates = reused = 0
-    for index, (relative, row, cached) in enumerate(_verified_rows(songs, root, references, cache_dir, cancel, full_verify, deduplicate), 1):
+    for index, (relative, row, cached) in enumerate(_verified_rows(songs, Path(source_songs).resolve() if source_songs is not None else root, references, cache_dir, cancel, full_verify, deduplicate), 1):
         reused += int(cached)
         _stop(cancel)
         key = relative.casefold()

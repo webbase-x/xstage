@@ -72,7 +72,7 @@ def summary(root_value):
             "songs": amount, "duplicate_midi_groups": duplicates, "read_only": True}
 
 
-def _local_media(root, relative):
+def _local_media(root, relative, *, source_songs=None):
     """Resolve exact Online relative location, never guess by song title/code."""
     if not isinstance(relative, str) or not relative.strip():
         return None
@@ -85,7 +85,7 @@ def _local_media(root, relative):
         parts.pop(0)
     if not parts or any(":" in part for part in parts):
         return None
-    songs = root / "SONGS"
+    songs = Path(source_songs) if source_songs is not None else root / "SONGS"
     candidate = songs.joinpath(*parts)
     try:
         resolved = candidate.resolve(strict=True)
