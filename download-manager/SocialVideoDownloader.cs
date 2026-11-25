@@ -49,11 +49,11 @@ public static class SocialVideoDownloader
     // yt-dlp runs outside the native HTTP byte gate. Apply the strictest
     // configured cap per video process; this is not yet an aggregate global
     // cap when several native/video jobs run simultaneously.
-    public static int VideoRateLimitKib(int globalLimitKib, int fileLimitKib)
+    public static int VideoRateLimitKib(int globalLimitKib, int fileLimitKib, bool sharedAllocation = false)
     {
         // Keep subprocess limits within the same validated range as native
         // HTTP. Corrupt legacy settings must not launch an unbounded process.
-        if (globalLimitKib != 0 && globalLimitKib is < 64 or > 1_048_576)
+        if (globalLimitKib != 0 && (globalLimitKib < (sharedAllocation ? 1 : 64) || globalLimitKib > 1_048_576))
             throw new ArgumentOutOfRangeException(nameof(globalLimitKib),
                 "Video speed limits must be 0 or 64–1048576 KiB/s.");
         if (fileLimitKib != 0 && fileLimitKib is < 64 or > 1_048_576)
@@ -97,7 +97,7 @@ public static class SocialVideoDownloader
         return "ดาวน์โหลดวิดีโอไม่สำเร็จ (รหัส " + exitCode + ")";
     }
 
-    public static IReadOnlyList<string> BuildArguments(DownloadJob job, string work, string tools, int globalLimitKib = 0)
+    public static IReadOnlyList<string> BuildArguments(DownloadJob job, string work, string tools, int globalLimitKib = 0, bool sharedAllocation = false)
     {
         if (!IsVideoUrl(job.Url)) throw new ArgumentException("ลิงก์นี้ไม่ใช่แพลตฟอร์มวิดีโอที่รองรับ");
         if (!AllowedQualities.Contains(job.VideoQuality)) throw new ArgumentException("รูปแบบวิดีโอไม่ถูกต้อง");
@@ -137,9 +137,9 @@ public static class SocialVideoDownloader
             "--progress-template", "download:xstage-progress:%(progress._percent_str)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s",
             "--ffmpeg-location", tools,
             "--js-runtimes", "deno:" + Path.Combine(tools, "deno.exe"),
-            "-N", VideoFragmentConcurrency(job.Parts).ToString(CultureInfo.InvariantCulture),
+            "-N", (globalLimitKib > 0 || job.FileSpeedLimitKib > 0 ? 1 : VideoFragmentConcurrency(job.Parts)).ToString(CultureInfo.InvariantCulture),
         };
-        var rateLimitKib = VideoRateLimitKib(globalLimitKib, job.FileSpeedLimitKib);
+        var rateLimitKib = VideoRateLimitKib(globalLimitKib, job.FileSpeedLimitKib, sharedAllocation);
         if (rateLimitKib > 0)
         {
             args.Add("--limit-rate");
@@ -233,7 +233,7 @@ public static class SocialVideoDownloader
         => postProcessing ? noByteProgress >= TimeSpan.FromMinutes(15)
                           : noByteProgress >= TimeSpan.FromMinutes(2);
 
-    public static async Task DownloadAsync(DownloadJob job, string work, CancellationToken ct, int globalLimitKib = 0)
+    public static async Task DownloadAsync(DownloadJob job, string work, CancellationToken ct, int globalLimitKib = 0, bool sharedAllocation = false)
     {
         var tools = Path.Combine(AppContext.BaseDirectory, "tools");
         var ytDlp = Path.Combine(tools, "yt-dlp.exe");
@@ -265,7 +265,7 @@ public static class SocialVideoDownloader
         info.Environment["YTDLP_NO_PLUGINS"] = "1";
         info.Environment["PYTHONIOENCODING"] = "utf-8";
         info.Environment["PYTHONUTF8"] = "1";
-        foreach (var arg in BuildArguments(job, work, tools, globalLimitKib)) info.ArgumentList.Add(arg);
+        foreach (var arg in BuildArguments(job, work, tools, globalLimitKib, sharedAllocation)) info.ArgumentList.Add(arg);
 
         using var process = new Process { StartInfo = info };
         if (!process.Start()) throw new IOException("ไม่สามารถเปิดตัวดาวน์โหลดวิดีโอได้");
