@@ -61,7 +61,7 @@ def activate(home, data, settings, *, installed=False):
     pending = settings.get("pending_online_master")
     pc_only = settings.get("pending_pc_only") is True
     local = home / "DB" / "songs.sqlite3"
-    if pending or pc_only or settings.get("shared_local_master"):
+    if pending or pc_only or settings.get("shared_local_master") or settings.get("catalog_local_master"):
         target = local
     else:
         target = master_path(home, data, installed=installed)
@@ -110,6 +110,7 @@ def activate(home, data, settings, *, installed=False):
                 finally:
                     stage.unlink(missing_ok=True)
         settings["library_mode"] = "pc"
+        settings["catalog_local_master"] = True
         settings.pop("shared_local_master", None)
         settings.pop("pending_pc_only", None)
     elif settings.get("library_mode") != "google-drive" and target != data / "songs.sqlite3":
