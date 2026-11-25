@@ -225,6 +225,12 @@ if (args.Length == 0)
         var adaptiveEngine = new DownloadEngine(Path.Combine(adaptiveRoot, "state"));
         adaptiveEngine.ConfigurePerformance(1, 1, 0);
         int observedTarget = 0;
+        var retiredOffsets = new System.Collections.Concurrent.ConcurrentQueue<long>();
+        adaptiveEngine.RangeRetiredSample = (index, saved) =>
+        {
+            if (saved > 0) retiredOffsets.Enqueue(
+                TransferSegmentGeometry.Boundary(adaptivePayload.Length, index, 32) + saved);
+        };
         var samples = new System.Collections.Concurrent.ConcurrentQueue<(int Target, int Active, double Rate)>();
         adaptiveEngine.RangeConcurrencySample = (target, active, rate) =>
         {
@@ -233,6 +239,7 @@ if (args.Length == 0)
         };
         var adaptiveJob = adaptiveEngine.Add(adaptiveServer.Url + "range/measured-adaptive.bin", adaptiveRoot, 32);
         await WaitFor(() => Volatile.Read(ref observedTarget) == 1, 30000);
+        await WaitFor(() => !retiredOffsets.IsEmpty, 30000);
         adaptiveServer.ChunkDelayMs = 1;
         await WaitFor(() => Volatile.Read(ref observedTarget) >= 2, 30000);
         adaptiveServer.ChunkDelayMs = 120;
@@ -242,6 +249,8 @@ if (args.Length == 0)
         if (adaptiveJob.Status != "Completed" || adaptiveJob.SegmentsUsed != 32 ||
             !SHA256.HashData(await File.ReadAllBytesAsync(adaptiveJob.CompletedPath)).SequenceEqual(SHA256.HashData(adaptivePayload)))
             throw new Exception("Adaptive transition changed geometry or corrupted bytes: " + adaptiveJob.Error);
+        if (!retiredOffsets.Any(offset => adaptiveServer.MeasuredRangeStarts.Contains(offset)))
+            throw new Exception("Retired partial range was not resumed at its physical byte offset.");
         if (samples.Any(x => x.Target < 1 || x.Target > 32 || x.Active < 0 || x.Active > 32))
             throw new Exception("Adaptive concurrency bounds violated.");
         Console.WriteLine("PASS: live adaptive target slow-fast-slow, immutable 32-range geometry, SHA-256; " +
@@ -2684,6 +2693,7 @@ sealed class FileServer : IDisposable
     private int _chunkDelayMs = 2;
     private int _measuredRequests, _activeMeasuredConnections, _peakMeasuredConnections;
     public int ChunkDelayMs { get => Volatile.Read(ref _chunkDelayMs); set => Volatile.Write(ref _chunkDelayMs, value); }
+    public System.Collections.Concurrent.ConcurrentBag<long> MeasuredRangeStarts { get; } = new();
     public int MeasuredRequests => Volatile.Read(ref _measuredRequests);
     public int PeakMeasuredConnections => Volatile.Read(ref _peakMeasuredConnections);
     public string Url { get; }
@@ -2779,6 +2789,7 @@ sealed class FileServer : IDisposable
                     code.StartsWith("206") && length > 1;
                 if (measuredRange)
                 {
+                    MeasuredRangeStarts.Add(begin);
                     Interlocked.Increment(ref _measuredRequests);
                     var active = Interlocked.Increment(ref _activeMeasuredConnections);
                     int peak;
