@@ -75,7 +75,7 @@ class CatalogWindow:
         self.window.protocol('WM_DELETE_WINDOW', self.hide)
         self.window.bind('<Escape>', lambda _: self.hide())
         self.window.bind('<Destroy>', self._on_destroy, add='+')
-        self.source = Path(app.managed_catalog_root())
+        self.source = Path(getattr(app, 'settings', {}).get('catalog_source') or app.managed_catalog_root())
         self.source_text = tk.StringVar(self.window, value=str(self.source))
         self.query = tk.StringVar(self.window)
         self.summary = tk.StringVar(self.window, value='กำลังอ่านรายการเพลง…')
@@ -94,6 +94,7 @@ class CatalogWindow:
         self._phase_total = None
         self._page = 0
         self.mode = tk.StringVar(self.window, value='quick')
+        self.usage = tk.StringVar(self.window, value='pc')
         self.duplicates = tk.StringVar(self.window, value='review')
         self.shutdown_after = tk.BooleanVar(self.window, value=False)
         self.duplicate_report_path = None
@@ -139,9 +140,14 @@ class CatalogWindow:
         tk.Label(source_card, text='ฐาน PC ปัจจุบัน: '+str(self.app.library.path),
                  bg=PANEL, fg=MUTED, wraplength=720, justify='left',
                  font=('Leelawadee UI', 9)).grid(row=2, column=0, columnspan=3, sticky='w', pady=(8, 0))
-        tk.Label(source_card, text='เลือก XStageKaraoke หรือ SONGS ภายในคลังร่วม เพื่อสร้าง DB สำหรับ PC / Online',
+        tk.Label(source_card, text='PC เท่านั้น: ใช้คลังตำแหน่งเดิม · PC + Online: ต้องเตรียมคลังบน Google Drive ก่อน',
                  bg=PANEL, fg=MUTED, wraplength=720, justify='left',
                  font=('Leelawadee UI', 9)).grid(row=3, column=0, columnspan=3, sticky='w')
+
+        mode_row = ttk.Frame(source_card)
+        mode_row.grid(row=4, column=0, columnspan=3, sticky='w', pady=(8, 0))
+        ttk.Radiobutton(mode_row, text='Karaoke PC เท่านั้น', value='pc', variable=self.usage).pack(side='left')
+        ttk.Radiobutton(mode_row, text='Karaoke PC + Online', value='online', variable=self.usage).pack(side='left', padx=(20, 0))
 
         search_row = tk.Frame(body, bg=BG)
         search_row.grid(row=1, column=0, sticky='ew', pady=(12, 6))
@@ -198,13 +204,10 @@ class CatalogWindow:
         options.columnconfigure(1, weight=1)
         tk.Label(options, text='โหมดสร้างรายการ', bg=PANEL, fg=INK).grid(row=0, column=0, sticky='w', padx=(0, 12))
         self.mode_select = ttk.Combobox(options, state='readonly', width=55,
-            values=('สร้างรายการด่วน — ค้นหาได้ก่อน ตรวจซ้ำภายหลัง (แนะนำ)',
-                    'ตรวจเพลงซ้ำละเอียด — SHA-256 และรายงาน',
-                    'ตรวจทุกไฟล์ — อ่านข้อมูลเพลงทั้งหมด',
-                    'สร้างใหม่แบบปลอดภัย — เฉพาะโฟลเดอร์ที่เลือก'))
+            values=('สร้างรายการด่วน — ไม่ตรวจเพลงซ้ำ',))
         self.mode_select.current(0)
         self.mode_select.grid(row=0, column=1, sticky='ew')
-        self.mode_select.bind('<<ComboboxSelected>>', lambda _: self.mode.set(('quick', 'fast', 'full', 'safe_rebuild')[self.mode_select.current()]))
+        self.mode_select.bind('<<ComboboxSelected>>', lambda _: self.mode.set('quick'))
         tk.Label(options, text='เพลงที่สงสัยว่าซ้ำ: ระบบจะรายงานเท่านั้น ไม่ซ่อนหรือลบเอง',
                  bg=PANEL, fg=MUTED, wraplength=690, justify='left').grid(
                  row=1, column=0, columnspan=2, sticky='w', pady=(6, 0))
@@ -287,15 +290,9 @@ class CatalogWindow:
             source = self.source.resolve()
             managed = Path(self.app.managed_catalog_root()).resolve()
             copy_external = False
-            shared = selected_shared_root(source)
-            if mode != 'clear' and shared is not None:
-                if messagebox.askyesno('ฐานเพลงร่วม PC / Online',
-                        f'ใช้คลังร่วมนี้และสร้างฐานจาก SONGS ทั้งหมดหรือไม่?\n\n'
-                        f'{shared / "DB" / "songs.sqlite3"}\n\n'
-                        'ระบบจะเปิดตัวสร้างฐานร่วม XMID/XSK2 ไม่บันทึกลงฐาน PC ภายในเครื่อง',
-                        parent=parent, default='yes'):
-                    from .shared_catalog_builder_ui import open_builder
-                    open_builder(self.app, initial_root=shared)
+            if mode == 'quick' and self.usage.get() == 'online':
+                from .shared_catalog_builder_ui import open_builder
+                open_builder(self.app, initial_root=source)
                 return
             if mode == 'clear':
                 if not messagebox.askyesno('ล้างรายการทั้งหมด',
@@ -310,11 +307,8 @@ class CatalogWindow:
                 # v0.9.43 never copies source media into Songs. The user may
                 # manually place files there and run an index afterward.
                 if mode == 'quick' and self.shutdown_after.get():
-                    if not messagebox.askyesno('ใช้โหมดตรวจละเอียด',
-                            'การปิดเครื่องอัตโนมัติต้องตรวจไฟล์ก่อน เปลี่ยนเป็นโหมดตรวจละเอียดหรือไม่?',
-                            parent=parent, default='no'):
-                        return
-                    mode = 'fast'
+                    self.shutdown_after.set(False)
+                    messagebox.showinfo('สร้างรายการด่วน', 'สร้างฐานโดยไม่ตรวจเพลงซ้ำและไม่ปิดเครื่องอัตโนมัติ', parent=parent)
                 if mode in ('rebuild', 'safe_rebuild'):
                     sources = f'{managed}\n{source}' if copy_external else str(source)
                     if not messagebox.askyesno('สร้างรายการใหม่',
