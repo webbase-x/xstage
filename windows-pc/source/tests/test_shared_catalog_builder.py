@@ -84,6 +84,30 @@ class SharedPcBuilderTests(unittest.TestCase):
         self.assertFalse((self.root/"DB/songs.sqlite3-wal").exists())
         self.assertFalse((self.root/"DB/songs.sqlite3-shm").exists())
 
+    def test_xmid_missing_artist_or_title_remains_searchable_and_cached(self):
+        (self.songs/"10001.xmid").write_bytes(
+            _xmid("10001","เพลงไม่มีศิลปิน","   ",self.midi))
+        changed = bytearray(self.midi)
+        changed[13] = 97
+        (self.songs/"10002.xmid").write_bytes(
+            _xmid("10002","","ศิลปินจริง",bytes(changed)))
+        cache = Path(self.tmp.name) / "index-cache"
+        preview = build(self.root, cache_dir=cache, publish=False)
+        self.assertEqual(preview["accepted"], 2)
+        result = build(self.root, cache_dir=cache)
+        self.assertEqual(result["reused"], 2)
+        with closing(sqlite3.connect(self.root/"DB/songs.sqlite3")) as db:
+            rows = db.execute(
+                "SELECT code,title,artist,playable,payload FROM songs ORDER BY code"
+            ).fetchall()
+            self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+        self.assertEqual(rows[0][:4], ("10001","เพลงไม่มีศิลปิน","ไม่ระบุศิลปิน",1))
+        self.assertEqual(rows[1][:4], ("10002","10002","ศิลปินจริง",1))
+        self.assertTrue(all(json.loads(row[4])["metadataComplete"] is False for row in rows))
+        library = SharedSongLibrary(self.root,{})
+        self.assertEqual(library.search("เพลงไม่มีศิลปิน")[0]["code"], "10001")
+        self.assertEqual(library.search("10002")[0]["title"], "10002")
+
     def test_midi_dedup_and_distinct_xsk2(self):
         (self.songs/"10002.xmid").write_bytes(
             _xmid("10002","ซ้ำ","ศิลปินใหม่",self.midi))
