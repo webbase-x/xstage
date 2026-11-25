@@ -71,7 +71,14 @@ def main():
         except (OSError, AttributeError):
             pass
         from karaoke.restore import apply_pending
-        try:restored=apply_pending(data)
+        try:
+            from karaoke.local_master import master_path
+            active_db = master_path(home, data, installed=bool(getattr(sys, "frozen", False)))
+            # An existing migrated master is the restore target; an old profile
+            # without a master is restored in its original folder before migration.
+            restored = (apply_pending(data, database=active_db)
+                        if active_db != data / "songs.sqlite3" and active_db.exists()
+                        else apply_pending(data))
         except Exception as error:
             import tkinter as tk
             from tkinter import messagebox
