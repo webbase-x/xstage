@@ -9,6 +9,25 @@ using XStageDownloadManager;
 
 if (args.Length == 0)
 {
+    // Deterministic virtual link telemetry: no dependence on CI wall-clock jitter.
+    foreach (var maximum in new[] { 1, 2, 4, 8, 16, 32 })
+    {
+        int active = 1;
+        for (int i = 0; i < 6; i++)
+            active = DownloadEngine.NextRangeConcurrency(active, maximum, maximum,
+                64 * 1024 * 1024d, 64 * 1024 * 1024d);
+        if (active != maximum) throw new Exception("Adaptive range growth failed.");
+        active = DownloadEngine.NextRangeConcurrency(active, maximum, maximum,
+            64 * 1024 * 1024d, 128 * 1024d);
+        if (active != Math.Max(1, maximum / 2))
+            throw new Exception("Adaptive range backpressure failed.");
+        for (int i = 0; i < 6; i++)
+            active = DownloadEngine.NextRangeConcurrency(active, maximum, maximum, 128 * 1024d, 0);
+        if (active != 1) throw new Exception("Stalled link did not reduce concurrency.");
+        if (DownloadEngine.NextRangeConcurrency(maximum, maximum, 1, 1, 1) != 1)
+            throw new Exception("Adaptive range ceiling exceeded.");
+    }
+    Console.WriteLine("PASS: virtual link adaptive range growth, slowdown, stall and ceiling");
     SmartSyncPlannerTests.Run();
     await SmartSyncBackgroundTests.RunAsync();
     await SmartSyncTransferTests.RunAsync();
