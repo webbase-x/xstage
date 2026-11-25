@@ -934,13 +934,49 @@ public sealed class DownloadEngine
         if (checkpointError.Length > 0)
             throw new IOException("ไม่สามารถบันทึกขอบเขตการดาวน์โหลดก่อนเริ่มเขียนไฟล์: " +
                 checkpointError);
-        var tasks = Enumerable.Range(0, count).Select(i =>
+        // Keep persisted byte geometry immutable; adapt only the number of
+        // active range workers. Start conservatively and sample completed bytes.
+        var tasks = new List<Task>();
+        var pending = new Queue<int>(Enumerable.Range(0, count).Where(i =>
+            job.SegmentDownloadedBytes[i] < TransferSegmentGeometry.Boundary(job.TotalBytes, i + 1, count)
+                - TransferSegmentGeometry.Boundary(job.TotalBytes, i, count)));
+        var active = new List<Task>();
+        var target = Math.Min(2, count);
+        var previousBytes = Interlocked.Read(ref job.DownloadedBytes);
+        var previousTick = Environment.TickCount64;
+        double previousRate = 0;
+        while (pending.Count > 0 || active.Count > 0)
         {
-            var begin = TransferSegmentGeometry.Boundary(job.TotalBytes, i, count);
-            var end = TransferSegmentGeometry.Boundary(job.TotalBytes, i + 1, count) - 1;
-            return DownloadPartAsync(job, PartPath(work, i), begin, end, i, ct);
-        }).ToArray();
-        try { await Task.WhenAll(tasks); }
+            while (!ct.IsCancellationRequested && !tasks.Any(t => t.IsFaulted || t.IsCanceled)
+                && pending.Count > 0 && active.Count < target)
+            {
+                var i = pending.Dequeue();
+                var begin = TransferSegmentGeometry.Boundary(job.TotalBytes, i, count);
+                var end = TransferSegmentGeometry.Boundary(job.TotalBytes, i + 1, count) - 1;
+                var task = DownloadPartAsync(job, PartPath(work, i), begin, end, i, ct);
+                active.Add(task);
+                tasks.Add(task);
+            }
+            if (active.Count == 0) break;
+            await Task.WhenAny(active.Append(Task.Delay(1000))).ConfigureAwait(false);
+            active.RemoveAll(t => t.IsCompleted);
+            var now = Environment.TickCount64;
+            if (now - previousTick >= 1000)
+            {
+                var bytes = Interlocked.Read(ref job.DownloadedBytes);
+                var rate = Math.Max(0, bytes - previousBytes) * 1000d / (now - previousTick);
+                var ceiling = AdaptiveSegmentPlanner.RecommendWithLimits(job.Parts,
+                    job.TotalBytes, rate, false, GlobalLimitKib, job.FileSpeedLimitKib);
+                if (previousRate > 0 && rate < previousRate * 0.75)
+                    target = Math.Max(1, target / 2);
+                else if (rate > 0)
+                    target = Math.Min(Math.Min(count, ceiling), target * 2);
+                previousRate = rate;
+                previousBytes = bytes;
+                previousTick = now;
+            }
+        }
+        try { await Task.WhenAll(tasks); ct.ThrowIfCancellationRequested(); }
         catch
         {
             if (tasks.Any(task => task.Exception?.Flatten().InnerExceptions
