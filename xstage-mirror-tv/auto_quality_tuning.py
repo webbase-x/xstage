@@ -141,17 +141,11 @@ change(renderer,
             if (scheduledOutputBufferRelease) {
                 // schedule frame at VSYNC matching its NTP presentation time
                 val ptsUs = info.presentationTimeUs
-                val now = System.nanoTime()
-                val target = if (_ptsBaseUs == Long.MIN_VALUE) now else
-                    _wallBaseNs + (ptsUs - _ptsBaseUs) * 1000L
-                // Discontinuous sender timestamps must not park decoder output buffers.
-                if (_ptsBaseUs == Long.MIN_VALUE || target - now > 250_000_000L || now - target > 250_000_000L) {
+                if (_ptsBaseUs == Long.MIN_VALUE) {
                     _ptsBaseUs = ptsUs
-                    _wallBaseNs = now
-                    c.releaseOutputBuffer(idx, true)
-                } else {
-                    c.releaseOutputBuffer(idx, maxOf(now, target))
+                    _wallBaseNs = System.nanoTime()
                 }
+                c.releaseOutputBuffer(idx, _wallBaseNs + (ptsUs - _ptsBaseUs) * 1000L)
             } else {
                 c.releaseOutputBuffer(idx, true)
             }
@@ -177,11 +171,17 @@ change(renderer,
             }
             if (scheduledOutputBufferRelease) {
                 val ptsUs = info.presentationTimeUs
-                if (_ptsBaseUs == Long.MIN_VALUE) {
+                val now = System.nanoTime()
+                val target = if (_ptsBaseUs == Long.MIN_VALUE) now else
+                    _wallBaseNs + (ptsUs - _ptsBaseUs) * 1000L
+                // Discontinuous sender timestamps must not park decoder output buffers.
+                if (_ptsBaseUs == Long.MIN_VALUE || target - now > 250_000_000L || now - target > 250_000_000L) {
                     _ptsBaseUs = ptsUs
-                    _wallBaseNs = System.nanoTime()
+                    _wallBaseNs = now
+                    c.releaseOutputBuffer(idx, true)
+                } else {
+                    c.releaseOutputBuffer(idx, maxOf(now, target))
                 }
-                c.releaseOutputBuffer(idx, _wallBaseNs + (ptsUs - _ptsBaseUs) * 1000L)
             } else {
                 c.releaseOutputBuffer(idx, true)
             }
