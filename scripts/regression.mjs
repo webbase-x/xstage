@@ -437,7 +437,7 @@ assert.ok(app.includes('function armAndroidTvLoginWatchdog(){')&&app.includes('f
 assert.ok(app.includes('androidTvLoginInProgress')&&app.includes('androidTvLoginCancelled'),'Google login cancellation and restoration must not race into duplicate QR requests');
 assert.ok(app.includes("#xstage-tv-quick-login"),'TV quick menu must allow re-login after cancellation');
 assert.ok(app.includes('void renderAndroidTvLoginQr(verificationUrl)'),'Google device URL must be rendered as QR when the code arrives');
-assert.ok(app.includes('androidTvHasStoredGoogleSession()'),'Android TV must restore an existing Google session before requesting a new QR');
+assert.ok(app.includes('androidTvHasStoredGoogleSession()'),'Android TV must support silent renewal after explicit sign-in');
 assert.ok(androidAuth.includes('boolean hasStoredSession()'),'native Google auth must expose whether a refresh token is stored');
 assert.ok(androidMain.includes('public boolean hasStoredGoogleSession()'),'Android JS bridge must expose the stored-session check');
 assert.ok(app.includes('window.XStageReceiveAndroidToken'),'web app must accept the Android TV OAuth access token');

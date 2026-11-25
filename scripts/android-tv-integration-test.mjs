@@ -325,3 +325,15 @@ assert.ok(app.includes("const status=$('android-tv-auth-status');")&&app.include
 const ambiguousRoot=app.slice(app.indexOf('if(!root){',app.indexOf('async function openDrive(')),app.indexOf('if(preferredRootId&&String(root.id)',app.indexOf('async function openDrive(')));
 assert.ok(ambiguousRoot.includes('state.songs=[]')&&ambiguousRoot.includes('setSharedLibraryGate(true')&&ambiguousRoot.includes('setAndroidTvStageAccess(true,account.sub)'), 'Verified ambiguous root must expose only empty library selection, not deadlock behind QR');
 assert.ok(app.includes('if(authId!==state.authId)return;\n    state.manifest=catalog;'),'Cancelled catalog load cannot activate stale library');
+
+// QR-first cold launch must not consult or restore a remembered token.
+{
+  const bootSrc=segment(app,'function bootAndroidTvAuthentication(){','// Re-check the native Drive session');
+  const calls=[];
+  const boot=new Function('androidTvBootAuthStarted','androidTvNativeBridgeReady','state','startAndroidTvDeviceLogin','androidTvHasStoredGoogleSession','restoreAndroidTvGoogleSession',bootSrc+'\nreturn bootAndroidTvAuthentication;')(false,()=>true,{},()=>calls.push('qr'),()=>{throw Error('Cold launch must not consult stored session');},()=>{throw Error('Cold launch must not restore stored session');});
+  boot();boot();
+  assert.deepEqual(calls,['qr'],'cold launch requests QR exactly once');
+}
+assert.deepEqual(guardScenario({hasSession:true,token:''}).calls,['login'],'no silent restore before QR authorization even when a remembered token exists');
+assert.ok(app.includes("void renderAndroidTvLoginQr('https://www.google.com/device')"),'Show official QR before Google issues a unique code');
+assert.ok(app.includes('if(sequence!==androidTvQrRenderSequence)return;'),'Late QR render must not overwrite verified login UI');
