@@ -93,11 +93,13 @@ def prepare_online(source, drive, name="XStageKaraoke", *, cancel=None, progress
     if not source.is_dir():
         raise ValueError("เลือกโฟลเดอร์คลังเพลงก่อน")
     root = Path(target_root).absolute() if target_root is not None else drive / name
-    if not _inside(root.resolve(), drive) or root.resolve() == drive:
-        raise ValueError("คลังปลายทางต้องอยู่ภายใน My Drive ที่เลือก")
+    # Validate the original path before resolving Windows short-name aliases.
     inspect(root)
     if root.is_symlink():
         raise ValueError("คลังปลายทางเป็น symbolic link")
+    root = root.resolve()
+    if not _inside(root, drive) or root == drive:
+        raise ValueError("คลังปลายทางต้องอยู่ภายใน My Drive ที่เลือก")
     songs = root / "SONGS"
     if source == root and songs.is_dir():
         source = songs.resolve()

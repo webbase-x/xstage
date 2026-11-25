@@ -12,12 +12,16 @@ class RememberedDriveTests(unittest.TestCase):
             root = mount / "Custom" / "XStageKaraoke"
             nested = root / "SONGS" / "MIDI"
             nested.mkdir(parents=True)
+            # Windows TEMP can use an 8.3 alias (RUNNER~1); the library
+            # returns canonical paths. Keep the original alias as input.
+            canonical_mount = mount.resolve(strict=True)
+            canonical_root = root.resolve(strict=True)
             app = SimpleNamespace(settings={}, save_settings=Mock())
             with patch("karaoke.library_setup.drive_roots", return_value=[mount]):
-                self.assertEqual(remember_drive_library(app, nested)[1], root)
-                self.assertEqual(remembered_drive_root(app.settings), str(root))
-                self.assertEqual(drive_library(root), (mount, root))
-                self.assertEqual(prepare_online(nested, mount, root.name, target_root=root), root)
+                self.assertEqual(remember_drive_library(app, nested)[1], canonical_root)
+                self.assertEqual(remembered_drive_root(app.settings), str(canonical_root))
+                self.assertEqual(drive_library(root), (canonical_mount, canonical_root))
+                self.assertEqual(prepare_online(nested, mount, root.name, target_root=root), canonical_root)
                 self.assertTrue((root / "DB").is_dir())
                 self.assertFalse((mount / root.name).exists())
                 remember_drive_library(app, root)
@@ -25,7 +29,7 @@ class RememberedDriveTests(unittest.TestCase):
             with patch("karaoke.library_setup.drive_roots", return_value=[]):
                 with self.assertRaises(ValueError):
                     drive_library(remembered_drive_root(app.settings))
-                self.assertEqual(remembered_drive_root(app.settings), str(root))
+                self.assertEqual(remembered_drive_root(app.settings), str(canonical_root))
 
     def test_existing_active_and_pending_root_migration(self):
         self.assertEqual(remembered_drive_root({"shared_drive_root":"G:/old"}), "G:/old")
