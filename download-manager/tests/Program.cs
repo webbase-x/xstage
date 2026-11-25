@@ -28,6 +28,22 @@ if (args.Length == 0)
             throw new Exception("Adaptive range ceiling exceeded.");
     }
     Console.WriteLine("PASS: virtual link adaptive range growth, slowdown, stall and ceiling");
+    foreach (var cap in new[] { 64, 128, 1024, 10240, 1048576 })
+    foreach (var slots in Enumerable.Range(1, 8))
+    {
+        var share = DownloadEngine.SharedJobBudgetKib(cap, slots);
+        if (share <= 0 || (long)share * slots > cap)
+            throw new Exception("Shared HTTP/media bandwidth allocation exceeds global cap.");
+        var gate = new TransferRateGate();
+        gate.Configure(share, sharedAllocation: true);
+        if (gate.LimitKibPerSecond != share ||
+            SocialVideoDownloader.VideoRateLimitKib(share, 0, sharedAllocation: true) != share ||
+            SocialVideoDownloader.VideoRateLimitKib(share, 64, sharedAllocation: true) != Math.Min(share, 64))
+            throw new Exception("Native and media bandwidth allocations differ.");
+    }
+    if (DownloadEngine.SharedJobBudgetKib(0, 8) != 0)
+        throw new Exception("Unlimited bandwidth mode regressed.");
+    Console.WriteLine("PASS: shared native/media bandwidth budgets for 1–8 slots");
     SmartSyncPlannerTests.Run();
     await SmartSyncBackgroundTests.RunAsync();
     await SmartSyncTransferTests.RunAsync();
