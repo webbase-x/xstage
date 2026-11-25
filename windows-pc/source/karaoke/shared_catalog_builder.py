@@ -338,9 +338,14 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         json.dump({"format": "xstage-catalog-import-lock-v1",
                    "createdBy": "Karaoke PC", "pid": os.getpid(),
                    "createdAt": time.time()}, handle)
-    stage = root / "CACHE" / (".songs-" + secrets.token_hex(10) + ".sqlite3")
+    cloud_stage = root / "CACHE" / (".songs-" + secrets.token_hex(10) + ".sqlite3")
+    stage = cloud_stage
     local_stage = None
+    if local_database is not None:
+        stage = Path(local_database).absolute().parent / (".songs-" + secrets.token_hex(10) + ".sqlite3")
+
     try:
+        stage.parent.mkdir(parents=True, exist_ok=True)
         _stop(cancel)
         generation = secrets.token_hex(12)
         with closing(sqlite3.connect(stage)) as db:
@@ -397,7 +402,16 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
                     raise ValueError("สำเนาฐาน PC ไม่สมบูรณ์")
             _stop(cancel)
             os.replace(local_stage, local)
-        os.replace(stage, old_file)  # same Drive volume, atomic local replacement
+            # Copy the completed local snapshot, never copy a live SQLite WAL.
+            _stop(cancel)
+            with closing(sqlite3.connect(local.as_uri() + "?mode=ro", uri=True)) as src, closing(sqlite3.connect(cloud_stage)) as dst:
+                src.backup(dst)
+                if dst.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                    raise ValueError("สำเนาฐาน Drive ไม่สมบูรณ์ · ฐาน PC บันทึกแล้ว")
+            _stop(cancel)
+            if (_hash(old_file) if old_file.exists() else None) != original_signature:
+                raise ValueError("ฐาน Drive เปลี่ยนระหว่างทำงาน · ฐาน PC บันทึกแล้ว")
+        os.replace(cloud_stage, old_file)  # same Drive volume, atomic local replacement
         return {"scanned": len(songs), "accepted": len(rows),
                 "duplicates": duplicates, "reused": reused, "generation": generation,
                 "database": str(old_file),
@@ -406,4 +420,5 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         if local_stage is not None:
             local_stage.unlink(missing_ok=True)
         stage.unlink(missing_ok=True)
+        cloud_stage.unlink(missing_ok=True)
         lock.unlink(missing_ok=True)
