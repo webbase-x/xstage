@@ -217,7 +217,7 @@ def _record(relative, file, old, *, fingerprint=True):
         "title": title, "artist": artist, "metadataComplete": True,
         "sourceFormat": kind.upper(), "originalFilename": file.name,
         "originalRelativePath": relative, "originalFileSize": file.stat().st_size,
-        "midiHash": midi_hash, "midiSize": len(midi),
+        "midiHash": midi_hash, "midiSha256": hashlib.sha256(midi).hexdigest(), "midiSize": len(midi),
         "lyricsMode": "timed" if doc.get("lines") else "unavailable",
         kind: media,
     }
@@ -246,7 +246,7 @@ def _verified_rows(songs, root, references, cache_dir, cancel, full_verify, fing
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha256(os.path.normcase(str(root)).encode("utf-8")).hexdigest()
-    with closing(sqlite3.connect(cache_dir / (("shared-index-v1-" if fingerprint else "shared-index-fast-v1-") + key + ".sqlite3"), timeout=15)) as cache:
+    with closing(sqlite3.connect(cache_dir / (("shared-index-v2-" if fingerprint else "shared-index-fast-v2-") + key + ".sqlite3"), timeout=15)) as cache:
         cache.execute("CREATE TABLE IF NOT EXISTS checked (path TEXT PRIMARY KEY, stamp TEXT NOT NULL, payload TEXT NOT NULL)")
         cache.commit()
         pending = 0
@@ -282,8 +282,14 @@ def _verified_rows(songs, root, references, cache_dir, cancel, full_verify, fing
             cache.commit()
 
 
-def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=None, full_verify=False, deduplicate=True, local_database=None):
-    """Create fresh verified snapshot; atomically replace after explicit consent."""
+def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=None, full_verify=False, deduplicate=True, local_database=None, candidate_only=False):
+    """Build a verified snapshot. Drive Desktop production UI uses candidate_only.
+
+    A candidate is never the active catalog; the Online publisher validates the
+    actual cloud revision and every package before making it canonical.
+    """
+    if candidate_only and not deduplicate:
+        raise ValueError("ฐานร่วมต้องตรวจ MIDI ซ้ำก่อนส่งเผยแพร่")
     root = _root(root_value)
     songs = _files(root, cancel)
     if not songs:
@@ -341,16 +347,18 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
     # Drive Desktop propagation is asynchronous, so also re-check the old
     # snapshot immediately before committing the new database.
     cache_root = root / "CACHE"
-    for other in cache_root.glob(".xstage-import-lock-*"):
-        if other.is_symlink():
-            raise ValueError("CACHE มี symlink ของงานสร้างฐาน ไม่ปลอดภัย")
-        if other.is_file() and time.time() - other.stat().st_mtime < 300:
-            raise ValueError("อีกอุปกรณ์กำลังสร้างฐานบน Google Drive กรุณารอให้เสร็จ")
-    lock = cache_root / (".xstage-import-lock-pc-" + secrets.token_hex(12) + ".json")
-    with lock.open("x", encoding="utf-8") as handle:
-        json.dump({"format": "xstage-catalog-import-lock-v1",
-                   "createdBy": "Karaoke PC", "pid": os.getpid(),
-                   "createdAt": time.time()}, handle)
+    lock = None
+    if not candidate_only:
+        for other in cache_root.glob(".xstage-import-lock-*"):
+            if other.is_symlink():
+                raise ValueError("CACHE มี symlink ของงานสร้างฐาน ไม่ปลอดภัย")
+            if other.is_file() and time.time() - other.stat().st_mtime < 300:
+                raise ValueError("อีกอุปกรณ์กำลังสร้างฐานบน Google Drive กรุณารอให้เสร็จ")
+        lock = cache_root / (".xstage-import-lock-pc-" + secrets.token_hex(12) + ".json")
+        with lock.open("x", encoding="utf-8") as handle:
+            json.dump({"format": "xstage-catalog-import-lock-v1",
+                       "createdBy": "Karaoke PC", "pid": os.getpid(),
+                       "createdAt": time.time()}, handle)
     cloud_stage = root / "CACHE" / (".songs-" + secrets.token_hex(10) + ".sqlite3")
     stage = cloud_stage
     local_stage = None
@@ -369,7 +377,10 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
                            [(k, str(v)) for k, v in {
                                "format": "xstage-sqlite3-v1", "schemaVersion": 1,
                                "kind": "snapshot", "generation": generation,
-                               "pcSchema": "shared-v1", "pathBase": "SONGS"}.items()])
+                               "pcSchema": "shared-v1", "pathBase": "SONGS",
+                               **({"producer": "karaoke-pc-candidate-v1",
+                                   "baseMd5": original_signature or ""}
+                                  if candidate_only else {})}.items()])
             for ordinal, (ident, row) in enumerate(rows):
                 db.execute(INSERT, (ident, ordinal, row["webSongId"],
                     "SONGS/" + row["originalRelativePath"], "MIDI",
@@ -390,6 +401,22 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         _stop(cancel)
         if (_hash(old_file) if old_file.exists() else None) != original_signature:
             raise ValueError("ฐานบน Google Drive เปลี่ยนระหว่างทำงาน กรุณาสร้างใหม่")
+        if candidate_only:
+            # Stage under a unique name; no direct overwrite of the synchronized
+            # active DB. A browser-side publisher verifies the actual cloud state.
+            candidate = cache_root / ("songs-pc-candidate-" + generation + ".sqlite3")
+            if candidate.exists() or candidate.is_symlink():
+                raise ValueError("ชื่อฐานรอเผยแพร่ซ้ำ")
+            if stage != cloud_stage:
+                shutil.copyfile(stage, cloud_stage)
+                if _hash(stage) != _hash(cloud_stage):
+                    raise ValueError("สำเนาฐานรอเผยแพร่ไม่ตรงต้นฉบับ")
+            _stop(cancel)
+            os.replace(cloud_stage, candidate)
+            return {"scanned": len(songs), "accepted": len(rows),
+                    "duplicates": duplicates, "reused": reused, "generation": generation,
+                    "database": str(candidate), "candidate_only": True,
+                    "pending_drive_ids": sum(bool(row.get("pendingDriveLink")) for _, row in rows)}
         if old_file.exists():
             backup = root / "BACKUP" / (
                 "songs-" + time.strftime("%Y%m%d-%H%M%S") + "-" +
@@ -436,4 +463,5 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
             local_stage.unlink(missing_ok=True)
         stage.unlink(missing_ok=True)
         cloud_stage.unlink(missing_ok=True)
-        lock.unlink(missing_ok=True)
+        if lock is not None:
+            lock.unlink(missing_ok=True)

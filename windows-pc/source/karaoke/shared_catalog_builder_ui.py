@@ -39,7 +39,7 @@ def open_builder(app, initial_root=None):
 
     full_verify = tk.BooleanVar(value=False)
     ttk.Checkbutton(frame, text="ตรวจแพ็กเกจใหม่ทั้งหมด (ช้ากว่า)", variable=full_verify).pack(anchor="w")
-    status = tk.StringVar(value="เลือกคลังเพลง แล้วกดสร้างฐานและซิงก์ · ไม่ตรวจเพลงซ้ำ")
+    status = tk.StringVar(value="เลือกคลังเพลง แล้วสร้างฐานที่ตรวจ MIDI ซ้ำก่อนเผยแพร่")
     ttk.Label(frame, textvariable=status, style="Muted.TLabel",
               wraplength=860).pack(fill="x", pady=8)
     progress = ttk.Progressbar(frame, mode="determinate", maximum=100)
@@ -95,8 +95,8 @@ def open_builder(app, initial_root=None):
                 "ยืนยันสร้าง SQLite ใหม่จาก Karaoke PC",
                 "จะคัดลอก XMID/XSK2 ไปยังคลัง Google Drive หากอยู่นอกคลัง\n"
                 "เก็บต้นฉบับไว้ ไม่เขียนทับไฟล์ชื่อเดียวกันที่ต่างกัน\n"
-                "สร้างฐานหลักใน App/DB และทำสำเนาไป Drive โดยไม่ตรวจเพลงซ้ำ\n"
-                "หลัง Drive ซิงก์ขึ้นคลาวด์ Online จะจับคู่ File ID ที่ยังไม่รู้ก่อนเล่น\n"
+                "สร้าง SQLite ที่ตรวจ MIDI ซ้ำ แล้วส่งฐานรอเผยแพร่ไป CACHE\n"
+                "หลัง Drive ซิงก์ขึ้น Cloud ให้เปิด Online > จัดการคลัง > เผยแพร่ฐานที่สร้างจาก PC\n"
                 "ฐานงานผลิตของ Song Studio ไม่เปลี่ยน",
                 parent=panel
             ):
@@ -139,8 +139,8 @@ def open_builder(app, initial_root=None):
                 root = prepare_online(requested, drive, name, cancel=stop, progress=update) if publish else Path(requested).resolve()
                 result = builder.build(root, progress=update, cancel=stop,
                                        publish=publish, cache_dir=Path(app.data_dir) / "index-cache",
-                                       full_verify=verify_all, deduplicate=not publish,
-                                       local_database=(Path(app.home) / "DB" / ".online-pending.sqlite3") if publish else None)
+                                       full_verify=verify_all, deduplicate=True,
+                                       candidate_only=publish)
                 result["root"] = str(root)
             except Exception as exc:
                 result, error = None, str(exc)
@@ -173,18 +173,14 @@ def open_builder(app, initial_root=None):
                         str(result["pending_drive_ids"])+" รายการ · กดยืนยันสร้างฐาน")
                 else:
                     state["approved"] = None
-                    app.settings["pending_online_master"] = {
-                        "root": result["root"], "generation": result["generation"]}
-                    app.settings.pop("pending_pc_only", None)
-                    app.save_settings()
                     folder.set(result["root"])
-                    messagebox.showinfo("สร้างฐานเพลงสำเร็จ",
-                        "ฐานหลัก PC และสำเนา Google Drive พร้อมแล้ว\nเปิดโปรแกรมใหม่เพื่อใช้งานฐานหลักใน DB/songs.sqlite3",
+                    messagebox.showinfo("สร้างฐานรอเผยแพร่สำเร็จ",
+                        "ฐานที่ตรวจแล้วอยู่ใน CACHE และยังไม่แทนที่ DB เดิม\n"
+                        "หลัง Google Drive ซิงก์ ให้เปิด Karaoke Online > จัดการคลัง > เผยแพร่ฐานที่สร้างจาก PC",
                         parent=panel)
-                    status.set("สร้าง SQLite ใหม่สำเร็จ "+str(result["accepted"]) +
-                               " เพลง · ไม่ตรวจเพลงซ้ำ" +
-                               " · รอ Google Drive ซิงก์ (ยังไม่ยืนยัน Cloud) · File ID รอตรวจ "+str(result["pending_drive_ids"]) +
-                               " เพลง · เมื่อ Online เปิดเพลงจะตรวจจับคู่กับ Drive")
+                    status.set("สร้างฐานรอเผยแพร่ "+str(result["accepted"]) +
+                               " เพลง · MIDI ซ้ำ "+str(result["duplicates"]) +
+                               " · "+result["database"]+" · ยังไม่ยืนยัน Cloud")
                     if getattr(app, "shared_drive_mode", False):
                         try:
                             app.refresh_library()
@@ -200,7 +196,7 @@ def open_builder(app, initial_root=None):
 
     inspect = ttk.Button(buttons, text="ตรวจเพลงซ้ำ (คลัง Drive)", command=lambda: submit(False))
     inspect.pack(side="left", padx=(0, 10))
-    confirm = ttk.Button(buttons, text="สร้างฐานและซิงก์ (เร็วที่สุด)",
+    confirm = ttk.Button(buttons, text="สร้างฐานรอเผยแพร่",
                          command=lambda: submit(True))
     confirm.pack(side="left", padx=(0, 10))
     cancel = ttk.Button(buttons, text="หยุดอย่างปลอดภัย",

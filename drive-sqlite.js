@@ -260,8 +260,13 @@ async function read(bytes){
       songs.push(song);
     }
     const removes=(db.exec('SELECT web_song_id FROM removed_songs')[0]?.values||[]).map(x=>x[0]);
+    const candidate=metadata.producer==='karaoke-pc-candidate-v1'
+      ?{producer:metadata.producer,baseMd5:String(metadata.baseMd5||'')}:null;
+    if(candidate&&candidate.baseMd5&&!/^[a-f0-9]{32}$/.test(candidate.baseMd5))
+      fail('MD5 ฐานตั้งต้นของ PC ไม่ถูกต้อง');
     return {schemaVersion:1,generation:metadata.generation||'',
-      kind:metadata.kind, ...(metadata.kind==='snapshot'?{songs}:{upserts:songs,removes})};
+      kind:metadata.kind, ...(candidate?{candidate}:{}),
+      ...(metadata.kind==='snapshot'?{songs}:{upserts:songs,removes})};
   }finally{db.close();}
 }
 scope.XStageDriveSQLite=Object.freeze({create,read,engine,format:FORMAT});

@@ -216,10 +216,14 @@ async function inspectPackage(drive,file,check){
   if(!reader?.openPackage)fail('ยังไม่โหลดตัวอ่าน '+file.ext.toUpperCase());
   const parsed=await reader.openPackage(blob);
   const midiHash=await scope.XStageImportCore.hashBlob(parsed.midi,check);
+  const midiSha256=scope.crypto?.subtle?Array.from(new Uint8Array(
+    await scope.crypto.subtle.digest('SHA-256',await parsed.midi.arrayBuffer())),
+    byte=>byte.toString(16).padStart(2,'0')).join(''):'';
+  check();
   const midiSize=parsed.midi.size;
   const identity=scope.XStageImportCore.songIdentity(parsed.document,parsed.code);
   return {file,parsed:{code:parsed.code,document:{lyricsMode:parsed.document.lyricsMode}},
-    midiHash,midiSize,packedMd5,identity};
+    midiHash,midiSha256,midiSize,packedMd5,identity};
 }
 // A count match alone is never proof. Match package IDs, checksums, sizes
 // and verified MIDI identities; duplicates need not occupy another DB row.
@@ -319,6 +323,7 @@ function createWorkflow(options={}){
   let layoutReady=false;
   const scanButton=$('xstage-drive-scan-counts');
   const rebuildButton=$('xstage-drive-rebuild-db');
+  const publishPcButton=$('xstage-drive-publish-pc'),restoreDbButton=$('xstage-drive-restore-db');
   const countNodes=Object.fromEntries(KIND.map(k=>[k,$('xstage-drive-count-'+k)]));
   const dbCount=$('xstage-drive-db-count'),comparison=$('xstage-drive-compare-status');
   let scanTask=null,comparisonState='unknown',catalogCache=null,scanTimer=null;
@@ -479,6 +484,8 @@ function createWorkflow(options={}){
     }
     if(scanButton)scanButton.disabled=!valid||busy||!layoutReady;
     if(rebuildButton)rebuildButton.disabled=!valid||busy||!layoutReady||!pref.music?.id;
+    if(publishPcButton)publishPcButton.disabled=!valid||busy||!layoutReady||!options.hasFullRead?.();
+    if(restoreDbButton)restoreDbButton.disabled=!valid||busy||!layoutReady||!options.hasFullRead?.();
     const waiting=valid&&pref.music?.id&&isPaused(s,pref.music.id);
     if(buildButton){buildButton.disabled=busy||!layoutReady||!pref.music?.id||(!waiting&&(comparisonState==='equal'||comparisonState==='checking'));
       buildButton.textContent=busy?(publishing?'กำลังยืนยันฐานเพลง…':stopRequested?'กำลังพักงาน…':'กำลังตรวจเพลง…'):waiting?'ทำงานต่อจากจุดที่หยุด':comparisonState==='equal'?'ฐานเพลงเป็นปัจจุบัน':comparisonState==='checking'?'กำลังตรวจฐานเพลง…':'ตรวจไฟล์และอัปเดตฐานเพลง';}
@@ -691,7 +698,7 @@ function createWorkflow(options={}){
             const media={fileId:item.file.id,md5Checksum:item.packedMd5,
               size:Number(item.file.size),path:musicRoot.name+'/'+item.file.relative};
             const row={webSongId:ident,code,sourceCode:item.parsed.code,
-              midiHash:item.midiHash,midiSize:item.midiSize,
+              midiHash:item.midiHash,midiSha256:item.midiSha256||undefined,midiSize:item.midiSize,
               originalFilename:item.file.name,originalRelativePath:item.file.relative,
               originalFileSize:Number(item.file.size),
               title:item.identity.title,artist:item.identity.artist,
@@ -758,6 +765,107 @@ function createWorkflow(options={}){
         });
     }else await work();
   }
+    // Only the browser's common publisher writes the canonical cloud catalog.
+  // The PC produces a candidate in CACHE; it is never trusted by filename alone.
+  async function selectVerifiedFile(drive,s,folder,namePattern,check){
+    const root=await drive.listChildren(s.rootId);check();
+    const dirs=root.filter(x=>x.name===folder&&x.mimeType===FOLDER);
+    if(dirs.length!==1)fail('ไม่พบโฟลเดอร์ '+folder+' ที่ยืนยันได้');
+    const candidates=(await drive.listChildren(dirs[0].id))
+      .filter(x=>x.mimeType!==FOLDER&&namePattern.test(x.name)&&packageSignature(x))
+      .sort((a,b)=>String(b.modifiedTime||'').localeCompare(String(a.modifiedTime||'')));
+    if(!candidates.length)fail('ยังไม่มีไฟล์ที่พร้อมใน '+folder+' · ตรวจ Google Drive ซิงก์');
+    let index=0;
+    if(candidates.length>1){
+      const choices=candidates.slice(0,30);
+      const answer=scope.prompt?.('เลือกไฟล์ (กรอกลำดับ)\\n'+choices.map((f,i)=>(i+1)+'. '+f.name).join('\\n'),'1');
+      if(answer==null)return null;
+      index=Number(answer)-1;
+      if(!Number.isInteger(index)||index<0||index>=choices.length)fail('ลำดับไฟล์ไม่ถูกต้อง');
+    }
+    const file=candidates[index],bytes=await drive.getSqlite(file.id);check();
+    if(bytes.byteLength!==Number(file.size)||await scope.XStageImportCore.hashBlob(new Blob([bytes]),check)!==String(file.md5Checksum).toLowerCase())
+      fail('ไฟล์ SQLite ที่เลือกยังซิงก์ไม่ครบหรือเปลี่ยนแปลง');
+    const decoded=await scope.XStageDriveSQLite.read(bytes);
+    if(decoded.kind!=='snapshot'||!decoded.generation||!Array.isArray(decoded.songs))
+      fail('ไฟล์ที่เลือกไม่ใช่ฐานเพลงร่วม');
+    return {file,decoded};
+  }
+  async function controlledPublication(mode){
+    if(busy)return;
+    let initial;try{initial=session();}catch(e){display(e.message);return;}
+    if(!options.hasFullRead?.()){display('ต้องอนุญาตอ่าน Google Drive ครบก่อนเผยแพร่หรือกู้คืน');return;}
+    const run=async()=>{
+      if(busy)return;
+      ++scanSequence;scanTask=null;busy=true;publishing=true;scope.XStageDriveBuildBusy=true;render();
+      const check=()=>{if(!sameSession(initial)||!options.hasFullRead?.())fail('บัญชี คลัง หรือสิทธิ์เปลี่ยนระหว่างทำงาน');};
+      const drive=new scope.XStageCloudImport.Drive(()=>options.session()?.token,check);
+      drive.ensureAuth=force=>options.ensureAuth?.(force);
+      try{
+        const selected=await selectVerifiedFile(drive,initial,mode==='pc'?'CACHE':'BACKUP',
+          mode==='pc'?/^songs-pc-candidate-[a-f0-9]{24}\.sqlite3$/:/^songs-backup-[a-f0-9]{24}\.sqlite3$|^songs-[0-9]{8}-[0-9]{6}-[a-f0-9]{12}\.sqlite3\.bak$/,check);
+        if(!selected)return;
+        const {decoded,file}=selected;
+        let existing;
+        if(mode==='pc'){
+          if(decoded.candidate?.producer!=='karaoke-pc-candidate-v1')fail('ไฟล์ไม่ใช่ฐานที่สร้างจาก PC');
+          existing=await scope.XStageCloudImport.loadCatalog(drive,initial.rootId,{verifyChecksum:true});
+          if((existing.pointer?.catalogMd5||'').toLowerCase()!==decoded.candidate.baseMd5)
+            fail('ฐาน Cloud เปลี่ยนหลัง PC สร้าง · สร้างฐานใหม่จาก PC ก่อน');
+          const chosen=readSelections(initial.sub,initial.rootId).music;
+          await verifyFolder(drive,chosen?.id,initial.rootId,'music');
+          const inventory=await walkMusic(drive,chosen.id,check,display);
+          const byPath=packagePathIndex(inventory.files);
+          const candidates=new Map(),covered=new Set(),rows=new Map();
+          // Preserve unrelated imported audio/video rows rather than dropping them.
+          for(const [id,row] of existing.rows)if(!row.xmid&&!row.xsk)rows.set(id,row);
+          for(const row of decoded.songs){
+            const media=row.xmid||row.xsk,kind=row.xmid?'xmid':'xsk';
+            if(!media||!/^([a-f0-9]{64})$/.test(row.midiSha256||''))fail('ฐาน PC ไม่มี SHA-256 ของ MIDI');
+            const actual=byPath.get(media.path);
+            if(!actual||actual.ext!==kind||packageSignature(actual)!==packageSignature(media))
+              fail('ไฟล์ในฐาน PC ยังไม่ตรงกับ Cloud: '+String(media.path||''));
+            const verified=await inspectPackage(drive,actual,check);
+            if(verified.midiSha256!==row.midiSha256||verified.midiHash!==row.midiHash||verified.midiSize!==row.midiSize)
+              fail('MIDI ในฐาน PC ไม่ตรงกับข้อมูล Cloud');
+            if(candidates.has(verified.midiSha256))fail('พบ MIDI ซ้ำในฐาน PC');
+            candidates.set(verified.midiSha256,verified.midiSize);covered.add(actual.id);
+            if(rows.has(row.webSongId))fail('รหัสเพลงชนกับฐานเดิม');
+            rows.set(row.webSongId,{...row,originalRelativePath:actual.relative,originalFilename:actual.name,
+              pendingDriveLink:false,[kind]:{...media,fileId:actual.id}});
+          }
+          for(const actual of inventory.files){
+            if(covered.has(actual.id))continue;
+            const verified=await inspectPackage(drive,actual,check);
+            if(candidates.get(verified.midiSha256)!==verified.midiSize)
+              fail('Cloud มีเพลงที่ไม่อยู่ในฐาน PC · กรุณาซิงก์แล้วสร้างฐานอีกครั้ง');
+          }
+          check();
+          if(!scope.confirm?.('ยืนยันเผยแพร่ฐาน PC '+decoded.songs.length+' เพลง · คงเพลงรูปแบบอื่น '+(rows.size-decoded.songs.length)+' รายการ · สำรองฐานเดิมก่อน?'))return;
+          await scope.XStageCloudImport.publishSingleCatalog({drive,rootId:initial.rootId,pointer:existing.pointer,rows,check,status:display});
+        }else{
+          const root=await drive.listChildren(initial.rootId);check();
+          const dbs=root.filter(x=>x.name==='DB'&&x.mimeType===FOLDER);
+          if(dbs.length!==1)fail('ไม่พบ DB ที่ยืนยันได้');
+          const active=(await drive.listChildren(dbs[0].id)).filter(x=>x.name==='songs.sqlite3');
+          if(active.length>1)fail('พบฐานซ้ำ · ไม่เลือกแทนผู้ใช้');
+          const current=active[0];
+          const pointer=current?{directFile:true,catalogFileId:current.id,catalogMd5:String(current.md5Checksum||'')}:null;
+          if(!scope.confirm?.('กู้คืน '+file.name+' ('+decoded.songs.length+' เพลง)? ฐานปัจจุบันจะถูกสำรองก่อน และไม่ลบไฟล์เพลง'))return;
+          await scope.XStageCloudImport.publishSingleCatalog({drive,rootId:initial.rootId,pointer,
+            rows:new Map(decoded.songs.map(row=>[row.webSongId,row])),check,status:display});
+        }
+        display(mode==='pc'?'เผยแพร่ฐานที่สร้างจาก PC สำเร็จ · ฐาน Cloud ผ่านการตรวจแล้ว':'กู้คืนฐานสำรองสำเร็จ');
+        await options.refresh?.();
+      }catch(error){display('ยังไม่เผยแพร่ · '+String(error?.message||error));}
+      finally{busy=false;publishing=false;scope.XStageDriveBuildBusy=false;catalogCache=null;comparisonState='unknown';render();scheduleScan();}
+    };
+    if(scope.navigator?.locks?.request)await scope.navigator.locks.request('xstage-drive-import-'+initial.sub,{mode:'exclusive',ifAvailable:true},async lock=>{if(lock)await run();else display('อีกแท็บกำลังทำงานกับฐาน');});
+    else await run();
+  }
+
+  publishPcButton?.addEventListener('click',()=>void controlledPublication('pc'));
+  restoreDbButton?.addEventListener('click',()=>void controlledPublication('restore'));
   for(const kind of KIND){
     $('xstage-drive-folder-'+kind)?.addEventListener('click',()=>void manageFolder(kind));
   }

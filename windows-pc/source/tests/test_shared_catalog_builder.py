@@ -99,6 +99,23 @@ class SharedPcBuilderTests(unittest.TestCase):
         self.assertEqual({x["source_format"] for x in lib.search("")},
                          {"XMID","XSK"})
 
+    def test_pc_candidate_never_replaces_active_catalog(self):
+        old=self.root/"DB/songs.sqlite3"
+        old.write_bytes(b"existing canonical")
+        result=build(self.root,candidate_only=True)
+        self.assertTrue(result["candidate_only"])
+        self.assertEqual(old.read_bytes(),b"existing canonical")
+        candidate=Path(result["database"])
+        self.assertEqual(candidate.parent,self.root/"CACHE")
+        self.assertTrue(candidate.name.startswith("songs-pc-candidate-"))
+        with closing(sqlite3.connect(candidate)) as db:
+            self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0],"ok")
+            meta=dict(db.execute("SELECT key,value FROM catalog_meta"))
+            self.assertEqual(meta["producer"],"karaoke-pc-candidate-v1")
+            self.assertEqual(len(meta["baseMd5"]),32)
+            payload=json.loads(db.execute("SELECT payload FROM songs").fetchone()[0])
+            self.assertEqual(len(payload["midiSha256"]),64)
+
     def test_cancel_unchanged_old_database(self):
         old=self.root/"DB/songs.sqlite3"
         old.write_bytes(b"old-database-placeholder")

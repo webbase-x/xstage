@@ -304,3 +304,8 @@ assert.ok(lastRows.every(row=>row.originalRelativePath&&row.xmid?.fileId),
 assert.match(element('xstage-drive-folder-status').textContent,/สร้างฐานเสร็จ/);
 console.log('PASS: explicit shared PC/Online SQLite rebuild ignores legacy rows without deleting media');
 
+
+// New PC/Online handoff must be explicit and protect canonical media and SHA identity.
+assert.match(read('cloud-drive-folders.js'),/decoded\.candidate\.baseMd5/);
+assert.match(read('cloud-drive-folders.js'),/verified\.midiSha256!==row\.midiSha256/);
+assert.match(read('cloud-drive-folders.js'),/scope\.XStageCloudImport\.publishSingleCatalog/);
