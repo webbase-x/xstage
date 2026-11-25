@@ -212,6 +212,12 @@ jobs:
           & (Join-Path $tools 'ffmpeg.exe') -version
           if ($LASTEXITCODE -ne 0) { throw 'Bundled ffmpeg smoke test failed' }
           Write-Host 'Bundled verified video tools; no dependencies will be downloaded when the user installs.'
+      - name: Verify mixed native HTTP and bundled yt-dlp bandwidth on loopback
+        shell: pwsh
+        run: |
+          $yt = (Resolve-Path 'download-manager/out/tools/yt-dlp.exe').Path
+          dotnet run --project download-manager/tests/DownloadEngine.Tests.csproj -c Release -- --mixed-bandwidth $yt
+          if ($LASTEXITCODE -ne 0) { throw 'Mixed native/media bandwidth smoke failed' }
       - name: Smoke-test playable MP4 with bundled FFmpeg and FFprobe
         shell: pwsh
         run: |
