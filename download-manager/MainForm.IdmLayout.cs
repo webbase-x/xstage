@@ -996,7 +996,7 @@ public sealed partial class MainForm
                 "active" => job.Status == "Running",
                 "queued" => job.Status == "Queued",
                 "completed" => job.Status == "Completed",
-                "failed" => job.Status == "Failed",
+                "failed" => job.Status is "Failed" or "Missing",
                 _ => false
             });
             var next = value.ToString("N0");
@@ -1061,7 +1061,7 @@ public sealed partial class MainForm
         _grid.RowTemplate.Height = 39;
         _grid.RowHeadersVisible = false;
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _grid.MultiSelect = false;
+        _grid.MultiSelect = true;
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
@@ -1129,6 +1129,19 @@ public sealed partial class MainForm
         };
         _grid.KeyDown += (_, e) =>
         {
+            if (e.KeyCode == Keys.Delete)
+            {
+                e.Handled = e.SuppressKeyPress = true;
+                RemoveSelectedJob();
+                return;
+            }
+            if (e.Control && e.KeyCode == Keys.A)
+            {
+                e.Handled = e.SuppressKeyPress = true;
+                foreach (DataGridViewRow row in _grid.Rows)
+                    row.Selected = row.Tag is string id && _engine.Jobs.Any(j => j.Id == id);
+                return;
+            }
             if (e.KeyCode != Keys.F2) return;
             e.Handled = true;
             e.SuppressKeyPress = true;
@@ -1139,7 +1152,8 @@ public sealed partial class MainForm
         _grid.SelectionChanged += (_, _) => UpdateDetails();
         _grid.CellClick += (_, e) =>
         {
-            if (e.RowIndex < 0 || e.ColumnIndex != _grid.Columns["File"].Index) return;
+            if (e.RowIndex < 0 || e.ColumnIndex != _grid.Columns["File"].Index ||
+                _grid.SelectedRows.Count > 1 || (ModifierKeys & (Keys.Control | Keys.Shift)) != 0) return;
             var job = VisibleJobAt(e.RowIndex);
             if (job is not null)
                 ShowCompletedMenu(job,
@@ -1464,11 +1478,11 @@ public sealed partial class MainForm
         "all" => true,
         "active" => job.Status == "Running",
         "queued" => job.Status == "Queued",
-        "failed" => job.Status == "Failed",
+        "failed" => job.Status is "Failed" or "Missing",
         "priority-high" => job.Priority == 0 && job.Status != "Completed",
         "priority-normal" => job.Priority == 1 && job.Status != "Completed",
         "priority-low" => job.Priority == 2 && job.Status != "Completed",
-        "incomplete" => job.Status is "Paused" or "Failed" or "Queued" or "Running",
+        "incomplete" => job.Status is "Paused" or "Failed" or "Missing" or "Queued" or "Running",
         "completed" => job.Status == "Completed",
         _ => CategoryOf(job) == _categoryFilter
     };
@@ -1482,11 +1496,11 @@ public sealed partial class MainForm
                 "all" => true,
                 "active" => job.Status == "Running",
                 "queued" => job.Status == "Queued",
-                "failed" => job.Status == "Failed",
+                "failed" => job.Status is "Failed" or "Missing",
                 "priority-high" => job.Priority == 0 && job.Status != "Completed",
                 "priority-normal" => job.Priority == 1 && job.Status != "Completed",
                 "priority-low" => job.Priority == 2 && job.Status != "Completed",
-                "incomplete" => job.Status is "Paused" or "Failed" or "Queued" or "Running",
+                "incomplete" => job.Status is "Paused" or "Failed" or "Missing" or "Queued" or "Running",
                 "completed" => job.Status == "Completed",
                 _ => CategoryOf(job) == key
             });
@@ -1507,31 +1521,47 @@ public sealed partial class MainForm
     private void StartIncomplete()
     {
         foreach (var job in _engine.Jobs.ToArray())
-            if (job.Status is "Paused" or "Failed")
+            if (job.Status is "Paused" or "Failed" or "Missing")
                 _engine.Start(job);
         RefreshRows();
     }
 
-    private void RemoveSelectedJob()
+    private bool _removingHistory;
+    private async void RemoveSelectedJob()
     {
-        if (SelectedSyncLane() is not null)
+        if (_removingHistory) return;
+        var selected = SelectedDownloadJobs();
+        if (selected.Length == 0)
         {
-            if (_smartSyncWindow?.IsBusy == true) _smartSyncWindow.RequestStop();
-            else _smartSyncWindow?.ClearPreview();
-            RefreshRows();
+            if (SelectedSyncLane() is not null)
+            {
+                if (_smartSyncWindow?.IsBusy == true) _smartSyncWindow.RequestStop();
+                else _smartSyncWindow?.ClearPreview();
+                RefreshRows();
+            }
             return;
         }
-        var job = Selected();
-        if (job is null) return;
         if (MessageBox.Show(this,
-            "ลบรายการนี้จากประวัติหรือไม่?\nไฟล์ที่ดาวน์โหลดเสร็จจะยังคงอยู่",
+            $"ลบประวัติ {selected.Length:N0} รายการที่เลือกหรือไม่?\nไฟล์ปลายทางที่ดาวน์โหลดเสร็จแล้วจะไม่ถูกลบ",
             "ยืนยันการลบ", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
-        if (!_engine.Remove(job))
-            MessageBox.Show(this,
-                "หยุดงานแล้ว กรุณารอให้หยุดสนิทและลบอีกครั้ง",
-                "กำลังหยุด", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        RefreshRows();
+        _removingHistory = true;
+        try
+        {
+            foreach (var job in selected) _engine.Pause(job);
+            var until = Environment.TickCount64 + 60000;
+            while (selected.Any(_engine.IsTransferActive) && Environment.TickCount64 < until)
+            {
+                await Task.Delay(100);
+                if (IsDisposed || Disposing) return;
+            }
+            var removed = _engine.RemoveMany(selected);
+            RefreshRows();
+            if (removed != selected.Length)
+                MessageBox.Show(this, $"ลบแล้ว {removed:N0} จาก {selected.Length:N0} รายการ\nรายการที่ยังทำงานหรือบันทึกไม่ได้ยังคงอยู่",
+                    "ผลการลบ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally { _removingHistory = false; }
     }
 
     private void ClearCompletedHistory()
@@ -1543,7 +1573,7 @@ public sealed partial class MainForm
             " รายการ?\nไฟล์จริงในโฟลเดอร์ดาวน์โหลดจะไม่ถูกลบ",
             "ยืนยันการลบประวัติ", MessageBoxButtons.YesNo,
             MessageBoxIcon.Question) != DialogResult.Yes) return;
-        foreach (var job in finished) _engine.Remove(job);
+        _engine.RemoveMany(finished);
         RefreshRows();
     }
 

@@ -144,7 +144,7 @@ const contracts = [
   ['search wiring', /_jobSearch\.TextChanged \+= \(_, _\) => RefreshRows\(\)/, workspace],
   ['search respects category', /jobs\.Where\(job => InSelectedCategory\(job\) && MatchesSearch\(job\)\)/, main],
   ['search keeps original row IDs and appends distinct Sync tags', /var tags = visible\.Select\(j => j\.Id\)\.Concat\(syncLanes\.Select\(l => l\.Upload \? SyncUploadTag : SyncDownloadTag\)\)\.ToArray\(\);[\s\S]*?_grid\.Rows\[index\]\.Tag = tag;/, main],
-  ['row selection preserved by original tag', /if \(Equals\(row\.Tag, selectedId\)\)/, main],
+  ['row selection preserved by original tag', /selectedIds\.Contains\(id\)/, main],
   ['sync row tags are distinct reserved identities', /SyncUploadTag = "workspace:smart-sync:upload";[\s\S]*?SyncDownloadTag = "workspace:smart-sync:download";/, workspace],
   ['selected action resolves original job', /_engine\.Jobs\.FirstOrDefault\(j => j\.Id == id\)/, main],
   ['dashboard updated from engine', /UpdateOverviewCounts\(jobs\)/, main],

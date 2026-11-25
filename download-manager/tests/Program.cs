@@ -2660,8 +2660,23 @@ try
         throw new Exception("Single stream incorrect bytes");
     if (job.CompletedPath == plain.CompletedPath || !File.Exists(job.CompletedPath))
         throw new Exception("Existing output must not be overwritten");
-    if (!manager.Remove(job) || !File.Exists(job.CompletedPath))
-        throw new Exception("Removing history must not delete completed files");
+    var removedOutput = plain.CompletedPath;
+    File.Delete(removedOutput);
+    if (manager.RefreshCompletedFiles() != 1 || plain.Status != "Missing" ||
+        ProgressPresentation.IsComplete(plain) || ProgressPresentation.FillFraction(plain) != 0 ||
+        Interlocked.Read(ref plain.DownloadedBytes) != 0 || plain.ResumeWhenNetworkReturns)
+        throw new Exception("Deleted destination retained stale completed progress.");
+    var missingReopened = new DownloadEngine(isolatedEngineData).Jobs.Single(j => j.Id == plain.Id);
+    if (missingReopened.Status != "Missing" || missingReopened.CompletedPath != removedOutput)
+        throw new Exception("Missing destination status was not persisted.");
+    await File.WriteAllBytesAsync(removedOutput, bytes);
+    if (manager.RefreshCompletedFiles() != 1 || plain.Status != "Completed")
+        throw new Exception("Restored destination did not update status.");
+    if (manager.RemoveMany(new[] { job, plain, plain }) != 2 ||
+        !File.Exists(job.CompletedPath) || !File.Exists(removedOutput) ||
+        new DownloadEngine(isolatedEngineData).Jobs.Any(j => j.Id == job.Id || j.Id == plain.Id))
+        throw new Exception("Batch removal must persist exactly selected history without deleting completed files.");
+    Console.WriteLine("PASS: destination removal/reappearance, zero progress, persisted missing status and batch history removal");
     if (new DownloadEngine(isolatedEngineData).DefaultParts != 8)
         throw new Exception("Default segment count must persist across restarts.");
     Console.WriteLine("PASS: HTTP Range segments, verified EXE update resume, dropped-stream retry, SHA-256 verification, HTTP 200 fallback, settings persistence and safe removal.");

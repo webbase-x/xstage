@@ -96,7 +96,50 @@ public sealed class DownloadEngine
             if (!AllowedParts.Contains(job.Parts)) job.Parts = 4;
             job.PreviousBytes = job.DownloadedBytes;
         }
+        RefreshCompletedFiles();
         Save();
+    }
+
+    // Reconcile completed history with the destination without deleting user files.
+    public int RefreshCompletedFiles()
+    {
+        var changed = 0;
+        foreach (var job in Jobs.ToArray())
+        {
+            if (IsTransferActive(job) || job.Status is not ("Completed" or "Missing")) continue;
+            if (job.Status == "Completed" && !File.Exists(job.CompletedPath))
+            {
+                job.Status = "Missing";
+                job.Error = "ไม่พบไฟล์ปลายทาง หรือไม่สามารถเข้าถึงได้";
+                Interlocked.Exchange(ref job.DownloadedBytes, 0);
+                job.VideoPercent = 0;
+                job.SegmentsUsed = 0;
+                job.SegmentDownloadedBytes = Array.Empty<long>();
+                job.PreviousBytes = 0;
+                job.SpeedBytesPerSecond = job.SmoothedSpeedBytesPerSecond = 0;
+                job.ResumeAfterRestart = job.ResumeWhenNetworkReturns = job.InterruptedOnStartup = false;
+                changed++;
+            }
+            else if (job.Status == "Missing" && File.Exists(job.CompletedPath))
+            {
+                try
+                {
+                    var length = new FileInfo(job.CompletedPath).Length;
+                    if (job.TotalBytes >= 0 && job.TotalBytes != length) continue;
+                    job.TotalBytes = length;
+                    Interlocked.Exchange(ref job.DownloadedBytes, length);
+                    job.PreviousBytes = length;
+                    job.VideoPercent = job.Kind == "Video" ? 100 : 0;
+                    job.Status = "Completed";
+                    job.Error = "";
+                    changed++;
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+        if (changed > 0) Save();
+        return changed;
     }
 
     // Persist critical state changes immediately, and keep running transfers
@@ -712,20 +755,42 @@ public sealed class DownloadEngine
         }
     }
 
+    public bool IsTransferActive(DownloadJob job) =>
+        _active.ContainsKey(job.Id) || job.Cancellation is not null;
+
     public bool Remove(DownloadJob job)
     {
-        if (_active.ContainsKey(job.Id)) { Pause(job); return false; }
-        Jobs.Remove(job);
-        // Remove only this application's temporary segments, never a completed user file.
-        try
+        if (IsTransferActive(job)) { Pause(job); return false; }
+        return RemoveMany(new[] { job }) == 1;
+    }
+
+    public int RemoveMany(IEnumerable<DownloadJob> selected)
+    {
+        lock (_saveLock)
         {
-            var work = WorkDir(job);
-            if (Directory.Exists(work)) Directory.Delete(work, true);
+            var snapshot = Jobs.ToArray();
+            var targets = selected.Distinct().Where(j => Jobs.Contains(j) &&
+                !IsTransferActive(j)).ToArray();
+            if (targets.Length == 0) return 0;
+            foreach (var job in targets) Jobs.Remove(job);
+            if (Save().Length > 0)
+            {
+                Jobs.Clear();
+                Jobs.AddRange(snapshot);
+                return 0;
+            }
+            foreach (var job in targets)
+            {
+                try
+                {
+                    var work = WorkDir(job);
+                    if (Directory.Exists(work)) Directory.Delete(work, true);
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+            return targets.Length;
         }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-        Save();
-        return true;
     }
 
     private static string WorkDir(DownloadJob job) =>

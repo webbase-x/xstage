@@ -280,10 +280,10 @@ public sealed partial class MainForm
             _previewTitle.Text = job.Name;
             _previewMeta.Text = "ชนิดไฟล์: " + DownloadTableSort.FileType(job) +
                 "    ·    ขนาด: " + (job.TotalBytes >= 0 ? FormatBytes(job.TotalBytes) : "ไม่ทราบ");
-            _previewState.Text = "สถานะ: " + job.Status +
+            _previewState.Text = "สถานะ: " + (job.Status == "Missing" ? "ไม่พบไฟล์ปลายทาง" : job.Status) +
                 (job.Kind == "Video" && !string.IsNullOrWhiteSpace(job.VideoPhase)
                     ? " · " + job.VideoPhase : "");
-            _previewState.ForeColor = job.Status == "Failed"
+            _previewState.ForeColor = job.Status is "Failed" or "Missing"
                 ? Color.FromArgb(250, 147, 147) : Accent;
             _previewPath.Text = "บันทึกที่: " + job.Folder;
             _previewUrl.Text = "URL: " + job.Url;

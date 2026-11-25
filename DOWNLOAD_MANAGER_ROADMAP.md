@@ -124,3 +124,6 @@ The long-term target is an IDM / aria2 / yt-dlp / JDownloader-class application 
 
 ### Milestone 03 integration — 2026-11-25
 - Development CI 45571047914, 45571321221 and 45571909086 all succeeded. Safe retirement test verified physical partial offset resume and final SHA-256; measured 1/8/32 ranges fast 754.1/2020.0/2220.3 KiB/s. Integrated with current main preserving concurrent roadmap and unrelated project changes. Main CI pending; begin 04.1 only after it passes. No release/version change; physical field tests outstanding.
+
+### Destination availability and multi-selection history fix — 2026-11-25
+- Main integration CI 45580898037 succeeded. Added five-second destination availability refresh and startup reconciliation: Missing status, zero displayed bytes/progress, corrected category/footer/preview counts; original path retained, no auto-redownload; returning file restores Completed on presence and matching known size only (not a new hash). Grid multi-select Ctrl/Shift/Ctrl+A/Delete, stable selection by ID, one confirmation and batch SQLite history removal; active jobs paused and drained first, completed files preserved. Development CI pending; physical Windows and large/disconnected remote-library UI latency unverified. Next: verify CI and resume Milestone 04.1. No version or release change.

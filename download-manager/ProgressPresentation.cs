@@ -12,6 +12,7 @@ public static class ProgressPresentation
     public static double FillFraction(DownloadJob job)
     {
         if (IsComplete(job)) return 1.0;
+        if (job.Status == "Missing") return 0.0;
         var downloaded = Interlocked.Read(ref job.DownloadedBytes);
         double value = job.Kind == "Video" ? job.VideoPercent / 100.0 :
             job.TotalBytes > 0 ? downloaded / (double)job.TotalBytes : 0.0;

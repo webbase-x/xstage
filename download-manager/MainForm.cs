@@ -322,6 +322,13 @@ public sealed partial class MainForm : Form
         return _engine.Jobs.FirstOrDefault(j => j.Id == id);
     }
 
+    private DownloadJob[] SelectedDownloadJobs()
+    {
+        var ids = _grid.SelectedRows.Cast<DataGridViewRow>()
+            .Select(row => row.Tag as string).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        return _engine.Jobs.Where(j => ids.Contains(j.Id)).ToArray();
+    }
+
     private void SelectedAction(Action<DownloadJob> action)
     {
         var job = Selected();
@@ -701,7 +708,7 @@ public sealed partial class MainForm : Form
             downloadAgain.Enabled = job.Status is not ("Running" or "Queued");
             _completedMenu.Items.Insert(0, downloadAgain);
         }
-        if (job.Status == "Failed")
+        if (job.Status is "Failed" or "Missing")
         {
             _completedMenu.Items.Insert(0, new ToolStripMenuItem(
                 "ดูสาเหตุข้อผิดพลาด", null, (_, _) => ShowJobError(job)));
@@ -1019,9 +1026,17 @@ public sealed partial class MainForm : Form
         _completedMenu.Show(Cursor.Position);
     }
 
+    private long _lastDestinationCheck;
+
     private void RefreshRows()
     {
         if (IsDisposed || _grid.IsDisposed) return;
+        var now = Environment.TickCount64;
+        if (_lastDestinationCheck == 0 || now - _lastDestinationCheck >= 5000)
+        {
+            _lastDestinationCheck = now;
+            _engine.RefreshCompletedFiles();
+        }
         var jobs = _engine.Jobs.ToArray();
 
         // UI selection/search may refresh rows between timer ticks.
@@ -1051,7 +1066,8 @@ public sealed partial class MainForm : Form
         }
 
         TrackLiveEvents(jobs);
-        var selectedId = _grid.SelectedRows.Count > 0 ? _grid.SelectedRows[0].Tag as string : null;
+        var selectedIds = _grid.SelectedRows.Cast<DataGridViewRow>()
+            .Select(row => row.Tag as string).OfType<string>().ToHashSet(StringComparer.Ordinal);
         var visible = DownloadTableSort.Sort(jobs.Where(job => InSelectedCategory(job) && MatchesSearch(job)),
             _sortColumn, _sortDescending, jobs);
         var syncLanes = VisibleSyncLanes();
@@ -1074,13 +1090,9 @@ public sealed partial class MainForm : Form
                     _grid.Rows[index].Tag = tag;
                 }
                 _grid.ClearSelection();
-                if (selectedId is not null)
-                    foreach (DataGridViewRow row in _grid.Rows)
-                        if (Equals(row.Tag, selectedId))
-                        {
-                            row.Selected = true;
-                            break;
-                        }
+                foreach (DataGridViewRow row in _grid.Rows)
+                    if (row.Tag is string id && selectedIds.Contains(id))
+                        row.Selected = true;
             }
             finally { _grid.ResumeLayout(true); }
         }
@@ -1117,9 +1129,9 @@ public sealed partial class MainForm : Form
                 ? FormatBytes((long)job.SmoothedSpeedBytesPerSecond) + "/s" : "—";
             row.Cells["ETA"].Value = EtaLabel(job);
             row.Cells["Added"].Value = job.CreatedAt.ToLocalTime().ToString("dd/MM/yy HH:mm");
-            row.Cells["Status"].ToolTipText = job.Status == "Failed" ? job.Error :
+            row.Cells["Status"].ToolTipText = job.Status is "Failed" or "Missing" ? job.Error :
                 job.Kind == "Video" && job.Status == "Running" ? job.VideoPhase : "";
-            row.Cells["File"].ToolTipText = job.Status == "Failed"
+            row.Cells["File"].ToolTipText = job.Status is "Failed" or "Missing"
                 ? "คลิกเพื่อดูสาเหตุข้อผิดพลาด: " + job.Error
                 : job.Name + "\n" + job.Url;
             row.Cells["Status"].Value = job.Status switch
@@ -1130,13 +1142,14 @@ public sealed partial class MainForm : Form
                 "Queued" => "รอคิว",
                 "Paused" => "หยุดชั่วคราว",
                 "Completed" => "สำเร็จ",
+                "Missing" => "ไม่พบไฟล์ปลายทาง",
                 "Failed" => "เกิดข้อผิดพลาด",
                 _ => job.Status
             };
             row.Cells["Status"].Style.ForeColor = job.Status switch
             {
                 "Completed" => Color.FromArgb(124, 235, 173),
-                "Failed" => Color.FromArgb(255, 166, 166),
+                "Failed" or "Missing" => Color.FromArgb(255, 166, 166),
                 "Running" => Color.FromArgb(146, 205, 254),
                 _ => Color.FromArgb(215, 225, 238)
             };
@@ -1167,7 +1180,7 @@ public sealed partial class MainForm : Form
         var active = jobs.Count(j => j.Status == "Running");
         var completed = jobs.Count(j => j.Status == "Completed");
         var queued = jobs.Count(j => j.Status == "Queued");
-        var failed = jobs.Count(j => j.Status == "Failed");
+        var failed = jobs.Count(j => j.Status is "Failed" or "Missing");
         _transferHeading.Text = "▣  รายการงาน (" + tags.Length.ToString("N0") + ")";
         if (_smartSyncWindow?.IsBusy == true) _transferHeading.Text += " · Smart Sync";
         UpdateSyncAnimation();
