@@ -179,7 +179,7 @@ def _files(root, cancel):
     return sorted(files, key=lambda entry: entry[0].casefold())
 
 
-def _record(relative, file, old):
+def _record(relative, file, old, *, fingerprint=True):
     ext = file.suffix.lower()
     if ext == ".xmid":
         midi, doc = read_xmid(file)
@@ -192,7 +192,7 @@ def _record(relative, file, old):
     artist = str(doc.get("artist") or "").strip()
     if not title or not artist:
         raise ValueError("ไฟล์ไม่มีชื่อเพลงหรือศิลปิน: " + str(file))
-    midi_hash = hashlib.md5(midi).hexdigest()
+    midi_hash = hashlib.md5(midi).hexdigest() if fingerprint else None
     packed_hash = _hash(file)
     kind = ext[1:]
     ident = "browser/" + kind + "/" + packed_hash
@@ -224,17 +224,17 @@ def _file_stamp(file):
                        stat.st_ino, stat.st_dev], separators=(",", ":"))
 
 
-def _verified_rows(songs, root, references, cache_dir, cancel, full_verify):
+def _verified_rows(songs, root, references, cache_dir, cancel, full_verify, fingerprint=True):
     """Cache verified metadata locally, never in the synchronized catalog."""
     if cache_dir is None:
         for relative, file in songs:
             _stop(cancel)
-            yield relative, _record(relative, file, references), False
+            yield relative, (_record(relative, file, references) if fingerprint else _record(relative, file, references, fingerprint=False)), False
         return
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha256(os.path.normcase(str(root)).encode("utf-8")).hexdigest()
-    with closing(sqlite3.connect(cache_dir / ("shared-index-v1-" + key + ".sqlite3"), timeout=15)) as cache:
+    with closing(sqlite3.connect(cache_dir / (("shared-index-v1-" if fingerprint else "shared-index-fast-v1-") + key + ".sqlite3"), timeout=15)) as cache:
         cache.execute("CREATE TABLE IF NOT EXISTS checked (path TEXT PRIMARY KEY, stamp TEXT NOT NULL, payload TEXT NOT NULL)")
         cache.commit()
         pending = 0
@@ -247,7 +247,7 @@ def _verified_rows(songs, root, references, cache_dir, cancel, full_verify):
                 if saved:
                     row = json.loads(saved[0])
                 else:
-                    row = _record(relative, file, {})
+                    row = (_record(relative, file, {}) if fingerprint else _record(relative, file, {}, fingerprint=False))
                     if _file_stamp(file) != stamp:
                         raise ValueError("ไฟล์เปลี่ยนระหว่างตรวจ: " + relative)
                     cache.execute("INSERT OR REPLACE INTO checked VALUES (?,?,?)",
@@ -283,7 +283,7 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
     references = _old_refs(old_file)
     rows, midi_hashes, paths, codes, ids = [], set(), set(), set(), set()
     duplicates = reused = 0
-    for index, (relative, row, cached) in enumerate(_verified_rows(songs, root, references, cache_dir, cancel, full_verify), 1):
+    for index, (relative, row, cached) in enumerate(_verified_rows(songs, root, references, cache_dir, cancel, full_verify, deduplicate), 1):
         reused += int(cached)
         _stop(cancel)
         key = relative.casefold()
