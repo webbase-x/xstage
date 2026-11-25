@@ -1804,13 +1804,26 @@ $('xstage-soundfont-authorize')?.addEventListener('click',async()=>{
   const sub=state.accountSub,rootId=state.libraryRootId;
   try{
     const choice=window.XStageDriveFolders?.readSelections?.(sub,rootId)?.soundfont;
-    if(!choice?.id)throw Error('เลือกโฟลเดอร์ SoundFont ที่ใช้งานอยู่ก่อน');
+    if(!sub||!rootId||!state.token)throw Error('เชื่อม Google Drive และเปิดคลังหลักก่อน');
     const drive=new window.XStageCloudImport.Drive(()=>state.token,()=>{});
-    await window.XStageDriveFolders.verifyFolder(drive,choice.id,rootId,'soundfont');
+    // The fixed default folder can be verified even before a saved selection.
+    const resolveFontFolder=async()=>{
+      const saved=window.XStageDriveFolders?.readSelections?.(sub,rootId)?.soundfont;
+      if(saved?.id)return saved.id;
+      const matches=(await drive.list("'"+rootId+"' in parents and trashed=false"))
+        .filter(x=>String(x.name||'').toUpperCase()==='SOUNDFONT');
+      if(matches.length!==1||matches[0].name!=='SOUNDFONT'||
+         matches[0].mimeType!=='application/vnd.google-apps.folder')
+        throw Error('ตรวจโฟลเดอร์ SOUNDFONT ในคลังหลักก่อนอนุญาตไฟล์');
+      return matches[0].id;
+    };
+    const folderId=choice?.id||await resolveFontFolder();
+    await window.XStageDriveFolders.verifyFolder(drive,folderId,rootId,'soundfont');
     await ensureImporterGoogleAuth(true,true,true);
     if(sub!==state.accountSub||rootId!==state.libraryRootId||
-       choice.id!==window.XStageDriveFolders?.readSelections?.(sub,rootId)?.soundfont?.id)
+       folderId!==await resolveFontFolder())
       throw Error('บัญชีหรือโฟลเดอร์เปลี่ยนระหว่างอนุญาตไฟล์');
+    await window.XStageDriveFolders.verifyFolder(drive,folderId,rootId,'soundfont');
     await window.XStageBrowserMidi?.refreshFonts({token:state.token,sub,rootId,ownedByMe:state.libraryRootOwnedByMe});
   }catch(e){if(status)status.textContent=e.message;}
 });

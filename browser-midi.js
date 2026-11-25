@@ -843,6 +843,47 @@ async function fastGmFont(token,signal){
   fontStatusChanged();
   return bytes;
 }
+// Never buffer an unbounded private response, even when Content-Length is
+// missing. Preallocate only the validated exact Drive size when available.
+async function readBoundedFontResponse(response,limit,expected=0,check=()=>{}){
+  const declared=Number(response.headers?.get?.('Content-Length')||0);
+  if(declared>limit||expected>limit||(declared&&expected&&declared!==expected)){
+    try{await response.body?.cancel?.();}catch{}
+    fail('ขนาด SoundFont เกินขอบเขตหรือไม่ตรงกับรายการ Drive');
+  }
+  if(!response.body?.getReader){
+    check();
+    const bytes=new Uint8Array(await response.arrayBuffer());
+    check();
+    if(bytes.byteLength>limit||(expected&&bytes.byteLength!==expected))
+      fail('ขนาด SoundFont เกินขอบเขตหรือไม่ตรงกับรายการ Drive');
+    return bytes;
+  }
+  const size=expected||declared;
+  const reader=response.body.getReader();
+  let output=null,total=0;const chunks=[];
+  try{
+    check();
+    if(size)output=new Uint8Array(size);
+    for(;;){
+      check();
+      const {done,value}=await reader.read();
+      check();
+      if(done)break;
+      const next=total+value.byteLength;
+      if(next>limit||(size&&next>size))fail('ขนาด SoundFont เกินขอบเขตหรือไม่ตรงกับรายการ Drive');
+      if(output)output.set(value,total);else chunks.push(value);
+      total=next;
+    }
+    if(size&&total!==size)fail('ดาวน์โหลด SoundFont ไม่ครบ');
+    if(!output){
+      output=new Uint8Array(total);let offset=0;
+      for(const chunk of chunks){output.set(chunk,offset);offset+=chunk.byteLength;}
+    }
+    return output;
+  }catch(error){try{await reader.cancel();}catch{}throw error;}
+  finally{reader.releaseLock();}
+}
 async function selectedFont(token,signal){
   if(fontRefreshPromise)await fontRefreshPromise;
   if(switchTask)await switchTask;
@@ -939,7 +980,15 @@ async function selectedFont(token,signal){
       await res.body?.cancel?.();
       throw Error('SoundFont เกินขอบเขตหรือ RAM ไม่เพียงพอ');
     }
-    const bytes=new Uint8Array(await res.arrayBuffer());
+    const cap=Math.floor(Math.min(deviceLimit,MAX_FONT,
+      native?Math.max(16*1048576,native.available*.22):MAX_FONT));
+    const bytes=await readBoundedFontResponse(res,cap,listedSize,()=>{
+      if(signal?.aborted||controller?.signal.aborted||generation!==switchGeneration||
+         selected!==id||context?.token!==token||context?.sub!==sub)
+        throw new DOMException('ยกเลิกการโหลดหรือเปลี่ยน SoundFont','AbortError');
+      const current=scope.XStageMemory?.nativeRam?.();
+      if(current?.lowMemory)fail('Android รายงาน RAM ต่ำระหว่างดาวน์โหลด');
+    });
     if(bytes.byteLength>MAX_FONT||bytes.byteLength>deviceLimit||
        native&&bytes.byteLength>Math.max(16*1048576,native.available*.22)){
       throw Error('SoundFont ใช้ RAM มากเกินไป');

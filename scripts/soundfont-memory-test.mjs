@@ -61,3 +61,25 @@ assert.ok(android.includes('public String memorySnapshot()')&&
   android.includes('manager.getMemoryInfo(info)'),
   'Native Android WebView must expose measured system RAM');
 console.log('PASS: SoundFont parsed/session cache, bounded SF samples, memory-colored UI, Android RAM and active video accounting');
+
+// Exercise the real streaming reader; missing Content-Length must not bypass RAM limits.
+const readerStart=midi.indexOf('async function readBoundedFontResponse(');
+const readerEnd=midi.indexOf('async function selectedFont(',readerStart);
+assert.ok(readerStart>=0&&readerEnd>readerStart);
+const readFont=new Function('fail',midi.slice(readerStart,readerEnd)+';return readBoundedFontResponse;')(msg=>{throw Error(msg)});
+function streaming(parts,declared=0){
+  let i=0,cancelled=false,released=false;
+  const reader={async read(){return i<parts.length?{done:false,value:Uint8Array.from(parts[i++])}:{done:true}},async cancel(){cancelled=true},releaseLock(){released=true}};
+  return {headers:{get:()=>String(declared)},body:{getReader:()=>reader,async cancel(){cancelled=true}},get cancelled(){return cancelled},get released(){return released}};
+}
+const exact=streaming([[1,2],[3,4]]);
+assert.deepEqual(await readFont(exact,8,4),Uint8Array.of(1,2,3,4));assert.ok(exact.released);
+const oversized=streaming([[1,2],[3,4]]);
+await assert.rejects(readFont(oversized,3),/เกินขอบเขต/);assert.ok(oversized.cancelled&&oversized.released);
+const short=streaming([[1,2]]);
+await assert.rejects(readFont(short,8,4),/ไม่ครบ/);assert.ok(short.cancelled);
+const mismatch=streaming([[1,2]],2);
+await assert.rejects(readFont(mismatch,8,4),/ไม่ตรง/);assert.ok(mismatch.cancelled);
+let ticks=0;const interrupted=streaming([[1,2],[3,4]]);
+await assert.rejects(readFont(interrupted,8,4,()=>{if(++ticks===3)throw Error('pause')}),/pause/);assert.ok(interrupted.cancelled&&interrupted.released);
+console.log('PASS: bounded SoundFont streaming, exact size, cancellation and truncated payload');
