@@ -147,6 +147,14 @@ class KaraokeApp(tk.Tk):
             except (TypeError, ValueError):
                 size = 84
             self.settings.update(font_size=max(84, min(120, size)), lyric_layout_version=1)
+        import sys
+        from .local_master import activate
+        pending_mode = bool(self.settings.get("pending_online_master") or self.settings.get("pending_pc_only"))
+        local_catalog = activate(self.home, self.data_dir, self.settings,
+                                 installed=bool(getattr(sys, "frozen", False)))
+        if pending_mode:
+            self._settings_revision = write_json(self.settings_path, self.settings,
+                                                expected_revision=self._settings_revision)
         self.shared_drive_mode = self.settings.get("library_mode") == "google-drive"
         self.shared_drive_error = ""
         if self.shared_drive_mode:
@@ -159,9 +167,8 @@ class KaraokeApp(tk.Tk):
                 self.shared_drive_error = str(error)
                 self.library = UnavailableSharedSongLibrary(root,error)
         else:
-            self.library = SongLibrary(self.data_dir / "songs.sqlite3")
-        # Queues belong to each device; the *song index* comes from the shared
-        # DB in Google Drive, and must never be copied into a local songs.sqlite3.
+            self.library = SongLibrary(local_catalog)
+        # Separate queues preserve identifiers from the native and portable schemas.
         self.song_queue = SongQueue(self.data_dir / ("drive-queue.json" if self.shared_drive_mode else "queue.json"))
         self.queue_warmup = QueueWarmup()
         self._last_memory_report = 0
