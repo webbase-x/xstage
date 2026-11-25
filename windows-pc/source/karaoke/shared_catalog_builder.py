@@ -202,7 +202,12 @@ def _record(relative, file, old, *, fingerprint=True):
         raise ValueError("รหัสเพลงในแพ็กเกจไม่รองรับ: " + str(file))
     title = str(doc.get("title") or "").strip()
     artist = str(doc.get("artist") or "").strip()
-    if not title or not artist:
+    metadata_complete = bool(title and artist)
+    if ext == ".xmid":
+        # Missing descriptive metadata is not a corrupt MIDI package.
+        title = title or file.stem
+        artist = artist or "ไม่ระบุศิลปิน"
+    elif not metadata_complete:
         raise ValueError("ไฟล์ไม่มีชื่อเพลงหรือศิลปิน: " + str(file))
     midi_hash = hashlib.md5(midi).hexdigest() if fingerprint else None
     packed_hash = _hash(file)
@@ -214,7 +219,7 @@ def _record(relative, file, old, *, fingerprint=True):
              "size": file.stat().st_size, "path": media_path}
     record = {
         "webSongId": ident, "code": code, "sourceCode": code,
-        "title": title, "artist": artist, "metadataComplete": True,
+        "title": title, "artist": artist, "metadataComplete": metadata_complete,
         "sourceFormat": kind.upper(), "originalFilename": file.name,
         "originalRelativePath": relative, "originalFileSize": file.stat().st_size,
         "midiHash": midi_hash, "midiSize": len(midi),
