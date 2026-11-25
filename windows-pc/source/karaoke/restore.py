@@ -18,7 +18,19 @@ def readonly(path):
     return sqlite3.connect(Path(path).resolve().as_uri()+'?mode=ro',uri=True)
 
 
-def validate_backup(folder):
+def _target(folder, name, database=None):
+    return Path(database) if database is not None and name == FILES[0] else Path(folder) / name
+
+
+def _target_sidecars(folder, names, database=None):
+    for name in names:
+        target = _target(folder, name, database)
+        if target.parent.is_symlink() or getattr(target.parent, 'is_junction', lambda: False)():
+            raise ValueError('โฟลเดอร์ฐานข้อมูลไม่ปลอดภัย')
+        validate_sqlite_sidecars(target.parent, (target.name,))
+
+
+def validate_backup(folder, database=None):
     folder=Path(folder)
     if folder.is_symlink() or getattr(folder, 'is_junction', lambda: False)():
         raise ValueError('โฟลเดอร์ชุดสำรองเป็นลิงก์ที่ไม่ปลอดภัย')
@@ -26,9 +38,9 @@ def validate_backup(folder):
         raise ValueError('ไม่พบโฟลเดอร์ชุดสำรอง')
     # SQLite may open WAL/SHM companions implicitly during validation.
     # Reject links or directories before SQLite has a chance to follow them.
-    validate_sqlite_sidecars(folder, ('songs.sqlite3', 'play_stats.sqlite3'))
+    _target_sidecars(folder, ('songs.sqlite3', 'play_stats.sqlite3'), database)
     for name in FILES + OPTIONAL_FILES:
-        source = folder/name
+        source = _target(folder, name, database)
         # A backup must be self-contained. Do not follow symlinks/junctions
         # that could silently read or restore files outside the selected set.
         if source.is_symlink() or getattr(source, 'is_junction', lambda: False)():
@@ -38,8 +50,8 @@ def validate_backup(folder):
         if optional.exists() and not optional.is_file():
             raise ValueError('ไฟล์เสริมชุดสำรองไม่ถูกต้อง: '+name)
     for name in FILES:
-        if not (folder/name).is_file():raise ValueError('ชุดสำรองไม่ครบ: '+name)
-    with closing(readonly(folder/FILES[0])) as db:
+        if not _target(folder, name, database).is_file():raise ValueError('ชุดสำรองไม่ครบ: '+name)
+    with closing(readonly(_target(folder, FILES[0], database))) as db:
         if db.execute('PRAGMA integrity_check').fetchone()[0]!='ok':raise ValueError('ฐานข้อมูลสำรองเสียหาย')
         columns={row[1] for row in db.execute('PRAGMA table_info(songs)')}
         if not {'id','path','code','title','artist','kind','search','favorite'}<=columns:
@@ -174,7 +186,7 @@ def validate_sqlite_sidecars(data, names):
                 raise ValueError('ไฟล์ SQLite journal ไม่ปลอดภัย: ' + sidecar.name)
 
 
-def rollback(data,safety,existed,replaced=FILES):
+def rollback(data,safety,existed,replaced=FILES, *, database=None):
     # Direct callers must not escape the application data directory or
     # restore the same file twice. Validate names before any filesystem access.
     allowed = set(FILES + OPTIONAL_FILES)
@@ -194,11 +206,11 @@ def rollback(data,safety,existed,replaced=FILES):
     # A safety snapshot may be tampered with while an interrupted restore is
     # pending. Never open its SQLite database with linked journal sidecars.
     validate_sqlite_sidecars(safety, replaced)
-    validate_sqlite_sidecars(data, replaced)
+    _target_sidecars(data, replaced, database)
     # Validate every destination before any rollback mutation. This also
     # protects files that did not exist in the original snapshot.
     for name in replaced:
-        target = data/name
+        target = _target(data, name, database)
         if (target.is_symlink() or getattr(target, 'is_junction', lambda: False)()
                 or (target.exists() and not target.is_file())):
             raise ValueError('ไฟล์ปลายทางย้อนคืนไม่ปลอดภัย: ' + name)
@@ -250,10 +262,10 @@ def rollback(data,safety,existed,replaced=FILES):
         from .play_stats import validate_stats
         validate_stats(safety/'play_stats.sqlite3')
     for name in replaced:
-        target=data/name
+        target=_target(data, name, database)
         if name.endswith('.sqlite3'):
-            validate_sqlite_sidecars(data, (name,))
-            for suffix in ('-wal','-shm'):(data/(name+suffix)).unlink(missing_ok=True)
+            _target_sidecars(data, (name,), database)
+            for suffix in ('-wal','-shm'):target.with_name(target.name+suffix).unlink(missing_ok=True)
         if name in existed:
             replace_file(safety/name,target)
         else:
@@ -264,7 +276,7 @@ def rollback(data,safety,existed,replaced=FILES):
             target.unlink(missing_ok=True)
 
 
-def apply_pending(data):
+def apply_pending(data, *, database=None):
     data=Path(data);pending=data/'restore-pending'
     if data.is_symlink() or getattr(data,'is_junction',lambda:False)():
         raise ValueError('โฟลเดอร์ข้อมูลปลายทางเป็นลิงก์ที่ไม่ปลอดภัย')
@@ -304,12 +316,12 @@ def apply_pending(data):
         # A crash can leave the live target replaced by a link before restart.
         # Never follow it while rolling back; require operator intervention.
         for name in replaced:
-            target=data/name
+            target=_target(data, name, database)
             if (target.is_symlink() or getattr(target,'is_junction',lambda:False)()
                     or (target.exists() and not target.is_file())):
                 raise ValueError('ไฟล์ปลายทางย้อนคืนไม่ปลอดภัย: '+name)
-        validate_sqlite_sidecars(data, replaced)
-        rollback(data,safety,existed,replaced)
+        _target_sidecars(data, replaced, database)
+        rollback(data,safety,existed,replaced, database=database)
         pending.rename(data/('restore-interrupted-'+uuid.uuid4().hex))
         raise ValueError('กู้คืนครั้งก่อนถูกขัดจังหวะ คืนข้อมูลเดิมแล้ว กรุณาเลือกชุดสำรองใหม่')
     if state['status']=='complete':
@@ -327,17 +339,17 @@ def apply_pending(data):
     # Validate all live inputs before allocating a safety directory. A failed
     # snapshot must not leave an orphan directory or a half-written journal.
     for name in replaced:
-        source=data/name
+        source=_target(data, name, database)
         if source.is_symlink() or getattr(source,'is_junction',lambda:False)():
             raise ValueError('ไฟล์ข้อมูลปัจจุบันเป็นลิงก์ที่ไม่ปลอดภัย: '+name)
         if source.exists() and not source.is_file():
             raise ValueError('ไฟล์ข้อมูลปัจจุบันไม่ถูกต้อง: '+name)
-    validate_sqlite_sidecars(data, replaced)
+    _target_sidecars(data, replaced, database)
     safety=data/('restore-safety-'+uuid.uuid4().hex);safety.mkdir()
     existed=[]
     try:
         for name in replaced:
-            source=data/name
+            source=_target(data, name, database)
             # Recheck immediately before snapshotting: an external process may
             # replace a regular file with a link after the initial preflight.
             if (source.is_symlink() or getattr(source, 'is_junction', lambda: False)()
@@ -363,13 +375,14 @@ def apply_pending(data):
             if name.endswith('.sqlite3'):
                 # Snapshotting can take time; journals may have changed since
                 # the initial preflight. Recheck before removing any sidecar.
-                validate_sqlite_sidecars(data, (name,))
-                for suffix in ('-wal','-shm'):(data/(name+suffix)).unlink(missing_ok=True)
-            replace_file(pending/name,data/name)
-        validate_backup(data)
+                _target_sidecars(data, (name,), database)
+                target = _target(data, name, database)
+                for suffix in ('-wal','-shm'):target.with_name(target.name+suffix).unlink(missing_ok=True)
+            replace_file(pending/name,_target(data, name, database))
+        validate_backup(data, database)
         write_json(pending/'state.json',{**state,'status':'complete'})
     except Exception:
-        rollback(data,safety,existed,replaced)
+        rollback(data,safety,existed,replaced, database=database)
         write_json(pending/'state.json',dict(status='prepared'))
         raise
     shutil.rmtree(pending)
