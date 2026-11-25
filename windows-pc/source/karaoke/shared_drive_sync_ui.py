@@ -9,14 +9,12 @@ from tkinter import ttk, filedialog, messagebox
 from . import shared_drive_sync as sync
 
 
-def open_drive_push(app):
-    dialog = tk.Toplevel(app)
-    dialog.title("X-Stage Karaoke PC · จัดการเพลงและปลายทาง Google Drive")
-    dialog.geometry("900x470")
-    dialog.minsize(750, 425)
-    dialog.configure(bg="#081d58")
-    dialog.transient(app)
-    frame = ttk.Frame(dialog, padding=22)
+def open_drive_push(app, *, parent=None):
+    if parent is None:
+        from .catalog_window import open_song_management
+        return open_song_management(app, 'sync')
+    dialog = parent.winfo_toplevel()
+    frame = ttk.Frame(parent, padding=22)
     frame.pack(fill="both", expand=True)
     ttk.Label(frame, text="X-STAGE · GOOGLE DRIVE SYNC",
               font=("Leelawadee UI", 17, "bold")).pack(anchor="w")
@@ -79,8 +77,9 @@ def open_drive_push(app):
         dialog.after(0, lambda: None if closed[0] else status.set(text))
 
     def run_job(kind, operation):
-        if is_running():
+        if is_running() or getattr(app, "_shared_build_busy", False) or getattr(app, "scanning", False) or getattr(getattr(app, "duplicate_review_window", None), "busy", False):
             return
+        app._shared_build_busy = True
         cancel.clear()
         phase[0] = kind
         generation[0] += 1
@@ -95,6 +94,7 @@ def open_drive_push(app):
             except Exception as exc:
                 output, error = None, str(exc)
             def done():
+                app._shared_build_busy = False
                 if closed[0] or current != generation[0]:
                     return
                 buttons["stop"].configure(state="disabled")
@@ -176,13 +176,13 @@ def open_drive_push(app):
     ttk.Label(frame, text="Google Drive for desktop เป็นผู้ส่งไฟล์ขึ้นคลาวด์ต่อ · เมื่อซิงก์เสร็จต้องอัปเดตฐานเพลงใน Karaoke Online · ซ้ำ MIDI ภายใน XMID/XSK ตรวจอีกชั้นตอนสร้างฐาน",
               style="Muted.TLabel",wraplength=800).pack(anchor="w",pady=10)
 
-    def close():
-        cancel.set()
-        closed[0] = True
-        generation[0] += 1
-        dialog.destroy()
-    dialog.protocol("WM_DELETE_WINDOW",close)
+    def close(event):
+        if event.widget is frame:
+            cancel.set()
+            closed[0] = True
+            generation[0] += 1
+    frame.bind("<Destroy>", close, add="+")
     root_var.trace_add("write",reset)
     source_var.trace_add("write",reset)
     area_var.trace_add("write",reset)
-    return dialog
+    return frame
