@@ -4970,6 +4970,8 @@ function startAndroidTvDeviceLogin(automatic=false){
   androidTvLoginInProgress=true;
   ui.login.disabled=ui.gateLogin.disabled=true;
   showAndroidTvAuthPanel();
+  // Load the QR renderer in parallel with native device authorization.
+  void ensureAndroidTvQrLibrary().catch(()=>{});
   setStatus(automatic?'กำลังเตรียม QR Login ในแอป Android…':'กำลังสร้างรหัสเข้าสู่ระบบสำหรับมือถือ…');
   try{window.XStageAndroid.requestGoogleLogin();armAndroidTvLoginWatchdog();}
   catch(error){
