@@ -3,7 +3,14 @@
 An independently branded GPLv3 Android TV AirPlay receiver for iPhone and iPad.
 No iOS app, accounts, or internet cloud service required for casting on the local network.
 
-## Mirror TV receiver — v0.2.16 (Build 118)
+## Mirror TV receiver — v0.2.17 (Build 119)
+
+- Stability-first AUTO starts at 720p30 where supported; adaptive quality learns within 30 FPS profiles and can upgrade to 1080p30 after three stable sessions. Manual settings remain available; no forced disconnect to renegotiate.
+- Rebase discontinuous video presentation timestamps outside a 250 ms window, and reset after catch-up so old timestamps do not park decoder buffers.
+- Retry failed mDNS announcements with capped 30-second backoff until receiver teardown, ignoring stale failure callbacks and cleaning up late registration. This restores discovery after registration failure, not the iOS sender session itself.
+- Actual iPhone/TrueID long-duration testing is still required; CI is a build and source-contract check.
+
+### Previous v0.2.16 (Build 118)
 
 - Live AirPlay HLS errors now retry outside the Media3 error callback, avoiding re-entrant stop/prepare calls. Unexpected live-playlist END triggers bounded source recovery at the live edge rather than ending the receiver immediately.
 - Normal completed video-on-demand continues to close without retry. The independent screen mirroring pipeline remains unchanged.
