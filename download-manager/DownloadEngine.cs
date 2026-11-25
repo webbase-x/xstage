@@ -18,7 +18,8 @@ public sealed class DownloadEngine
     private readonly object _saveLock = new();
     private readonly TransferSlotQueue _slots = new();
     private readonly TransferRateGate _globalSpeed = new();
-    private readonly ConcurrentDictionary<string, TransferRateGate> _sharedJobSpeed = new();
+    private readonly TransferRateGate _nativePool = new();
+    private readonly ConcurrentDictionary<string, byte> _mediaReservations = new();
     private readonly ConcurrentDictionary<string, TransferRateGate> _fileSpeed = new();
     private readonly ConcurrentDictionary<string, byte> _active = new();
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, IncludeFields = true };
@@ -293,16 +294,27 @@ public sealed class DownloadEngine
     public static int SharedJobBudgetKib(int globalLimitKib, int slots) =>
         globalLimitKib == 0 ? 0 : Math.Max(1, globalLimitKib / Math.Max(1, slots));
 
+    public static int NativePoolBudgetKib(int globalLimitKib, int slots, int mediaJobs)
+    {
+        if (globalLimitKib == 0) return 0;
+        slots = Math.Max(1, slots);
+        // A running native job occupies at least one slot.
+        var reserved = Math.Clamp(mediaJobs, 0, slots - 1);
+        return Math.Max(1, globalLimitKib - reserved * SharedJobBudgetKib(globalLimitKib, slots));
+    }
+
     private Task LimitNetworkReadAsync(DownloadJob job, int bytes, CancellationToken ct)
     {
         var fileGate = job.FileSpeedLimitKib > 0
             ? _fileSpeed.GetOrAdd(job.Id, _ => new TransferRateGate(job.FileSpeedLimitKib))
             : null;
-        var share = SharedJobBudgetKib(GlobalLimitKib, MaxConcurrentJobs);
-        var shared = _sharedJobSpeed.GetOrAdd(job.Id, _ => new TransferRateGate());
-        shared.Configure(share, sharedAllocation: true);
-        return Task.WhenAll(TransferRateLimiter.WaitAsync(_globalSpeed, fileGate, bytes, ct),
-            shared.WaitForBytesAsync(bytes, ct));
+        // Reserve a fixed share for every possible external process slot.
+        // Native jobs share the remaining pool, including unused native shares.
+        // External processes reserve their share before launch.
+        var media = _mediaReservations.Count;
+        var budget = NativePoolBudgetKib(GlobalLimitKib, MaxConcurrentJobs, media);
+        _nativePool.Configure(budget, sharedAllocation: true);
+        return TransferRateLimiter.WaitAsync(_nativePool, fileGate, bytes, ct);
     }
 
     private static int ReadBufferSize(DownloadJob job, int globalLimitKib) =>
@@ -534,7 +546,6 @@ public sealed class DownloadEngine
             {
                 slot?.Dispose();
                 _fileSpeed.TryRemove(job.Id, out _);
-                _sharedJobSpeed.TryRemove(job.Id, out _);
                 _active.TryRemove(job.Id, out _);
                 if (ReferenceEquals(job.Cancellation, cts)) job.Cancellation = null;
                 cts.Dispose();
@@ -768,8 +779,15 @@ public sealed class DownloadEngine
         Directory.CreateDirectory(job.Folder);
         if (SocialVideoDownloader.IsVideoUrl(job.Url))
         {
-            await SocialVideoDownloader.DownloadAsync(job, WorkDir(job), ct,
-                SharedJobBudgetKib(GlobalLimitKib, MaxConcurrentJobs), sharedAllocation: true);
+            _mediaReservations.TryAdd(job.Id, 0);
+            _nativePool.Configure(NativePoolBudgetKib(GlobalLimitKib, MaxConcurrentJobs,
+                _mediaReservations.Count), sharedAllocation: true);
+            try
+            {
+                await SocialVideoDownloader.DownloadAsync(job, WorkDir(job), ct,
+                    SharedJobBudgetKib(GlobalLimitKib, MaxConcurrentJobs), sharedAllocation: true);
+            }
+            finally { _mediaReservations.TryRemove(job.Id, out _); }
             return;
         }
         var probe = await ProbeAsync(job, ct);
