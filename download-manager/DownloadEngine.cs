@@ -300,7 +300,7 @@ public sealed class DownloadEngine
             : null;
         var share = SharedJobBudgetKib(GlobalLimitKib, MaxConcurrentJobs);
         var shared = _sharedJobSpeed.GetOrAdd(job.Id, _ => new TransferRateGate());
-        shared.Configure(share);
+        shared.Configure(share, sharedAllocation: true);
         return Task.WhenAll(TransferRateLimiter.WaitAsync(_globalSpeed, fileGate, bytes, ct),
             shared.WaitForBytesAsync(bytes, ct));
     }
@@ -769,7 +769,7 @@ public sealed class DownloadEngine
         if (SocialVideoDownloader.IsVideoUrl(job.Url))
         {
             await SocialVideoDownloader.DownloadAsync(job, WorkDir(job), ct,
-                SharedJobBudgetKib(GlobalLimitKib, MaxConcurrentJobs));
+                SharedJobBudgetKib(GlobalLimitKib, MaxConcurrentJobs), sharedAllocation: true);
             return;
         }
         var probe = await ProbeAsync(job, ct);
