@@ -7,6 +7,9 @@ from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
 
 from . import shared_catalog_builder as builder
+from .library_setup import drive_roots, prepare_online, DRIVE_DOWNLOAD
+import webbrowser
+from tkinter import simpledialog
 
 
 def open_builder(app, initial_root=None):
@@ -20,23 +23,23 @@ def open_builder(app, initial_root=None):
     frame.pack(fill="both", expand=True)
     ttk.Label(frame, text="สร้างฐานใหม่สำหรับ PC / Online",
               font=("Leelawadee UI", 17, "bold")).pack(anchor="w")
-    ttk.Label(frame, text="สร้าง DB/songs.sqlite3 จาก XMID/XSK2 ใน XStageKaraoke/SONGS · รหัสและพาธตรงกัน",
+    ttk.Label(frame, text="PC + Online · เลือกคลังเพลงจากทุกแหล่ง · ฐานหลัก App/DB/songs.sqlite3",
               style="Muted.TLabel").pack(anchor="w", pady=(6, 15))
     row = ttk.Frame(frame)
     row.pack(fill="x", pady=(2, 12))
     folder = tk.StringVar(value=str(initial_root or app.settings.get("shared_drive_root", "")))
     ttk.Entry(row, textvariable=folder).pack(side="left", fill="x", expand=True, padx=(0, 8))
     def select():
-        name = filedialog.askdirectory(parent=panel, title="เลือก XStageKaraoke บน Google Drive for desktop",
+        name = filedialog.askdirectory(parent=panel, title="เลือกโฟลเดอร์คลังเพลง",
                                        initialdir=folder.get() or str(Path.home()))
         if name:
             folder.set(name)
             state["approved"] = None
-    ttk.Button(row, text="เลือก Google Drive…", command=select).pack(side="left")
+    ttk.Button(row, text="เลือกคลังเพลง…", command=select).pack(side="left")
 
     full_verify = tk.BooleanVar(value=False)
-    ttk.Checkbutton(frame, text="ตรวจ SHA-256 ทุกไฟล์ใหม่ (ช้ากว่า)", variable=full_verify).pack(anchor="w")
-    status = tk.StringVar(value="เลือกคลังหลัก แล้วกดสร้างฐานและซิงก์ · ข้ามการตรวจไฟล์เดิมที่ไม่เปลี่ยน")
+    ttk.Checkbutton(frame, text="ตรวจแพ็กเกจใหม่ทั้งหมด (ช้ากว่า)", variable=full_verify).pack(anchor="w")
+    status = tk.StringVar(value="เลือกคลังเพลง แล้วกดสร้างฐานและซิงก์ · ไม่ตรวจเพลงซ้ำ")
     ttk.Label(frame, textvariable=status, style="Muted.TLabel",
               wraplength=860).pack(fill="x", pady=8)
     progress = ttk.Progressbar(frame, mode="determinate", maximum=100)
@@ -70,7 +73,24 @@ def open_builder(app, initial_root=None):
         if not requested:
             status.set("กรุณาเลือก XStageKaraoke ก่อน")
             return
+        drive = None
+        name = None
         if publish:
+            roots = drive_roots()
+            if not roots:
+                if messagebox.askyesno("ไม่พบ Google Drive", "PC + Online ต้องใช้ Google Drive for desktop ที่เข้าสู่ระบบแล้ว\nเปิดหน้าดาวน์โหลด Google Drive หรือไม่?", parent=panel):
+                    webbrowser.open(DRIVE_DOWNLOAD)
+                return
+            chosen = filedialog.askdirectory(parent=panel, title="เลือก My Drive ของ Google Drive", initialdir=str(roots[0]), mustexist=True)
+            if not chosen:
+                return
+            drive = Path(chosen).resolve()
+            if drive not in [p.resolve() for p in roots]:
+                messagebox.showwarning("เลือก Google Drive", "กรุณาเลือก My Drive โดยตรง", parent=panel)
+                return
+            name = simpledialog.askstring("ชื่อคลัง Google Drive", "ชื่อโฟลเดอร์หลัก (ใช้ของเดิมถ้ามี)", initialvalue="XStageKaraoke", parent=panel)
+            if not name:
+                return
             if not messagebox.askyesno(
                 "ยืนยันสร้าง SQLite ใหม่จาก Karaoke PC",
                 "ต้องการสร้างและเผยแพร่ XStageKaraoke/DB/songs.sqlite3 ใหม่จาก XMID/XSK2 "
@@ -95,9 +115,7 @@ def open_builder(app, initial_root=None):
                 # Windows refuses to atomically replace an open SQLite file.
                 # Close the long-lived PC search reader without touching the
                 # playback engine; reopen search after publication.
-                if publish and getattr(app, "shared_drive_mode", False) and str(
-                        getattr(getattr(app, "library", None), "root", "")) == str(
-                        Path(requested).resolve()):
+                if publish and getattr(app, "shared_drive_mode", False):
                     condition = getattr(app, "_search_condition", None)
                     if condition is not None:
                         with condition:
@@ -117,9 +135,12 @@ def open_builder(app, initial_root=None):
                         app._active_reader = None
                         app._search_thread = None
                         reader_stopped = True
-                result = builder.build(requested, progress=update, cancel=stop,
+                root = prepare_online(requested, drive, name, cancel=stop, progress=update) if publish else Path(requested).resolve()
+                result = builder.build(root, progress=update, cancel=stop,
                                        publish=publish, cache_dir=Path(app.data_dir) / "index-cache",
-                                       full_verify=verify_all)
+                                       full_verify=verify_all, deduplicate=not publish,
+                                       local_database=(Path(app.home) / "DB" / "songs.sqlite3") if publish else None)
+                result["root"] = str(root)
             except Exception as exc:
                 result, error = None, str(exc)
             finally:
@@ -150,18 +171,21 @@ def open_builder(app, initial_root=None):
                         str(result["pending_drive_ids"])+" รายการ · กดยืนยันสร้างฐาน")
                 else:
                     state["approved"] = None
-                    app.settings["shared_drive_root"] = requested
+                    if app.settings.get("shared_drive_root") != result["root"]:
+                        app.settings.pop("shared_drive_folder_id", None)
+                    app.settings["shared_drive_root"] = result["root"]
                     if messagebox.askyesno(
-                        "ใช้ฐานเพลงร่วมใน Karaoke PC",
+                        "ใช้ฐานหลัก PC ในเครื่อง",
                         "สร้างฐานเพลงร่วมสำเร็จแล้ว\n"
-                        "ต้องการใช้ XStageKaraoke/DB/songs.sqlite3 "
+                        "ต้องการใช้ App/DB/songs.sqlite3 "
                         "เป็นฐานเพลงหลักของ Karaoke PC หลังเปิดโปรแกรมใหม่หรือไม่?\n"
                         "ฐาน Song Studio Pro จะไม่เปลี่ยน",
                         parent=panel):
                         app.settings["library_mode"] = "google-drive"
+                        app.settings["shared_local_master"] = True
                     app.save_settings()
                     status.set("สร้าง SQLite ใหม่สำเร็จ "+str(result["accepted"]) +
-                               " เพลง · ข้าม MIDI ซ้ำ "+str(result["duplicates"]) +
+                               " เพลง · ไม่ตรวจเพลงซ้ำ "+str(result["duplicates"]) +
                                " · รอ Google Drive ซิงก์ (ยังไม่ยืนยัน Cloud) · File ID รอตรวจ "+str(result["pending_drive_ids"]) +
                                " เพลง · เมื่อ Online เปิดเพลงจะตรวจจับคู่กับ Drive")
                     if getattr(app, "shared_drive_mode", False):
@@ -177,7 +201,7 @@ def open_builder(app, initial_root=None):
         threading.Thread(target=work, daemon=True,
                          name="xstage-shared-sqlite-pc-build").start()
 
-    inspect = ttk.Button(buttons, text="ตรวจอย่างเดียว", command=lambda: submit(False))
+    inspect = ttk.Button(buttons, text="ตรวจเพลงซ้ำ (คลัง Drive)", command=lambda: submit(False))
     inspect.pack(side="left", padx=(0, 10))
     confirm = ttk.Button(buttons, text="สร้างฐานและซิงก์ (เร็วที่สุด)",
                          command=lambda: submit(True))
