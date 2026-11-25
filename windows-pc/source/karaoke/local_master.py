@@ -198,6 +198,20 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None):
                     raise ValueError("เพลงบน Drive ไม่ตรงกับฐาน PC: " + path)
                 for key in ("xmid", "xsk"):
                     if row.get(key):
+                        import hashlib
+                        expected = str(row[key].get("md5Checksum", "")).lower()
+                        if len(expected) != 32 or any(ch not in "0123456789abcdef" for ch in expected):
+                            raise ValueError("ฐานเพลงไม่มี MD5 ที่ตรวจสอบได้: " + path)
+                        digest = hashlib.md5(usedforsecurity=False)
+                        with media.open("rb") as stream:
+                            while True:
+                                stopped()
+                                chunk = stream.read(1024 * 1024)
+                                if not chunk:
+                                    break
+                                digest.update(chunk)
+                        if digest.hexdigest() != expected:
+                            raise ValueError("MD5 เพลงบน Drive ไม่ตรงกับฐาน PC: " + path)
                         row[key]["fileId"] = ""
                         row["pendingDriveLink"] = True
                 db.execute("UPDATE songs SET payload=? WHERE id=?",
