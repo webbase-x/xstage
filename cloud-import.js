@@ -748,13 +748,16 @@ async function buildMidiIndex(rows,drive,check){
       const packed=new Blob([await drive.getSqlite(media.fileId)]);
       const opened=await reader.openPackage(packed);
       hash=await core.hashBlob(opened.midi,check);
-      row.midiHash=hash;row.midiSize=opened.midi.size;backfilled++;
+      row.midiHash=hash;row.midiSize=opened.midi.size;
+      row.midiSha256=await core.sha256Blob(opened.midi,check)||undefined;backfilled++;
     }
     if(!/^[0-9a-f]{32}$/.test(hash))continue;
     const prev=hashes.get(hash);
     if(prev&&Number(prev.midiSize)>0&&Number(row.midiSize)>0&&
       Number(prev.midiSize)!==Number(row.midiSize))
       fail('พบแฮช MIDI ตรงกันแต่ขนาดไบต์ต่างกัน · ต้องตรวจสอบก่อนรวมฐาน');
+    if(prev&&prev.midiSha256&&row.midiSha256&&prev.midiSha256!==row.midiSha256)
+      fail('MD5 MIDI ตรงกันแต่ SHA-256 ต่างกัน · ต้องตรวจไฟล์ต้นฉบับ');
     if(prev&&prev.webSongId!==id){
       // Old catalog is preserved in BACKUP; new canonical DB keeps one entry.
       rows.delete(id);duplicates++;continue;
@@ -774,12 +777,14 @@ function sourceXmidName(filename){
   // A collision is resolved by uploadMedia, never by renumbering a song.
   return safeName(source.replace(/\.xmid$/i,''))+'.XMID';
 }
-function sameMidiBytes(hashIndex,hash,actualSize){
+function sameMidiBytes(hashIndex,hash,actualSize,sha256=''){
   const old=hashIndex.get(hash);
   if(!old)return false;
   const size=Number(old.midiSize||old.midi?.size||0);
   if(size>0&&actualSize>0&&size!==actualSize)
     fail('พบแฮช MIDI ตรงกันแต่ขนาดไบต์ต่างกัน · ต้องตรวจสอบไฟล์ต้นฉบับ');
+  if(sha256&&old.midiSha256&&sha256!==old.midiSha256)
+    fail('MD5 MIDI ตรงกันแต่ SHA-256 ต่างกัน · ต้องตรวจไฟล์ต้นฉบับ');
   return true;
 }
 function distinctImportCode(requested,rawMidiHash,byCode){
@@ -1593,12 +1598,13 @@ class Importer {
           const sourceCode=opened.code;
           const rawMidiSize=opened.midi.size;
           const rawMidiHash=await core.hashBlob(opened.midi,()=>this.check());
+          const rawMidiSha256=await core.sha256Blob(opened.midi,()=>this.check());
           const identity=core.songIdentity(opened.document,sourceCode);
           // Do not discard a checksum-valid MIDI because artist metadata is
           // missing. The reader marks it as pending and removes placeholder
           // lyrics without inventing an artist or timed karaoke text.
           const xmidHash=await core.hashBlob(item.file,()=>this.check());
-          return {item,sourceCode,rawMidiSize,rawMidiHash,identity,xmidHash,
+          return {item,sourceCode,rawMidiSize,rawMidiHash,rawMidiSha256,identity,xmidHash,
             identityComplete:Boolean(identity.identityComplete),
             lyricsAvailable:Boolean(opened.lyricsAvailable),
             ident:'browser/xmid/'+xmidHash,name:sourceXmidName(item.file.name)};
@@ -1615,7 +1621,7 @@ class Importer {
             continue;
           }
           const entry=outcome.value;
-          if(sameMidiBytes(byMidi,entry.rawMidiHash,entry.rawMidiSize)||
+          if(sameMidiBytes(byMidi,entry.rawMidiHash,entry.rawMidiSize,entry.rawMidiSha256)||
              reservedMidi.has(entry.rawMidiHash)||
              rows.has(entry.ident)){
             this.stats.duplicates++;finished++;
@@ -1641,7 +1647,7 @@ class Importer {
           }
           this.check();
           const record={webSongId:entry.ident,code:entry.code,
-            sourceCode:entry.sourceCode,midiHash:entry.rawMidiHash,
+            sourceCode:entry.sourceCode,midiHash:entry.rawMidiHash,midiSha256:entry.rawMidiSha256||undefined,
             midiSize:entry.rawMidiSize,originalFilename:entry.item.file.name,
             originalRelativePath:entry.item.relative||entry.item.file.name,
             originalFileSize:entry.item.file.size,
@@ -1698,7 +1704,8 @@ class Importer {
             const sourceCode=opened.code;
             const rawMidiSize=opened.midi.size;
             const rawMidiHash=await core.hashBlob(opened.midi,()=>this.check());
-            if(sameMidiBytes(byMidi,rawMidiHash,rawMidiSize)){
+            const rawMidiSha256=await core.sha256Blob(opened.midi,()=>this.check());
+            if(sameMidiBytes(byMidi,rawMidiHash,rawMidiSize,rawMidiSha256)){
               this.stats.duplicates++;finished++;
               show('ข้าม MIDI ซ้ำในแพ็กเกจต่างแหล่ง: '+sourceCode);continue;
             }
@@ -1724,7 +1731,7 @@ class Importer {
             const path=pathFor(sourceCode,isXmid?'xmid':'xsk','',name).slice(0,-1);
             const packed=await uploadMedia(item.file,code,path,name,
               'application/octet-stream',xskHash,0,1);
-            const record={webSongId:ident,code,sourceCode,midiHash:rawMidiHash,
+            const record={webSongId:ident,code,sourceCode,midiHash:rawMidiHash,midiSha256:rawMidiSha256||undefined,
               midiSize:rawMidiSize,originalFilename:item.file.name,
               originalRelativePath:item.relative||item.file.name,
               originalFileSize:item.file.size,
@@ -1740,7 +1747,8 @@ class Importer {
             const midiFile=item.midi.file,sourceCode=item.code;
             const midiSize=midiFile.size;
             const midiHash=await core.hashBlob(midiFile,()=>this.check());
-            if(sameMidiBytes(byMidi,midiHash,midiSize)){
+            const midiSha256=await core.sha256Blob(midiFile,()=>this.check());
+            if(sameMidiBytes(byMidi,midiHash,midiSize,midiSha256)){
               this.stats.duplicates++;finished++;
               show('ข้าม MIDI ซ้ำแม้ต่างชื่อ/รหัส/โฟลเดอร์: '+sourceCode);continue;
             }
@@ -1822,7 +1830,7 @@ class Importer {
             const ident=same?.webSongId||('browser/midi/'+midiHash);
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิง MIDI ชนเพลงอื่น');
             const identity=core.songIdentity(doc,code,same);
-            const record={...(same||{}),webSongId:ident,code,sourceCode,midiHash,
+            const record={...(same||{}),webSongId:ident,code,sourceCode,midiHash,midiSha256:midiSha256||undefined,
               midiSize,originalFilename:midiFile.name,
               originalRelativePath:item.midi?.relative||midiFile.name,
               originalFileSize:midiFile.size,

@@ -216,9 +216,7 @@ async function inspectPackage(drive,file,check){
   if(!reader?.openPackage)fail('ยังไม่โหลดตัวอ่าน '+file.ext.toUpperCase());
   const parsed=await reader.openPackage(blob);
   const midiHash=await scope.XStageImportCore.hashBlob(parsed.midi,check);
-  const midiSha256=scope.crypto?.subtle?Array.from(new Uint8Array(
-    await scope.crypto.subtle.digest('SHA-256',await parsed.midi.arrayBuffer())),
-    byte=>byte.toString(16).padStart(2,'0')).join(''):'';
+  const midiSha256=await scope.XStageImportCore.sha256Blob(parsed.midi,check);
   check();
   const midiSize=parsed.midi.size;
   const identity=scope.XStageImportCore.songIdentity(parsed.document,parsed.code);

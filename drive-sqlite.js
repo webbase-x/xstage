@@ -135,6 +135,8 @@ async function create(kind,songs,removes=[],generation=''){
         const midiHash=String(row.midiHash||row.midi?.md5Checksum||'').toLowerCase();
         const validHash=/^[0-9a-f]{32}$/.test(midiHash)?midiHash:null;
         const midiSize=Number(row.midiSize||row.midi?.size||0);
+        if(row.midiSha256!=null&&!/^[a-f0-9]{64}$/.test(row.midiSha256))
+          fail('SHA-256 MIDI ในฐานไม่ถูกต้อง');
         if(validHash){
           const previous=midiHashes.get(validHash);
           if(previous&&previous!==row.webSongId)
@@ -240,6 +242,8 @@ async function read(bytes){
       let song;
       try{song=JSON.parse(payload);}catch{fail('ข้อมูล JSON ในแถว SQLite ไม่ถูกต้อง');}
       if(!validId(id)||song?.webSongId!==id)fail('รหัสอ้างอิงในฐานเพลงไม่ตรงกัน');
+      if(song.midiSha256!=null&&!/^[a-f0-9]{64}$/.test(song.midiSha256))
+        fail('SHA-256 MIDI ในฐานไม่ถูกต้อง');
       if(shared){
         const relative=String(song.originalRelativePath||'').replaceAll('\\','/');
         if(pcSongId!==pcId(id)||portablePath!=='SONGS/'+relative||portableKind!==pcKind(song))

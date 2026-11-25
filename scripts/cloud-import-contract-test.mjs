@@ -177,7 +177,7 @@ assert.ok(importerText.includes("const name=safeName(midiFile.name)") &&
   'Preserve input filenames unless another file with different content already uses the name');
 assert.ok(importerText.includes('core.hashBlob(opened.midi,()=>this.check())'),
   'Wrapped XMID/XSK input must hash the internal MIDI content');
-assert.ok(importerText.includes('sameMidiBytes(byMidi,midiHash,midiSize)') &&
+assert.ok(importerText.includes('sameMidiBytes(byMidi,midiHash,midiSize,midiSha256)') &&
   importerText.includes('byMidi.set(midiHash,record)'),
   'Every import must compare MIDI byte length and MD5 before uploading media');
 assert.ok(importerText.includes('const CATALOG_BATCH_SIZE=500')&&
@@ -666,3 +666,5 @@ console.log('PASS: WEB upload DOM, visible Start, selection/review/resume, Drive
  d.fetch=async()=>({json:async()=>({files:[],incompleteSearch:true})});
  await assert.rejects(d.list("'rootFolder123' in parents"),/ค้นหาไม่ครบ/);
 }
+
+assert.throws(()=>sameMidiBytes(new Map([['a',{midiSize:8,midiSha256:'a'.repeat(64)}]]),'a',8,'b'.repeat(64)),/SHA-256 ต่างกัน/);
