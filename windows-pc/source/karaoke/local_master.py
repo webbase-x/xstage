@@ -149,6 +149,7 @@ def activate(home, data, settings, *, installed=False):
         settings["catalog_local_master"] = True
         settings.pop("shared_local_master", None)
         settings.pop("pending_pc_only", None)
+        settings.pop("pending_shared_drive", None)
     elif settings.get("library_mode") != "google-drive" and target != data / "songs.sqlite3":
         if kind(target) == "online":
             raise ValueError("ฐานหลักเป็นชนิด Online · กรุณาเลือกสลับโหมดอย่างปลอดภัย")

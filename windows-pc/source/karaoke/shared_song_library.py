@@ -45,6 +45,12 @@ def validate_shared(root, database=None):
             raise ValueError("ฐานร่วมมีคอลัมน์ไม่ครบ กรุณาสร้างฐานใหม่จาก Karaoke PC หรือ Karaoke Online")
         if db.execute("PRAGMA quick_check(1)").fetchone()[0] != "ok":
             raise ValueError("ฐานร่วม SQLite ไม่สมบูรณ์ หยุดอ่านเพื่อป้องกันเพลงผิดรายการ")
+        if not metadata.get("generation"):
+            raise ValueError("ฐานร่วมไม่มีรุ่นข้อมูล")
+        # Candidate snapshots are for the Online publisher, not a synced
+        # canonical playback source.
+        if database is None and metadata.get("producer") == "karaoke-pc-candidate-v1":
+            raise ValueError("ฐานรอเผยแพร่ยังไม่ใช่ฐานหลัก")
     return root
 
 

@@ -24,7 +24,7 @@ assert.ok(page.includes('cloud-import-core.js?v=')&&page.includes('cloud-import.
 assert.ok(style.includes('.cloud-import-dialog')&&style.includes('@media(max-width:700px)'));
 assert.ok(app.includes('XStageCloudImport?.init')&&app.includes('refresh:async()=>')&&
           app.includes("xstage:auth-cleared"),'Import must receive the verified session and refresh canonical catalog');
-const ctx={Blob,URL,URLSearchParams,DOMException,console,setTimeout,clearTimeout,crypto:webcrypto};
+const ctx={Blob,URL,URLSearchParams,DOMException,TextDecoder,TextEncoder,console,setTimeout,clearTimeout,crypto:webcrypto};
 ctx.window=ctx;
 ctx.document={getElementById:()=>null};
 vm.runInNewContext(read('cloud-import-core.js'),ctx,{filename:'cloud-import-core.js'});

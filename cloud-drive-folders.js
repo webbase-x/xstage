@@ -134,7 +134,7 @@ async function countSourceFiles(drive,start,check=()=>{},collect=null){
 }
 async function walkMusic(drive,start,check,progress){
   const folders=[{id:start,path:'',depth:0}],seen=new Set();
-  const files=[];let count=0;
+  const files=[],portablePaths=new Set();let count=0;
   while(folders.length){
     check();
     const folder=folders.shift();
@@ -144,6 +144,12 @@ async function walkMusic(drive,start,check,progress){
     const children=await drive.listChildren(folder.id);
     for(const item of children){
       if(!isId(item.id))fail('Google Drive คืน File ID ไม่ถูกต้อง');
+      const name=String(item.name||'');
+      if(!name||name==='.'||name==='..'||/[\\/:*?"<>|\u0000-\u001f]/.test(name))
+        fail('ชื่อไฟล์หรือโฟลเดอร์ไม่สามารถใช้ร่วมกับ Windows: '+name);
+      const portable=(folder.path+name).normalize('NFC').toLowerCase();
+      if(portablePaths.has(portable))fail('ชื่อไฟล์หรือโฟลเดอร์ซ้ำเมื่อใช้บน Windows: '+name);
+      portablePaths.add(portable);
       if(item.mimeType===FOLDER){
         if(folder.depth>=MAX_DEPTH)fail('โครงสร้างเพลงลึกเกิน 12 ชั้น');
         if(retired.has(item.id))fail('พบคลังที่ถูกยกเลิกภายในรายการที่เลือก');
@@ -313,6 +319,8 @@ async function verifyPcCandidate(drive,decoded,existing,files,check=()=>{}){
   for(const row of decoded.songs){
     const media=row.xmid||row.xsk,kind=row.xmid?'xmid':'xsk';
     if(!media||!/^([a-f0-9]{64})$/.test(row.midiSha256||''))fail('ฐาน PC ไม่มี SHA-256 ของ MIDI');
+    if(row.webSongId!=='browser/'+kind+'/'+String(media.md5Checksum||'').toLowerCase())
+      fail('รหัสเพลง PC ไม่ตรงกับแพ็กเกจที่ตรวจสอบได้');
     const actual=byPath.get(media.path);
     if(!actual||actual.ext!==kind||packageSignature(actual)!==packageSignature(media))
       fail('ไฟล์ในฐาน PC ยังไม่ตรงกับ Cloud: '+String(media.path||''));
@@ -322,7 +330,11 @@ async function verifyPcCandidate(drive,decoded,existing,files,check=()=>{}){
     if(candidates.has(verified.midiSha256))fail('พบ MIDI ซ้ำในฐาน PC');
     candidates.set(verified.midiSha256,verified.midiSize);covered.add(actual.id);
     if(rows.has(row.webSongId))fail('รหัสเพลงชนกับฐานเดิม');
-    rows.set(row.webSongId,{...row,originalRelativePath:actual.relative,originalFilename:actual.name,
+    rows.set(row.webSongId,{...row,sourceCode:verified.parsed.code,
+      title:verified.identity.title,artist:verified.identity.artist,
+      metadataComplete:Boolean(verified.identity.identityComplete),
+      lyricsMode:verified.parsed.document.lyricsMode||'timed',
+      originalRelativePath:actual.relative,originalFilename:actual.name,
       pendingDriveLink:false,[kind]:{...media,fileId:actual.id}});
   }
   for(const actual of files){

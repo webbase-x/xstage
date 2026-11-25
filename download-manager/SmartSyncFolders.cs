@@ -152,7 +152,16 @@ public static class SmartSyncFolders
                 long size = before.Length, stamp = before.LastWriteTimeUtc.Ticks;
                 string hash;
                 using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    var header = new byte[100];
+                    stream.ReadExactly(header);
+                    // SQLite format bytes 18/19 are read/write journal mode.
+                    // Refuse WAL before opening, even when sidecars are missing.
+                    if (header[18] != 1 || header[19] != 1)
+                        throw new InvalidDataException("Not a standalone SQLite snapshot");
+                    stream.Position = 0;
                     hash = Convert.ToHexString(SHA256.HashDataAsync(stream, ct).GetAwaiter().GetResult());
+                }
                 using var db = new SqliteConnection(new SqliteConnectionStringBuilder
                 { DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
                 db.Open();

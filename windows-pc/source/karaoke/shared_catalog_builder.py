@@ -200,10 +200,17 @@ def _record(relative, file, old, *, fingerprint=True):
     code = str(doc.get("code") or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", code):
         raise ValueError("รหัสเพลงในแพ็กเกจไม่รองรับ: " + str(file))
-    title = str(doc.get("title") or "").strip()
-    artist = str(doc.get("artist") or "").strip()
-    if not title or not artist:
-        raise ValueError("ไฟล์ไม่มีชื่อเพลงหรือศิลปิน: " + str(file))
+    banned = {"x-stage karaoke", "x-stage song studio", "xstage karaoke",
+              "xstage song studio", "unknown", "ไม่ทราบ", "ไม่ระบุ",
+              "ไม่ระบุชื่อเพลง", "ไม่ระบุศิลปิน"}
+    def identity(value, is_title=False):
+        text = unicodedata.normalize("NFC", str(value or "")).strip()[:200]
+        return "" if text.lower() in banned or (is_title and text == code) else text
+    title, artist = identity(doc.get("title"), True), identity(doc.get("artist"))
+    complete = bool(title and artist)
+    title, artist = title or "ไม่ระบุชื่อเพลง", artist or "ไม่ระบุศิลปิน"
+    lines = doc.get("lines") or []
+    placeholder = len(lines) == 1 and str(lines[0].get("text") or "").strip().lower() == "x-stage karaoke"
     midi_hash = hashlib.md5(midi).hexdigest() if fingerprint else None
     packed_hash = _hash(file)
     kind = ext[1:]
@@ -214,11 +221,11 @@ def _record(relative, file, old, *, fingerprint=True):
              "size": file.stat().st_size, "path": media_path}
     record = {
         "webSongId": ident, "code": code, "sourceCode": code,
-        "title": title, "artist": artist, "metadataComplete": True,
+        "title": title, "artist": artist, "metadataComplete": complete,
         "sourceFormat": kind.upper(), "originalFilename": file.name,
         "originalRelativePath": relative, "originalFileSize": file.stat().st_size,
         "midiHash": midi_hash, "midiSha256": hashlib.sha256(midi).hexdigest(), "midiSize": len(midi),
-        "lyricsMode": "timed" if doc.get("lines") else "unavailable",
+        "lyricsMode": "timed" if lines and not placeholder else "unavailable",
         kind: media,
     }
     if not file_id:
@@ -246,7 +253,7 @@ def _verified_rows(songs, root, references, cache_dir, cancel, full_verify, fing
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha256(os.path.normcase(str(root)).encode("utf-8")).hexdigest()
-    with closing(sqlite3.connect(cache_dir / (("shared-index-v2-" if fingerprint else "shared-index-fast-v2-") + key + ".sqlite3"), timeout=15)) as cache:
+    with closing(sqlite3.connect(cache_dir / (("shared-index-v3-" if fingerprint else "shared-index-fast-v3-") + key + ".sqlite3"), timeout=15)) as cache:
         cache.execute("CREATE TABLE IF NOT EXISTS checked (path TEXT PRIMARY KEY, stamp TEXT NOT NULL, payload TEXT NOT NULL)")
         cache.commit()
         pending = 0

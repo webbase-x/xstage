@@ -246,6 +246,8 @@ async function read(bytes){
         fail('SHA-256 MIDI ในฐานไม่ถูกต้อง');
       if(shared){
         const relative=String(song.originalRelativePath||'').replaceAll('\\','/');
+        if(!relative||relative.split('/').some(p=>!p||p==='.'||p==='..'||p.includes(':')))
+          fail('พาธเพลงในฐาน SQLite ไม่ปลอดภัย');
         if(pcSongId!==pcId(id)||portablePath!=='SONGS/'+relative||portableKind!==pcKind(song))
           fail('รหัสหรือเส้นทางเพลง PC ไม่ตรงกับข้อมูล Online');
       }

@@ -315,7 +315,7 @@ assert.match(read('cloud-drive-folders.js'),/scope\.XStageCloudImport\.publishSi
  const verify=window.XStageDriveFolders.verifyPcCandidate;
  const generation='pc-generation';
  const candidateRows=lastRows.map(row=>({...row}));
- const allFiles=records.filter(f=>/\\.xmid$/i.test(f.name)).map(f=>({...f,relative:f.name,ext:'xmid'}));
+ const allFiles=records.filter(f=>/\.xmid$/i.test(f.name)).map(f=>({...f,relative:f.name,ext:'xmid'}));
  // The raw file inventory may contain byte-identical copies whose FakeDrive
  // entries deliberately share package content; give those copies their bytes.
  for(const f of allFiles)if(!blobs.has(f.id)){
