@@ -22,9 +22,15 @@ REQUIRED = {
 }
 
 
-def validate_shared(root):
-    root = shared_root(root)
-    with closing(_open_read_only(root)) as db:
+def validate_shared(root, database=None):
+    if database is None:
+        root = shared_root(root)
+    else:
+        root = Path(root).resolve()
+        database = Path(database).resolve()
+        if not database.is_file():
+            raise ValueError("ยังไม่มีฐานหลัก PC · สร้างฐานก่อน")
+    with closing(_open_read_only(root, database)) as db:
         metadata = dict(db.execute("SELECT key,value FROM catalog_meta"))
         if (metadata.get("format") != "xstage-sqlite3-v1" or
             metadata.get("schemaVersion") != "1" or
@@ -47,7 +53,7 @@ class SharedReader(SearchReader):
         self.library = library
         # The Drive sync client may replace a complete SQLite snapshot.
         # Immutable, read-only handles never create -wal or -shm in Drive.
-        self.db = _open_read_only(library.root)
+        self.db = _open_read_only(library.root, library.path)
         self.db.create_function("xstage_rank", 4, library._rank, deterministic=True)
         self.fts = False
         self._version = None
@@ -60,9 +66,9 @@ class SharedReader(SearchReader):
         signature=self.library.file_signature()
         if signature==self._file_signature:
             return
-        validate_shared(self.library.root)
+        validate_shared(self.library.root, self.library.path)
         self.db.close()
-        self.db=_open_read_only(self.library.root)
+        self.db=_open_read_only(self.library.root, self.library.path)
         self.db.create_function("xstage_rank",4,self.library._rank,deterministic=True)
         self._file_signature=signature
         self._version=self._count=None
@@ -84,9 +90,9 @@ class SharedReader(SearchReader):
 class SharedSongLibrary:
     shared_drive = True
 
-    def __init__(self, drive_root, settings=None, save_settings=None):
-        self.root = validate_shared(drive_root)
-        self.path = self.root / "DB" / "songs.sqlite3"
+    def __init__(self, drive_root, settings=None, save_settings=None, *, database=None):
+        self.root = validate_shared(drive_root, database)
+        self.path = Path(database).resolve() if database is not None else self.root / "DB" / "songs.sqlite3"
         self.fts = False
         self.settings = settings if isinstance(settings, dict) else {}
         self.save_settings = save_settings
@@ -122,7 +128,7 @@ class SharedSongLibrary:
 
     @contextmanager
     def connect(self):
-        with closing(_open_read_only(self.root)) as db:
+        with closing(_open_read_only(self.root, self.path)) as db:
             yield db
 
     def open_reader(self):
