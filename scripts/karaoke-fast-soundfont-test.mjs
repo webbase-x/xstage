@@ -50,7 +50,7 @@ const fakeFetch=async(url,options={})=>{
     const parent=q.match(/'([^']+)' in parents/)?.[1]||'';
     driveParents.push({q,parent});
     const folders=parent==='root'
-      ?[{id:'font-root',name:'SoundFont',mimeType:'application/vnd.google-apps.folder'}]
+      ?[{id:'font-root',name:'SOUNDFONT',mimeType:'application/vnd.google-apps.folder'}]
       :parent==='font-root'
         ?[{id:'sf2-folder',name:'SF2',mimeType:'application/vnd.google-apps.folder'}]
         :parent==='sf2-folder'
@@ -71,7 +71,7 @@ const ctx={
   document:{getElementById:id=>id==='xstage-soundfont-select'?select:id==='xstage-soundfont-authorize'?permission:id==='xstage-drive-font-permission-status'?sourceStatus:null},
   XStageDriveReadAccess:()=>fullRead,
   XStageCloudImport:{Drive:class{}},
-  XStageDriveFolders:{readSelections:()=>explicitFolder?{soundfont:{id:explicitFolder,name:'Selected'}}:{},
+  XStageDriveFolders:{readSelections:()=>explicitFolder?{soundfont:{id:explicitFolder,name:'SOUNDFONT'}}:{},
     verifyFolder:async()=>({mimeType:'application/vnd.google-apps.folder',name:'SoundFont'})},
   localStorage:{getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v)},
   fetch:fakeFetch,Option,CustomEvent,
@@ -113,7 +113,7 @@ assert.ok(/GM 6 MB/.test(midi.fontStatus().warning),
   'The player must tell the user why it uses the fast bank');
 assert.equal(largeDownloads,1,'The explicit large selection remains possible');
 assert.equal(midi.isFastGmBytes(quick),true);
-assert.equal(permission.hidden,true,'Already accessible SoundFonts require no extra grant');
+assert.equal(permission.hidden,false,'Limited scope must still offer full inventory permission');
 explicitFolder='empty-folder';
 await midi.refreshFonts(auth);
 assert.equal(permission.hidden,false,'An empty explicit source offers permission recovery');

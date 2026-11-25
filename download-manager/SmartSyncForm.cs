@@ -337,6 +337,7 @@ public sealed class SmartSyncForm : UserControl
             new[] { $"สำรองสำเนา PC {cleanup.PcArchived:N0} · Drive {cleanup.DriveArchived:N0} · เก็บไว้ {cleanup.Preserved:N0} · {SmartSyncFolders.DuplicateBackupFolder}" }
                 .Concat(cleanup.Samples).ToArray();
         if (cleanup is not null) _status.Text += $" · สำรองซ้ำ {cleanup.PcArchived + cleanup.DriveArchived:N0} · เก็บไว้ {cleanup.Preserved:N0}";
+        if (!string.IsNullOrEmpty(plan.CatalogStatus)) _status.Text += "\n" + plan.CatalogStatus;
         _review.Lines = plan.Decisions.OrderBy(d => d.Action switch
             {
                 SyncAction.Conflict or SyncAction.ReviewDeletion => 0,

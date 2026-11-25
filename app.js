@@ -1017,10 +1017,12 @@ function savePendingAuth(token,expiresAt){
   if(!token||!(expiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS))return;
   const value=JSON.stringify({token,expiresAt});
   try{sessionStorage.setItem(PENDING_AUTH_KEY,value);}catch{}
-  try{localStorage.setItem(PENDING_AUTH_KEY,value);}catch{}
+  // Keep access tokens tab-scoped; remembered account metadata is separate.
+  try{localStorage.removeItem(PENDING_AUTH_KEY);}catch{}
 }
 function readPendingAuth(){
-  for(const store of [(()=>{try{return sessionStorage}catch{return null}})(),(()=>{try{return localStorage}catch{return null}})()].filter(Boolean)){
+  try{localStorage.removeItem(PENDING_AUTH_KEY);}catch{}
+  for(const store of [(()=>{try{return sessionStorage}catch{return null}})()].filter(Boolean)){
     try{
       const current=JSON.parse(store.getItem(PENDING_AUTH_KEY)||'null');
       if(current&&typeof current.token==='string'&&current.token.length>25&&Number.isFinite(current.expiresAt)&&current.expiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS)return current;
@@ -1033,14 +1035,14 @@ function saveActiveAuth(token,expiresAt,sub){
   const readOnly=!!token&&token===fullDriveReadToken;
   const value=JSON.stringify({token,expiresAt,sub,readOnly});
   try{sessionStorage.setItem(ACTIVE_AUTH_KEY,value);}catch{}
-  // Expanded read tokens stay in this tab only, never persistent localStorage.
-  try{if(readOnly)localStorage.removeItem(ACTIVE_AUTH_KEY);
-      else localStorage.setItem(ACTIVE_AUTH_KEY,value);}catch{}
+  // Never persist bearer credentials across browser sessions. The remembered
+  // account is still available for Google reauthorization on the next visit.
+  try{localStorage.removeItem(ACTIVE_AUTH_KEY);localStorage.removeItem(LEGACY_ACTIVE_AUTH_KEY);}catch{}
 }
 function readActiveAuth(){
   const stores=[];
   try{stores.push(sessionStorage);}catch{}
-  try{stores.push(localStorage);}catch{}
+  try{localStorage.removeItem(ACTIVE_AUTH_KEY);localStorage.removeItem(LEGACY_ACTIVE_AUTH_KEY);}catch{}
   for(const store of stores){
     try{
       const current=JSON.parse(store.getItem(ACTIVE_AUTH_KEY)||store.getItem(LEGACY_ACTIVE_AUTH_KEY)||'null');
@@ -1804,13 +1806,26 @@ $('xstage-soundfont-authorize')?.addEventListener('click',async()=>{
   const sub=state.accountSub,rootId=state.libraryRootId;
   try{
     const choice=window.XStageDriveFolders?.readSelections?.(sub,rootId)?.soundfont;
-    if(!choice?.id)throw Error('เลือกโฟลเดอร์ SoundFont ที่ใช้งานอยู่ก่อน');
+    if(!sub||!rootId||!state.token)throw Error('เชื่อม Google Drive และเปิดคลังหลักก่อน');
     const drive=new window.XStageCloudImport.Drive(()=>state.token,()=>{});
-    await window.XStageDriveFolders.verifyFolder(drive,choice.id,rootId,'soundfont');
+    // The fixed default folder can be verified even before a saved selection.
+    const resolveFontFolder=async()=>{
+      const saved=window.XStageDriveFolders?.readSelections?.(sub,rootId)?.soundfont;
+      if(saved?.id)return saved.id;
+      const matches=(await drive.list("'"+rootId+"' in parents and trashed=false"))
+        .filter(x=>String(x.name||'').toUpperCase()==='SOUNDFONT');
+      if(matches.length!==1||matches[0].name!=='SOUNDFONT'||
+         matches[0].mimeType!=='application/vnd.google-apps.folder')
+        throw Error('ตรวจโฟลเดอร์ SOUNDFONT ในคลังหลักก่อนอนุญาตไฟล์');
+      return matches[0].id;
+    };
+    const folderId=choice?.id||await resolveFontFolder();
+    await window.XStageDriveFolders.verifyFolder(drive,folderId,rootId,'soundfont');
     await ensureImporterGoogleAuth(true,true,true);
     if(sub!==state.accountSub||rootId!==state.libraryRootId||
-       choice.id!==window.XStageDriveFolders?.readSelections?.(sub,rootId)?.soundfont?.id)
+       folderId!==await resolveFontFolder())
       throw Error('บัญชีหรือโฟลเดอร์เปลี่ยนระหว่างอนุญาตไฟล์');
+    await window.XStageDriveFolders.verifyFolder(drive,folderId,rootId,'soundfont');
     await window.XStageBrowserMidi?.refreshFonts({token:state.token,sub,rootId,ownedByMe:state.libraryRootOwnedByMe});
   }catch(e){if(status)status.textContent=e.message;}
 });
@@ -2060,6 +2075,12 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
      (pointer.deltaFileIds||[]).length)
     throw Error('X-Stage รองรับเฉพาะ DB/songs.sqlite3 ไฟล์เดียว');
   const totalPieces=1;
+  // A single canonical SQLite snapshot is enough; do not retain dozens of
+  // decoded copies in RAM after Drive revisions change.
+  const rememberCatalog=(key,data)=>{
+    state.catalogCache.clear();
+    state.catalogCache.set(key,data);
+  };
   let completedPieces=0;
   const report=(message,fromCache=false)=>{
     completedPieces++;
@@ -2070,26 +2091,57 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
   };
   async function fetchImmutable(id,label){
     if(typeof id!=='string'||!id)throw Error('ฐานเพลงไม่มี Drive File ID');
-    const cacheKey=pointer.directFile?id+':'+pointer.generation:id;
+    const cacheKey=pointer.directFile?id+':'+pointer.generation+(pointer.catalogMd5?':verified-md5-v1':''):id;
     if(state.catalogCache.has(cacheKey)){report(label+' · พร้อมแล้ว',true);return state.catalogCache.get(cacheKey);}
     const persisted=await loadCatalogPiece(sub,cacheKey);
     if(persisted){
-      state.catalogCache.set(cacheKey,persisted);
+      rememberCatalog(cacheKey,persisted);
       report(label+' · ใช้ส่วนที่โหลดไว้แล้ว',true);
       return persisted;
     }
     const codec=window.XStageDriveSQLite;
     if(!codec)throw Error('ไม่พบตัวอ่าน SQLite3 กรุณาโหลดหน้าเว็บใหม่');
     const response=await privateFile(id,token);
-    const buffer=await response.arrayBuffer();
-    if(buffer.byteLength>192*1048576)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกิน 192 MB');
-    const data=await codec.read(new Uint8Array(buffer));
-    state.catalogCache.set(cacheKey,data);
-    await saveCatalogPiece(sub,cacheKey,data);
-    if(state.catalogCache.size>40){
-      const oldest=state.catalogCache.keys().next().value;
-      state.catalogCache.delete(oldest);
+    const maxBytes=192*1048576;
+    const advertised=Number(response.headers?.get?.('Content-Length')||0);
+    if(advertised>maxBytes){
+      try{await response.body?.cancel?.();}catch{}
+      throw Error('ฐานข้อมูล SQLite3 ใหญ่เกิน 192 MB');
     }
+    // Enforce the existing limit during streaming, not after allocating the
+    // entire response. Fallback for browsers without a readable body.
+    let bytes;
+    if(response.body?.getReader){
+      const reader=response.body.getReader();
+      const chunks=[];let total=0;
+      try{
+        for(;;){
+          const {done,value}=await reader.read();
+          if(done)break;
+          total+=value.byteLength;
+          if(total>maxBytes)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกิน 192 MB');
+          chunks.push(value);
+        }
+      }catch(error){try{await reader.cancel();}catch{}throw error;}
+      finally{reader.releaseLock();}
+      bytes=new Uint8Array(total);let offset=0;
+      for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+      chunks.length=0;
+    }else{
+      const buffer=await response.arrayBuffer();
+      if(buffer.byteLength>maxBytes)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกิน 192 MB');
+      bytes=new Uint8Array(buffer);
+    }
+    if(pointer.catalogMd5){
+      if(!/^[a-f0-9]{32}$/i.test(pointer.catalogMd5)||
+         !window.XStageImportCore?.hashBlob||
+         await window.XStageImportCore.hashBlob(new Blob([bytes]))!==pointer.catalogMd5.toLowerCase())
+        throw Error('MD5 ฐานเพลงไม่ตรงกับ Drive · ใช้ฐานเดิมก่อน');
+    }
+    const data=await codec.read(bytes);
+    if(data.candidate)throw Error('ฐาน PC ยังไม่ผ่านการเผยแพร่ · ไม่เปิดเป็นฐานหลัก');
+    rememberCatalog(cacheKey,data);
+    await saveCatalogPiece(sub,cacheKey,data);
     report(label+' · ดาวน์โหลดแล้ว',false);
     return data;
   }
@@ -2107,7 +2159,7 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
 function directCatalogPointer(file){
   if(!file?.id||file.name!=='songs.sqlite3')throw Error('DB/songs.sqlite3 ไม่ถูกต้อง');
   return {schemaVersion:1,layoutVersion:6,format:'xstage-sqlite3-v1',
-    directFile:true,catalogFileId:file.id,deltaFileIds:[],
+    directFile:true,catalogFileId:file.id,catalogMd5:String(file.md5Checksum||''),deltaFileIds:[],
     generation:'sqlite:'+file.id+':'+String(file.md5Checksum||file.modifiedTime||file.size||'')};
 }
 async function activeDriveCatalog(dbId,token){
@@ -2119,15 +2171,18 @@ async function activeDriveCatalog(dbId,token){
 async function pollPublishedCatalog(){
   if(!state.token||!state.catalogDbDirId||state.catalogPolling)return;
   const authId=state.authId,token=state.token;
+  const dbId=state.catalogDbDirId,rootId=state.libraryRootId;
+  const sameCatalogSession=()=>authId===state.authId&&token===state.token&&
+    dbId===state.catalogDbDirId&&rootId===state.libraryRootId;
   state.catalogPolling=true;
   try{
-    const published=await activeDriveCatalog(state.catalogDbDirId,token);
+    const published=await activeDriveCatalog(dbId,token);
     const pointer=published?.pointer;
-    if(!pointer||authId!==state.authId||state.token!==token||!pointer.generation||
+    if(!pointer||!sameCatalogSession()||!pointer.generation||
        pointer.generation===state.catalogGeneration)return;
     const cacheOwner=libraryCacheOwner(state.accountSub,state.libraryRootId);
     const catalog=await readPublishedCatalog(pointer,token,{sub:cacheOwner});
-    if(authId!==state.authId||state.token!==token)return;
+    if(!sameCatalogSession())return;
     const countBefore=state.songs.length;
     state.manifest=catalog;
     state.songs=catalog.songs.filter(playable);

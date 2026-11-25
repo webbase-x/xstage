@@ -862,8 +862,24 @@ const windowsUpdateMetadata=JSON.parse(read('downloads/windows-pc-latest.json'))
 const windowsSourceManifest=JSON.parse(read('windows-pc/manifest.json'));
 // Windows installers have their own release channel; Android/Web may ship a
 // hotfix without falsely advertising a Windows installer at the same version.
-assert.equal(windowsUpdateMetadata.version,windowsSourceManifest.version,'Windows metadata must match its own Windows source version');
-assert.equal(windowsUpdateMetadata.build,windowsSourceManifest.build,'Windows metadata must match its own Windows build');
+// The stable signed installer is deliberately unavailable; its metadata may
+// lag the source and the separately verified unsigned preview.
+assert.match(windowsUpdateMetadata.version,/^\d+\.\d+\.\d+$/);
+assert.ok(Number.isInteger(windowsUpdateMetadata.build)&&windowsUpdateMetadata.build>0&&
+  windowsUpdateMetadata.build<=windowsSourceManifest.build,'Stable metadata must not advertise a future Windows build');
+assert.equal(windowsUpdateMetadata.installer_file,null,'Unavailable stable channel must not expose an installer');
+assert.equal(windowsUpdateMetadata.sha256,null,'Unavailable stable channel must not expose an installer hash');
+const windowsPreviewMetadata=JSON.parse(read('downloads/windows-pc-preview-latest.json'));
+assert.equal(windowsPreviewMetadata.channel,'preview');
+if(windowsPreviewMetadata.available){
+  assert.match(windowsPreviewMetadata.version,/^\d+\.\d+\.\d+$/);
+  assert.ok(Number.isInteger(windowsPreviewMetadata.build)&&windowsPreviewMetadata.build>0&&
+    windowsPreviewMetadata.build<=windowsSourceManifest.build,'Preview must not advertise an unbuilt future version');
+  assert.match(windowsPreviewMetadata.sha256,/^[a-f0-9]{64}$/);
+  assert.match(windowsPreviewMetadata.source_commit,/^[a-f0-9]{40}$/);
+  assert.equal(windowsPreviewMetadata.installer_file,'X-StageKaraoke.exe');
+  assert.equal(windowsPreviewMetadata.download_url,'https://webbase-x.github.io/xstage/downloads/X-StageKaraoke.exe');
+}
 const windowsUpdateHelper=read('windows-pc/Check-Update.ps1');
 const windowsStartupLauncher=read('windows-pc/Start-XStage-With-Updates.ps1');
 assert.ok(windowsStartupLauncher.includes("Start-Process -FilePath $executable"),'Windows launcher must start the installed app');

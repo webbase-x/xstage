@@ -100,10 +100,42 @@ window.XStageCloudImport={
   publishSingleCatalog:async({rows})=>{published++;lastRows=[...rows.values()];}
 };
 vm.runInNewContext(read('cloud-drive-folders.js'),context,{filename:'cloud-drive-folders.js'});
+// Inventory simulation: parallel siblings must merge deterministically,
+// respect the concurrency bound and fail closed on duplicate identities.
+{
+  const folder=(id,name)=>({id,name,mimeType:'application/vnd.google-apps.folder'});
+  const file=(id,name)=>({id,name,mimeType:'application/octet-stream',size:'1'});
+  const rootId='benchRoot123';
+  const folders=Array.from({length:24},(_,i)=>folder('benchFolder'+i,'dir'+i));
+  let active=0,peak=0,calls=0;
+  const drive={listChildren:async id=>{
+    calls++;active++;peak=Math.max(peak,active);
+    try{
+      await new Promise(resolve=>setTimeout(resolve,2));
+      if(id===rootId)return folders;
+      const i=Number(id.slice('benchFolder'.length));
+      return [file('benchFile'+i,'song.xmid')];
+    }finally{active--;}
+  }};
+  const result=await window.XStageDriveFolders.walkMusic(drive,rootId,()=>{});
+  assert.equal(result.files.length,24);
+  assert.equal(result.folders,25);
+  assert.equal(calls,25);
+  assert.ok(peak>1&&peak<=8,'bounded parallel folder listing');
+  assert.equal(result.files.map(x=>x.relative).join(','),folders.map(x=>x.name+'/song.xmid').join(','));
+  const duplicate={listChildren:async id=>id===rootId?folders.slice(0,2):[file('sameFile123','song.xmid')]};
+  await assert.rejects(window.XStageDriveFolders.walkMusic(duplicate,rootId,()=>{}),/File ID ซ้ำ/);
+  console.log('PASS: parallel folder inventory, deterministic merge, bounded concurrency and duplicate ID guard; peak '+peak);
+}
 let current={sub:'account1',rootId:root,token:'token1'},pick={id:music,name:'XMID'};
 const savedMetadata=new Map();
+let checkpointBatches=0,checkpointSingles=0;
 const workflow=window.XStageDriveFolders.init({
-  openCheckpoint:async()=>({get:async key=>savedMetadata.get(key),put:async(key,value)=>savedMetadata.set(key,value)}),
+  openCheckpoint:async()=>({
+    get:async key=>{checkpointSingles++;return savedMetadata.get(key);},
+    getMany:async keys=>{checkpointBatches++;return new Map(keys.map(key=>[key,savedMetadata.get(key)]));},
+    put:async(key,value)=>savedMetadata.set(key,value)
+  }),
   session:()=>current,hasFullRead:()=>true,chooseFolder:async()=>pick,
   refresh:async()=>{},ensureAuth:async()=>{}
 });
@@ -136,6 +168,9 @@ assert.notEqual(lastRows[0].code,lastRows[1].code,
   'Distinct MIDI with colliding embedded song code must receive an alias');
 assert.equal(uploads,0,'Rebuilding must not upload any source file');
 assert.equal(reads,4,'Resume reuses two verified packages and retries only the failed file');
+assert.equal(checkpointSingles,0,'Checkpoint lookup must use the batched transaction API');
+assert.ok(checkpointBatches>0,'Resume must look up saved checkpoints in bounded groups');
+console.log('PASS: batched checkpoint lookups and individually durable verification writes');
 assert.match(element('xstage-drive-folder-status').textContent,/ฐานเดิม 0 เพลง/);
 assert.match(element('xstage-drive-folder-status').textContent,/MIDI ซ้ำ 1 \(มีในฐานแล้ว 0 · ซ้ำในรอบนี้ 1\)/);
 assert.match(element('xstage-drive-folder-status').textContent,/รูปแบบอื่นที่ยังไม่ได้ทำดัชนี 1/);
@@ -304,3 +339,31 @@ assert.ok(lastRows.every(row=>row.originalRelativePath&&row.xmid?.fileId),
 assert.match(element('xstage-drive-folder-status').textContent,/สร้างฐานเสร็จ/);
 console.log('PASS: explicit shared PC/Online SQLite rebuild ignores legacy rows without deleting media');
 
+
+// New PC/Online handoff must be explicit and protect canonical media and SHA identity.
+assert.match(read('cloud-drive-folders.js'),/decoded\.candidate\.baseMd5/);
+assert.match(read('cloud-drive-folders.js'),/verified\.midiSha256!==row\.midiSha256/);
+assert.match(read('cloud-drive-folders.js'),/scope\.XStageCloudImport\.publishSingleCatalog/);
+
+// Real package decoding and candidate handoff; no production Drive is touched.
+{
+ const verify=window.XStageDriveFolders.verifyPcCandidate;
+ const generation='pc-generation';
+ const candidateRows=lastRows.map(row=>({...row}));
+ const allFiles=records.filter(f=>/\.xmid$/i.test(f.name)).map(f=>({...f,relative:f.name,ext:'xmid'}));
+ // The raw file inventory may contain byte-identical copies whose FakeDrive
+ // entries deliberately share package content; give those copies their bytes.
+ for(const f of allFiles)if(!blobs.has(f.id)){
+   const source=allFiles.find(x=>x.md5Checksum===f.md5Checksum&&blobs.has(x.id));
+   if(source)blobs.set(f.id,blobs.get(source.id));
+ }
+ const old={pointer:{catalogMd5:'a'.repeat(32)},rows:new Map([['video',{webSongId:'video',video:{fileId:'video123'}}]])};
+ const decoded={kind:'snapshot',generation,candidate:{producer:'karaoke-pc-candidate-v1',baseMd5:'a'.repeat(32)},songs:candidateRows};
+ assert.ok(candidateRows.every(row=>/^[a-f0-9]{64}$/.test(row.midiSha256||'')),'New scan stores verified SHA-256');
+ const verified=await verify(new FakeDrive(),decoded,old,allFiles);
+ assert.equal(verified.size,candidateRows.length+1);assert.ok(verified.has('video'));
+ await assert.rejects(verify(new FakeDrive(),{...decoded,candidate:{...decoded.candidate,baseMd5:'b'.repeat(32)}},old,allFiles),/ฐาน Cloud เปลี่ยน/);
+ await assert.rejects(verify(new FakeDrive(),{...decoded,songs:[{...candidateRows[0],midiSha256:'f'.repeat(64)},...candidateRows.slice(1)]},old,allFiles),/MIDI ในฐาน PC ไม่ตรง/);
+ await assert.rejects(verify(new FakeDrive(),{...decoded,songs:candidateRows.slice(1)},old,allFiles),/Cloud มีเพลงที่ไม่อยู่/);
+ console.log('PASS: PC candidate Cloud identity, stale baseline, SHA mismatch, missing songs and preservation of other media');
+}

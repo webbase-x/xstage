@@ -54,14 +54,15 @@ const sourcePanel=html.slice(html.indexOf('id="xstage-drive-sources"'),html.inde
 assert.ok(!menu.includes('xstage-soundfont-authorize'),'Playback menu must not grant Drive files');
 assert.equal((html.match(/id="xstage-soundfont-authorize"/g)||[]).length,1);
 assert.ok(sourcePanel.includes('id="xstage-soundfont-authorize" type="button" hidden'));
-assert.ok(app.includes("verifyFolder(drive,choice.id,rootId,'soundfont')"));
+assert.ok(app.includes("verifyFolder(drive,folderId,rootId,'soundfont')")&&
+  app.includes('folderId!==await resolveFontFolder()'),'Verify the default or selected canonical folder before and after explicit authorization');
 assert.ok(html.includes('id="xstage-drive-main-select"'));
 assert.ok(settings.includes('if(parent===root)return first;'));
 assert.ok(app.includes('Array.isArray(x.parents)&&x.parents.includes(current.id)'));
 assert.ok(app.includes('!preferredRootId&&roots.length===1'));
 assert.ok(settings.includes("ids.MIDI=await child(ids.SONGS,'MIDI'")&&!settings.includes("add('เปลี่ยนโฟลเดอร์'"));
 assert.ok(app.includes("dialog.addEventListener('cancel',event=>{event.preventDefault();finish();})"));
-assert.ok(soundfont.includes('showPermission(!fullRead&&!!chosenFolder'));
+assert.ok(soundfont.includes('showPermission(!fullRead,summary+accessHint+'),'Limited scope must offer permission recovery for the verified default or selected folder');
 assert.ok(importer.includes('xstage:drive-sources-open')&&settings.includes('xstage:drive-sources-open'));
 assert.ok(html.includes('id="xstage-drive-read-all"')&&html.includes('id="xstage-drive-scan-counts"'));
 assert.ok(app.includes('ensureImporterGoogleAuth(true,true,true)')&&app.includes('grantedDriveReadAndWrite(newToken)'));

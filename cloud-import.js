@@ -133,13 +133,14 @@ class Drive {
     const rows=[],seenPageTokens=new Set();let next='';
     do{
       this.assertLive();
-      const params=new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,size,md5Checksum,createdTime,modifiedTime,ownedByMe,parents)',
+      const params=new URLSearchParams({q,fields:'nextPageToken,incompleteSearch,files(id,name,mimeType,size,md5Checksum,createdTime,modifiedTime,ownedByMe,parents)',
         pageSize:'1000'});
       if(next)params.set('pageToken',next);
       const result=await (await this.fetch(API+'?'+params)).json();
       if(!result || (result.files!=null&&!Array.isArray(result.files)) ||
          (result.nextPageToken!=null&&typeof result.nextPageToken!=='string'))
         fail('Google Drive ส่งรายการไฟล์ที่มีโครงสร้างไม่ถูกต้อง');
+      if(result.incompleteSearch===true)fail('Google Drive รายงานว่าค้นหาไม่ครบ · ไม่อนุญาตให้แก้ฐาน');
       rows.push(...(result.files||[]));
       next=result.nextPageToken||'';
       if(rows.length>300000)fail('พบไฟล์บน Drive มากเกินขีดจำกัดการตรวจต่อครั้ง');
@@ -304,6 +305,15 @@ class Drive {
   async metadata(id){
     const r=await this.fetch(API+'/'+driveId(id)+'?fields=id,name,mimeType,md5Checksum,size');
     return await r.json();
+  }
+  async renewCatalogLease(id){
+    const modifiedTime=new Date().toISOString();
+    const response=await this.fetch(API+'/'+driveId(id)+'?fields=id,modifiedTime',{
+      method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({modifiedTime})
+    });
+    const meta=await response.json();
+    if(meta.id!==id||!Number.isFinite(Date.parse(meta.modifiedTime||'')))
+      fail('ไม่สามารถต่ออายุสิทธิ์เผยแพร่ฐาน');
   }
   async folderMetadata(id){
     const response=await this.fetch(API+'/'+driveId(id)+
@@ -537,7 +547,7 @@ async function loadCatalog(drive,root,{verifyChecksum=false}={}){
         fail('ขนาดหรือ MD5 ของฐานเพลงไม่ตรงกับ Drive · กรุณาตรวจอีกครั้ง');
     }
     const base=await scope.XStageDriveSQLite.read(bytes);
-    if(base.schemaVersion!==1||base.kind!=='snapshot'||!Array.isArray(base.songs))
+    if(base.schemaVersion!==1||base.kind!=='snapshot'||base.candidate||!Array.isArray(base.songs))
       fail('DB/songs.sqlite3 ไม่ใช่ฐานข้อมูลเพลงที่ถูกต้อง');
     const rows=new Map();
     for(const row of base.songs){
@@ -568,21 +578,48 @@ async function acquireCatalogLease(drive,cacheRoot,check,status){
     token:id,createdAt:new Date().toISOString()});
   const hash=await core.hashBlob(blob,check);
   const mine=await drive.upload(cacheRoot,blob,name,'application/json',hash);
-  let released=false;
+  const leaseMs=5*60*1000;
+  let released=false,lastRenew=Date.now();
+  const assertFresh=()=>{
+    if(released||Date.now()-lastRenew>=leaseMs)
+      fail('หมดอายุสิทธิ์เผยแพร่ฐาน · ต้องเริ่มตรวจฐานใหม่');
+  };
   const listLocks=async()=>{
     check();
     const found=await drive.list("'"+driveId(cacheRoot)+"' in parents and trashed=false");
     const now=Date.now();
     return found.filter(x=>x.name?.startsWith('.xstage-import-lock-')&&
-      (!x.createdTime||now-Date.parse(x.createdTime)<5*60*1000)).sort((a,b)=>{
+      (!x.createdTime||!Number.isFinite(Date.parse(x.modifiedTime||x.createdTime))||
+       now-Date.parse(x.modifiedTime||x.createdTime)<leaseMs)).sort((a,b)=>{
         const byTime=String(a.createdTime||'').localeCompare(String(b.createdTime||''));
         return byTime||String(a.id).localeCompare(String(b.id));
       });
   };
+  const assertNoPc=locks=>{
+    // Drive Desktop has no cloud CAS and may not yet see our browser lock.
+    // Do not elect a browser ahead of any visible live PC writer.
+    if(locks.some(x=>/^\.xstage-import-lock-pc-/i.test(x.name||'')))
+      fail('Karaoke PC กำลังเผยแพร่ฐานเพลง · กรุณารอให้ Google Drive ซิงก์ก่อน');
+  };
   const assertOwner=async()=>{
-    const first=(await listLocks())[0];
-    if(!first||first.id!==mine.id)
+    assertFresh();
+    const locks=await listLocks();
+    assertFresh();
+    assertNoPc(locks);
+    if(!locks[0]||locks[0].id!==mine.id)
       fail('อีกเครื่องกำลังเผยแพร่ฐานเพลง · จะตรวจฐานล่าสุดก่อนทำต่อ');
+    if(drive.renewCatalogLease&&Date.now()-lastRenew>=60000){
+      const started=Date.now();
+      await drive.renewCatalogLease(mine.id);
+      // Never revive a lease that expired while the network call was stalled.
+      assertFresh();
+      lastRenew=started;
+      const renewed=await listLocks();
+      assertFresh();
+      assertNoPc(renewed);
+      if(renewed[0]?.id!==mine.id)
+        fail('สิทธิ์เผยแพร่ฐานเปลี่ยนระหว่างต่ออายุ');
+    }
   };
   const release=async()=>{
     if(released)return;released=true;
@@ -595,7 +632,11 @@ async function acquireCatalogLease(drive,cacheRoot,check,status){
     await sleep(650);
     for(let attempt=0;attempt<120;attempt++){
       check();
-      if((await listLocks())[0]?.id===mine.id)
+      assertFresh();
+      const locks=await listLocks();
+      assertFresh();
+      assertNoPc(locks);
+      if(locks[0]?.id===mine.id)
         return {assertOwner,release};
       status?.('อีกเครื่องกำลังอัปเดต songs.sqlite3 · รอคิวเผยแพร่');
       await sleep(1000);
@@ -603,14 +644,65 @@ async function acquireCatalogLease(drive,cacheRoot,check,status){
     fail('มีเครื่องอื่นใช้งานฐานเพลงนานเกินไป · โปรดลองใหม่');
   }catch(error){await release();throw error;}
 }
-async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
+// A durable intent survives a closed tab, crash, network outage or an
+// uncertain move. Never recover based only on a filename/date.
+async function recoverInterruptedCatalog({drive,rootId,dbRoot,cacheRoot,check,status}){
+  const listActive=()=>drive.list("'"+driveId(dbRoot)+"' in parents and name='songs.sqlite3' and trashed=false");
+  if((await listActive()).length)return false;
+  const entries=await drive.list("'"+driveId(cacheRoot)+"' in parents and trashed=false");
+  const journals=entries.filter(x=>/^\.xstage-catalog-intent-[a-f0-9]{24}\.json$/.test(x.name||''));
+  if(!journals.length)return false;
+  if(journals.length!==1)fail('พบงานเผยแพร่ค้างหลายรายการ · ใช้เมนูกู้คืนฐานจาก BACKUP');
+  const record=journals[0];
+  if(!/^[a-f0-9]{32}$/i.test(record.md5Checksum||'')||Number(record.size)>8192||Number(record.size)<1)
+    fail('บันทึกกู้คืนไม่สมบูรณ์ · ยังไม่แก้ฐาน');
+  const lease=await acquireCatalogLease(drive,cacheRoot,check,status);
+  try{
+    await lease.assertOwner();
+    if((await listActive()).length)return false;
+    const bytes=await drive.getSqlite(record.id);check();
+    if(bytes.byteLength!==Number(record.size)||await core.hashBlob(new Blob([bytes]),check)!==record.md5Checksum.toLowerCase())
+      fail('บันทึกกู้คืนไม่ตรง MD5');
+    const intent=JSON.parse(new TextDecoder().decode(bytes));
+    if(intent.format!=='xstage-catalog-intent-v1'||intent.rootId!==rootId||
+       intent.dbRoot!==dbRoot||intent.cacheRoot!==cacheRoot||
+       !/^[a-f0-9]{24}$/.test(intent.generation||'')||
+       record.name!=='.xstage-catalog-intent-'+intent.generation+'.json'||
+       !/^[a-f0-9]{32}$/.test(intent.oldMd5||''))
+      fail('บันทึกกู้คืนไม่ตรงคลังหรือรูปแบบ');
+    const root=await drive.list("'"+driveId(rootId)+"' in parents and trashed=false");
+    const backup=root.filter(x=>x.name==='BACKUP'&&x.mimeType===MIME_FOLDER);
+    if(backup.length!==1||backup[0].id!==intent.backupRoot)fail('ไม่พบ BACKUP ของงานเดิม');
+    const old=(await drive.list("'"+driveId(intent.backupRoot)+"' in parents and trashed=false"))
+      .filter(x=>x.id===intent.oldId&&x.name==='songs-backup-'+intent.generation+'.sqlite3');
+    if(old.length!==1||String(old[0].md5Checksum||'').toLowerCase()!==intent.oldMd5)
+      fail('ฐานเดิมใน BACKUP ไม่ตรงบันทึก · กู้คืนด้วยตนเอง');
+    const snapshot=await drive.getSqlite(old[0].id);check();
+    if(await core.hashBlob(new Blob([snapshot]),check)!==intent.oldMd5)
+      fail('ฐานสำรองไม่ผ่าน MD5');
+    const data=await scope.XStageDriveSQLite.read(snapshot);
+    if(data.kind!=='snapshot'||!data.generation)fail('ฐานสำรองไม่สมบูรณ์');
+    await lease.assertOwner();
+    if((await listActive()).length)return false;
+    await lease.assertOwner();
+    await drive.moveToFolder(old[0].id,intent.backupRoot,dbRoot,'songs.sqlite3');
+    const active=await listActive();
+    if(active.length!==1||active[0].id!==intent.oldId)fail('กู้คืนฐานยังยืนยันไม่ได้');
+    try{await drive.trashFile(record.id);}catch{}
+    status?.('กู้คืนฐานเดิมจากงานเผยแพร่ค้างสำเร็จ · ตรวจฐานใหม่ก่อนทำต่อ');
+    return true;
+  }finally{await lease.release();}
+}
+async function publishSingleCatalog({drive,rootId,pointer,rows,check,status,explicitRestore=false}){
   check();
   const dbRoot=await drive.ensurePath(rootId,['DB']);
   const cacheRoot=await drive.ensurePath(rootId,['CACHE']);
   // On the first publication there is no prior DB to back up.
   // Do not leave an empty BACKUP directory in a brand-new library.
   let backupRoot=null;
-  const lease=await acquireCatalogLease(drive,cacheRoot,check,status);
+  let lease=null,journal=null;
+  if(!pointer&&!explicitRestore&&await recoverInterruptedCatalog({drive,rootId,dbRoot,cacheRoot,check,status}))
+    fail('กู้คืนฐานเดิมแล้ว · ตรวจและเริ่มงานใหม่จากฐานที่กู้คืน');
   try{
   const codec=scope.XStageDriveSQLite;
   if(!codec)fail('ไม่พบตัวอ่าน SQLite3 บนเว็บ');
@@ -626,12 +718,17 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
     if(pointer?.directFile){
       if(canonical.length!==1||canonical[0].id!==pointer.catalogFileId)
         fail('ฐาน songs.sqlite3 เปลี่ยนจากอีกอุปกรณ์ระหว่างนำเข้า');
+      const expected=String(pointer.catalogMd5||'').toLowerCase();
+      if(!/^[a-f0-9]{32}$/.test(expected))
+        fail('ไม่มี MD5 ของฐานเดิม · ยังไม่อนุญาตให้เขียนทับ songs.sqlite3');
       const meta=await drive.metadata(pointer.catalogFileId);
-      if(pointer.catalogMd5&&String(meta.md5Checksum||'')!==pointer.catalogMd5)
+      if(String(meta.md5Checksum||'').toLowerCase()!==expected||
+         String(canonical[0].md5Checksum||'').toLowerCase()!==expected)
         fail('ฐาน SQLite ถูกแก้ไขจากอีกอุปกรณ์ · หยุดเพื่อไม่เขียนทับ');
     }else if(canonical.length){
       fail('อีกเครื่องสร้าง songs.sqlite3 ระหว่างนำเข้า · ตรวจฐานใหม่ก่อนเผยแพร่');
     }
+    return canonical;
   };
   await verifySource();
   status?.('กำลังสร้าง DB/songs.sqlite3 สำหรับ '+rows.size.toLocaleString('th-TH')+' เพลง');
@@ -643,60 +740,102 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
   const digest=await core.hashBlob(blob,check);
   const staged=await drive.upload(cacheRoot,blob,'songs-stage-'+generation+'.sqlite3',
     'application/vnd.sqlite3',digest);
-  const uploaded=await codec.read(await drive.getSqlite(staged.id));
+  const verifiedBytes=await drive.getSqlite(staged.id);
+  if(await core.hashBlob(new Blob([verifiedBytes]),check)!==digest)
+    fail('MD5 ของฐาน SQLite3 ที่อัปโหลดไม่ตรง · ยังไม่แทนที่ฐานเดิม');
+  const uploaded=await codec.read(verifiedBytes);
   if(uploaded.kind!=='snapshot'||uploaded.generation!==generation||
      uploaded.songs.length!==rows.size)
     fail('ฐาน SQLite3 บน Drive ตรวจสอบไม่ผ่าน · ยังไม่แทนที่ฐานเดิม');
+  // A fresh listing (not listChildren's cache) is the only source of truth.
+  // Acquire the short-lived advisory lease only after the expensive
+  // SQLite encode, upload and re-read. Never hold a lease through a long scan.
+  lease=await acquireCatalogLease(drive,cacheRoot,check,status);
+  const before=await verifySource();
+  if(before.length)backupRoot=await drive.ensurePath(rootId,['BACKUP']);
   await lease.assertOwner();
-  await verifySource();
-  // Backup only the previous canonical SQLite before publishing a new one.
-  const older=(await drive.listChildren(dbRoot)).filter(x=>
-    x.name==='songs.sqlite3'&&x.mimeType!==MIME_FOLDER);
-  if(older.length)backupRoot=await drive.ensurePath(rootId,['BACKUP']);
-  // Include moving the previous database in the rollback-protected region.
+  const older=await verifySource();
+  if(older.length){
+    const intent=encode({format:'xstage-catalog-intent-v1',rootId,dbRoot,cacheRoot,backupRoot,
+      generation,oldId:older[0].id,oldMd5:String(pointer.catalogMd5).toLowerCase(),stagedId:staged.id,stagedMd5:digest});
+    journal=await drive.upload(cacheRoot,intent,'.xstage-catalog-intent-'+generation+'.json',
+      'application/json',await core.hashBlob(intent,check));
+    await lease.assertOwner();
+    await verifySource();
+  }
+  const listActive=()=>drive.list("'"+driveId(dbRoot)+
+    "' in parents and name='songs.sqlite3' and trashed=false");
+  // Only the pinned previous file and our own staged file may ever be moved.
+  // Re-check after moving the previous file because another writer could
+  // appear during Drive's non-transactional move/rename sequence.
   try{
-    for(let i=0;i<older.length;i++){
+    if(older.length){
       check();
-      status?.('สำรองฐานก่อนหน้า '+(i+1)+'/'+older.length);
-      await drive.moveToFolder(older[i].id,dbRoot,backupRoot);
+      status?.('สำรองฐานก่อนหน้า 1/1');
+      await lease.assertOwner();
+      await verifySource();
+      await drive.moveToFolder(older[0].id,dbRoot,backupRoot,
+        'songs-backup-'+generation+'.sqlite3');
     }
+    await lease.assertOwner();
+    if((await listActive()).length)
+      fail('อีกอุปกรณ์เผยแพร่ฐานเพลงระหว่างสลับไฟล์ · ไม่เขียนทับ');
+    await lease.assertOwner();
     await drive.moveToFolder(staged.id,cacheRoot,dbRoot,'songs.sqlite3');
-    const active=(await drive.listChildren(dbRoot)).filter(x=>
+    const active=(await drive.list("'"+driveId(dbRoot)+"' in parents and trashed=false")).filter(x=>
       /\.sqlite3$/i.test(x.name)&&x.mimeType!==MIME_FOLDER);
     if(active.length!==1||active[0].id!==staged.id||active[0].name!=='songs.sqlite3')
       fail('DB ต้องมี songs.sqlite3 เพียงไฟล์เดียว');
-    const final=await codec.read(await drive.getSqlite(staged.id));
+    const finalBytes=await drive.getSqlite(staged.id);
+    if(await core.hashBlob(new Blob([finalBytes]),check)!==digest)
+      fail('MD5 ของ SQLite3 หลังเผยแพร่ไม่ตรง');
+    const final=await codec.read(finalBytes);
     if(final.kind!=='snapshot'||final.generation!==generation||
        final.songs.length!==rows.size)
       fail('อ่าน SQLite3 จาก DB หลังเผยแพร่ไม่ผ่าน · สำเนาเก่าอยู่ BACKUP');
+    await lease.assertOwner();
+    const confirmed=await listActive();
+    if(confirmed.length!==1||confirmed[0].id!==staged.id||
+       String(confirmed[0].md5Checksum||'').toLowerCase()!==digest)
+      fail('ฐานถูกเปลี่ยนระหว่างยืนยันการเผยแพร่');
   }catch(error){
-    // Restore the same known-good DB File ID if an in-place switch fails.
-    if(pointer?.directFile){
-      try{
+    // Roll back ONLY this publication's file. Never move, rename, or delete
+    // a foreign writer's canonical database, even when it appeared mid-switch.
+    try{
+      await lease.assertOwner();
+      const suspect=await listActive();
+      if(suspect.some(file=>file.id===staged.id&&String(file.md5Checksum||'').toLowerCase()===digest)){
         backupRoot ||= await drive.ensurePath(rootId,['BACKUP']);
-        const suspect=await drive.list("'"+driveId(dbRoot)+
-          "' in parents and name='songs.sqlite3' and trashed=false");
-        for(const file of suspect){
-          if(file.id===pointer.catalogFileId)continue;
-          await drive.moveToFolder(file.id,dbRoot,backupRoot,
-            'songs-failed-'+generation+'.sqlite3');
-        }
-        const present=await drive.list("'"+driveId(dbRoot)+
-          "' in parents and name='songs.sqlite3' and trashed=false");
-        if(!present.some(x=>x.id===pointer.catalogFileId))
-          await drive.moveToFolder(pointer.catalogFileId,backupRoot,dbRoot,'songs.sqlite3');
-      }catch(restoreError){
-        console.error('Cannot restore last verified SQLite; BACKUP is preserved',restoreError);
+        await drive.moveToFolder(staged.id,dbRoot,backupRoot,
+          'songs-failed-'+generation+'.sqlite3');
       }
+      const present=await listActive();
+      if(pointer?.directFile&&!present.length&&backupRoot){
+        await lease.assertOwner();
+        const old=await drive.metadata(pointer.catalogFileId);
+        if(String(old.md5Checksum||'').toLowerCase()!==
+           String(pointer.catalogMd5||'').toLowerCase())
+          fail('ฐานสำรองเปลี่ยนแปลง · ไม่คืนฐานโดยอัตโนมัติ');
+        if(!(await listActive()).length)
+          await drive.moveToFolder(pointer.catalogFileId,backupRoot,dbRoot,'songs.sqlite3');
+      }
+      const restored=await listActive();
+      if(journal&&restored.length===1&&restored[0].id===pointer?.catalogFileId&&
+         String(restored[0].md5Checksum||'').toLowerCase()===String(pointer.catalogMd5||'').toLowerCase()){
+        try{await drive.trashFile(journal.id);}catch{}
+      }
+    }catch(restoreError){
+      console.error('Cannot restore last verified SQLite; BACKUP is preserved',restoreError);
     }
     throw error;
   }
   const next={schemaVersion:1,layoutVersion:6,format:'xstage-sqlite3-v1',
     directFile:true,generation,catalogFileId:staged.id,catalogMd5:digest,
     deltaFileIds:[],songCount:rows.size};
+  if(journal){try{await drive.trashFile(journal.id);}catch{}}
   status?.('เผยแพร่ DB/songs.sqlite3 โดยตรง · '+rows.size.toLocaleString('th-TH')+' เพลง');
   return {pointer:next};
-  }finally{await lease.release();}
+  }finally{await lease?.release();}
 }
 // Global raw-MIDI content identity. Package filenames, lyrics, source codes and
 // folders cannot create a second song when the enclosed MIDI bytes match.
@@ -718,13 +857,16 @@ async function buildMidiIndex(rows,drive,check){
       const packed=new Blob([await drive.getSqlite(media.fileId)]);
       const opened=await reader.openPackage(packed);
       hash=await core.hashBlob(opened.midi,check);
-      row.midiHash=hash;row.midiSize=opened.midi.size;backfilled++;
+      row.midiHash=hash;row.midiSize=opened.midi.size;
+      row.midiSha256=await core.sha256Blob(opened.midi,check)||undefined;backfilled++;
     }
     if(!/^[0-9a-f]{32}$/.test(hash))continue;
     const prev=hashes.get(hash);
     if(prev&&Number(prev.midiSize)>0&&Number(row.midiSize)>0&&
       Number(prev.midiSize)!==Number(row.midiSize))
       fail('พบแฮช MIDI ตรงกันแต่ขนาดไบต์ต่างกัน · ต้องตรวจสอบก่อนรวมฐาน');
+    if(prev&&prev.midiSha256&&row.midiSha256&&prev.midiSha256!==row.midiSha256)
+      fail('MD5 MIDI ตรงกันแต่ SHA-256 ต่างกัน · ต้องตรวจไฟล์ต้นฉบับ');
     if(prev&&prev.webSongId!==id){
       // Old catalog is preserved in BACKUP; new canonical DB keeps one entry.
       rows.delete(id);duplicates++;continue;
@@ -744,12 +886,14 @@ function sourceXmidName(filename){
   // A collision is resolved by uploadMedia, never by renumbering a song.
   return safeName(source.replace(/\.xmid$/i,''))+'.XMID';
 }
-function sameMidiBytes(hashIndex,hash,actualSize){
+function sameMidiBytes(hashIndex,hash,actualSize,sha256=''){
   const old=hashIndex.get(hash);
   if(!old)return false;
   const size=Number(old.midiSize||old.midi?.size||0);
   if(size>0&&actualSize>0&&size!==actualSize)
     fail('พบแฮช MIDI ตรงกันแต่ขนาดไบต์ต่างกัน · ต้องตรวจสอบไฟล์ต้นฉบับ');
+  if(sha256&&old.midiSha256&&sha256!==old.midiSha256)
+    fail('MD5 MIDI ตรงกันแต่ SHA-256 ต่างกัน · ต้องตรวจไฟล์ต้นฉบับ');
   return true;
 }
 function distinctImportCode(requested,rawMidiHash,byCode){
@@ -1563,12 +1707,13 @@ class Importer {
           const sourceCode=opened.code;
           const rawMidiSize=opened.midi.size;
           const rawMidiHash=await core.hashBlob(opened.midi,()=>this.check());
+          const rawMidiSha256=await core.sha256Blob(opened.midi,()=>this.check());
           const identity=core.songIdentity(opened.document,sourceCode);
           // Do not discard a checksum-valid MIDI because artist metadata is
           // missing. The reader marks it as pending and removes placeholder
           // lyrics without inventing an artist or timed karaoke text.
           const xmidHash=await core.hashBlob(item.file,()=>this.check());
-          return {item,sourceCode,rawMidiSize,rawMidiHash,identity,xmidHash,
+          return {item,sourceCode,rawMidiSize,rawMidiHash,rawMidiSha256,identity,xmidHash,
             identityComplete:Boolean(identity.identityComplete),
             lyricsAvailable:Boolean(opened.lyricsAvailable),
             ident:'browser/xmid/'+xmidHash,name:sourceXmidName(item.file.name)};
@@ -1585,7 +1730,7 @@ class Importer {
             continue;
           }
           const entry=outcome.value;
-          if(sameMidiBytes(byMidi,entry.rawMidiHash,entry.rawMidiSize)||
+          if(sameMidiBytes(byMidi,entry.rawMidiHash,entry.rawMidiSize,entry.rawMidiSha256)||
              reservedMidi.has(entry.rawMidiHash)||
              rows.has(entry.ident)){
             this.stats.duplicates++;finished++;
@@ -1611,7 +1756,7 @@ class Importer {
           }
           this.check();
           const record={webSongId:entry.ident,code:entry.code,
-            sourceCode:entry.sourceCode,midiHash:entry.rawMidiHash,
+            sourceCode:entry.sourceCode,midiHash:entry.rawMidiHash,midiSha256:entry.rawMidiSha256||undefined,
             midiSize:entry.rawMidiSize,originalFilename:entry.item.file.name,
             originalRelativePath:entry.item.relative||entry.item.file.name,
             originalFileSize:entry.item.file.size,
@@ -1668,7 +1813,8 @@ class Importer {
             const sourceCode=opened.code;
             const rawMidiSize=opened.midi.size;
             const rawMidiHash=await core.hashBlob(opened.midi,()=>this.check());
-            if(sameMidiBytes(byMidi,rawMidiHash,rawMidiSize)){
+            const rawMidiSha256=await core.sha256Blob(opened.midi,()=>this.check());
+            if(sameMidiBytes(byMidi,rawMidiHash,rawMidiSize,rawMidiSha256)){
               this.stats.duplicates++;finished++;
               show('ข้าม MIDI ซ้ำในแพ็กเกจต่างแหล่ง: '+sourceCode);continue;
             }
@@ -1694,7 +1840,7 @@ class Importer {
             const path=pathFor(sourceCode,isXmid?'xmid':'xsk','',name).slice(0,-1);
             const packed=await uploadMedia(item.file,code,path,name,
               'application/octet-stream',xskHash,0,1);
-            const record={webSongId:ident,code,sourceCode,midiHash:rawMidiHash,
+            const record={webSongId:ident,code,sourceCode,midiHash:rawMidiHash,midiSha256:rawMidiSha256||undefined,
               midiSize:rawMidiSize,originalFilename:item.file.name,
               originalRelativePath:item.relative||item.file.name,
               originalFileSize:item.file.size,
@@ -1710,7 +1856,8 @@ class Importer {
             const midiFile=item.midi.file,sourceCode=item.code;
             const midiSize=midiFile.size;
             const midiHash=await core.hashBlob(midiFile,()=>this.check());
-            if(sameMidiBytes(byMidi,midiHash,midiSize)){
+            const midiSha256=await core.sha256Blob(midiFile,()=>this.check());
+            if(sameMidiBytes(byMidi,midiHash,midiSize,midiSha256)){
               this.stats.duplicates++;finished++;
               show('ข้าม MIDI ซ้ำแม้ต่างชื่อ/รหัส/โฟลเดอร์: '+sourceCode);continue;
             }
@@ -1792,7 +1939,7 @@ class Importer {
             const ident=same?.webSongId||('browser/midi/'+midiHash);
             if(rows.has(ident)&&!same)throw Error('รหัสอ้างอิง MIDI ชนเพลงอื่น');
             const identity=core.songIdentity(doc,code,same);
-            const record={...(same||{}),webSongId:ident,code,sourceCode,midiHash,
+            const record={...(same||{}),webSongId:ident,code,sourceCode,midiHash,midiSha256:midiSha256||undefined,
               midiSize,originalFilename:midiFile.name,
               originalRelativePath:item.midi?.relative||midiFile.name,
               originalFileSize:midiFile.size,
@@ -2027,5 +2174,5 @@ class Importer {
 }
 scope.XStageCloudImport={init:(options)=>new Importer(options),Drive,loadCatalog,
   buildMidiIndex,distinctImportCode,sourceXmidName,pathFor,sameMidiBytes,
-  acquireCatalogLease,publishSingleCatalog};
+  acquireCatalogLease,publishSingleCatalog,recoverInterruptedCatalog};
 })(window);

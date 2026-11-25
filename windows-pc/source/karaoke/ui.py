@@ -149,10 +149,10 @@ class KaraokeApp(tk.Tk):
             self.settings.update(font_size=max(84, min(120, size)), lyric_layout_version=1)
         import sys
         from .local_master import activate
-        pending_mode = bool(self.settings.get("pending_online_master") or self.settings.get("pending_pc_only"))
+        previous_catalog_settings = dict(self.settings)
         local_catalog = activate(self.home, self.data_dir, self.settings,
                                  installed=bool(getattr(sys, "frozen", False)))
-        if pending_mode:
+        if self.settings != previous_catalog_settings:
             self._settings_revision = write_json(self.settings_path, self.settings,
                                                 expected_revision=self._settings_revision)
         self.shared_drive_mode = self.settings.get("library_mode") == "google-drive"

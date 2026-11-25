@@ -99,6 +99,153 @@ class SharedPcBuilderTests(unittest.TestCase):
         self.assertEqual({x["source_format"] for x in lib.search("")},
                          {"XMID","XSK"})
 
+    def test_local_master_committed_before_exact_drive_copy(self):
+        from unittest.mock import patch
+        from karaoke.shared_catalog_builder import _copy_to_drive
+        local=Path(self.tmp.name)/"App/DB/songs.sqlite3"
+        drive=self.root/"DB/songs.sqlite3"
+        def observe(source, root, generation, base_sha, cancel):
+            self.assertTrue(local.is_file())
+            self.assertEqual(source,local.absolute())
+            self.assertFalse(drive.exists())
+            with closing(sqlite3.connect(local)) as db:
+                self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0],"ok")
+            return _copy_to_drive(source,root,generation,base_sha,cancel)
+        with patch("karaoke.shared_catalog_builder._copy_to_drive",side_effect=observe):
+            result=build(self.root,local_database=local)
+        self.assertTrue(result["local_committed"])
+        self.assertTrue(result["drive_copied"])
+        self.assertEqual(local.read_bytes(),drive.read_bytes())
+        self.assertEqual(result["sha256"],hashlib.sha256(drive.read_bytes()).hexdigest())
+        self.assertEqual(SharedSongLibrary(self.root,{},database=local).count(),1)
+
+    def test_drive_failure_keeps_local_master(self):
+        from unittest.mock import patch
+        local=Path(self.tmp.name)/"App/DB/songs.sqlite3"
+        drive=self.root/"DB/songs.sqlite3"
+        build(self.root)
+        old=drive.read_bytes()
+        with patch("karaoke.shared_catalog_builder._copy_to_drive",side_effect=OSError("simulated disconnect")):
+            result=build(self.root,local_database=local)
+        self.assertTrue(result["local_committed"])
+        self.assertFalse(result["drive_copied"])
+        self.assertIn("simulated disconnect",result["drive_error"])
+        self.assertEqual(old,drive.read_bytes())
+        self.assertEqual(SharedSongLibrary(self.root,{},database=local).count(),1)
+
+    def test_retry_copy_uses_completed_master_without_rescan(self):
+        from unittest.mock import patch
+        from karaoke.shared_catalog_builder import retry_local_copy
+        local=Path(self.tmp.name)/"App/DB/songs.sqlite3"
+        with patch("karaoke.shared_catalog_builder._copy_to_drive",side_effect=OSError("offline")):
+            result=build(self.root,local_database=local)
+        before=local.read_bytes()
+        with patch("karaoke.shared_catalog_builder._files",side_effect=AssertionError("no rescan")):
+            target=Path(retry_local_copy(local,self.root,result["generation"]))
+        self.assertEqual(target.read_bytes(),before)
+        self.assertEqual(local.read_bytes(),before)
+        with self.assertRaises(ValueError):
+            retry_local_copy(local,self.root,"different-generation")
+
+    def test_local_master_conflicting_drive_is_not_replaced(self):
+        from unittest.mock import patch
+        from karaoke.shared_catalog_builder import _copy_to_drive
+        local=Path(self.tmp.name)/"App/DB/songs.sqlite3"
+        drive=self.root/"DB/songs.sqlite3"
+        build(self.root)
+        def conflict(source,root,generation,base_sha,cancel):
+            drive.write_bytes(b"foreign revision")
+            return _copy_to_drive(source,root,generation,base_sha,cancel)
+        with patch("karaoke.shared_catalog_builder._copy_to_drive",side_effect=conflict):
+            result=build(self.root,local_database=local)
+        self.assertTrue(result["local_committed"])
+        self.assertFalse(result["drive_copied"])
+        self.assertEqual(drive.read_bytes(),b"foreign revision")
+        self.assertTrue(local.is_file())
+
+    def test_second_pc_process_cannot_lock_master(self):
+        import subprocess
+        import sys
+        from karaoke.shared_catalog_builder import _local_master_lock
+        local=Path(self.tmp.name)/"App/DB/songs.sqlite3"
+        code=("import sys; from karaoke.shared_catalog_builder import _local_master_lock; "
+              "from pathlib import Path; "
+              "lock=_local_master_lock(Path(sys.argv[1])); lock.__enter__(); lock.__exit__(None,None,None)")
+        with _local_master_lock(local):
+            blocked=subprocess.run([sys.executable,"-c",code,str(local)],capture_output=True)
+            self.assertNotEqual(blocked.returncode,0)
+            self.assertIn("Karaoke PC",blocked.stderr.decode("utf-8",errors="replace"))
+        allowed=subprocess.run([sys.executable,"-c",code,str(local)],capture_output=True)
+        self.assertEqual(allowed.returncode,0,allowed.stderr)
+
+    def test_pc_copy_refuses_visible_online_lock_and_keeps_its_file(self):
+        local=Path(self.tmp.name)/"App/DB/songs.sqlite3"
+        drive=self.root/"DB/songs.sqlite3"
+        build(self.root)
+        before=drive.read_bytes()
+        other=self.root/"CACHE"/(".xstage-import-lock-"+"a"*24+".json")
+        other.write_text("foreign writer",encoding="utf-8")
+        result=build(self.root,local_database=local)
+        self.assertTrue(result["local_committed"])
+        self.assertFalse(result["drive_copied"])
+        self.assertEqual(drive.read_bytes(),before)
+        self.assertEqual(other.read_text(encoding="utf-8"),"foreign writer")
+        self.assertEqual(list(other.parent.glob(".xstage-import-lock-*")),[other])
+
+    def test_pc_copy_refuses_duplicate_database(self):
+        local=Path(self.tmp.name)/"App/DB/songs.sqlite3"
+        drive=self.root/"DB/songs.sqlite3"
+        build(self.root)
+        other=drive.with_name("songs (1).sqlite3")
+        other.write_bytes(drive.read_bytes())
+        before=drive.read_bytes()
+        result=build(self.root,local_database=local)
+        self.assertTrue(result["local_committed"])
+        self.assertFalse(result["drive_copied"])
+        self.assertEqual(drive.read_bytes(),before)
+        self.assertEqual(other.read_bytes(),before)
+
+    def test_package_fingerprint_reads_each_package_once(self):
+        from unittest.mock import patch
+        from karaoke import shared_catalog_builder as builder
+        changed=bytearray(self.midi);changed[13]=97
+        xsk=self.songs/"10003.xsk"
+        xsk.write_bytes(_xsk("10003","เพลง XSK","นักร้อง",bytes(changed)))
+        files=[self.songs/"10001.xmid",xsk]
+        expected={file.name:hashlib.md5(file.read_bytes()).hexdigest() for file in files}
+        reads={file.name:0 for file in files}
+        original=Path.open
+        def track(path,*args,**kwargs):
+            if path.name in reads and args and args[0]=="rb":
+                reads[path.name]+=1
+            return original(path,*args,**kwargs)
+        with patch.object(Path,"open",track):
+            result=build(self.root)
+        self.assertEqual(result["accepted"],2)
+        self.assertEqual(reads,{file.name:1 for file in files})
+        with closing(sqlite3.connect(self.root/"DB/songs.sqlite3")) as db:
+            for (payload,) in db.execute("SELECT payload FROM songs"):
+                row=json.loads(payload)
+                media=row[row["sourceFormat"].lower()]
+                self.assertEqual(media["md5Checksum"],expected[row["originalFilename"]])
+
+    def test_pc_candidate_never_replaces_active_catalog(self):
+        old=self.root/"DB/songs.sqlite3"
+        old.write_bytes(b"existing canonical")
+        result=build(self.root,candidate_only=True)
+        self.assertTrue(result["candidate_only"])
+        self.assertEqual(old.read_bytes(),b"existing canonical")
+        candidate=Path(result["database"])
+        self.assertEqual(candidate.parent.resolve(),(self.root/"CACHE").resolve())
+        self.assertTrue(candidate.name.startswith("songs-pc-candidate-"))
+        with closing(sqlite3.connect(candidate)) as db:
+            self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0],"ok")
+            meta=dict(db.execute("SELECT key,value FROM catalog_meta"))
+            self.assertEqual(meta["producer"],"karaoke-pc-candidate-v1")
+            self.assertEqual(len(meta["baseMd5"]),32)
+            payload=json.loads(db.execute("SELECT payload FROM songs").fetchone()[0])
+            self.assertEqual(len(payload["midiSha256"]),64)
+
     def test_cancel_unchanged_old_database(self):
         old=self.root/"DB/songs.sqlite3"
         old.write_bytes(b"old-database-placeholder")

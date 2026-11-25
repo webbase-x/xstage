@@ -156,15 +156,32 @@ def open_shared_drive_catalog(app):
 
     def use_shared_as_main():
         try:
-            from .shared_song_library import validate_shared
-            root = str(validate_shared(selected_root.get().strip()))
-            from .shared_drive_layout import drive_folder_id
-            verified_id = drive_folder_id(drive_id.get())
+            from .shared_catalog_builder import _root
+            root = str(_root(selected_root.get().strip()))
         except (ValueError, OSError) as error:
             messagebox.showerror("ยังใช้ฐานร่วมไม่ได้", str(error), parent=window)
             return
         from .shared_catalog_builder_ui import open_builder
         open_builder(app, initial_root=root)
+
+    def use_published_as_main():
+        try:
+            from .shared_song_library import validate_shared
+            root = str(validate_shared(selected_root.get().strip()))
+            from .shared_drive_layout import drive_folder_id
+            verified_id = drive_folder_id(drive_id.get())
+            if not messagebox.askyesno("ใช้ฐานที่เผยแพร่แล้ว",
+                "สำเนา DB/songs.sqlite3 ที่ซิงก์จาก Google Drive ไป App/DB/songs.sqlite3 เป็นฐานหลักเมื่อเปิดโปรแกรมใหม่?\nตรวจให้ Drive ซิงก์เสร็จก่อน",
+                parent=window):
+                return
+            app.settings["pending_shared_drive"] = {"root": root}
+            app.settings["shared_drive_folder_id"] = verified_id
+            app.settings.pop("pending_pc_only", None)
+            app.settings.pop("pending_online_master", None)
+            app.save_settings()
+            summary.set("เลือกฐานร่วมที่เผยแพร่แล้ว · เปิด PC ใหม่เพื่อใช้ฐานเดียวกับ Online")
+        except Exception as error:
+            messagebox.showerror("ยังใช้ฐานร่วมไม่ได้",str(error),parent=window)
 
     def use_local_as_main():
         if not messagebox.askyesno("กลับไปใช้ฐานภายใน PC",
@@ -173,13 +190,15 @@ def open_shared_drive_catalog(app):
             return
         app.settings["pending_pc_only"] = True
         app.settings.pop("pending_online_master", None)
+        app.settings.pop("pending_shared_drive", None)
         app.save_settings()
         summary.set("เลือกฐานภายใน PC แล้ว · มีผลหลังเปิดโปรแกรมใหม่")
 
     refresh = ttk.Button(search_row, text="ตรวจฐาน / ค้นหา", command=load)
     refresh.pack(side="left", padx=(8, 0))
     search_input.bind("<Return>", lambda event: load())
-    ttk.Button(actions, text="สร้างฐาน PC จาก Google Drive", command=use_shared_as_main).pack(side="left", padx=(0,8))
+    ttk.Button(actions, text="สร้างฐาน PC และสำเนา Drive", command=use_shared_as_main).pack(side="left", padx=(0,8))
+    ttk.Button(actions, text="ใช้ฐานร่วมที่เผยแพร่แล้ว", command=use_published_as_main).pack(side="left", padx=(0,8))
     ttk.Button(actions, text="กลับใช้ฐานในเครื่อง", command=use_local_as_main).pack(side="left", padx=(0,8))
     ttk.Button(actions, text="เล่นจากฐาน Google Drive ใน PC", command=play_selected).pack(side="left")
     ttk.Button(actions, text="ปิด", command=window.destroy).pack(side="right")

@@ -360,5 +360,12 @@ function validLyricsJson(raw,code){
   return document;
 }
 function bucket(code){const c=String(code||'').charAt(0).toUpperCase();return /[0-9A-Z]/.test(c)?c:'_';}
-scope.XStageImportCore={MD5,hashBlob,ext,groupKey,scan,validAudio,validVideo,needsVideoConversion,embeddedVideoLyrics,videoMime,videoFingerprint,validateVideoDetails,validFont,lrcToJson,validLyricsJson,songIdentity,bucket};
+async function sha256Blob(blob,check){
+  check?.();
+  if(!scope.crypto?.subtle)return '';
+  const bytes=await blob.arrayBuffer();check?.();
+  const digest=await scope.crypto.subtle.digest('SHA-256',bytes);check?.();
+  return Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('');
+}
+scope.XStageImportCore={MD5,hashBlob,sha256Blob,ext,groupKey,scan,validAudio,validVideo,needsVideoConversion,embeddedVideoLyrics,videoMime,videoFingerprint,validateVideoDetails,validFont,lrcToJson,validLyricsJson,songIdentity,bucket};
 })(typeof window!=='undefined'?window:globalThis);

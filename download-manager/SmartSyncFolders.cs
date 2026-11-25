@@ -13,7 +13,7 @@ public sealed record SmartSyncFolderPlan(string Pc, string Drive, SmartSyncDirec
     IReadOnlyList<SyncDecision> Decisions, IReadOnlyDictionary<string, SyncFingerprint> PcFiles,
     IReadOnlyDictionary<string, SyncFingerprint> DriveFiles, int DatabaseReviewCount,
     SmartSyncMode Mode = SmartSyncMode.FullVerify, XmidConflictPolicy ConflictPolicy = XmidConflictPolicy.Skip,
-    XmidDuplicateCleanup? DuplicateCleanup = null);
+    XmidDuplicateCleanup? DuplicateCleanup = null, string CatalogStatus = "");
 public sealed record SmartSyncFolderResult(int Copied, int Identical, int Review, int SkippedDirection);
 public sealed record XmidDuplicateCleanup(int PcArchived, int DriveArchived, int Preserved, IReadOnlyList<string> Samples);
 public sealed record SmartSyncScanProgress(string Phase, string RelativePath, int PcFiles, int DriveFiles,
@@ -93,13 +93,16 @@ public static class SmartSyncFolders
                     throw new InvalidDataException("พบไฟล์หรือโฟลเดอร์ลิงก์ กรุณาใช้โฟลเดอร์ Mirror ที่ดาวน์โหลดครบแล้ว");
                 if ((attributes & FileAttributes.Directory) != 0)
                 {
-                    // Reserved backup tree: never include it in either direction.
-                    if (!Paths.Equals(path, Path.Combine(root, DuplicateBackupFolder))) pending.Push(path);
+                    // Catalog control folders are not ordinary transferable media.
+                    // Never mirror leases, publisher candidates, backup or logs.
+                    var dirRelative = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
+                    if (!IsCatalogControlPath(dirRelative) &&
+                        !Paths.Equals(path, Path.Combine(root, DuplicateBackupFolder))) pending.Push(path);
                     continue;
                 }
                 var relative = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
                 reporter.Publish(phase, relative, pc);
-                if (SmartSyncTransfer.IsDatabaseSidecar(relative) || SmartSyncTransfer.IsDatabaseCandidate(relative))
+                if (IsCatalogControlPath(relative) || SmartSyncTransfer.IsDatabaseSidecar(relative) || SmartSyncTransfer.IsDatabaseCandidate(relative))
                 { review++; reporter.Publish(phase, relative, pc, review: 1); continue; }
                 // A crash may have left an unpublished staging file.
                 if (Path.GetFileName(path).StartsWith(".xstage-sync-", StringComparison.OrdinalIgnoreCase))
@@ -116,6 +119,72 @@ public static class SmartSyncFolders
             }
         }
         return (entries, review);
+    }
+
+    public static bool IsCatalogControlPath(string relative)
+    {
+        var parts = relative.Split('/');
+        // Do not copy root-level control trees or any publisher lock.
+        return parts.Length > 0 && (new[] { "DB", "CACHE", "BACKUP", "LOGS" }
+            .Contains(parts[0], StringComparer.OrdinalIgnoreCase) ||
+            parts.Any(part => part.StartsWith(".xstage-import-lock-", StringComparison.OrdinalIgnoreCase) ||
+                part.StartsWith(".xstage-catalog-", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    // Diagnostic only: these are two LOCAL snapshots; Drive Desktop owns
+    // cloud synchronization. Never select a winner or copy a live database.
+    public static string CompareCanonicalCatalogs(string pc, string drive, CancellationToken ct)
+    {
+        const string relative = "DB/songs.sqlite3";
+        var left = SmartSyncTransfer.ResolveLocalPath(pc, relative);
+        var right = SmartSyncTransfer.ResolveLocalPath(drive, relative);
+        if (!File.Exists(left) && !File.Exists(right)) return "";
+        if (!File.Exists(left) || !File.Exists(right))
+            return "ฐานร่วมยังไม่ครบสองฝั่ง · รอ Drive ซิงก์/เผยแพร่ผ่าน Karaoke Online";
+        if (new[] { left, right }.Any(p => new[] { "-wal", "-shm", "-journal" }.Any(s => File.Exists(p + s))))
+            return "ฐานร่วมมี SQLite journal ค้าง · ไม่เปรียบเทียบหรือส่งฐาน";
+        try
+        {
+            (string Hash, string Generation) Read(string path)
+            {
+                ct.ThrowIfCancellationRequested();
+                var before = new FileInfo(path);
+                long size = before.Length, stamp = before.LastWriteTimeUtc.Ticks;
+                string hash;
+                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    var header = new byte[100];
+                    stream.ReadExactly(header);
+                    // SQLite format bytes 18/19 are read/write journal mode.
+                    // Refuse WAL before opening, even when sidecars are missing.
+                    if (header[18] != 1 || header[19] != 1)
+                        throw new InvalidDataException("Not a standalone SQLite snapshot");
+                    stream.Position = 0;
+                    hash = Convert.ToHexString(SHA256.HashDataAsync(stream, ct).GetAwaiter().GetResult());
+                }
+                using var db = new SqliteConnection(new SqliteConnectionStringBuilder
+                { DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+                db.Open();
+                using var cmd = db.CreateCommand();
+                cmd.CommandText = "PRAGMA quick_check(1)";
+                if (!string.Equals(cmd.ExecuteScalar()?.ToString(), "ok", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("SQLite quick_check");
+                cmd.CommandText = "SELECT value FROM catalog_meta WHERE key='format'";
+                if (cmd.ExecuteScalar()?.ToString() != "xstage-sqlite3-v1")
+                    throw new InvalidDataException("catalog format");
+                cmd.CommandText = "SELECT value FROM catalog_meta WHERE key='generation'";
+                var generation = cmd.ExecuteScalar()?.ToString() ?? "";
+                var after = new FileInfo(path);
+                if (after.Length != size || after.LastWriteTimeUtc.Ticks != stamp || generation.Length == 0)
+                    throw new InvalidDataException("catalog changed");
+                return (hash, generation);
+            }
+            var a = Read(left); var b = Read(right);
+            return a == b ? "ฐานร่วมในเครื่องตรงกัน (SHA-256) · ยังไม่ยืนยัน Cloud"
+                : "ฐานร่วมต่างรุ่นหรือ SHA-256 ต่างกัน · ไม่เขียนทับ · ตรวจการเผยแพร่/Drive ซิงก์";
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception) { return "ยังยืนยันความสมบูรณ์ฐานร่วมไม่ได้ · ไม่ส่งหรือเขียนทับ"; }
     }
 
     private static SyncFingerprint HashExisting(string root, string relative, SyncFingerprint expected, CancellationToken ct)
@@ -206,7 +275,8 @@ public static class SmartSyncFolders
             ? d with { Action = SyncAction.Conflict, Note = "ปลายทางซ้ำ · ตรวจสอบเอง" } : d).ToArray();
         ct.ThrowIfCancellationRequested();
         reporter.Publish("ตรวจสอบเสร็จ", "", false);
-        return new SmartSyncFolderPlan(pc, drive, direction, decisions, Unique(l.Entries), Unique(r.Entries), l.Review + r.Review, mode, policy, cleanup);
+        return new SmartSyncFolderPlan(pc, drive, direction, decisions, Unique(l.Entries), Unique(r.Entries), l.Review + r.Review, mode, policy, cleanup,
+            CompareCanonicalCatalogs(pc, drive, ct));
     }
 
     // Numeric or letter-prefixed IDs, including Google copy suffixes and our
@@ -462,6 +532,8 @@ public static class SmartSyncFolders
             var destinationRoot = upload ? plan.Drive : plan.Pc;
             var sourceMap = upload ? plan.PcFiles : plan.DriveFiles;
             var sourcePath = d.SourcePath ?? d.RelativePath;
+            if (IsCatalogControlPath(sourcePath) || IsCatalogControlPath(d.RelativePath))
+                throw new InvalidDataException("ไฟล์ควบคุมฐานเพลงต้องใช้ตัวเผยแพร่ฐานโดยเฉพาะ");
             if (!sourceMap.TryGetValue(sourcePath, out var observed))
                 throw new InvalidDataException("ข้อมูลไฟล์ต้นทางเปลี่ยน กรุณาตรวจสอบใหม่");
             var expected = d.SourceFingerprint ?? observed;

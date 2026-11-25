@@ -77,6 +77,25 @@ class LocalMasterWorkflowTests(TestCase):
         self.assertEqual(kind(native), "pc")
         self.assertTrue(self.file.exists())
 
+    def test_restart_recovers_committed_master_and_preserves_native_backup(self):
+        with patch("karaoke.library_setup.drive_roots", return_value=[self.drive]):
+            root = prepare_online(self.source, self.drive)
+        native = self.home / "DB/songs.sqlite3"
+        SongLibrary(native)
+        with patch("karaoke.shared_catalog_builder._copy_to_drive", side_effect=OSError("offline")):
+            result = build(root, local_database=native)
+        self.assertTrue(result["local_committed"])
+        self.assertFalse(result["drive_copied"])
+        settings = {}
+        self.assertEqual(activate(self.home, self.data, settings, installed=True), native)
+        self.assertTrue(settings["shared_local_master"])
+        self.assertEqual(settings["local_master_generation"],result["generation"])
+        self.assertTrue((native.parent/settings["pc_only_backup"]).is_file())
+        self.assertEqual(SharedSongLibrary(root, database=native).count(),1)
+        settings["pending_pc_only"] = True
+        activate(self.home,self.data,settings,installed=True)
+        self.assertEqual(kind(native),"pc")
+
     def test_installed_legacy_migration_preserves_database(self):
         legacy = self.data / "songs.sqlite3"
         lib = SongLibrary(legacy)
