@@ -3,11 +3,11 @@
   "available": true,
   "name": "X-Stage Karaoke PC Windows PREVIEW",
   "platform": "windows-x64",
-  "version": "1.0.85",
-  "build": 1085,
+  "version": "1.0.86",
+  "build": 1086,
   "installer_file": "X-StageKaraoke.exe",
-  "sha256": "51ac32922a531413c83311cee3d183338fc0c67e7293d086722d0a6b9b83d84d",
+  "sha256": "8429fd5b2479592cc21530b3ea7e99c5b855e9f4ecdd1666e1fccb73ccecc27b",
   "download_url": "https://webbase-x.github.io/xstage/downloads/X-StageKaraoke.exe",
-  "source_commit": "3a829cb349abd82be718d09ae60f629002ccda57",
+  "source_commit": "5d6a936b340a54bed0d577c6c5e85ee39bd59b25",
   "note": "Unsigned public binary preview from verified Windows CI. Not an official signed updater; SmartScreen may warn."
 }
