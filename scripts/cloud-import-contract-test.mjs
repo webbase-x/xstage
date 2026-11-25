@@ -612,3 +612,50 @@ assert.equal(simulatedState.token,accepted,
   'Google refresh must never switch an active upload to a different account');
 
 console.log('PASS: WEB upload DOM, visible Start, selection/review/resume, Drive chunks, MD5 and catalog safety');
+
+// Publication simulations: a foreign writer must never be moved by rollback.
+{
+  const {publishSingleCatalog}=ctx.XStageCloudImport;
+  const encodeRows=(songs,generation)=>new TextEncoder().encode(JSON.stringify({kind:'snapshot',songs,generation}));
+  const digest=bytes=>createHash('md5').update(bytes).digest('hex');
+  ctx.XStageDriveSQLite={create:async(_kind,songs,_removed,generation)=>encodeRows(songs,generation),
+    read:async bytes=>JSON.parse(new TextDecoder().decode(bytes))};
+  async function simulate(mode){
+    const old=encodeRows([{webSongId:'old'}],'old-generation');
+    const db='dbFolder123',cache='cacheFolder123',backup='backupFolder123';
+    const entries=new Map([['oldFile123',{id:'oldFile123',name:'songs.sqlite3',parent:db,bytes:old,md5Checksum:digest(old)}]]);
+    let serial=0,stagedId='',moves=[];
+    const foreign=()=>entries.set('foreignFile123',{id:'foreignFile123',name:'songs.sqlite3',parent:db,bytes:old,md5Checksum:digest(old)});
+    const mock={
+      ensurePath:async(_root,[name])=>({DB:db,CACHE:cache,BACKUP:backup})[name],
+      list:async query=>[...entries.values()].filter(x=>query.includes("'"+x.parent+"' in parents")&&(!query.includes("name='songs.sqlite3'")||x.name==='songs.sqlite3')),
+      listChildren:async parent=>[...entries.values()].filter(x=>x.parent===parent),
+      metadata:async id=>entries.get(id),
+      getSqlite:async id=>entries.get(id).bytes,
+      upload:async(parent,blob,name,_mime,md5)=>{
+        const id='mockFile'+(++serial),bytes=new Uint8Array(await blob.arrayBuffer());
+        entries.set(id,{id,name,parent,bytes,md5Checksum:md5,createdTime:new Date().toISOString()});
+        if(name.startsWith('songs-stage-'))stagedId=id;
+        return {id};
+      },
+      trashFile:async id=>entries.delete(id),
+      moveToFolder:async(id,from,to,name)=>{
+        const item=entries.get(id);assert.equal(item.parent,from);moves.push(id);
+        if(id===stagedId&&to===db&&mode==='rollback')throw Error('simulated move failed');
+        item.parent=to;item.name=name||item.name;
+        if(id==='oldFile123'&&to===backup&&mode==='foreign')foreign();
+        if(id===stagedId&&to===db&&mode==='foreign-after-stage'){foreign();throw Error('simulated uncertain move');}
+      }
+    };
+    const pointer={directFile:true,catalogFileId:'oldFile123',catalogMd5:mode==='missing-md5'?'':digest(old)};
+    const run=()=>publishSingleCatalog({drive:mock,rootId:'rootFolder123',pointer,rows:new Map([['new',{webSongId:'new'}]]),check:()=>{}});
+    if(mode==='success')await run();else await assert.rejects(run());
+    const active=[...entries.values()].filter(x=>x.parent===db&&x.name==='songs.sqlite3');
+    assert.equal(active.length,1,mode+' must leave one canonical file');
+    assert.equal(active[0].id,mode==='success'?stagedId:mode.startsWith('foreign')?'foreignFile123':'oldFile123');
+    assert.ok(!moves.includes('foreignFile123'),'foreign database must never be moved');
+    if(mode==='missing-md5')assert.equal(moves.length,0);
+  }
+  for(const mode of ['success','rollback','foreign','foreign-after-stage','missing-md5'])await simulate(mode);
+  console.log('PASS: SQLite publication conflict, rollback isolation and source MD5 simulations');
+}

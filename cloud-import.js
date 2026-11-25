@@ -626,12 +626,17 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
     if(pointer?.directFile){
       if(canonical.length!==1||canonical[0].id!==pointer.catalogFileId)
         fail('ฐาน songs.sqlite3 เปลี่ยนจากอีกอุปกรณ์ระหว่างนำเข้า');
+      const expected=String(pointer.catalogMd5||'').toLowerCase();
+      if(!/^[a-f0-9]{32}$/.test(expected))
+        fail('ไม่มี MD5 ของฐานเดิม · ยังไม่อนุญาตให้เขียนทับ songs.sqlite3');
       const meta=await drive.metadata(pointer.catalogFileId);
-      if(pointer.catalogMd5&&String(meta.md5Checksum||'')!==pointer.catalogMd5)
+      if(String(meta.md5Checksum||'').toLowerCase()!==expected||
+         String(canonical[0].md5Checksum||'').toLowerCase()!==expected)
         fail('ฐาน SQLite ถูกแก้ไขจากอีกอุปกรณ์ · หยุดเพื่อไม่เขียนทับ');
     }else if(canonical.length){
       fail('อีกเครื่องสร้าง songs.sqlite3 ระหว่างนำเข้า · ตรวจฐานใหม่ก่อนเผยแพร่');
     }
+    return canonical;
   };
   await verifySource();
   status?.('กำลังสร้าง DB/songs.sqlite3 สำหรับ '+rows.size.toLocaleString('th-TH')+' เพลง');
@@ -643,51 +648,67 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
   const digest=await core.hashBlob(blob,check);
   const staged=await drive.upload(cacheRoot,blob,'songs-stage-'+generation+'.sqlite3',
     'application/vnd.sqlite3',digest);
-  const uploaded=await codec.read(await drive.getSqlite(staged.id));
+  const verifiedBytes=await drive.getSqlite(staged.id);
+  if(await core.hashBlob(new Blob([verifiedBytes]),check)!==digest)
+    fail('MD5 ของฐาน SQLite3 ที่อัปโหลดไม่ตรง · ยังไม่แทนที่ฐานเดิม');
+  const uploaded=await codec.read(verifiedBytes);
   if(uploaded.kind!=='snapshot'||uploaded.generation!==generation||
      uploaded.songs.length!==rows.size)
     fail('ฐาน SQLite3 บน Drive ตรวจสอบไม่ผ่าน · ยังไม่แทนที่ฐานเดิม');
+  // A fresh listing (not listChildren's cache) is the only source of truth.
+  const before=await verifySource();
+  if(before.length)backupRoot=await drive.ensurePath(rootId,['BACKUP']);
   await lease.assertOwner();
-  await verifySource();
-  // Backup only the previous canonical SQLite before publishing a new one.
-  const older=(await drive.listChildren(dbRoot)).filter(x=>
-    x.name==='songs.sqlite3'&&x.mimeType!==MIME_FOLDER);
-  if(older.length)backupRoot=await drive.ensurePath(rootId,['BACKUP']);
-  // Include moving the previous database in the rollback-protected region.
+  const older=await verifySource();
+  const listActive=()=>drive.list("'"+driveId(dbRoot)+
+    "' in parents and name='songs.sqlite3' and trashed=false");
+  // Only the pinned previous file and our own staged file may ever be moved.
+  // Re-check after moving the previous file because another writer could
+  // appear during Drive's non-transactional move/rename sequence.
   try{
-    for(let i=0;i<older.length;i++){
+    if(older.length){
       check();
-      status?.('สำรองฐานก่อนหน้า '+(i+1)+'/'+older.length);
-      await drive.moveToFolder(older[i].id,dbRoot,backupRoot);
+      status?.('สำรองฐานก่อนหน้า 1/1');
+      await drive.moveToFolder(older[0].id,dbRoot,backupRoot,
+        'songs-backup-'+generation+'.sqlite3');
     }
+    await lease.assertOwner();
+    if((await listActive()).length)
+      fail('อีกอุปกรณ์เผยแพร่ฐานเพลงระหว่างสลับไฟล์ · ไม่เขียนทับ');
     await drive.moveToFolder(staged.id,cacheRoot,dbRoot,'songs.sqlite3');
     const active=(await drive.listChildren(dbRoot)).filter(x=>
       /\.sqlite3$/i.test(x.name)&&x.mimeType!==MIME_FOLDER);
     if(active.length!==1||active[0].id!==staged.id||active[0].name!=='songs.sqlite3')
       fail('DB ต้องมี songs.sqlite3 เพียงไฟล์เดียว');
-    const final=await codec.read(await drive.getSqlite(staged.id));
+    const finalBytes=await drive.getSqlite(staged.id);
+    if(await core.hashBlob(new Blob([finalBytes]),check)!==digest)
+      fail('MD5 ของ SQLite3 หลังเผยแพร่ไม่ตรง');
+    const final=await codec.read(finalBytes);
     if(final.kind!=='snapshot'||final.generation!==generation||
        final.songs.length!==rows.size)
       fail('อ่าน SQLite3 จาก DB หลังเผยแพร่ไม่ผ่าน · สำเนาเก่าอยู่ BACKUP');
   }catch(error){
-    // Restore the same known-good DB File ID if an in-place switch fails.
-    if(pointer?.directFile){
-      try{
+    // Roll back ONLY this publication's file. Never move, rename, or delete
+    // a foreign writer's canonical database, even when it appeared mid-switch.
+    try{
+      const suspect=await listActive();
+      if(suspect.some(file=>file.id===staged.id)){
         backupRoot ||= await drive.ensurePath(rootId,['BACKUP']);
-        const suspect=await drive.list("'"+driveId(dbRoot)+
-          "' in parents and name='songs.sqlite3' and trashed=false");
-        for(const file of suspect){
-          if(file.id===pointer.catalogFileId)continue;
-          await drive.moveToFolder(file.id,dbRoot,backupRoot,
-            'songs-failed-'+generation+'.sqlite3');
-        }
-        const present=await drive.list("'"+driveId(dbRoot)+
-          "' in parents and name='songs.sqlite3' and trashed=false");
-        if(!present.some(x=>x.id===pointer.catalogFileId))
-          await drive.moveToFolder(pointer.catalogFileId,backupRoot,dbRoot,'songs.sqlite3');
-      }catch(restoreError){
-        console.error('Cannot restore last verified SQLite; BACKUP is preserved',restoreError);
+        await drive.moveToFolder(staged.id,dbRoot,backupRoot,
+          'songs-failed-'+generation+'.sqlite3');
       }
+      const present=await listActive();
+      if(pointer?.directFile&&!present.length&&backupRoot){
+        await lease.assertOwner();
+        const old=await drive.metadata(pointer.catalogFileId);
+        if(String(old.md5Checksum||'').toLowerCase()!==
+           String(pointer.catalogMd5||'').toLowerCase())
+          fail('ฐานสำรองเปลี่ยนแปลง · ไม่คืนฐานโดยอัตโนมัติ');
+        if(!(await listActive()).length)
+          await drive.moveToFolder(pointer.catalogFileId,backupRoot,dbRoot,'songs.sqlite3');
+      }
+    }catch(restoreError){
+      console.error('Cannot restore last verified SQLite; BACKUP is preserved',restoreError);
     }
     throw error;
   }

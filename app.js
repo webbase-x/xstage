@@ -2060,6 +2060,12 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
      (pointer.deltaFileIds||[]).length)
     throw Error('X-Stage รองรับเฉพาะ DB/songs.sqlite3 ไฟล์เดียว');
   const totalPieces=1;
+  // A single canonical SQLite snapshot is enough; do not retain dozens of
+  // decoded copies in RAM after Drive revisions change.
+  const rememberCatalog=(key,data)=>{
+    state.catalogCache.clear();
+    state.catalogCache.set(key,data);
+  };
   let completedPieces=0;
   const report=(message,fromCache=false)=>{
     completedPieces++;
@@ -2074,22 +2080,46 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
     if(state.catalogCache.has(cacheKey)){report(label+' · พร้อมแล้ว',true);return state.catalogCache.get(cacheKey);}
     const persisted=await loadCatalogPiece(sub,cacheKey);
     if(persisted){
-      state.catalogCache.set(cacheKey,persisted);
+      rememberCatalog(cacheKey,persisted);
       report(label+' · ใช้ส่วนที่โหลดไว้แล้ว',true);
       return persisted;
     }
     const codec=window.XStageDriveSQLite;
     if(!codec)throw Error('ไม่พบตัวอ่าน SQLite3 กรุณาโหลดหน้าเว็บใหม่');
     const response=await privateFile(id,token);
-    const buffer=await response.arrayBuffer();
-    if(buffer.byteLength>192*1048576)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกิน 192 MB');
-    const data=await codec.read(new Uint8Array(buffer));
-    state.catalogCache.set(cacheKey,data);
-    await saveCatalogPiece(sub,cacheKey,data);
-    if(state.catalogCache.size>40){
-      const oldest=state.catalogCache.keys().next().value;
-      state.catalogCache.delete(oldest);
+    const maxBytes=192*1048576;
+    const advertised=Number(response.headers?.get?.('Content-Length')||0);
+    if(advertised>maxBytes){
+      try{await response.body?.cancel?.();}catch{}
+      throw Error('ฐานข้อมูล SQLite3 ใหญ่เกิน 192 MB');
     }
+    // Enforce the existing limit during streaming, not after allocating the
+    // entire response. Fallback for browsers without a readable body.
+    let bytes;
+    if(response.body?.getReader){
+      const reader=response.body.getReader();
+      const chunks=[];let total=0;
+      try{
+        for(;;){
+          const {done,value}=await reader.read();
+          if(done)break;
+          total+=value.byteLength;
+          if(total>maxBytes)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกิน 192 MB');
+          chunks.push(value);
+        }
+      }catch(error){try{await reader.cancel();}catch{}throw error;}
+      finally{reader.releaseLock();}
+      bytes=new Uint8Array(total);let offset=0;
+      for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+      chunks.length=0;
+    }else{
+      const buffer=await response.arrayBuffer();
+      if(buffer.byteLength>maxBytes)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกิน 192 MB');
+      bytes=new Uint8Array(buffer);
+    }
+    const data=await codec.read(bytes);
+    rememberCatalog(cacheKey,data);
+    await saveCatalogPiece(sub,cacheKey,data);
     report(label+' · ดาวน์โหลดแล้ว',false);
     return data;
   }
@@ -2119,15 +2149,18 @@ async function activeDriveCatalog(dbId,token){
 async function pollPublishedCatalog(){
   if(!state.token||!state.catalogDbDirId||state.catalogPolling)return;
   const authId=state.authId,token=state.token;
+  const dbId=state.catalogDbDirId,rootId=state.libraryRootId;
+  const sameCatalogSession=()=>authId===state.authId&&token===state.token&&
+    dbId===state.catalogDbDirId&&rootId===state.libraryRootId;
   state.catalogPolling=true;
   try{
-    const published=await activeDriveCatalog(state.catalogDbDirId,token);
+    const published=await activeDriveCatalog(dbId,token);
     const pointer=published?.pointer;
-    if(!pointer||authId!==state.authId||state.token!==token||!pointer.generation||
+    if(!pointer||!sameCatalogSession()||!pointer.generation||
        pointer.generation===state.catalogGeneration)return;
     const cacheOwner=libraryCacheOwner(state.accountSub,state.libraryRootId);
     const catalog=await readPublishedCatalog(pointer,token,{sub:cacheOwner});
-    if(authId!==state.authId||state.token!==token)return;
+    if(!sameCatalogSession())return;
     const countBefore=state.songs.length;
     state.manifest=catalog;
     state.songs=catalog.songs.filter(playable);
