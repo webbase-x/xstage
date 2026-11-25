@@ -932,6 +932,16 @@ public sealed class DownloadEngine
     private static string PartPath(string work, int index) => Path.Combine(work, index.ToString("D2") + ".part");
 
     // Pure policy, exercised by deterministic network telemetry simulations.
+    // In-process diagnostic hook for measured adaptive scheduling tests.
+    internal Action<int, int, double>? RangeConcurrencySample { get; set; }
+    internal Action<int, long>? RangeRetiredSample { get; set; }
+    private sealed class RangeWorker(int index)
+    {
+        public int Index { get; } = index;
+        public volatile bool Retire;
+        public Task<bool> Task { get; set; } = null!;
+    }
+
     public static int NextRangeConcurrency(int current, int count, int ceiling,
         double previousRate, double rate)
     {
@@ -1012,7 +1022,7 @@ public sealed class DownloadEngine
         var pending = new Queue<int>(Enumerable.Range(0, count).Where(i =>
             job.SegmentDownloadedBytes[i] < TransferSegmentGeometry.Boundary(job.TotalBytes, i + 1, count)
                 - TransferSegmentGeometry.Boundary(job.TotalBytes, i, count)));
-        var active = new List<Task>();
+        var active = new List<RangeWorker>();
         var target = Math.Min(2, count);
         var previousBytes = Interlocked.Read(ref job.DownloadedBytes);
         var previousTick = Environment.TickCount64;
@@ -1025,13 +1035,25 @@ public sealed class DownloadEngine
                 var i = pending.Dequeue();
                 var begin = TransferSegmentGeometry.Boundary(job.TotalBytes, i, count);
                 var end = TransferSegmentGeometry.Boundary(job.TotalBytes, i + 1, count) - 1;
-                var task = DownloadPartAsync(job, PartPath(work, i), begin, end, i, ct);
-                active.Add(task);
-                tasks.Add(task);
+                var worker = new RangeWorker(i);
+                worker.Task = DownloadPartAsync(job, PartPath(work, i), begin, end, i, ct, worker);
+                active.Add(worker);
+                tasks.Add(worker.Task);
             }
             if (active.Count == 0) break;
-            await Task.WhenAny(active.Append(Task.Delay(1000))).ConfigureAwait(false);
-            active.RemoveAll(t => t.IsCompleted);
+            await Task.WhenAny(active.Select(w => (Task)w.Task).Append(Task.Delay(1000))).ConfigureAwait(false);
+            foreach (var worker in active.Where(w => w.Task.IsCompleted).ToArray())
+            {
+                active.Remove(worker);
+                if (worker.Task.IsCompletedSuccessfully && !worker.Task.Result)
+                {
+                    // The stream has been flushed and disposed before requeue.
+                    // The next worker opens Range at the physical .part length.
+                    var saved = new FileInfo(PartPath(work, worker.Index));
+                    RangeRetiredSample?.Invoke(worker.Index, saved.Exists ? saved.Length : 0);
+                    pending.Enqueue(worker.Index);
+                }
+            }
             var now = Environment.TickCount64;
             if (now - previousTick >= 1000)
             {
@@ -1040,6 +1062,11 @@ public sealed class DownloadEngine
                 var ceiling = AdaptiveSegmentPlanner.RecommendWithLimits(job.Parts,
                     job.TotalBytes, rate, false, GlobalLimitKib, job.FileSpeedLimitKib);
                 target = NextRangeConcurrency(target, count, ceiling, previousRate, rate);
+                // Retire only excess workers, cooperatively at write boundaries.
+                // Do not cancel an in-flight file write or alter saved geometry.
+                var retained = active.Where(w => !w.Retire).ToArray();
+                foreach (var worker in retained.Skip(target)) worker.Retire = true;
+                RangeConcurrencySample?.Invoke(target, active.Count, rate);
                 previousRate = rate;
                 previousBytes = bytes;
                 previousTick = now;
@@ -1056,8 +1083,8 @@ public sealed class DownloadEngine
         }
     }
 
-    private async Task DownloadPartAsync(DownloadJob job, string file,
-        long begin, long end, int segmentIndex, CancellationToken ct)
+    private async Task<bool> DownloadPartAsync(DownloadJob job, string file,
+        long begin, long end, int segmentIndex, CancellationToken ct, RangeWorker worker)
     {
         var expected = end - begin + 1;
         Exception? last = null;
@@ -1065,7 +1092,8 @@ public sealed class DownloadEngine
         {
             ct.ThrowIfCancellationRequested();
             var saved = File.Exists(file) ? new FileInfo(file).Length : 0;
-            if (saved == expected) return;
+            if (saved == expected) return true;
+            if (worker.Retire) return false;
             if (saved > expected)
                 throw new IOException("ข้อมูล Chunk ที่บันทึกไว้เกินช่วงที่คาดไว้");
             TimeSpan? retryAfter = null;
@@ -1112,6 +1140,11 @@ public sealed class DownloadEngine
                 var buffer = new byte[131072];
                 while (remaining > 0)
                 {
+                    if (worker.Retire)
+                    {
+                        await output.FlushAsync(ct);
+                        return false;
+                    }
                     var amount = (int)Math.Min(
                         ReadBufferSize(job, GlobalLimitKib), remaining);
                     await LimitNetworkReadAsync(job, amount, ct);
@@ -1128,7 +1161,7 @@ public sealed class DownloadEngine
                 }
                 await output.FlushAsync(ct);
                 job.TransferPhase = "";
-                return;
+                return true;
             }
             catch (HttpRequestException ex) when (ex.StatusCode.HasValue &&
                 !DownloadRetryPolicy.IsTransientStatus(ex.StatusCode.Value))
@@ -1146,6 +1179,7 @@ public sealed class DownloadEngine
                 last = ex;
             }
 
+            if (worker.Retire) return false;
             if (attempt == MaxRetryCount) break;
             job.TransferPhase = $"Chunk {segmentIndex + 1} หลุด — ต่อใหม่ ({attempt}/{MaxRetryCount})";
             await DownloadRetryPolicy.DelayAsync(attempt, retryAfter, ct);

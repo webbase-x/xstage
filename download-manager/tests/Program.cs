@@ -176,6 +176,87 @@ if (args.Length == 0)
         Console.WriteLine($"PASS: loopback HTTP aggregate {kibPerSecond:F1} KiB/s; pause/resume and SHA-256");
     }
     finally { try { Directory.Delete(bandwidthRoot, true); } catch { } }
+    // Measure actual Range requests on a changing loopback link. The requested
+    // geometry (1/8/32) is distinct from the adaptive number of live workers.
+    var rangeRoot = Path.Combine(Path.GetTempPath(), "xstage-measured-ranges-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(rangeRoot);
+    try
+    {
+        var rangePayload = new byte[8 * 1024 * 1024];
+        new Random(527).NextBytes(rangePayload);
+        var rangeHash = SHA256.HashData(rangePayload);
+        foreach (var requested in new[] { 1, 8, 32 })
+        {
+            using var measuredServer = new FileServer(rangePayload);
+            measuredServer.ChunkDelayMs = 35;
+            var measuredEngine = new DownloadEngine(Path.Combine(rangeRoot, "state-" + requested));
+            measuredEngine.ConfigurePerformance(1, 1, 0);
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var measured = measuredEngine.Add(measuredServer.Url + "range/measured-" + requested + ".bin", rangeRoot, requested);
+            await WaitFor(() => Interlocked.Read(ref measured.DownloadedBytes) >= 512 * 1024, 90000);
+            var slowBytes = Interlocked.Read(ref measured.DownloadedBytes);
+            var slowSeconds = watch.Elapsed.TotalSeconds;
+            measuredServer.ChunkDelayMs = 1;
+            await WaitFor(() => measured.Status is "Completed" or "Failed", 90000);
+            watch.Stop();
+            if (measured.Status != "Completed" || measured.SegmentsUsed != requested)
+                throw new Exception("Measured Range geometry/transfer failed: " + measured.Error);
+            if (!SHA256.HashData(await File.ReadAllBytesAsync(measured.CompletedPath)).SequenceEqual(rangeHash))
+                throw new Exception("Measured Range SHA-256 mismatch.");
+            if (measuredServer.MeasuredRequests < requested || measuredServer.PeakMeasuredConnections < 1 ||
+                measuredServer.PeakMeasuredConnections > requested)
+                throw new Exception("Measured live Range connection bounds violated.");
+            var slowRate = slowBytes / 1024d / Math.Max(0.001, slowSeconds);
+            var fastRate = (rangePayload.Length - slowBytes) / 1024d /
+                Math.Max(0.001, watch.Elapsed.TotalSeconds - slowSeconds);
+            Console.WriteLine($"PASS: measured geometry={requested}, requests={measuredServer.MeasuredRequests}, peak={measuredServer.PeakMeasuredConnections}, slow={slowRate:F1} KiB/s, fast={fastRate:F1} KiB/s, SHA-256");
+        }
+    }
+    finally { try { Directory.Delete(rangeRoot, true); } catch { } }
+    // Exercise the production adaptive scheduler with a slow/fast/slow link.
+    var adaptiveRoot = Path.Combine(Path.GetTempPath(), "xstage-adaptive-transition-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(adaptiveRoot);
+    try
+    {
+        var adaptivePayload = new byte[48 * 1024 * 1024];
+        new Random(619).NextBytes(adaptivePayload);
+        using var adaptiveServer = new FileServer(adaptivePayload);
+        adaptiveServer.ChunkDelayMs = 120;
+        var adaptiveEngine = new DownloadEngine(Path.Combine(adaptiveRoot, "state"));
+        adaptiveEngine.ConfigurePerformance(1, 1, 0);
+        int observedTarget = 0;
+        var retiredOffsets = new System.Collections.Concurrent.ConcurrentQueue<long>();
+        adaptiveEngine.RangeRetiredSample = (index, saved) =>
+        {
+            if (saved > 0) retiredOffsets.Enqueue(
+                TransferSegmentGeometry.Boundary(adaptivePayload.Length, index, 32) + saved);
+        };
+        var samples = new System.Collections.Concurrent.ConcurrentQueue<(int Target, int Active, double Rate)>();
+        adaptiveEngine.RangeConcurrencySample = (target, active, rate) =>
+        {
+            samples.Enqueue((target, active, rate));
+            Interlocked.Exchange(ref observedTarget, target);
+        };
+        var adaptiveJob = adaptiveEngine.Add(adaptiveServer.Url + "range/measured-adaptive.bin", adaptiveRoot, 32);
+        await WaitFor(() => Volatile.Read(ref observedTarget) == 1, 30000);
+        await WaitFor(() => !retiredOffsets.IsEmpty, 30000);
+        adaptiveServer.ChunkDelayMs = 1;
+        await WaitFor(() => Volatile.Read(ref observedTarget) >= 2, 30000);
+        adaptiveServer.ChunkDelayMs = 120;
+        await WaitFor(() => Volatile.Read(ref observedTarget) == 1, 30000);
+        adaptiveServer.ChunkDelayMs = 1;
+        await WaitFor(() => adaptiveJob.Status is "Completed" or "Failed", 120000);
+        if (adaptiveJob.Status != "Completed" || adaptiveJob.SegmentsUsed != 32 ||
+            !SHA256.HashData(await File.ReadAllBytesAsync(adaptiveJob.CompletedPath)).SequenceEqual(SHA256.HashData(adaptivePayload)))
+            throw new Exception("Adaptive transition changed geometry or corrupted bytes: " + adaptiveJob.Error);
+        if (!retiredOffsets.Any(offset => adaptiveServer.MeasuredRangeStarts.Contains(offset)))
+            throw new Exception("Retired partial range was not resumed at its physical byte offset.");
+        if (samples.Any(x => x.Target < 1 || x.Target > 32 || x.Active < 0 || x.Active > 32))
+            throw new Exception("Adaptive concurrency bounds violated.");
+        Console.WriteLine("PASS: live adaptive target slow-fast-slow, immutable 32-range geometry, SHA-256; " +
+            string.Join(" | ", samples.Select(x => $"{x.Target}/{x.Active}:{x.Rate / 1024:F0} KiB/s")));
+    }
+    finally { try { Directory.Delete(adaptiveRoot, true); } catch { } }
     SmartSyncPlannerTests.Run();
     await SmartSyncBackgroundTests.RunAsync();
     await SmartSyncTransferTests.RunAsync();
@@ -2609,6 +2690,12 @@ sealed class FileServer : IDisposable
     private int _flakyRangeOnce;
     private int _flakySingleOnce;
     private int _busyOnce;
+    private int _chunkDelayMs = 2;
+    private int _measuredRequests, _activeMeasuredConnections, _peakMeasuredConnections;
+    public int ChunkDelayMs { get => Volatile.Read(ref _chunkDelayMs); set => Volatile.Write(ref _chunkDelayMs, value); }
+    public System.Collections.Concurrent.ConcurrentBag<long> MeasuredRangeStarts { get; } = new();
+    public int MeasuredRequests => Volatile.Read(ref _measuredRequests);
+    public int PeakMeasuredConnections => Volatile.Read(ref _peakMeasuredConnections);
     public string Url { get; }
     public FileServer(byte[] data)
     {
@@ -2698,16 +2785,31 @@ sealed class FileServer : IDisposable
                     (code.StartsWith("206") ? "Content-Range: bytes " + begin + "-" + end + "/" + _data.Length + "\r\n" : "") +
                     "Connection: close\r\n\r\n";
                 await stream.WriteAsync(Encoding.ASCII.GetBytes(response));
-                var offset = begin;
-                while (offset <= end)
+                var measuredRange = path.StartsWith("/range/measured-") &&
+                    code.StartsWith("206") && length > 1;
+                if (measuredRange)
                 {
-                    var chunk = Math.Min(8192, end - offset + 1);
-                    await stream.WriteAsync(_data.AsMemory(offset, chunk));
-                    offset += chunk;
-                    if ((interrupt || flakyRange || flakySingle) &&
-                        offset - begin >= 160 * 1024) break;
-                    await Task.Delay(2);
+                    MeasuredRangeStarts.Add(begin);
+                    Interlocked.Increment(ref _measuredRequests);
+                    var active = Interlocked.Increment(ref _activeMeasuredConnections);
+                    int peak;
+                    do { peak = Volatile.Read(ref _peakMeasuredConnections); }
+                    while (active > peak && Interlocked.CompareExchange(ref _peakMeasuredConnections, active, peak) != peak);
                 }
+                try
+                {
+                    var offset = begin;
+                    while (offset <= end)
+                    {
+                        var chunk = Math.Min(8192, end - offset + 1);
+                        await stream.WriteAsync(_data.AsMemory(offset, chunk));
+                        offset += chunk;
+                        if ((interrupt || flakyRange || flakySingle) &&
+                            offset - begin >= 160 * 1024) break;
+                        if (offset <= end) await Task.Delay(ChunkDelayMs);
+                    }
+                }
+                finally { if (measuredRange) Interlocked.Decrement(ref _activeMeasuredConnections); }
             }
             catch (IOException) { /* A paused download intentionally closes its socket. */ }
             catch (SocketException) { }
