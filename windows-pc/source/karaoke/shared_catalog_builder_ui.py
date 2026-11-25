@@ -67,7 +67,7 @@ def open_builder(app, initial_root=None):
             pass
 
     def submit(publish):
-        if state["busy"]:
+        if state["busy"] or getattr(app, "_shared_build_busy", False) or getattr(app, "scanning", False):
             return
         requested = folder.get().strip()
         if not requested:
@@ -93,9 +93,9 @@ def open_builder(app, initial_root=None):
                 return
             if not messagebox.askyesno(
                 "ยืนยันสร้าง SQLite ใหม่จาก Karaoke PC",
-                "ต้องการสร้างและเผยแพร่ XStageKaraoke/DB/songs.sqlite3 ใหม่จาก XMID/XSK2 "
-                "ทุกไฟล์ใน Google Drive PC ใช่หรือไม่?\n"
-                "ระบบตรวจ SHA-256/MIDI ซ้ำและสำรองฐานเดิมก่อนแทนที่\n"
+                "จะคัดลอก XMID/XSK2 ไปยังคลัง Google Drive หากอยู่นอกคลัง\n"
+                "เก็บต้นฉบับไว้ ไม่เขียนทับไฟล์ชื่อเดียวกันที่ต่างกัน\n"
+                "สร้างฐานหลักใน App/DB และทำสำเนาไป Drive โดยไม่ตรวจเพลงซ้ำ\n"
                 "หลัง Drive ซิงก์ขึ้นคลาวด์ Online จะจับคู่ File ID ที่ยังไม่รู้ก่อนเล่น\n"
                 "ฐานงานผลิตของ Song Studio ไม่เปลี่ยน",
                 parent=panel
@@ -103,6 +103,7 @@ def open_builder(app, initial_root=None):
                 return
         verify_all = full_verify.get()
         state["busy"] = True
+        app._shared_build_busy = True
         stop.clear()
         inspect.configure(state="disabled")
         confirm.configure(state="disabled")
@@ -115,7 +116,7 @@ def open_builder(app, initial_root=None):
                 # Windows refuses to atomically replace an open SQLite file.
                 # Close the long-lived PC search reader without touching the
                 # playback engine; reopen search after publication.
-                if publish and getattr(app, "shared_drive_mode", False):
+                if publish and getattr(app, "shared_drive_mode", False) and not app.settings.get("shared_local_master"):
                     condition = getattr(app, "_search_condition", None)
                     if condition is not None:
                         with condition:
@@ -139,7 +140,7 @@ def open_builder(app, initial_root=None):
                 result = builder.build(root, progress=update, cancel=stop,
                                        publish=publish, cache_dir=Path(app.data_dir) / "index-cache",
                                        full_verify=verify_all, deduplicate=not publish,
-                                       local_database=(Path(app.home) / "DB" / "songs.sqlite3") if publish else None)
+                                       local_database=(Path(app.home) / "DB" / ".online-pending.sqlite3") if publish else None)
                 result["root"] = str(root)
             except Exception as exc:
                 result, error = None, str(exc)
@@ -147,6 +148,7 @@ def open_builder(app, initial_root=None):
                 if reader_stopped:
                     app._search_stopping = False
             def finish():
+                app._shared_build_busy = False
                 if state["closed"]:
                     return
                 if reader_stopped and getattr(app, "shared_drive_mode", False):
@@ -161,7 +163,7 @@ def open_builder(app, initial_root=None):
                 cancel.configure(state="disabled")
                 if error:
                     state["approved"] = None
-                    status.set("ไม่สำเร็จ · "+error+" · ฐานเดิมยังไม่ถูกแทนที่")
+                    status.set("ไม่สำเร็จ · "+error+" · เก็บต้นฉบับและงานที่บันทึกแล้วไว้")
                     return
                 if not publish:
                     state["approved"] = requested
@@ -171,21 +173,16 @@ def open_builder(app, initial_root=None):
                         str(result["pending_drive_ids"])+" รายการ · กดยืนยันสร้างฐาน")
                 else:
                     state["approved"] = None
-                    if app.settings.get("shared_drive_root") != result["root"]:
-                        app.settings.pop("shared_drive_folder_id", None)
-                    app.settings["shared_drive_root"] = result["root"]
-                    if messagebox.askyesno(
-                        "ใช้ฐานหลัก PC ในเครื่อง",
-                        "สร้างฐานเพลงร่วมสำเร็จแล้ว\n"
-                        "ต้องการใช้ App/DB/songs.sqlite3 "
-                        "เป็นฐานเพลงหลักของ Karaoke PC หลังเปิดโปรแกรมใหม่หรือไม่?\n"
-                        "ฐาน Song Studio Pro จะไม่เปลี่ยน",
-                        parent=panel):
-                        app.settings["library_mode"] = "google-drive"
-                        app.settings["shared_local_master"] = True
+                    app.settings["pending_online_master"] = {
+                        "root": result["root"], "generation": result["generation"]}
+                    app.settings.pop("pending_pc_only", None)
                     app.save_settings()
+                    folder.set(result["root"])
+                    messagebox.showinfo("สร้างฐานเพลงสำเร็จ",
+                        "ฐานหลัก PC และสำเนา Google Drive พร้อมแล้ว\nเปิดโปรแกรมใหม่เพื่อใช้งานฐานหลักใน DB/songs.sqlite3",
+                        parent=panel)
                     status.set("สร้าง SQLite ใหม่สำเร็จ "+str(result["accepted"]) +
-                               " เพลง · ไม่ตรวจเพลงซ้ำ "+str(result["duplicates"]) +
+                               " เพลง · ไม่ตรวจเพลงซ้ำ" +
                                " · รอ Google Drive ซิงก์ (ยังไม่ยืนยัน Cloud) · File ID รอตรวจ "+str(result["pending_drive_ids"]) +
                                " เพลง · เมื่อ Online เปิดเพลงจะตรวจจับคู่กับ Drive")
                     if getattr(app, "shared_drive_mode", False):
@@ -209,11 +206,27 @@ def open_builder(app, initial_root=None):
     cancel = ttk.Button(buttons, text="หยุดอย่างปลอดภัย",
                         command=stop.set, state="disabled")
     cancel.pack(side="left")
+    def pc_only():
+        if state["busy"] or getattr(app, "_shared_build_busy", False):
+            return
+        if not messagebox.askyesno("Karaoke PC เท่านั้น",
+                "สลับกลับฐาน PC ภายในเครื่องเมื่อเปิดโปรแกรมใหม่หรือไม่?\nเก็บฐานร่วมและเพลงต้นฉบับไว้",
+                parent=panel):
+            return
+        app.settings["pending_pc_only"] = True
+        app.settings.pop("pending_online_master", None)
+        app.save_settings()
+        status.set("เปิดโปรแกรมใหม่เพื่อใช้ฐาน PC เท่านั้น")
+    ttk.Button(buttons, text="ใช้ PC เท่านั้น", command=pc_only).pack(side="left", padx=8)
+
     ttk.Label(frame, text="ตรวจสถานะซิงก์ใน Google Drive for desktop แล้วตรวจฐานบน Karaoke Online · ใช้โฟลเดอร์หลักเดียวกันทั้ง PC และ Web "
               "· SQLite ของ Song Studio Pro ยังแยก · ไม่มีการลบไฟล์เพลงต้นฉบับ",
               style="Muted.TLabel", wraplength=860).pack(anchor="w")
     def close():
-        stop.set()
+        if state["busy"]:
+            stop.set()
+            status.set("กำลังหยุดอย่างปลอดภัย · ปิดหน้าต่างได้เมื่อหยุดแล้ว")
+            return
         state["closed"] = True
         panel.destroy()
     panel.protocol("WM_DELETE_WINDOW", close)
