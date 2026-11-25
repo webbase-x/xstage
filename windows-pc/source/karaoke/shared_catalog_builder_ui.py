@@ -83,7 +83,7 @@ def open_builder(app, initial_root=None, *, parent=None):
         except RuntimeError:
             pass
 
-    def submit(publish):
+    def submit(publish, *, local_only=False):
         if state["busy"] or getattr(app, "_shared_build_busy", False) or getattr(app, "scanning", False) or getattr(getattr(app, "duplicate_review_window", None), "busy", False):
             return
         requested = folder.get().strip()
@@ -97,27 +97,30 @@ def open_builder(app, initial_root=None, *, parent=None):
             # The selected source and the Online destination are independent.
             if (source / "SONGS").is_dir():
                 source = source / "SONGS"
-            selected = target.get() or remembered_drive_root(app.settings)
-            if not selected:
-                try:
-                    _, source_root = drive_library(requested)
-                    _, source_root = remember_drive_library(app, source_root)
-                    selected = str(source_root)
-                except (ValueError, OSError):
-                    if publish:
-                        change_target()
-                        selected = target.get()
-            if not selected:
-                status.set("เลือกปลายทางสำเนา DB Online ครั้งแรก")
-                return
-            drive, root = drive_library(selected, explicit=True, remembered=selected)
-            target.set(str(root))
+            if local_only:
+                root = Path(app.home).resolve(strict=True)
+            else:
+                selected = target.get() or remembered_drive_root(app.settings)
+                if not selected:
+                    try:
+                        _, source_root = drive_library(requested)
+                        _, source_root = remember_drive_library(app, source_root)
+                        selected = str(source_root)
+                    except (ValueError, OSError):
+                        if publish:
+                            change_target()
+                            selected = target.get()
+                if not selected:
+                    status.set("เลือกปลายทางสำเนา DB Online ครั้งแรก")
+                    return
+                drive, root = drive_library(selected, explicit=True, remembered=selected)
+                target.set(str(root))
             # Retain paths relative to SONGS if user chose the shared root.
             source = source.resolve(strict=True)
         except (ValueError, OSError) as exc:
             status.set(str(exc))
             return
-        if publish:
+        if publish and not local_only:
             if not messagebox.askyesno(
                 "ยืนยันสร้าง SQLite ใหม่จาก Karaoke PC",
                 "อ่านไฟล์จากต้นทางเดิม ไม่คัดลอกหรือย้ายไฟล์เพลง\n"
@@ -128,6 +131,12 @@ def open_builder(app, initial_root=None, *, parent=None):
                 parent=panel
             ):
                 return
+        if publish and local_only and not messagebox.askyesno(
+                "สร้างฐาน SQLite สำหรับ PC / Web / APK",
+                "สร้างฐานร่วมจากเพลงที่เลือกใน App/DB เท่านั้น\n"
+                "ไม่คัดลอกเพลงหรือเชื่อม Google Drive\nเปิดโปรแกรมใหม่เพื่อใช้ฐานที่สร้าง",
+                parent=panel, default="no"):
+            return
         selected_library = root
         selected_source = source
         verify_all = full_verify.get()
@@ -166,12 +175,13 @@ def open_builder(app, initial_root=None, *, parent=None):
                         app._search_thread = None
                         reader_stopped = True
                 root = selected_library
-                if publish:
+                if publish and not local_only:
                     setup(root)
                 result = builder.build(root, progress=update, cancel=stop,
                                        publish=publish, cache_dir=Path(app.data_dir) / "index-cache",
                                        full_verify=verify_all, deduplicate=not publish, source_songs=selected_source,
-                                       local_database=(Path(app.home) / "DB" / ".online-pending.sqlite3") if publish else None)
+                                       local_database=(Path(app.home) / "DB" / ".online-pending.sqlite3") if publish and not local_only else None,
+                                       local_only=local_only)
                 result["root"] = str(root)
             except Exception as exc:
                 result, error = None, str(exc)
@@ -206,18 +216,21 @@ def open_builder(app, initial_root=None, *, parent=None):
                     state["approved"] = None
                     app.settings["pending_online_master"] = {
                         "root": result["root"], "generation": result["generation"],
-                        "source_songs": str(selected_source)}
+                        "source_songs": str(selected_source), "local_only": local_only}
                     app.settings.pop("pending_pc_only", None)
                     app.save_settings()
                     app.settings["catalog_source"] = requested
                     app.save_settings()
                     messagebox.showinfo("สร้างฐานเพลงสำเร็จ",
-                        "ฐานหลัก PC และสำเนา Google Drive พร้อมแล้ว\nเปิดโปรแกรมใหม่เพื่อใช้งานฐานหลักใน DB/songs.sqlite3",
+                        ("ฐาน PC พร้อมแล้ว · ไม่ได้ส่งไป Drive" if local_only else
+                         "ฐานหลัก PC และสำเนา Google Drive พร้อมแล้ว") +
+                        "\nเปิดโปรแกรมใหม่เพื่อใช้งานฐานหลักใน DB/songs.sqlite3",
                         parent=panel)
                     status.set("สร้าง SQLite ใหม่สำเร็จ "+str(result["accepted"]) +
                                " เพลง · ไม่ตรวจเพลงซ้ำ" +
-                               " · รอ Google Drive ซิงก์ (ยังไม่ยืนยัน Cloud) · File ID รอตรวจ "+str(result["pending_drive_ids"]) +
-                               " เพลง · เมื่อ Online เปิดเพลงจะตรวจจับคู่กับ Drive")
+                               (" · เปิดโปรแกรมใหม่เพื่อใช้ฐาน PC" if local_only else
+                                " · รอ Google Drive ซิงก์ (ยังไม่ยืนยัน Cloud) · File ID รอตรวจ "+str(result["pending_drive_ids"]) +
+                                " เพลง · เมื่อ Online เปิดเพลงจะตรวจจับคู่กับ Drive"))
                     if getattr(app, "shared_drive_mode", False):
                         try:
                             app.refresh_library()
@@ -231,7 +244,7 @@ def open_builder(app, initial_root=None, *, parent=None):
         threading.Thread(target=work, daemon=True,
                          name="xstage-shared-sqlite-pc-build").start()
 
-    inspect = ttk.Button(buttons, text="ตรวจเพลงซ้ำ (PC + Online)", command=lambda: submit(False))
+    inspect = ttk.Button(buttons, text="ตรวจเพลงซ้ำจากต้นทาง", command=lambda: submit(False, local_only=True))
     inspect.pack(side="left", padx=(0, 10))
     confirm = ttk.Button(buttons, text="สร้างฐาน PC + สำเนา Online",
                          command=lambda: submit(True))
@@ -240,30 +253,7 @@ def open_builder(app, initial_root=None, *, parent=None):
                         command=stop.set, state="disabled")
     cancel.pack(side="left")
     def pc_only():
-        if state["busy"] or getattr(app, "_shared_build_busy", False):
-            return
-        requested = folder.get().strip()
-        if not requested or not Path(requested).is_dir():
-            status.set("กรุณาเลือกโฟลเดอร์ต้นทางเพลง")
-            return
-        app.settings["catalog_source"] = requested
-        app.save_settings()
-        if not getattr(app, "shared_drive_mode", False):
-            from .catalog_window import open_song_management
-            manager = open_song_management(app, "local")
-            manager.source = Path(requested)
-            manager.source_text.set(requested)
-            manager.usage.set("pc")
-            manager._start("quick")
-            return
-        if not messagebox.askyesno("Karaoke PC เท่านั้น",
-                "สลับกลับฐาน PC ภายในเครื่องเมื่อเปิดโปรแกรมใหม่หรือไม่?\nเก็บฐานร่วมและเพลงต้นฉบับไว้",
-                parent=panel):
-            return
-        app.settings["pending_pc_only"] = True
-        app.settings.pop("pending_online_master", None)
-        app.save_settings()
-        status.set("เปิดโปรแกรมใหม่เพื่อใช้ฐาน PC เท่านั้น")
+        submit(True, local_only=True)
     ttk.Button(buttons, text="สร้างฐาน PC เท่านั้น", command=pc_only).pack(side="left", padx=8)
 
     ttk.Label(frame, text="ตรวจสถานะซิงก์ใน Google Drive for desktop แล้วตรวจฐานบน Karaoke Online · ใช้โฟลเดอร์หลักเดียวกันทั้ง PC และ Web "

@@ -21,7 +21,7 @@ def drive_roots():
 def remembered_drive_root(settings):
     """Selection is independent of which SQLite snapshot is active."""
     pending = settings.get("pending_online_master") or {}
-    return str(settings.get("catalog_drive_root") or pending.get("root") or
+    return str(settings.get("catalog_drive_root") or (None if pending.get("local_only") else pending.get("root")) or
                settings.get("shared_drive_root") or "")
 
 def drive_library(value, *, explicit=False, remembered=""):

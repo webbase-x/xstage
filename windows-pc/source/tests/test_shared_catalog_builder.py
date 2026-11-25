@@ -60,6 +60,26 @@ class SharedPcBuilderTests(unittest.TestCase):
         (self.songs/"10001.xmid").write_bytes(
             _xmid("10001","เพลงทดสอบ","ศิลปิน",self.midi))
 
+    def test_local_only_portable_snapshot_without_drive(self):
+        from karaoke.local_master import activate
+        home = Path(self.tmp.name) / "Installed"
+        home.mkdir()
+        source = self.root / "SONGS"
+        result = build(home, source_songs=source, local_only=True, deduplicate=False)
+        self.assertEqual(result["accepted"], 1)
+        self.assertEqual(result["pending_drive_ids"], 1)
+        self.assertFalse((home / "SONGS").exists())
+        self.assertFalse((self.root / "DB/songs.sqlite3").exists())
+        settings = {"pending_online_master": {"root": str(home), "generation": result["generation"],
+                    "source_songs": str(source), "local_only": True}}
+        master = activate(home, home / "data", settings, installed=True)
+        self.assertEqual(master, home / "DB/songs.sqlite3")
+        self.assertNotIn("shared_drive_root", settings)
+        library = SharedSongLibrary(home, settings, database=master)
+        self.assertEqual(library.count(), 1)
+        self.assertEqual(Path(library.get(library.search("10001")[0]["id"])["path"]), self.songs / "10001.xmid")
+        self.assertEqual(library.path, master)
+
     def test_preview_and_publish_compatible_sqlite(self):
         before=build(self.root,publish=False)
         self.assertEqual(before["accepted"],1)

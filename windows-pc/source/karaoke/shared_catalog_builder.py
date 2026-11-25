@@ -86,12 +86,12 @@ def _pc_id(ident):
     return (h & ((1 << 53) - 1)) or 1
 
 
-def _root(value):
+def _root(value, *, local_only=False):
     root = Path(value).expanduser()
     if root.is_symlink() or not root.is_dir() or root.name in ("", ".", ".."):
         raise ValueError("กรุณาเลือกโฟลเดอร์หลักของคลังเพลงบน Google Drive for desktop")
     root = root.resolve(strict=True)
-    for kind in ("SONGS", "SOUNDFONT"):
+    for kind in (() if local_only else ("SONGS", "SOUNDFONT")):
         child = root / kind
         if not child.is_dir() or child.is_symlink():
             raise ValueError("ไม่มีโฟลเดอร์ " + kind + " ใน XStageKaraoke")
@@ -289,17 +289,19 @@ def _verified_rows(songs, root, references, cache_dir, cancel, full_verify, fing
             cache.commit()
 
 
-def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=None, full_verify=False, deduplicate=True, local_database=None, source_songs=None):
+def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=None, full_verify=False, deduplicate=True, local_database=None, source_songs=None, local_only=False):
     """Create fresh verified snapshot; atomically replace after explicit consent."""
-    root = _root(root_value)
+    root = _root(root_value, local_only=local_only)
+    if local_only and (source_songs is None or local_database is not None):
+        raise ValueError("Local build requires a song source and the standard PC destination")
     songs = _files(root, cancel, source_songs)
     if not songs:
         raise ValueError("ไม่มี XMID/XSK ที่พร้อมสร้างฐานในโฟลเดอร์ SONGS ของคลังที่เลือก")
-    old_file = root / "DB/songs.sqlite3"
+    old_file = root / ("DB/.online-pending.sqlite3" if local_only else "DB/songs.sqlite3")
     if old_file.is_symlink() or (old_file.exists() and not old_file.is_file()):
         raise ValueError("DB/songs.sqlite3 ไม่ใช่ไฟล์ SQLite ปกติ หยุดเพื่อไม่เขียนนอกคลัง")
     original_signature = _hash(old_file) if old_file.exists() else None
-    references = _old_refs(old_file)
+    references = {} if local_only else _old_refs(old_file)
     old_ids = _old_ids(old_file) if not deduplicate else {}
     rows, midi_hashes, paths, codes, ids = [], set(), set(), set(), set()
     duplicates = reused = 0
@@ -342,12 +344,12 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         return {"scanned": len(songs), "accepted": len(rows),
                 "duplicates": duplicates, "reused": reused,
                 "pending_drive_ids": sum(bool(row.get("pendingDriveLink")) for _, row in rows)}
-    for directory in ("DB", "CACHE", "BACKUP"):
+    for directory in (("DB",) if local_only else ("DB", "CACHE", "BACKUP")):
         (root / directory).mkdir(parents=True, exist_ok=True)
     # Share the same advisory lock namespace as the browser importer.
     # Drive Desktop propagation is asynchronous, so also re-check the old
     # snapshot immediately before committing the new database.
-    cache_root = root / "CACHE"
+    cache_root = root / ("DB" if local_only else "CACHE")
     for other in cache_root.glob(".xstage-import-lock-*"):
         if other.is_symlink():
             raise ValueError("CACHE มี symlink ของงานสร้างฐาน ไม่ปลอดภัย")
@@ -358,7 +360,7 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         json.dump({"format": "xstage-catalog-import-lock-v1",
                    "createdBy": "Karaoke PC", "pid": os.getpid(),
                    "createdAt": time.time()}, handle)
-    cloud_stage = root / "CACHE" / (".songs-" + secrets.token_hex(10) + ".sqlite3")
+    cloud_stage = cache_root / (".songs-" + secrets.token_hex(10) + ".sqlite3")
     stage = cloud_stage
     local_stage = None
     if local_database is not None:
@@ -398,12 +400,12 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         if (_hash(old_file) if old_file.exists() else None) != original_signature:
             raise ValueError("ฐานบน Google Drive เปลี่ยนระหว่างทำงาน กรุณาสร้างใหม่")
         if old_file.exists():
-            backup = root / "BACKUP" / (
+            backup = root / ("DB" if local_only else "BACKUP") / (
                 "songs-" + time.strftime("%Y%m%d-%H%M%S") + "-" +
                 original_signature[:12] + ".sqlite3.bak")
             shutil.copyfile(old_file, backup)
             if _hash(backup) != original_signature:
-                raise ValueError("ไฟล์สำรองฐานเดิมไม่ผ่าน SHA-256")
+                raise ValueError("ไฟล์สำรองฐานเดิมไม่ผ่านการตรวจ checksum")
         _stop(cancel)
         if local_database is not None:
             local = Path(local_database).absolute()

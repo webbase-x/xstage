@@ -109,10 +109,11 @@ def activate(home, data, settings, *, installed=False):
             if current == "pc":
                 settings["pc_only_backup"] = backup.name
         snapshot(staged, local)
-        if settings.get("shared_drive_root") != pending["root"]:
-            settings.pop("shared_drive_folder_id", None)
-        settings.update(library_mode="google-drive", shared_local_master=True,
-                        shared_drive_root=pending["root"])
+        if not pending.get("local_only"):
+            if settings.get("shared_drive_root") != pending["root"]:
+                settings.pop("shared_drive_folder_id", None)
+            settings["shared_drive_root"] = pending["root"]
+        settings.update(library_mode="google-drive", shared_local_master=True)
         settings["shared_source_songs"] = pending.get("source_songs") or str(Path(pending["root"]) / "SONGS")
         settings.pop("pending_online_master", None)
         settings.pop("pending_pc_only", None)
