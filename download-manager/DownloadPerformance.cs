@@ -182,9 +182,9 @@ public sealed class TransferRateGate
 
     public TransferRateGate(int limitKib = 0) => Configure(limitKib);
 
-    public void Configure(int limitKib)
+    public void Configure(int limitKib, bool sharedAllocation = false)
     {
-        if (limitKib != 0 && limitKib is < 64 or > 1_048_576)
+        if (limitKib != 0 && (limitKib < (sharedAllocation ? 1 : 64) || limitKib > 1_048_576))
             throw new ArgumentOutOfRangeException(nameof(limitKib),
                 "ความเร็วต้องเป็น 0 (ไม่จำกัด) หรือ 64–1048576 KiB/s");
         lock (_mutex)
