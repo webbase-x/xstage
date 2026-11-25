@@ -25,10 +25,8 @@ class MirrorAutoQuality(private val context: Context) {
     data class Profile(val width: Int, val height: Int, val fps: Int, val label: String)
     enum class Signal { NONE, CATCH_UP, RECOVER }
 
-    private val preferences = context.getSharedPreferences("xstage_mirror_auto_quality", Context.MODE_PRIVATE)
+    private val preferences = context.getSharedPreferences("xstage_mirror_stable_quality_v119", Context.MODE_PRIVATE)
     private val candidates = listOf(
-        Profile(1920, 1080, 60, "1080p60"),
-        Profile(1280, 720, 60, "720p60"),
         Profile(1920, 1080, 30, "1080p30"),
         Profile(1280, 720, 30, "720p30"),
         Profile(960, 540, 30, "540p30")
@@ -52,7 +50,9 @@ class MirrorAutoQuality(private val context: Context) {
     @Synchronized
     fun choose(): Profile {
         val possible = available
-        val requested = preferences.getInt("level", 0).coerceIn(0, possible.lastIndex)
+        val initialLevel = possible.indexOfFirst { it.width <= 1280 }.let { if (it < 0) 0 else it }
+        val requested = preferences.getInt("level", initialLevel).coerceIn(0, possible.lastIndex)
+        preferences.edit().putInt("level", requested).apply()
         val profile = possible[requested]
         active = profile
         pendingReannounce = false
@@ -207,13 +207,8 @@ class MirrorAutoQuality(private val context: Context) {
                     }.getOrDefault(false)
                 } == true
         }
-        // Prefer smoother 720p60 to sharper-but-slower 1080p30. If the
-        // receiver cannot handle 720p60, retain 1080p30 as a fallback.
-        // Avoid degrading from 720p60 to a heavier 1080p30 workload.
-        val motionFirst = if (supported.any { it.label == "720p60" }) {
-            supported.filterNot { it.label == "1080p30" }
-        } else supported
-        if (motionFirst.isNotEmpty()) return motionFirst
+        // AUTO favors stability: start at 720p30, then learn within 30 FPS profiles.
+        if (supported.isNotEmpty()) return supported
 
         // Incomplete manufacturer codec metadata is common. Avoid black-screen
         // by starting at a conservative size and allowing future diagnostics.
