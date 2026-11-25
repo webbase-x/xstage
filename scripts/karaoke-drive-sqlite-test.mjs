@@ -29,7 +29,7 @@ assert.ok(importer.includes('acquireCatalogLease(drive,cacheRoot,check,status)')
   'Multi-computer imports must coordinate a Drive writer lease');
 assert.ok(importer.includes("const {hashes:byMidi,duplicates:olderDuplicates,backfilled:olderHashes}"),
   'All existing MID/XSK/XMID sources must be indexed globally');
-assert.ok(app.includes("activeDriveCatalog(state.catalogDbDirId,token)"));
+assert.ok(app.includes("activeDriveCatalog(dbId,token)")&&app.includes("state.catalogDbDirId=dbId"),"Refresh resolves the selected root DB before reading it");
 assert.ok(importer.includes("moveToFolder"));
 assert.ok(!importer.includes("catalog-base-'+generation+'.json"));
 assert.ok(app.includes("pointer?.layoutVersion!==6"));

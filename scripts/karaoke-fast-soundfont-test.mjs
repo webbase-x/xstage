@@ -50,7 +50,7 @@ const fakeFetch=async(url,options={})=>{
     const parent=q.match(/'([^']+)' in parents/)?.[1]||'';
     driveParents.push({q,parent});
     const folders=parent==='root'
-      ?[{id:'font-root',name:'SoundFont',mimeType:'application/vnd.google-apps.folder'}]
+      ?[{id:'font-root',name:'SOUNDFONT',mimeType:'application/vnd.google-apps.folder'}]
       :parent==='font-root'
         ?[{id:'sf2-folder',name:'SF2',mimeType:'application/vnd.google-apps.folder'}]
         :parent==='sf2-folder'
@@ -113,7 +113,7 @@ assert.ok(/GM 6 MB/.test(midi.fontStatus().warning),
   'The player must tell the user why it uses the fast bank');
 assert.equal(largeDownloads,1,'The explicit large selection remains possible');
 assert.equal(midi.isFastGmBytes(quick),true);
-assert.equal(permission.hidden,true,'Already accessible SoundFonts require no extra grant');
+assert.equal(permission.hidden,false,'Limited scope must offer expanded read access even when banks are visible');
 explicitFolder='empty-folder';
 await midi.refreshFonts(auth);
 assert.equal(permission.hidden,false,'An empty explicit source offers permission recovery');

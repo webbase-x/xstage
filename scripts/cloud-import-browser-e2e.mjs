@@ -56,7 +56,7 @@ async function routeDrive(route){
     const meta=JSON.parse(req.postData());
     assert.equal(meta.mimeType,'application/vnd.google-apps.folder');
     const item={...meta,id:id(),ownedByMe:true};
-    group(meta.parents[0]).push(item);group(item.id);
+    group(meta.parents[0]).push(item);group(item.id);records.set(item.id,item);
     if(meta.parents[0]==='root')rootCreated++;
     return send(200,item);
   }
@@ -107,10 +107,13 @@ async function routeDrive(route){
   if(url.pathname.startsWith('/drive/v3/files/')&&method==='GET'){
     const itemId=url.pathname.split('/').pop();
     const item=records.get(itemId);assert.ok(item,'Unknown Drive file ID '+itemId);
-    if(url.searchParams.get('alt')==='media')
+    if(url.searchParams.get('alt')==='media'){
+      assert.ok(item.data,'Only file records have media bytes');
       return route.fulfill({status:200,headers:{...cors,'Content-Type':'application/json',
         'Content-Length':String(item.data.length)},body:item.data});
-    return send(200,item);
+    }
+    const {data,...metadata}=item;
+    return send(200,metadata);
   }
   if(url.pathname.startsWith('/drive/v3/files/')&&method==='PATCH'){
     const itemId=url.pathname.split('/').pop();
@@ -138,7 +141,7 @@ async function routeDrive(route){
   if(url.pathname.startsWith('/upload/drive/v3/files/')&&method==='PATCH'){
     const itemId=url.pathname.split('/').pop();
     const existing=records.get(itemId);
-    assert.ok(existing,'Update must target an existing current.json ID');
+    assert.ok(existing,'Update must target an existing file ID');
     const bytes=req.postDataBuffer();
     existing.data=bytes;existing.size=String(bytes.length);
     existing.md5Checksum=createHash('md5').update(bytes).digest('hex');
