@@ -547,7 +547,7 @@
 // Standalone stage clock: survives player initialization or Google login failures.
 (function(){const clocks=document.querySelectorAll('.stage-clock');if(!clocks.length)return;const tick=()=>{const time=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});clocks.forEach(clock=>clock.textContent=time);};tick();setInterval(tick,1000);})();
 </script>
-<script src="config.js?v=1214-fx-folder"></script>
+<script src="config.js?v=1218-fx-folder"></script>
 <script>
 window.XSTAGE_RELEASE={version:'1.0.218',build:1218};
 document.addEventListener('DOMContentLoaded',function(){
@@ -580,7 +580,7 @@ document.addEventListener('DOMContentLoaded',function(){
   <script src="app.js?v=1218-fixed-layout" defer></script><script src="pc-extensions.js?v=1206-scoped-fx" defer></script>
   <script src="midi-keyboard-ui.js?v=1215-mobile-manual" defer></script>
   <script src="native-audio-meter.js?v=1218" defer></script>
-  <script src="stage-controls.js?v=1214-monitor-only-eq" defer></script>
+  <script src="stage-controls.js?v=1218-monitor-only-eq" defer></script>
   <script src="mobile-layout.js?v=1202-menu" defer></script>
   <script src="android-apk-download.js?v=1218" defer></script>
 

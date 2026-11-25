@@ -862,8 +862,15 @@ const windowsUpdateMetadata=JSON.parse(read('downloads/windows-pc-latest.json'))
 const windowsSourceManifest=JSON.parse(read('windows-pc/manifest.json'));
 // Windows installers have their own release channel; Android/Web may ship a
 // hotfix without falsely advertising a Windows installer at the same version.
-assert.equal(windowsUpdateMetadata.version,windowsSourceManifest.version,'Windows metadata must match its own Windows source version');
-assert.equal(windowsUpdateMetadata.build,windowsSourceManifest.build,'Windows metadata must match its own Windows build');
+assert.match(windowsUpdateMetadata.version,/^\d+\.\d+\.\d+$/,'Windows release feed must have a valid version');
+assert.ok(Number.isInteger(windowsUpdateMetadata.build)&&windowsUpdateMetadata.build>0&&windowsUpdateMetadata.build<=windowsSourceManifest.build,'Windows release feed may lag an unreleased Windows source build, but never advertise a future build');
+if(windowsUpdateMetadata.available){
+  assert.equal(windowsUpdateMetadata.version,windowsSourceManifest.version);
+  assert.equal(windowsUpdateMetadata.build,windowsSourceManifest.build);
+}else{
+  assert.equal(windowsUpdateMetadata.installer_file,null,'Unpublished Windows installer must not be advertised');
+  assert.equal(windowsUpdateMetadata.sha256,null,'Unpublished Windows installer must not advertise a hash');
+}
 const windowsUpdateHelper=read('windows-pc/Check-Update.ps1');
 const windowsStartupLauncher=read('windows-pc/Start-XStage-With-Updates.ps1');
 assert.ok(windowsStartupLauncher.includes("Start-Process -FilePath $executable"),'Windows launcher must start the installed app');
