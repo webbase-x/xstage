@@ -99,8 +99,7 @@ def open_shared_drive_catalog(app):
                     report_error(error)
                     return
                 selected_root.set(info["root"])
-                app.settings["shared_drive_root"] = info["root"]
-                app.save_settings()
+                # Browsing does not change the active PC library root.
                 results.clear()
                 for item in tree.get_children():
                     tree.delete(item)
@@ -164,30 +163,23 @@ def open_shared_drive_catalog(app):
         except (ValueError, OSError) as error:
             messagebox.showerror("ยังใช้ฐานร่วมไม่ได้", str(error), parent=window)
             return
-        app.settings["shared_drive_root"] = root
-        app.settings["shared_drive_folder_id"] = verified_id
-        app.settings["library_mode"] = "google-drive"
-        app.save_settings()
-        summary.set("บันทึกแล้ว · X-Stage Karaoke PC จะใช้ DB/songs.sqlite3 จาก Google Drive "
-                    "เป็นฐานหลักเมื่อเปิดโปรแกรมใหม่")
-        messagebox.showinfo("เลือกฐาน Google Drive แล้ว",
-            "เลือกฐานเดียวกับ Karaoke Online แล้ว\n"
-            "ปิดและเปิด Karaoke PC ใหม่เพื่อให้ระบบค้นหา คิวเพลง และการเล่น "
-            "ใช้ SQLite ร่วมทุกส่วน โดยไม่สร้างฐานเพลง PC อีกชุด", parent=window)
+        from .shared_catalog_builder_ui import open_builder
+        open_builder(app, initial_root=root)
 
     def use_local_as_main():
         if not messagebox.askyesno("กลับไปใช้ฐานภายใน PC",
             "สลับกลับไปใช้ฐานเพลงภายในเครื่องเมื่อเปิดโปรแกรมใหม่? "
             "ไม่ลบฐาน Google Drive หรือคิวเพลงเดิม", parent=window):
             return
-        app.settings["library_mode"] = "local"
+        app.settings["pending_pc_only"] = True
+        app.settings.pop("pending_online_master", None)
         app.save_settings()
         summary.set("เลือกฐานภายใน PC แล้ว · มีผลหลังเปิดโปรแกรมใหม่")
 
     refresh = ttk.Button(search_row, text="ตรวจฐาน / ค้นหา", command=load)
     refresh.pack(side="left", padx=(8, 0))
     search_input.bind("<Return>", lambda event: load())
-    ttk.Button(actions, text="ใช้ Google Drive เป็นฐานหลักของ PC", command=use_shared_as_main).pack(side="left", padx=(0,8))
+    ttk.Button(actions, text="สร้างฐาน PC จาก Google Drive", command=use_shared_as_main).pack(side="left", padx=(0,8))
     ttk.Button(actions, text="กลับใช้ฐานในเครื่อง", command=use_local_as_main).pack(side="left", padx=(0,8))
     ttk.Button(actions, text="เล่นจากฐาน Google Drive ใน PC", command=play_selected).pack(side="left")
     ttk.Button(actions, text="ปิด", command=window.destroy).pack(side="right")
