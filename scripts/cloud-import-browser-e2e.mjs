@@ -44,7 +44,7 @@ async function routeDrive(route){
   if(url.pathname==='/drive/v3/files'&&method==='GET'){
     const q=url.searchParams.get('q')||'';
     const parent=q.match(/'([^']+)' in parents/)?.[1]||'root';
-    let items=group(parent);
+    let items=group(parent).filter(item=>!item.trashed);
     // Match Google Drive's server-side name predicate, including DB lookups
     // during player auth restore. Returning all sibling folders made a valid
     // XStageKaraoke appear to contain duplicate DBs and logged the user out.
@@ -55,8 +55,8 @@ async function routeDrive(route){
   if(url.pathname==='/drive/v3/files'&&method==='POST'){
     const meta=JSON.parse(req.postData());
     assert.equal(meta.mimeType,'application/vnd.google-apps.folder');
-    const item={...meta,id:id(),ownedByMe:true};
-    group(meta.parents[0]).push(item);group(item.id);
+    const item={...meta,id:id(),ownedByMe:true,createdTime:new Date().toISOString()};
+    group(meta.parents[0]).push(item);group(item.id);records.set(item.id,item);
     if(meta.parents[0]==='root')rootCreated++;
     return send(200,item);
   }
@@ -106,7 +106,8 @@ async function routeDrive(route){
   }
   if(url.pathname.startsWith('/drive/v3/files/')&&method==='GET'){
     const itemId=url.pathname.split('/').pop();
-    const item=records.get(itemId);assert.ok(item,'Unknown Drive file ID '+itemId);
+    const item=records.get(itemId);if(!item||item.trashed)return send(404,{error:{message:'File not found'}});
+    if(url.searchParams.get('alt')==='media'&&!item.data)return send(400,{error:{message:'Folder has no media'}});
     if(url.searchParams.get('alt')==='media')
       return route.fulfill({status:200,headers:{...cors,'Content-Type':'application/json',
         'Content-Length':String(item.data.length)},body:item.data});

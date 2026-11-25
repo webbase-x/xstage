@@ -11,7 +11,7 @@ assert.ok(version.build>=1144,'revision must not regress');
 assert.ok(page.indexOf('drive-sqlite.js?v=')>0&&
   page.indexOf('drive-sqlite.js?v=')<page.indexOf('cloud-import.js?v='),
   'Shared SQLite codec must load before importer');
-assert.ok(app.includes('codec.read(new Uint8Array(buffer))'));
+assert.ok(app.includes('codec.read(bytes)')&&app.includes('response.body?.getReader')&&app.includes('total>maxBytes'),'Bound SQLite reads before decoding');
 assert.ok(importer.includes("application/vnd.sqlite3"));
 assert.ok(!importer.includes("catalog-delta-'+generation+'.sqlite3"));
 assert.ok(importer.includes("'songs.sqlite3'"));
@@ -29,7 +29,7 @@ assert.ok(importer.includes('acquireCatalogLease(drive,cacheRoot,check,status)')
   'Multi-computer imports must coordinate a Drive writer lease');
 assert.ok(importer.includes("const {hashes:byMidi,duplicates:olderDuplicates,backfilled:olderHashes}"),
   'All existing MID/XSK/XMID sources must be indexed globally');
-assert.ok(app.includes("activeDriveCatalog(state.catalogDbDirId,token)"));
+assert.ok(app.includes("activeDriveCatalog(dbId,token)")&&app.includes('sameCatalogSession()'),'Poll the pinned library and discard stale responses');
 assert.ok(importer.includes("moveToFolder"));
 assert.ok(!importer.includes("catalog-base-'+generation+'.json"));
 assert.ok(app.includes("pointer?.layoutVersion!==6"));

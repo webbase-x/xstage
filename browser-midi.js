@@ -665,8 +665,11 @@ async function refreshFonts(auth){
       if(!sourceId){
         const categories=await listFolder(rootId,auth.token);
         const soundFolders=categories.filter(x=>
-          x.name==='SOUNDFONT'&&x.mimeType==='application/vnd.google-apps.folder');
-        if(soundFolders.length>1)fail('พบ SOUNDFONT ซ้ำใน XStageKaraoke');
+          String(x.name||'').toLowerCase()==='soundfont');
+        if(soundFolders.length>1||soundFolders.some(x=>x.mimeType!=='application/vnd.google-apps.folder'))
+          fail('พบ SOUNDFONT ซ้ำหรือชนกับไฟล์ใน XStageKaraoke');
+        if(soundFolders.length&&soundFolders[0].name!=='SOUNDFONT')
+          fail('กรุณาตั้งชื่อโฟลเดอร์เป็น SOUNDFONT ผ่านเมนูจัดการคลัง');
         sourceId=soundFolders[0]?.id||'';
         sourceName=soundFolders[0]?.name||'SoundFont';
       }
@@ -708,7 +711,7 @@ async function refreshFonts(auth){
       const accessHint=fullRead?' · ตรวจครบในโฟลเดอร์ที่เลือก':
         ' · เฉพาะไฟล์ที่ Google อนุญาต อาจยังไม่ครบ';
       if(status)status.textContent=summary+accessHint+(!fullRead?' · เปิดสิทธิ์เพิ่มเติมในเมนูจัดการคลัง':'');
-      showPermission(!fullRead&&!!chosenFolder,summary+accessHint+
+      showPermission(!fullRead,summary+accessHint+
         (!fullRead?' · กดอนุญาตอ่านทุกไฟล์ หรืออนุญาตไฟล์ที่ขาด':' · พร้อมเลือกใช้งานจากเมนู SoundFont'));
       const storageKey='xstage-font-pref:'+sub+':'+rootId+':'+(chosenFolder||'default');
       let saved='';
@@ -786,7 +789,7 @@ async function refreshFonts(auth){
     }catch(error){
       if(sequence!==fontRefreshSequence)return;
       if(status)status.textContent='อ่านรายการไม่ได้: '+String(error.message);
-      showPermission(!scope.XStageDriveReadAccess?.()&&!!chosenFolder,'อ่านรายการไม่ได้: '+String(error.message));
+      showPermission(!scope.XStageDriveReadAccess?.(),'อ่านรายการไม่ได้: '+String(error.message));
       select.replaceChildren(...choices);
       const option=new Option('SoundFont: '+String(error.message).slice(0,80),'');
       option.disabled=true;select.append(option);
