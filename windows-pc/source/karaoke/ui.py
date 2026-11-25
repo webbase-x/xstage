@@ -153,7 +153,8 @@ class KaraokeApp(tk.Tk):
             from .shared_song_library import SharedSongLibrary, UnavailableSharedSongLibrary
             root = str(self.settings.get("shared_drive_root", ""))
             try:
-                self.library = SharedSongLibrary(root,self.settings,self.save_settings)
+                self.library = SharedSongLibrary(root,self.settings,self.save_settings,
+                    database=(self.home / "DB" / "songs.sqlite3" if self.settings.get("shared_local_master") else None))
             except (OSError,ValueError,sqlite3.DatabaseError) as error:
                 self.shared_drive_error = str(error)
                 self.library = UnavailableSharedSongLibrary(root,error)
