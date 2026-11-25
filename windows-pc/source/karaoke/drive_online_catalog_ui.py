@@ -156,10 +156,8 @@ def open_shared_drive_catalog(app):
 
     def use_shared_as_main():
         try:
-            from .shared_song_library import validate_shared
-            root = str(validate_shared(selected_root.get().strip()))
-            from .shared_drive_layout import drive_folder_id
-            verified_id = drive_folder_id(drive_id.get())
+            from .shared_catalog_builder import _root
+            root = str(_root(selected_root.get().strip()))
         except (ValueError, OSError) as error:
             messagebox.showerror("ยังใช้ฐานร่วมไม่ได้", str(error), parent=window)
             return
@@ -173,7 +171,7 @@ def open_shared_drive_catalog(app):
             from .shared_drive_layout import drive_folder_id
             verified_id = drive_folder_id(drive_id.get())
             if not messagebox.askyesno("ใช้ฐานที่เผยแพร่แล้ว",
-                "ใช้ DB/songs.sqlite3 ที่ Google Drive ซิงก์ลงเครื่องเป็นฐานหลักแบบอ่านอย่างเดียวเมื่อเปิดโปรแกรมใหม่?\nตรวจให้ Drive ซิงก์เสร็จก่อน",
+                "สำเนา DB/songs.sqlite3 ที่ซิงก์จาก Google Drive ไป App/DB/songs.sqlite3 เป็นฐานหลักเมื่อเปิดโปรแกรมใหม่?\nตรวจให้ Drive ซิงก์เสร็จก่อน",
                 parent=window):
                 return
             app.settings["pending_shared_drive"] = {"root": root}
@@ -199,7 +197,7 @@ def open_shared_drive_catalog(app):
     refresh = ttk.Button(search_row, text="ตรวจฐาน / ค้นหา", command=load)
     refresh.pack(side="left", padx=(8, 0))
     search_input.bind("<Return>", lambda event: load())
-    ttk.Button(actions, text="สร้างฐานรอเผยแพร่", command=use_shared_as_main).pack(side="left", padx=(0,8))
+    ttk.Button(actions, text="สร้างฐาน PC และสำเนา Drive", command=use_shared_as_main).pack(side="left", padx=(0,8))
     ttk.Button(actions, text="ใช้ฐานร่วมที่เผยแพร่แล้ว", command=use_published_as_main).pack(side="left", padx=(0,8))
     ttk.Button(actions, text="กลับใช้ฐานในเครื่อง", command=use_local_as_main).pack(side="left", padx=(0,8))
     ttk.Button(actions, text="เล่นจากฐาน Google Drive ใน PC", command=play_selected).pack(side="left")

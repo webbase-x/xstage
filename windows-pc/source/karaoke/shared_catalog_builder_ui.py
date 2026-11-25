@@ -39,7 +39,7 @@ def open_builder(app, initial_root=None):
 
     full_verify = tk.BooleanVar(value=False)
     ttk.Checkbutton(frame, text="ตรวจแพ็กเกจใหม่ทั้งหมด (ช้ากว่า)", variable=full_verify).pack(anchor="w")
-    status = tk.StringVar(value="เลือกคลังเพลง แล้วสร้างฐานที่ตรวจ MIDI ซ้ำก่อนเผยแพร่")
+    status = tk.StringVar(value="สร้างฐานหลัก App/DB/songs.sqlite3 ก่อน แล้วสำเนาไป Google Drive/DB")
     ttk.Label(frame, textvariable=status, style="Muted.TLabel",
               wraplength=860).pack(fill="x", pady=8)
     progress = ttk.Progressbar(frame, mode="determinate", maximum=100)
@@ -76,6 +76,9 @@ def open_builder(app, initial_root=None):
         drive = None
         name = None
         if publish:
+            if getattr(app, "engine", None) is not None:
+                status.set("หยุดเล่นเพลงก่อนเปลี่ยนฐานหลัก PC · คิวเดิมจะเก็บไว้")
+                return
             roots = drive_roots()
             if not roots:
                 if messagebox.askyesno("ไม่พบ Google Drive", "PC + Online ต้องใช้ Google Drive for desktop ที่เข้าสู่ระบบแล้ว\nเปิดหน้าดาวน์โหลด Google Drive หรือไม่?", parent=panel):
@@ -95,8 +98,9 @@ def open_builder(app, initial_root=None):
                 "ยืนยันสร้าง SQLite ใหม่จาก Karaoke PC",
                 "จะคัดลอก XMID/XSK2 ไปยังคลัง Google Drive หากอยู่นอกคลัง\n"
                 "เก็บต้นฉบับไว้ ไม่เขียนทับไฟล์ชื่อเดียวกันที่ต่างกัน\n"
-                "สร้าง SQLite ที่ตรวจ MIDI ซ้ำ แล้วส่งฐานรอเผยแพร่ไป CACHE\n"
-                "หลัง Drive ซิงก์ขึ้น Cloud ให้เปิด Online > จัดการคลัง > เผยแพร่ฐานที่สร้างจาก PC\n"
+                "สร้างฐานหลัก App/DB/songs.sqlite3 และตรวจ SQLite ให้เสร็จก่อน\n"
+                "จากนั้นสำรองฐาน Drive เดิมและสำเนาไป Google Drive/DB/songs.sqlite3\n"
+                "หากฐาน Drive เปลี่ยนหรือกำลังเผยแพร่ จะไม่เขียนทับ · ฐาน PC ยังอยู่\n"
                 "ฐานงานผลิตของ Song Studio ไม่เปลี่ยน",
                 parent=panel
             ):
@@ -104,6 +108,9 @@ def open_builder(app, initial_root=None):
         verify_all = full_verify.get()
         state["busy"] = True
         app._shared_build_busy = True
+        if publish:
+            app.scanning = True
+            panel.grab_set()
         stop.clear()
         inspect.configure(state="disabled")
         confirm.configure(state="disabled")
@@ -116,7 +123,7 @@ def open_builder(app, initial_root=None):
                 # Windows refuses to atomically replace an open SQLite file.
                 # Close the long-lived PC search reader without touching the
                 # playback engine; reopen search after publication.
-                if publish and getattr(app, "shared_drive_mode", False) and not app.settings.get("shared_local_master"):
+                if publish:
                     condition = getattr(app, "_search_condition", None)
                     if condition is not None:
                         with condition:
@@ -140,7 +147,7 @@ def open_builder(app, initial_root=None):
                 result = builder.build(root, progress=update, cancel=stop,
                                        publish=publish, cache_dir=Path(app.data_dir) / "index-cache",
                                        full_verify=verify_all, deduplicate=True,
-                                       candidate_only=publish)
+                                       local_database=(Path(app.home) / "DB" / "songs.sqlite3") if publish else None)
                 result["root"] = str(root)
             except Exception as exc:
                 result, error = None, str(exc)
@@ -149,9 +156,15 @@ def open_builder(app, initial_root=None):
                     app._search_stopping = False
             def finish():
                 app._shared_build_busy = False
+                if publish:
+                    app.scanning = False
+                    try:
+                        panel.grab_release()
+                    except tk.TclError:
+                        pass
                 if state["closed"]:
                     return
-                if reader_stopped and getattr(app, "shared_drive_mode", False):
+                if reader_stopped and error:
                     # Recreate only the search worker, not the active player.
                     try:
                         app.refresh_library()
@@ -174,19 +187,45 @@ def open_builder(app, initial_root=None):
                 else:
                     state["approved"] = None
                     folder.set(result["root"])
-                    messagebox.showinfo("สร้างฐานรอเผยแพร่สำเร็จ",
-                        "ฐานที่ตรวจแล้วอยู่ใน CACHE และยังไม่แทนที่ DB เดิม\n"
-                        "หลัง Google Drive ซิงก์ ให้เปิด Karaoke Online > จัดการคลัง > เผยแพร่ฐานที่สร้างจาก PC",
-                        parent=panel)
-                    status.set("สร้างฐานรอเผยแพร่ "+str(result["accepted"]) +
-                               " เพลง · MIDI ซ้ำ "+str(result["duplicates"]) +
-                               " · "+result["database"]+" · ยังไม่ยืนยัน Cloud")
-                    if getattr(app, "shared_drive_mode", False):
-                        try:
-                            app.refresh_library()
-                            app.refresh_queue()
-                        except (OSError, ValueError):
-                            pass
+                    from .shared_song_library import SharedSongLibrary
+                    from .library import SongQueue
+                    previous_shared = getattr(app, "shared_drive_mode", False)
+                    if app.settings.get("shared_drive_root") != result["root"]:
+                        app.settings.pop("shared_drive_folder_id", None)
+                    app.settings.update(library_mode="google-drive", shared_local_master=True,
+                                        shared_drive_root=result["root"],
+                                        local_master_generation=result["generation"])
+                    for key in ("pending_pc_only", "pending_online_master", "pending_shared_drive"):
+                        app.settings.pop(key, None)
+                    if result.get("pc_only_backup"):
+                        app.settings["pc_only_backup"] = result["pc_only_backup"]
+                    app.library = SharedSongLibrary(result["root"], app.settings, app.save_settings,
+                                                    database=Path(result["database"]))
+                    app.shared_drive_mode = True
+                    app.shared_drive_error = ""
+                    if not previous_shared:
+                        app.song_queue = SongQueue(Path(app.data_dir) / "drive-queue.json")
+                    try:
+                        app.save_settings()
+                    except (OSError, ValueError) as exc:
+                        status.set("ฐานหลัก PC บันทึกแล้ว · บันทึกค่าตั้งไม่สำเร็จ: "+str(exc))
+                        return
+                    try:
+                        app.refresh_library()
+                        app.refresh_queue()
+                    except (OSError, ValueError):
+                        pass
+                    if result.get("drive_copied"):
+                        messagebox.showinfo("สร้างฐานและสำเนาสำเร็จ",
+                            "ฐานหลัก: "+result["database"]+"\nสำเนา: "+result["drive_database"]+
+                            "\nSHA-256 ตรงกัน · รอ Google Drive for desktop ซิงก์ขึ้น Cloud",
+                            parent=panel)
+                        status.set("สร้างฐาน PC "+str(result["accepted"])+" เพลง · สำเนา Drive/DB สำเร็จ · ยังไม่ยืนยัน Cloud")
+                    else:
+                        messagebox.showwarning("ฐาน PC พร้อม · สำเนา Drive ยังไม่เสร็จ",
+                            "ฐานหลัก PC ใช้งานได้แล้ว\n"+result.get("drive_error","ตรวจการเชื่อมต่อ Drive"),
+                            parent=panel)
+                        status.set("ฐาน PC บันทึกแล้ว · ยังไม่สำเนา Drive: "+result.get("drive_error",""))
             try:
                 app.after(0, finish)
             except RuntimeError:
@@ -196,7 +235,7 @@ def open_builder(app, initial_root=None):
 
     inspect = ttk.Button(buttons, text="ตรวจเพลงซ้ำ (คลัง Drive)", command=lambda: submit(False))
     inspect.pack(side="left", padx=(0, 10))
-    confirm = ttk.Button(buttons, text="สร้างฐานรอเผยแพร่",
+    confirm = ttk.Button(buttons, text="สร้างฐานและสำเนาไป Drive",
                          command=lambda: submit(True))
     confirm.pack(side="left", padx=(0, 10))
     cancel = ttk.Button(buttons, text="หยุดอย่างปลอดภัย",

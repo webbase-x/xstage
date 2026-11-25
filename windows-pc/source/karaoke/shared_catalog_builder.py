@@ -79,6 +79,159 @@ def _hash(path):
     return digest.hexdigest()
 
 
+def _sha256(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _safe_file(path):
+    if (path.is_symlink() or getattr(path, "is_junction", lambda: False)()
+            or (path.exists() and not path.is_file())):
+        raise ValueError("ไฟล์ฐานข้อมูลไม่ปลอดภัย: " + str(path))
+
+
+def _no_sidecars(path):
+    for suffix in ("-wal", "-shm", "-journal"):
+        side = path.with_name(path.name + suffix)
+        if side.exists() or side.is_symlink():
+            raise ValueError("ฐานมี SQLite journal ค้าง · ไม่คัดลอก: " + str(path))
+
+
+def _verify_snapshot(path, generation):
+    _safe_file(path)
+    _no_sidecars(path)
+    with path.open("rb") as handle:
+        header = handle.read(100)
+    if len(header) < 100 or header[:16] != b"SQLite format 3\x00" or header[18:20] != b"\x01\x01":
+        raise ValueError("ฐานไม่ใช่ SQLite snapshot แบบไฟล์เดียว")
+    with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True)) as db:
+        db.execute("PRAGMA trusted_schema=OFF")
+        meta = dict(db.execute("SELECT key,value FROM catalog_meta"))
+        if (meta.get("format"), meta.get("pcSchema"), meta.get("schemaVersion"),
+                meta.get("kind"), meta.get("pathBase"), meta.get("generation")) != (
+                "xstage-sqlite3-v1", "shared-v1", "1", "snapshot", "SONGS", generation):
+            raise ValueError("โครงสร้างหรือรุ่นฐานร่วมไม่ตรงกัน")
+        if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise ValueError("SQLite ไม่ผ่าน integrity_check")
+    return _sha256(path)
+
+
+def _copy_verified(source, target, sha, cancel=None):
+    # Unique staging path only. Verify exact bytes, not a new SQLite backup
+    # whose page layout could differ from the completed local master.
+    with source.open("rb") as src, target.open("xb") as dst:
+        while True:
+            if cancel is not None and cancel.is_set():
+                raise InterruptedError("หยุดสำเนาฐาน · ฐานหลัก PC ยังอยู่")
+            chunk = src.read(1024 * 1024)
+            if not chunk:
+                break
+            dst.write(chunk)
+        dst.flush()
+        os.fsync(dst.fileno())
+    if _sha256(target) != sha or _sha256(source) != sha:
+        raise ValueError("SHA-256 สำเนาไม่ตรงกับฐานต้นฉบับ")
+
+
+def _write_master_receipt(local, root, generation, base_sha, backup):
+    # Local recovery journal only; absolute PC paths never enter the Drive DB.
+    receipt = local.parent / ".xstage-pc-master.json"
+    _safe_file(receipt)
+    temp = receipt.with_name(".xstage-pc-master-" + secrets.token_hex(12) + ".tmp")
+    try:
+        with temp.open("x", encoding="utf-8") as out:
+            json.dump({"format": "xstage-pc-master-v1", "root": str(root),
+                       "generation": generation, "baseSha256": base_sha,
+                       "backup": backup or ""}, out, ensure_ascii=False)
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(temp, receipt)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def _copy_to_drive(local, root, generation, base_sha, cancel=None):
+    """Publish only a completed standalone local master. Drive Desktop sync
+    is asynchronous: this is a local compare-and-replace, not a cloud CAS."""
+    root = _root(root)
+    target = root / "DB/songs.sqlite3"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    cache = root / "CACHE"
+    cache.mkdir(exist_ok=True)
+    backups = root / "BACKUP"
+    backups.mkdir(exist_ok=True)
+    sha = _verify_snapshot(local, generation)
+    def baseline():
+        _safe_file(target)
+        _no_sidecars(target)
+        return _sha256(target) if target.exists() else None
+    current = baseline()
+    if current == sha:
+        return str(target)
+    if current != base_sha:
+        raise ValueError("ฐาน Drive เปลี่ยนจากตอนเริ่มสร้าง · เก็บฐาน PC ไว้ ไม่เขียนทับ")
+    # Existing Online-only media must not silently disappear on a package-only
+    # rebuild. Ask the user to reconcile those media in Online before copying.
+    if target.exists():
+        with closing(sqlite3.connect(target.resolve().as_uri() + "?mode=ro&immutable=1", uri=True)) as db:
+            db.execute("PRAGMA trusted_schema=OFF")
+            if db.execute("SELECT 1 FROM songs WHERE upper(source_format) NOT IN ('XMID','XSK') LIMIT 1").fetchone():
+                raise ValueError("ฐาน Drive มีเพลงรูปแบบอื่นนอก XMID/XSK · ยังไม่แทนที่เพื่อรักษารายการเดิม")
+    lock = cache / (".xstage-import-lock-pc-" + secrets.token_hex(12) + ".json")
+    def assert_no_other_writer():
+        for other in cache.glob(".xstage-import-lock-*"):
+            if other == lock:
+                continue
+            _safe_file(other)
+            if other.is_file() and time.time() - other.stat().st_mtime < 300:
+                raise ValueError("อีกอุปกรณ์กำลังเผยแพร่ฐาน · ไม่เขียนทับ Drive")
+        if not lock.is_file() or lock.is_symlink():
+            raise ValueError("สูญเสียสิทธิ์เผยแพร่ฐาน PC")
+        os.utime(lock, None)
+    stage = cache / (".songs-pc-copy-" + secrets.token_hex(12) + ".sqlite3")
+    try:
+        with lock.open("x", encoding="utf-8") as handle:
+            json.dump({"format": "xstage-catalog-import-lock-v1",
+                       "createdBy": "Karaoke PC", "createdAt": time.time()}, handle)
+        assert_no_other_writer()
+        _copy_verified(local, stage, sha, cancel)
+        _verify_snapshot(stage, generation)
+        assert_no_other_writer()
+        if baseline() != base_sha:
+            raise ValueError("ฐาน Drive เปลี่ยนระหว่างคัดลอก · ไม่เขียนทับ")
+        if target.exists():
+            backup = backups / ("songs-pc-" + secrets.token_hex(12) + ".sqlite3.bak")
+            try:
+                _copy_verified(target, backup, base_sha, cancel)
+            except Exception:
+                backup.unlink(missing_ok=True)
+                raise
+        elif any(cache.glob(".xstage-catalog-intent-*.json")):
+            raise ValueError("พบงานเผยแพร่ Online ค้าง · กู้คืนฐานเดิมก่อน")
+        assert_no_other_writer()
+        if baseline() != base_sha:
+            raise ValueError("ฐาน Drive เปลี่ยนก่อนเผยแพร่ · ไม่เขียนทับ")
+        if cancel is not None and cancel.is_set():
+            raise InterruptedError("หยุดสำเนาฐาน · ฐานหลัก PC ยังอยู่")
+        if base_sha is None:
+            # Never overwrite a newly appeared file on first publication.
+            if os.name == "nt":
+                stage.rename(target)
+            else:
+                os.link(stage, target)
+        else:
+            os.replace(stage, target)
+        if _verify_snapshot(target, generation) != sha:
+            raise ValueError("ฐาน Drive หลังคัดลอกไม่ตรงกับฐาน PC")
+        return str(target)
+    finally:
+        stage.unlink(missing_ok=True)
+        lock.unlink(missing_ok=True)
+
+
 def _pc_id(ident):
     h = 14695981039346656037
     for byte in ident.encode("utf-8"):
@@ -292,8 +445,9 @@ def _verified_rows(songs, root, references, cache_dir, cancel, full_verify, fing
 def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=None, full_verify=False, deduplicate=True, local_database=None, candidate_only=False):
     """Build a verified snapshot. Drive Desktop production UI uses candidate_only.
 
-    A candidate is never the active catalog; the Online publisher validates the
-    actual cloud revision and every package before making it canonical.
+    With local_database set, commit the verified App/DB master first and
+    then copy its exact bytes to Drive DB. Candidate-only is an optional
+    compatibility path for cloud-mediated publication, not the PC default.
     """
     if candidate_only and not deduplicate:
         raise ValueError("ฐานร่วมต้องตรวจ MIDI ซ้ำก่อนส่งเผยแพร่")
@@ -304,7 +458,9 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
     old_file = root / "DB/songs.sqlite3"
     if old_file.is_symlink() or (old_file.exists() and not old_file.is_file()):
         raise ValueError("DB/songs.sqlite3 ไม่ใช่ไฟล์ SQLite ปกติ หยุดเพื่อไม่เขียนนอกคลัง")
+    local_first = local_database is not None and not candidate_only
     original_signature = _hash(old_file) if old_file.exists() else None
+    original_sha = _sha256(old_file) if local_first and old_file.exists() else None
     references = _old_refs(old_file)
     old_ids = _old_ids(old_file) if not deduplicate else {}
     rows, midi_hashes, paths, codes, ids = [], set(), set(), set(), set()
@@ -355,7 +511,7 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
     # snapshot immediately before committing the new database.
     cache_root = root / "CACHE"
     lock = None
-    if not candidate_only:
+    if not candidate_only and not local_first:
         for other in cache_root.glob(".xstage-import-lock-*"):
             if other.is_symlink():
                 raise ValueError("CACHE มี symlink ของงานสร้างฐาน ไม่ปลอดภัย")
@@ -370,7 +526,10 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
     stage = cloud_stage
     local_stage = None
     if local_database is not None:
-        stage = Path(local_database).absolute().parent / (".songs-" + secrets.token_hex(10) + ".sqlite3")
+        local_target = Path(local_database).absolute()
+        if root in local_target.resolve().parents or local_target.resolve() == old_file.resolve():
+            raise ValueError("ฐานหลัก PC ต้องอยู่แยกจาก Drive")
+        stage = local_target.parent / (".songs-" + secrets.token_hex(10) + ".sqlite3")
 
     try:
         if stage.parent.is_symlink() or getattr(stage.parent, "is_junction", lambda: False)():
@@ -406,6 +565,41 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         if stage.stat().st_size > MAX_SQLITE_BYTES:
             raise ValueError("ฐาน SQLite ใหญ่เกิน 192 MiB ที่ Online รองรับ")
         _stop(cancel)
+        if local_first:
+            from .local_master import kind, snapshot, _prepare_replacement
+            local = Path(local_database).absolute()
+            if local.resolve() == old_file.resolve() or root in local.resolve().parents:
+                raise ValueError("ฐานหลัก PC ต้องแยกจาก Google Drive")
+            _safe_file(local)
+            _verify_snapshot(stage, generation)
+            prior = kind(local)
+            backup = None
+            if prior:
+                backup = local.with_name(prior + "-" + secrets.token_hex(12) + ".sqlite3.bak")
+                snapshot(local, backup)
+            _prepare_replacement(local)
+            _stop(cancel)
+            if local.name == "songs.sqlite3":
+                _write_master_receipt(local, root, generation, original_sha,
+                                      backup.name if prior == "pc" else "")
+            # Commit the local DB before any Drive publication.
+            os.replace(stage, local)
+            local_sha = _verify_snapshot(local, generation)
+            result = {"scanned": len(songs), "accepted": len(rows),
+                      "duplicates": duplicates, "reused": reused, "generation": generation,
+                      "database": str(local), "sha256": local_sha, "local_committed": True,
+                      "pc_only_backup": backup.name if prior == "pc" else "",
+                      "drive_copied": False, "drive_database": str(old_file),
+                      "pending_drive_ids": sum(bool(row.get("pendingDriveLink")) for _, row in rows)}
+            if progress:
+                progress(dict(scanned=len(songs),total=len(songs),accepted=len(rows),
+                              duplicates=duplicates,reused=reused), "บันทึกฐานหลัก PC แล้ว · กำลังสำเนาไป Drive/DB")
+            try:
+                result["drive_database"] = _copy_to_drive(local, root, generation, original_sha, cancel)
+                result["drive_copied"] = True
+            except (OSError, ValueError, sqlite3.Error) as error:
+                result["drive_error"] = str(error)
+            return result
         if (_hash(old_file) if old_file.exists() else None) != original_signature:
             raise ValueError("ฐานบน Google Drive เปลี่ยนระหว่างทำงาน กรุณาสร้างใหม่")
         if candidate_only:

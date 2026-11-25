@@ -99,6 +99,56 @@ class SharedPcBuilderTests(unittest.TestCase):
         self.assertEqual({x["source_format"] for x in lib.search("")},
                          {"XMID","XSK"})
 
+    def test_local_master_committed_before_exact_drive_copy(self):
+        from unittest.mock import patch
+        from karaoke.shared_catalog_builder import _copy_to_drive
+        local=Path(self.tmp.name)/"App/DB/songs.sqlite3"
+        drive=self.root/"DB/songs.sqlite3"
+        def observe(source, root, generation, base_sha, cancel):
+            self.assertTrue(local.is_file())
+            self.assertEqual(source,local.absolute())
+            self.assertFalse(drive.exists())
+            with closing(sqlite3.connect(local)) as db:
+                self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0],"ok")
+            return _copy_to_drive(source,root,generation,base_sha,cancel)
+        with patch("karaoke.shared_catalog_builder._copy_to_drive",side_effect=observe):
+            result=build(self.root,local_database=local)
+        self.assertTrue(result["local_committed"])
+        self.assertTrue(result["drive_copied"])
+        self.assertEqual(local.read_bytes(),drive.read_bytes())
+        self.assertEqual(result["sha256"],hashlib.sha256(drive.read_bytes()).hexdigest())
+        self.assertEqual(SharedSongLibrary(self.root,{},database=local).count(),1)
+
+    def test_drive_failure_keeps_local_master(self):
+        from unittest.mock import patch
+        local=Path(self.tmp.name)/"App/DB/songs.sqlite3"
+        drive=self.root/"DB/songs.sqlite3"
+        build(self.root)
+        old=drive.read_bytes()
+        with patch("karaoke.shared_catalog_builder._copy_to_drive",side_effect=OSError("simulated disconnect")):
+            result=build(self.root,local_database=local)
+        self.assertTrue(result["local_committed"])
+        self.assertFalse(result["drive_copied"])
+        self.assertIn("simulated disconnect",result["drive_error"])
+        self.assertEqual(old,drive.read_bytes())
+        self.assertEqual(SharedSongLibrary(self.root,{},database=local).count(),1)
+
+    def test_local_master_conflicting_drive_is_not_replaced(self):
+        from unittest.mock import patch
+        from karaoke.shared_catalog_builder import _copy_to_drive
+        local=Path(self.tmp.name)/"App/DB/songs.sqlite3"
+        drive=self.root/"DB/songs.sqlite3"
+        build(self.root)
+        def conflict(source,root,generation,base_sha,cancel):
+            drive.write_bytes(b"foreign revision")
+            return _copy_to_drive(source,root,generation,base_sha,cancel)
+        with patch("karaoke.shared_catalog_builder._copy_to_drive",side_effect=conflict):
+            result=build(self.root,local_database=local)
+        self.assertTrue(result["local_committed"])
+        self.assertFalse(result["drive_copied"])
+        self.assertEqual(drive.read_bytes(),b"foreign revision")
+        self.assertTrue(local.is_file())
+
     def test_pc_candidate_never_replaces_active_catalog(self):
         old=self.root/"DB/songs.sqlite3"
         old.write_bytes(b"existing canonical")
