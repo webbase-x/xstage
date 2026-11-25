@@ -1,7 +1,7 @@
 ; X-Stage Karaoke PC — runtime-only Windows installer.
 ; Build/testing/source files stay in CI and are never distributed to end users.
-#define AppVersion "1.0.83"
-#define BuildNumber "1083"
+#define AppVersion "1.0.84"
+#define BuildNumber "1084"
 #define AppExe "X-StageKaraoke.exe"
 
 [Setup]
@@ -38,6 +38,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Dirs]
 ; User data is not an installer payload and must survive upgrades/uninstalls.
 Name: "{app}\data"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{app}\DB"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{app}\Songs"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{app}\Songs\MIDI"; Flags: uninsneveruninstall
 Name: "{app}\Songs\MIDI\NCN"; Flags: uninsneveruninstall
