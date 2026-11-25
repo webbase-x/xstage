@@ -16,12 +16,12 @@ const ctx={navigator:{deviceMemory:2},document:{getElementById:id=>({'xstage-sou
    async folderMetadata(id){
      assert.equal(this.token(),'test-token');
      verified.push(id);
-     if(id==='selectedFolder')return {id,name:'SoundFont',mimeType:'application/vnd.google-apps.folder',parents:[folderParent],trashed:false};
+     if(id==='selectedFolder')return {id,name:'SOUNDFONT',mimeType:'application/vnd.google-apps.folder',parents:[folderParent],trashed:false};
      assert.equal(id,'otherRoot');
      return {id,name:'Other',mimeType:'application/vnd.google-apps.folder',parents:['root'],trashed:false};
    }
  }},
- localStorage:{getItem:key=>key==='xstage-drive-source-folders-v1'?JSON.stringify({'account:activeRoot':{soundfont:{id:'selectedFolder',name:'SoundFont'}}}):null,setItem(){}},
+ localStorage:{getItem:key=>key==='xstage-drive-source-folders-v1'?JSON.stringify({'account:activeRoot':{soundfont:{id:'selectedFolder',name:'SOUNDFONT'}}}):null,setItem(){}},
  Option,CustomEvent:class{},URLSearchParams,Uint8Array,ArrayBuffer,DataView,TextEncoder,TextDecoder,Blob,DOMException,setTimeout,clearTimeout,console,dispatchEvent(){},addEventListener(){},
  fetch:async(url,opts)=>{
    if(String(url).includes('raw.githubusercontent.com'))return {ok:false,status:503};
@@ -37,8 +37,12 @@ ctx.window=ctx;
 vm.runInNewContext(fs.readFileSync(new URL('../cloud-drive-folders.js',import.meta.url),'utf8'),ctx);
 vm.runInNewContext(code,ctx);
 const auth={token:'test-token',sub:'account',rootId:'activeRoot'};
+// The canonical layout now requires the exact uppercase SOUNDFONT folder.
+assert.equal(ctx.XStageDriveFolders.readSelections(auth.sub,auth.rootId).soundfont?.id,'selectedFolder');
 await ctx.XStageBrowserMidi.refreshFonts(auth);
 assert.equal(select.options.length,2);
+assert.equal(select.options[1].value,'bank-0','limited scope must list an actual bank, not an error option');
+assert.deepEqual(pages,['first']);
 assert.equal(permission.hidden,false);
 assert.match(status.textContent,/อาจยังไม่ครบ/);
 full=true;pages=[];
