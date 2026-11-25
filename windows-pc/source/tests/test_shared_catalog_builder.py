@@ -77,7 +77,7 @@ class SharedPcBuilderTests(unittest.TestCase):
         self.assertNotIn("shared_drive_root", settings)
         library = SharedSongLibrary(home, settings, database=master)
         self.assertEqual(library.count(), 1)
-        self.assertEqual(Path(library.get(library.search("10001")[0]["id"])["path"]), self.songs / "10001.xmid")
+        self.assertTrue(Path(library.get(library.search("10001")[0]["id"])["path"]).samefile(self.songs / "10001.xmid"))
         self.assertEqual(library.path, master)
 
     def test_export_portable_after_copy_without_rebuilding(self):
