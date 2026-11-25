@@ -106,6 +106,7 @@ class CatalogWindow:
             ('local', 'รายการเพลง PC'),
             ('build', 'สร้างฐาน / Sync'),
             ('drive', 'คลัง Google Drive'),
+            ('sync', 'ส่งไฟล์ / Sync Drive'),
             ('duplicates', 'จัดการเพลงซ้ำ'),
         ):
             page = ttk.Frame(self.tabs)
@@ -268,6 +269,9 @@ class CatalogWindow:
             elif key == 'drive':
                 from .drive_online_catalog_ui import open_shared_drive_catalog
                 view = open_shared_drive_catalog(self.app, parent=self.pages[key])
+            elif key == 'sync':
+                from .shared_drive_sync_ui import open_drive_push
+                view = open_drive_push(self.app, parent=self.pages[key])
             elif key == 'duplicates':
                 from .duplicate_dialog import DuplicateReviewWindow
                 view = DuplicateReviewWindow(self.app, parent=self.pages[key])
