@@ -9,14 +9,12 @@ from tkinter import ttk, filedialog, messagebox
 from . import drive_online_catalog as catalog
 
 
-def open_shared_drive_catalog(app):
-    window = tk.Toplevel(app)
-    window.title("X-Stage Karaoke PC · Google Drive / ฐานเพลงร่วม")
-    window.geometry("980x640")
-    window.minsize(780, 520)
-    window.configure(bg="#081d58")
-    window.transient(app)
-    body = ttk.Frame(window, padding=18)
+def open_shared_drive_catalog(app, *, parent=None):
+    if parent is None:
+        from .catalog_window import open_song_management
+        return open_song_management(app, 'drive')
+    window = parent.winfo_toplevel()
+    body = ttk.Frame(parent, padding=18)
     body.pack(fill="both", expand=True)
     ttk.Label(body, text="GOOGLE DRIVE · คลังเพลงที่ผู้ใช้เลือก",
               font=("Leelawadee UI", 17, "bold")).pack(anchor="w")
@@ -182,15 +180,15 @@ def open_shared_drive_catalog(app):
     ttk.Button(actions, text="สร้างฐาน PC จาก Google Drive", command=use_shared_as_main).pack(side="left", padx=(0,8))
     ttk.Button(actions, text="กลับใช้ฐานในเครื่อง", command=use_local_as_main).pack(side="left", padx=(0,8))
     ttk.Button(actions, text="เล่นจากฐาน Google Drive ใน PC", command=play_selected).pack(side="left")
-    ttk.Button(actions, text="ปิด", command=window.destroy).pack(side="right")
+    ttk.Button(actions, text="ปิด", command=window.withdraw).pack(side="right")
     ttk.Label(body, text="เลือกเล่นเพลงจาก SQLite ของ Google Drive โดยตรง · ไม่เพิ่มแถวเพลงเข้า SQLite ในเครื่องหรือแก้ฐาน Online · ต้องมีไฟล์เพลงซิงก์บนเครื่อง",
               style="Muted.TLabel", wraplength=900).pack(anchor="w")
 
-    def close():
-        closing[0] = True
-        revision[0] += 1
-        window.destroy()
-    window.protocol("WM_DELETE_WINDOW", close)
+    def close(event):
+        if event.widget is body:
+            closing[0] = True
+            revision[0] += 1
+    body.bind("<Destroy>", close, add="+")
     if selected_root.get().strip():
         load()
-    return window
+    return body

@@ -24,17 +24,16 @@ def protected_ids(app):
 
 
 class DuplicateReviewWindow:
-    def __init__(self, app):
+    def __init__(self, app, *, parent):
         self.app = app
         self.folder = None
         self.future = None
         self.page = 0
         self.records = {}
-        self.window = DialogWindow(app)
-        self.window.title('เพลงซ้ำ — ตรวจรายงานและจัดการเอง (v0.9.43)')
-        self.window.geometry('1150x790')
-        self.window.transient(app)
-        body = ttk.Frame(self.window.content, padding=12)
+        self.window = parent
+        footer = ttk.Frame(parent)
+        footer.pack(side='bottom', fill='x')
+        body = ttk.Frame(parent, padding=12)
         body.pack(fill='both', expand=True)
         ttk.Label(body, text='การตรวจไม่ซ่อน ไม่ย้าย ไม่ลบไฟล์ · 1 เพลงอาจมี MID/LYR/CUR หลายไฟล์',
                   wraplength=1060).pack(anchor='w')
@@ -70,14 +69,19 @@ class DuplicateReviewWindow:
         ttk.Button(pager,text='‹ ก่อนหน้า',command=lambda:self.turn(-1)).pack(side='left')
         ttk.Button(pager,text='ถัดไป ›',command=lambda:self.turn(1)).pack(side='left',padx=6)
         ttk.Button(pager,text='ล้างการเลือก',command=lambda:self.tree.selection_remove(*self.tree.selection())).pack(side='right')
-        actions_bar=ttk.Frame(self.window.footer,padding=10);actions_bar.pack(fill='x')
+        actions_bar=ttk.Frame(footer,padding=10);actions_bar.pack(fill='x')
         for label,action in [('ซ่อนรายการที่เลือก',self.hide),('นำออกจากฐาน',self.exclude),
             ('ส่งเข้าถังรีไซเคิล',lambda:self.delete(False)),('ลบไฟล์ถาวร…',lambda:self.delete(True)),
-            ('เลิกซ่อน',self.unhide),('คืนรายการด้วย ID',self.restore_by_id),('ปิด',self.window.destroy)]:
+            ('เลิกซ่อน',self.unhide),('คืนรายการด้วย ID',self.restore_by_id),('ปิด',self.window.winfo_toplevel().withdraw)]:
             ttk.Button(actions_bar,text=label,command=action).pack(side='left',padx=3)
         self.timer=None;self.busy=False
         existing=sorted((app.data_dir/'duplicate-reviews').glob('*/summary.json'))
-        if existing:self.load(existing[-1].parent)
+        if existing:
+            try:
+                self.load(existing[-1].parent)
+            except (ValueError, OSError):
+                self.folder = None
+                self.summary.set('รายงานเดิมเป็นของฐานอื่น · กรุณาสร้างรายงานใหม่')
         self.poll()
         self.window.bind('<Destroy>',self.destroy,add='+')
 
@@ -99,7 +103,7 @@ class DuplicateReviewWindow:
         self.timer=self.window.after(150,self.poll)
 
     def start_report(self,exact):
-        if self.busy or self.app.scanning:return
+        if self.busy or self.app.scanning or getattr(self.app, '_shared_build_busy', False):return
         self.busy=True;self.error=None
         self.summary.set('กำลังตรวจ Song Bundle แบบอ่านอย่างเดียว…')
         def worker():
@@ -145,7 +149,7 @@ class DuplicateReviewWindow:
             os.startfile(self.folder/'report.csv')
 
     def run_actions(self,operation,notes):
-        if self.app.scanning or self.busy:return
+        if self.app.scanning or self.busy or getattr(self.app, '_shared_build_busy', False):return
         def work():
             success = failed = 0
             messages = []
@@ -250,12 +254,8 @@ class DuplicateReviewWindow:
 
 
 def open_exact_duplicates(app):
-    previous=getattr(app,'duplicate_review_window',None)
-    if previous and previous.window.winfo_exists():
-        previous.window.lift();return previous
-    manager=DuplicateReviewWindow(app)
-    app.duplicate_review_window=manager
-    return manager
+    from .catalog_window import open_song_management
+    return open_song_management(app, 'duplicates')
 
 
 def open_duplicates(app):

@@ -69,7 +69,7 @@ class CatalogWindow:
     def __init__(self, app):
         self.app = app
         self.window = DialogWindow(app)
-        self.window.title('สร้างรายการเพลง — X-Stage')
+        self.window.title('จัดการเพลง — X-Stage Karaoke PC')
         self.window.transient(app)
         self.window.geometry('960x790')
         self.window.protocol('WM_DELETE_WINDOW', self.hide)
@@ -98,7 +98,24 @@ class CatalogWindow:
         self.duplicates = tk.StringVar(self.window, value='review')
         self.shutdown_after = tk.BooleanVar(self.window, value=False)
         self.duplicate_report_path = None
+        self.tabs = ttk.Notebook(self.window.content)
+        self.tabs.pack(fill='both', expand=True)
+        self.pages = {}
+        self.page_views = {}
+        for key, title in (
+            ('local', 'รายการเพลง PC'),
+            ('build', 'สร้างฐาน / Sync'),
+            ('drive', 'คลัง Google Drive'),
+            ('sync', 'ส่งไฟล์ / Sync Drive'),
+            ('duplicates', 'จัดการเพลงซ้ำ'),
+        ):
+            page = ttk.Frame(self.tabs)
+            self.tabs.add(page, text=title)
+            self.pages[key] = page
+        self.local_footer = ttk.Frame(self.pages['local'])
+        self.local_footer.pack(side='bottom', fill='x')
         self._build()
+        self.tabs.bind('<<NotebookTabChanged>>', self._tab_changed)
         self.refresh()
         self._poll()
 
@@ -111,7 +128,7 @@ class CatalogWindow:
                         font=('Leelawadee UI', 10, 'bold'))
         style.configure('Catalog.Horizontal.TProgressbar', background=TEAL, troughcolor=ALT, thickness=8)
 
-        header = tk.Frame(self.window.content, bg='#152740', padx=22, pady=14)
+        header = tk.Frame(self.pages['local'], bg='#152740', padx=22, pady=14)
         header.pack(fill='x')
         tk.Label(header, text='X-STAGE   /   SONG LIBRARY', bg='#152740', fg=TEAL,
                  font=('Segoe UI', 10, 'bold')).pack(anchor='w')
@@ -121,7 +138,7 @@ class CatalogWindow:
                  bg='#152740', fg=MUTED, font=('Leelawadee UI', 10),
                  wraplength=820, justify='left').pack(anchor='w', pady=(3, 0))
 
-        body = tk.Frame(self.window.content, bg=BG, padx=20, pady=12)
+        body = tk.Frame(self.pages['local'], bg=BG, padx=20, pady=12)
         body.pack(fill='both', expand=True)
         body.columnconfigure(0, weight=1)
         body.rowconfigure(3, weight=1)
@@ -216,7 +233,7 @@ class CatalogWindow:
             text='ปิดเครื่องเมื่อสำเร็จ — นับถอยหลัง 60 วินาทีและยกเลิกได้ (ค่าเริ่มต้นปิด)')
         self.shutdown_check.grid(row=2, column=0, columnspan=2, sticky='w', pady=(8, 0))
 
-        actions = ActionBar(self.window.footer, padding=(12, 7))
+        actions = ActionBar(self.local_footer, padding=(12, 7))
         actions.pack(fill='x')
         self.update_button = ttk.Button(actions, text='เริ่มสร้างรายการ', style='Accent.TButton',
                                         command=lambda: self._start('run'))
@@ -234,15 +251,54 @@ class CatalogWindow:
                                self.shutdown_check, self.repair_reports_button)
         self._set_button_state()
 
+    def _tab_changed(self, _event=None):
+        selected = self.tabs.select()
+        for key, page in self.pages.items():
+            if str(page) == selected:
+                self._ensure_page(key)
+                break
+
+    def _ensure_page(self, key, initial_root=None):
+        if key == 'local':
+            return self
+        if key not in self.page_views:
+            if key == 'build':
+                from .shared_catalog_builder_ui import open_builder
+                view = open_builder(self.app, initial_root=initial_root or self.source,
+                                    parent=self.pages[key])
+            elif key == 'drive':
+                from .drive_online_catalog_ui import open_shared_drive_catalog
+                view = open_shared_drive_catalog(self.app, parent=self.pages[key])
+            elif key == 'sync':
+                from .shared_drive_sync_ui import open_drive_push
+                view = open_drive_push(self.app, parent=self.pages[key])
+            elif key == 'duplicates':
+                from .duplicate_dialog import DuplicateReviewWindow
+                view = DuplicateReviewWindow(self.app, parent=self.pages[key])
+                self.app.duplicate_review_window = view
+            else:
+                raise ValueError(key)
+            self.page_views[key] = view
+        view = self.page_views[key]
+        if key == 'build' and initial_root is not None:
+            view.set_source(initial_root)
+        return view
+
+    def show_page(self, key, initial_root=None):
+        view = self._ensure_page(key, initial_root)
+        self.tabs.select(self.pages[key])
+        self.show()
+        return view
+
     def _verify_pending(self):
-        if self._active or self.app.scanning:
+        if self._active or self.app.scanning or getattr(self.app, '_shared_build_busy', False) or getattr(getattr(self.app, 'duplicate_review_window', None), 'busy', False):
             return
         # Also works if there is no pending queue: a manual full duplicate
         # reconciliation may be useful after a restore or external import.
         self._start('fast')
 
     def _repair_reports(self):
-        if self._active or self.app.scanning:
+        if self._active or self.app.scanning or getattr(self.app, '_shared_build_busy', False) or getattr(getattr(self.app, 'duplicate_review_window', None), 'busy', False):
             return
         self._active = True
         self._cancel_requested = False
@@ -281,7 +337,7 @@ class CatalogWindow:
         return False
 
     def _start(self, mode):
-        if self._active or self.app.scanning:
+        if self._active or self.app.scanning or getattr(self.app, '_shared_build_busy', False) or getattr(getattr(self.app, 'duplicate_review_window', None), 'busy', False):
             return
         if mode == 'run':
             mode = self.mode.get()
@@ -336,7 +392,7 @@ class CatalogWindow:
             self.status.set('กำลังยกเลิกงาน…')
 
     def _set_button_state(self):
-        busy = bool(self._active or self.app.scanning)
+        busy = bool(self._active or self.app.scanning or getattr(self.app, '_shared_build_busy', False) or getattr(getattr(self.app, 'duplicate_review_window', None), 'busy', False))
         if busy != self._busy:
             self._busy = busy
             for button in self.action_buttons:
@@ -481,3 +537,12 @@ class CatalogWindow:
             if timer is not None:
                 self.window.after_cancel(timer)
         self._executor.shutdown(wait=False, cancel_futures=True)
+
+
+def open_song_management(app, page='local', initial_root=None):
+    """All song maintenance entry points reuse one modeless window."""
+    manager = getattr(app, 'catalog_window', None)
+    if manager is None or not manager.window.winfo_exists():
+        manager = CatalogWindow(app)
+        app.catalog_window = manager
+    return manager.show_page(page, initial_root)
