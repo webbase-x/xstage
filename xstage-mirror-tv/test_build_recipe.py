@@ -84,7 +84,12 @@ assert "FEED_RETRIES = 5" in renderer
 assert "FIRST_FEED_RETRIES = 20" in renderer
 assert "700L, 1_800L, 4_000L, 8_000L" in discovery
 assert "removeCallbacksAndMessages(null)" in discovery
-assert "registerAttempt(service, attempt + 1)" in discovery
+assert "registerAttempt(service, next)" in discovery
+assert "30_000L" in discovery and "if (released) return" in discovery
+assert "wasPending" in discovery
+assert "250_000_000L" in renderer
+assert "maxOf(now, target)" in renderer
+assert "_ptsBaseUs = Long.MIN_VALUE" in renderer
 assert 'ReceiverSetupQr(serverName)' not in ui
 assert (app / "src/main/kotlin/app/airshow/tv/ui/ReceiverSetupQr.kt").exists()
 updater = (app / "src/main/kotlin/app/airshow/tv/MirrorUpdateManager.kt").read_text()
@@ -164,7 +169,11 @@ assert 'Profile(1280, 720, 30, "720p30 (virtual)")' in quality
 assert "areSizeAndRateSupported" in quality
 assert "getSharedPreferences" in quality and "stable_sessions" in quality
 assert "badSamples >= 3" in quality and "Signal.CATCH_UP" in quality
-assert 'supported.filterNot { it.label == "1080p30" }' in quality
+assert 'Profile(1920, 1080, 30, "1080p30")' in quality
+assert 'Profile(1280, 720, 30, "720p30")' in quality
+assert 'Profile(1920, 1080, 60' not in quality
+assert 'Profile(1280, 720, 60' not in quality
+assert 'possible.indexOfFirst { it.width <= 1280 }' in quality
 assert "SAMPLE_MS = 2_000L" in quality
 assert "Never terminate" in quality
 assert "mirrorAutoQuality.choose()" in service
@@ -209,7 +218,7 @@ assert 'json.optString("channel") != "test-preview"' in updater
 assert "android.permission.REQUEST_INSTALL_PACKAGES" in open(app / "src/main/AndroidManifest.xml").read()
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.action.MY_PACKAGE_REPLACED" for x in manifest.iter("action"))
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == ".MirrorUpdateCleanupReceiver" and x.attrib.get("{http://schemas.android.com/apk/res/android}exported") == "false" for x in manifest.iter("receiver"))
-assert 'versionCode = 118' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
+assert 'versionCode = 119' in gradle or __import__('os').environ.get('XSTAGE_MIRROR_BUILD') is not None
 assert values["app_name"] == "X-Stage Mirror TV"
 assert any(x.attrib.get("{http://schemas.android.com/apk/res/android}name") == "android.intent.category.LEANBACK_LAUNCHER" for x in manifest.iter("category"))
 assert (root / "LICENSE").exists()
