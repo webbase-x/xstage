@@ -13,7 +13,7 @@ data class MdnsService(val name: String, val type: String, val port: Int, val tx
 /**
  * NsdManager registration is asynchronous. A transient failure previously only
  * logged a warning and left iPhones unable to discover this device until restart.
- * Retry failed registrations on a bounded backoff; never retry a live service.
+ * Retry failed registrations on a capped backoff until teardown; never retry a live service.
  * release() cancels pending retries and unregisters all active listeners.
  */
 class NsdServiceManager(private val ctx: Context) {
@@ -49,13 +49,18 @@ class NsdServiceManager(private val ctx: Context) {
         }
         val listener = object : NsdManager.RegistrationListener {
             override fun onServiceRegistered(actual: NsdServiceInfo) {
+                if (released) {
+                    try { manager.unregisterService(this) } catch (_: RuntimeException) { }
+                    return
+                }
                 Log.i(TAG, "${service.type} ready as '${actual.serviceName}' (attempt ${attempt + 1})")
                 if (actual.serviceName != service.name) {
                     Log.w(TAG, "Android renamed colliding service '${service.name}' -> '${actual.serviceName}'")
                 }
             }
             override fun onRegistrationFailed(info: NsdServiceInfo, code: Int) {
-                synchronized(stateLock) { listeners.remove(this) }
+                val wasPending = synchronized(stateLock) { listeners.remove(this) }
+                if (!wasPending || released) return
                 Log.w(TAG, "${service.type} registration failed: $code")
                 scheduleRetry(service, attempt)
             }
@@ -71,24 +76,22 @@ class NsdServiceManager(private val ctx: Context) {
         synchronized(stateLock) {
             if (released) return
             listeners.add(listener)
-        }
-        try {
-            manager.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener)
-        } catch (e: RuntimeException) {
-            synchronized(stateLock) { listeners.remove(listener) }
-            Log.w(TAG, "${service.type} registerService threw", e)
-            scheduleRetry(service, attempt)
+            try {
+                manager.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener)
+            } catch (e: RuntimeException) {
+                listeners.remove(listener)
+                Log.w(TAG, "${service.type} registerService threw", e)
+                scheduleRetry(service, attempt)
+            }
         }
     }
 
     private fun scheduleRetry(service: MdnsService, attempt: Int) {
-        if (released || attempt >= RETRY_DELAYS_MS.size) {
-            if (!released) Log.e(TAG, "${service.type} discovery unavailable after ${attempt + 1} tries")
-            return
-        }
+        if (released) return
+        val next = (attempt + 1).coerceAtMost(RETRY_DELAYS_MS.lastIndex)
         handler.postDelayed({
-            if (!released) registerAttempt(service, attempt + 1)
-        }, RETRY_DELAYS_MS[attempt])
+            if (!released) registerAttempt(service, next)
+        }, RETRY_DELAYS_MS[attempt.coerceAtMost(RETRY_DELAYS_MS.lastIndex)])
     }
 
     fun release() {
@@ -111,6 +114,6 @@ class NsdServiceManager(private val ctx: Context) {
 
     private companion object {
         const val TAG = "XStageMirrorDiscovery"
-        val RETRY_DELAYS_MS = longArrayOf(700L, 1_800L, 4_000L, 8_000L)
+        val RETRY_DELAYS_MS = longArrayOf(700L, 1_800L, 4_000L, 8_000L, 30_000L)
     }
 }
