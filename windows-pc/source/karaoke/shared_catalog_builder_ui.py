@@ -12,14 +12,12 @@ import webbrowser
 from tkinter import simpledialog
 
 
-def open_builder(app, initial_root=None):
-    panel = tk.Toplevel(app)
-    panel.title("X-Stage Karaoke PC · สร้างฐานใหม่สำหรับ PC / Online")
-    panel.geometry("930x450")
-    panel.minsize(780, 400)
-    panel.configure(bg="#081d58")
-    panel.transient(app)
-    frame = ttk.Frame(panel, padding=24)
+def open_builder(app, initial_root=None, *, parent=None):
+    if parent is None:
+        from .catalog_window import open_song_management
+        return open_song_management(app, 'build', initial_root)
+    panel = parent.winfo_toplevel()
+    frame = ttk.Frame(parent, padding=24)
     frame.pack(fill="both", expand=True)
     ttk.Label(frame, text="สร้างฐานใหม่สำหรับ PC / Online",
               font=("Leelawadee UI", 17, "bold")).pack(anchor="w")
@@ -67,7 +65,7 @@ def open_builder(app, initial_root=None):
             pass
 
     def submit(publish):
-        if state["busy"] or getattr(app, "_shared_build_busy", False) or getattr(app, "scanning", False):
+        if state["busy"] or getattr(app, "_shared_build_busy", False) or getattr(app, "scanning", False) or getattr(getattr(app, "duplicate_review_window", None), "busy", False):
             return
         requested = folder.get().strip()
         if not requested:
@@ -222,12 +220,16 @@ def open_builder(app, initial_root=None):
     ttk.Label(frame, text="ตรวจสถานะซิงก์ใน Google Drive for desktop แล้วตรวจฐานบน Karaoke Online · ใช้โฟลเดอร์หลักเดียวกันทั้ง PC และ Web "
               "· SQLite ของ Song Studio Pro ยังแยก · ไม่มีการลบไฟล์เพลงต้นฉบับ",
               style="Muted.TLabel", wraplength=860).pack(anchor="w")
-    def close():
-        if state["busy"]:
+    def set_source(value):
+        if not state["busy"]:
+            folder.set(str(value))
+            state["approved"] = None
+
+    def on_destroy(event):
+        if event.widget is frame:
+            state["closed"] = True
             stop.set()
-            status.set("กำลังหยุดอย่างปลอดภัย · ปิดหน้าต่างได้เมื่อหยุดแล้ว")
-            return
-        state["closed"] = True
-        panel.destroy()
-    panel.protocol("WM_DELETE_WINDOW", close)
-    return panel
+
+    frame.set_source = set_source
+    frame.bind("<Destroy>", on_destroy, add="+")
+    return frame
