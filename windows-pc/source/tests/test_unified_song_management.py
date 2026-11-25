@@ -33,5 +33,42 @@ class UnifiedSongManagementTests(unittest.TestCase):
             create.return_value.show_page.assert_called_once_with("drive", None)
 
 
+class UnifiedSongManagementGuiTests(unittest.TestCase):
+    @unittest.skipUnless(__import__("os").environ.get("DISPLAY"), "GUI runner opt-in")
+    def test_five_tabs_share_one_native_window_and_survive_hide(self):
+        import tkinter as tk
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            root = tk.Tk()
+            self.addCleanup(root.destroy)
+            home = Path(directory)
+            root.settings = {}
+            root.scanning = False
+            root.data_dir = home
+            root.managed_catalog_root = lambda: home
+            root.library = SimpleNamespace(path=home / "songs.sqlite3")
+            with patch.object(catalog_window, "read_page", return_value=([], 0, 0, 0)):
+                local = catalog_window.open_song_management(root)
+                root.update()
+                build = shared_catalog_builder_ui.open_builder(root, home)
+                drive = drive_online_catalog_ui.open_shared_drive_catalog(root)
+                sync = shared_drive_sync_ui.open_drive_push(root)
+                duplicates = duplicate_dialog.open_exact_duplicates(root)
+                root.update()
+                self.assertEqual(len(local.tabs.tabs()), 5)
+                for view in (build, drive, sync, duplicates.window):
+                    self.assertIs(view.winfo_toplevel(), local.window)
+                self.assertEqual(len([w for w in root.winfo_children()
+                                      if isinstance(w, tk.Toplevel)]), 1)
+                local.hide()
+                root.update()
+                self.assertIs(shared_catalog_builder_ui.open_builder(root), build)
+                self.assertIs(duplicate_dialog.open_exact_duplicates(root), duplicates)
+                root.update()
+                self.assertEqual(local.tabs.select(), str(local.pages["duplicates"]))
+                local.window.destroy()
+
+
 if __name__ == "__main__":
     unittest.main()
