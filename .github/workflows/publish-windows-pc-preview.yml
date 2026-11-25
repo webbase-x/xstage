@@ -3,7 +3,7 @@ name: Publish X-Stage Karaoke PC Windows binary preview
 on:
   workflow_run:
     workflows:
-      - 'X-Stage Karaoke PC installer candidate (v1.0.84)'
+      - 'X-Stage Karaoke PC installer candidate (v1.0.85)'
     types: [completed]
 
 permissions:
@@ -26,7 +26,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       SOURCE_RUN: ${{ github.event.workflow_run.id }}
       SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
-      TAG: "xstage-karaoke-pc-preview-v1.0.84-build1084"
+      TAG: "xstage-karaoke-pc-preview-v1.0.85-build1085"
       INSTALLER: "X-StageKaraoke.exe"
     steps:
       - uses: actions/checkout@v5
@@ -39,7 +39,7 @@ jobs:
           python3 - <<'PY'
           import json
           d=json.load(open('windows-pc/manifest.json',encoding='utf8'))
-          assert d['source_imported'] and d['version']=='1.0.84' and d['build']==1084
+          assert d['source_imported'] and d['version']=='1.0.85' and d['build']==1085
           PY
           verified=$(gh run view "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --json conclusion,headSha --jq '[.conclusion,.headSha]|join(" ")')
           test "$verified" = "success $SOURCE_SHA" || { echo "::error::Original candidate run was not successful"; exit 1; }
@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name "X-Stage-Karaoke-PC-Windows-v1.0.84-build1084-CANDIDATE" --dir dist
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name "X-Stage-Karaoke-PC-Windows-v1.0.85-build1085-CANDIDATE" --dir dist
           exe=$(find dist -type f -name "$INSTALLER" -print -quit)
           check=$(find dist -type f -name "$INSTALLER.sha256" -print -quit)
           test -n "$exe" && test -n "$check"
@@ -80,6 +80,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
+          # Do not overwrite an update with an obsolete candidate if PC source changed.
+          verify_current_source() {
+            git diff --quiet "$SOURCE_SHA" origin/main -- windows-pc/source windows-pc/installer windows-pc/manifest.json .github/workflows/build-windows-pc.yml .github/workflows/publish-windows-pc-preview.yml
+          }
+          if ! verify_current_source; then
+            echo "::notice::A newer PC source exists; refusing stale preview publication."
+            exit 0
+          fi
           git switch -C main origin/main
           mkdir -p downloads
           cp "dist/$INSTALLER" "downloads/$INSTALLER"
@@ -91,7 +99,7 @@ jobs:
           info={
             'channel':'preview','available':True,
             'name':'X-Stage Karaoke PC Windows PREVIEW',
-            'platform':'windows-x64','version':'1.0.84','build':1084,
+            'platform':'windows-x64','version':'1.0.85','build':1085,
             'installer_file':name,'sha256':os.environ['HASH'],
             'download_url':'https://webbase-x.github.io/xstage/downloads/'+name,
             'source_commit':os.environ['SOURCE_SHA'],
@@ -104,6 +112,10 @@ jobs:
           git commit -m "build(windows): publish verified public preview EXE"
           for attempt in 1 2 3 4; do
             git fetch origin main
+            if ! verify_current_source; then
+              echo "::notice::PC source changed during publication; leaving current download intact."
+              exit 0
+            fi
             if git rebase origin/main && git push origin HEAD:main; then
               echo "Published signed SHA-256 manifest and unsigned Windows EXE to public binary channel."
               exit 0
