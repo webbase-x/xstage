@@ -114,6 +114,7 @@ def open_builder(app, initial_root=None):
         stop.clear()
         inspect.configure(state="disabled")
         confirm.configure(state="disabled")
+        retry.configure(state="disabled")
         cancel.configure(state="normal")
         status.set("กำลังตรวจ XMID/XSK2 ใน SONGS…")
         def work():
@@ -173,6 +174,7 @@ def open_builder(app, initial_root=None):
                 state["busy"] = False
                 inspect.configure(state="normal")
                 confirm.configure(state="normal")
+                retry.configure(state="normal" if app.settings.get("shared_local_master") else "disabled")
                 cancel.configure(state="disabled")
                 if error:
                     state["approved"] = None
@@ -203,6 +205,7 @@ def open_builder(app, initial_root=None):
                                                     database=Path(result["database"]))
                     app.shared_drive_mode = True
                     app.shared_drive_error = ""
+                    retry.configure(state="normal")
                     if not previous_shared:
                         app.song_queue = SongQueue(Path(app.data_dir) / "drive-queue.json")
                     try:
@@ -238,6 +241,49 @@ def open_builder(app, initial_root=None):
     confirm = ttk.Button(buttons, text="สร้างฐานและสำเนาไป Drive",
                          command=lambda: submit(True))
     confirm.pack(side="left", padx=(0, 10))
+    def retry_copy():
+        if state["busy"] or getattr(app,"_shared_build_busy",False) or getattr(app,"scanning",False):
+            return
+        root = app.settings.get("shared_drive_root")
+        generation = app.settings.get("local_master_generation")
+        if not root or not generation or not app.settings.get("shared_local_master"):
+            status.set("ยังไม่มีฐานหลัก PC ที่พร้อมสำเนา")
+            return
+        if not messagebox.askyesno("สำเนาฐาน PC อีกครั้ง",
+                "ส่งเฉพาะ App/DB/songs.sqlite3 ที่สร้างเสร็จไปยังคลัง Drive เดิม?\n"
+                "ไม่สแกนเพลงใหม่และไม่เขียนทับหากฐาน Drive เปลี่ยน",parent=panel):
+            return
+        state["busy"] = True
+        app._shared_build_busy = True
+        stop.clear()
+        for button in (inspect,confirm,retry):
+            button.configure(state="disabled")
+        cancel.configure(state="normal")
+        status.set("กำลังสำเนาฐาน PC ที่บันทึกแล้ว · ไม่ตรวจเพลงใหม่")
+        def work():
+            try:
+                target = builder.retry_local_copy(Path(app.home)/"DB"/"songs.sqlite3",root,generation,stop)
+                message = "สำเนา Drive/DB สำเร็จ · SHA-256 ตรงกัน · รอซิงก์ Cloud: "+target
+            except Exception as error:
+                message = "ยังไม่สำเนา Drive · ฐาน PC ไม่เปลี่ยน: "+str(error)
+            def finish():
+                app._shared_build_busy = False
+                if state["closed"]:
+                    return
+                state["busy"] = False
+                for button in (inspect,confirm,retry):
+                    button.configure(state="normal")
+                cancel.configure(state="disabled")
+                status.set(message)
+            try:
+                app.after(0,finish)
+            except RuntimeError:
+                pass
+        threading.Thread(target=work,daemon=True,name="xstage-retry-db-copy").start()
+
+    retry = ttk.Button(buttons,text="สำเนาฐานเดิมอีกครั้ง",command=retry_copy,
+                       state="normal" if app.settings.get("shared_local_master") else "disabled")
+    retry.pack(side="left",padx=(0,10))
     cancel = ttk.Button(buttons, text="หยุดอย่างปลอดภัย",
                         command=stop.set, state="disabled")
     cancel.pack(side="left")

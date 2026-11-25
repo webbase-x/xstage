@@ -852,7 +852,7 @@ function createWorkflow(options={}){
       drive.ensureAuth=force=>options.ensureAuth?.(force);
       try{
         const selected=await selectVerifiedFile(drive,initial,mode==='pc'?'CACHE':'BACKUP',
-          mode==='pc'?/^songs-pc-candidate-[a-f0-9]{24}\.sqlite3$/:/^songs-backup-[a-f0-9]{24}\.sqlite3$|^songs-[0-9]{8}-[0-9]{6}-[a-f0-9]{12}\.sqlite3\.bak$/,check);
+          mode==='pc'?/^songs-pc-candidate-[a-f0-9]{24}\.sqlite3$/:/^songs-backup-[a-f0-9]{24}\.sqlite3$|^songs-pc-[a-f0-9]{24}\.sqlite3\.bak$|^songs-[0-9]{8}-[0-9]{6}-[a-f0-9]{12}\.sqlite3\.bak$/,check);
         if(!selected)return;
         const {decoded,file}=selected;
         let existing;

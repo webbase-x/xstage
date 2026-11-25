@@ -133,6 +133,20 @@ class SharedPcBuilderTests(unittest.TestCase):
         self.assertEqual(old,drive.read_bytes())
         self.assertEqual(SharedSongLibrary(self.root,{},database=local).count(),1)
 
+    def test_retry_copy_uses_completed_master_without_rescan(self):
+        from unittest.mock import patch
+        from karaoke.shared_catalog_builder import retry_local_copy
+        local=Path(self.tmp.name)/"App/DB/songs.sqlite3"
+        with patch("karaoke.shared_catalog_builder._copy_to_drive",side_effect=OSError("offline")):
+            result=build(self.root,local_database=local)
+        before=local.read_bytes()
+        with patch("karaoke.shared_catalog_builder._files",side_effect=AssertionError("no rescan")):
+            target=Path(retry_local_copy(local,self.root,result["generation"]))
+        self.assertEqual(target.read_bytes(),before)
+        self.assertEqual(local.read_bytes(),before)
+        with self.assertRaises(ValueError):
+            retry_local_copy(local,self.root,"different-generation")
+
     def test_local_master_conflicting_drive_is_not_replaced(self):
         from unittest.mock import patch
         from karaoke.shared_catalog_builder import _copy_to_drive

@@ -228,8 +228,32 @@ def _copy_to_drive(local, root, generation, base_sha, cancel=None):
             raise ValueError("ฐาน Drive หลังคัดลอกไม่ตรงกับฐาน PC")
         return str(target)
     finally:
-        stage.unlink(missing_ok=True)
-        lock.unlink(missing_ok=True)
+        # Drive may disappear after the local master is already committed.
+        # Never mask that result with an error while cleaning staging files.
+        for temporary in (stage, lock):
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def retry_local_copy(local_database, expected_root, expected_generation, cancel=None):
+    """Retry only the already committed snapshot, never rescan the songs or
+    silently adopt a newer Drive baseline after a conflict."""
+    local = Path(local_database).absolute()
+    receipt = local.parent / ".xstage-pc-master.json"
+    _safe_file(receipt)
+    if not receipt.is_file() or receipt.stat().st_size > 16384:
+        raise ValueError("ไม่มีข้อมูลสำเนาฐานหลัก PC ที่รอส่ง")
+    record = json.loads(receipt.read_text(encoding="utf-8"))
+    if (record.get("format") != "xstage-pc-master-v1"
+            or record.get("generation") != expected_generation
+            or Path(record.get("root", "")).resolve() != Path(expected_root).resolve()):
+        raise ValueError("ข้อมูลสำเนาค้างไม่ตรงกับฐานหรือคลังปัจจุบัน")
+    base_sha = record.get("baseSha256")
+    if base_sha is not None and not re.fullmatch(r"[a-f0-9]{64}", str(base_sha)):
+        raise ValueError("SHA-256 ของฐาน Drive ตั้งต้นไม่ถูกต้อง")
+    return _copy_to_drive(local, expected_root, expected_generation, base_sha, cancel)
 
 
 def _pc_id(ident):
@@ -504,8 +528,9 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         return {"scanned": len(songs), "accepted": len(rows),
                 "duplicates": duplicates, "reused": reused,
                 "pending_drive_ids": sum(bool(row.get("pendingDriveLink")) for _, row in rows)}
-    for directory in ("DB", "CACHE", "BACKUP"):
-        (root / directory).mkdir(parents=True, exist_ok=True)
+    if not local_first:
+        for directory in ("DB", "CACHE", "BACKUP"):
+            (root / directory).mkdir(parents=True, exist_ok=True)
     # Share the same advisory lock namespace as the browser importer.
     # Drive Desktop propagation is asynchronous, so also re-check the old
     # snapshot immediately before committing the new database.
@@ -571,7 +596,7 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
             if local.resolve() == old_file.resolve() or root in local.resolve().parents:
                 raise ValueError("ฐานหลัก PC ต้องแยกจาก Google Drive")
             _safe_file(local)
-            _verify_snapshot(stage, generation)
+            local_sha = _verify_snapshot(stage, generation)
             prior = kind(local)
             backup = None
             if prior:
@@ -584,7 +609,6 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
                                       backup.name if prior == "pc" else "")
             # Commit the local DB before any Drive publication.
             os.replace(stage, local)
-            local_sha = _verify_snapshot(local, generation)
             result = {"scanned": len(songs), "accepted": len(rows),
                       "duplicates": duplicates, "reused": reused, "generation": generation,
                       "database": str(local), "sha256": local_sha, "local_committed": True,
@@ -663,6 +687,7 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         if local_stage is not None:
             local_stage.unlink(missing_ok=True)
         stage.unlink(missing_ok=True)
-        cloud_stage.unlink(missing_ok=True)
+        if not local_first:
+            cloud_stage.unlink(missing_ok=True)
         if lock is not None:
             lock.unlink(missing_ok=True)
