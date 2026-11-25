@@ -214,6 +214,10 @@ def _record(relative, file, old):
     return record
 
 
+def file_kind(row):
+    return str(row["sourceFormat"]).lower()
+
+
 def _file_stamp(file):
     stat = file.stat()
     return json.dumps([stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns,
@@ -266,7 +270,7 @@ def _verified_rows(songs, root, references, cache_dir, cancel, full_verify):
             cache.commit()
 
 
-def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=None, full_verify=False):
+def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=None, full_verify=False, deduplicate=True):
     """Create fresh verified snapshot; atomically replace after explicit consent."""
     root = _root(root_value)
     songs = _files(root, cancel)
@@ -286,13 +290,20 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         if key in paths:
             raise ValueError("พบชื่อไฟล์ซ้ำบน Windows: " + relative)
         paths.add(key)
-        if row["midiHash"] in midi_hashes:
-            duplicates += 1
-            continue
-        midi_hashes.add(row["midiHash"])
+        if deduplicate:
+            if row["midiHash"] in midi_hashes:
+                duplicates += 1
+                continue
+            midi_hashes.add(row["midiHash"])
+        else:
+            # Online verifies package MD5, not a duplicate MIDI fingerprint.
+            # Retain each path, including byte-identical packages in different folders.
+            row["webSongId"] = "browser/" + file_kind(row) + "/" + hashlib.sha256(
+                relative.casefold().encode("utf-8")).hexdigest()
+            row.pop("midiHash", None)
         base_code = row["code"]
         if base_code.casefold() in codes:
-            row["code"] = base_code + "-" + row["midiHash"][:8]
+            row["code"] = base_code + "-" + hashlib.sha256(relative.casefold().encode("utf-8")).hexdigest()[:12]
             if row["code"].casefold() in codes:
                 raise ValueError("รหัสเพลงในฐานซ้ำ: " + row["code"])
         codes.add(row["code"].casefold())
@@ -346,7 +357,7 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
                     row["sourceFormat"], row["code"], row["title"], row["artist"],
                     row["sourceFormat"], row["originalFilename"],
                     row["originalRelativePath"], row["originalFileSize"],
-                    row["sourceCode"], row["midiSize"], row["midiHash"],
+                    row["sourceCode"], row["midiSize"], row.get("midiHash"),
                     json.dumps(row, ensure_ascii=False, separators=(",",":"))))
             db.commit()
             if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
