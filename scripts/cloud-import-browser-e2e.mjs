@@ -183,6 +183,25 @@ try{
       expiresAt:Date.now()+3600000}));
   });
   const page=await context.newPage();
+  // Use the real visible menu and its collapsed Drive category, not a DOM
+  // click or force click. The same flow must work after a page reload.
+  async function openDriveImporter(){
+    const menu=page.locator('#mobile-stage-menu');
+    const button=page.locator('#cloud-import-open');
+    await page.waitForFunction(()=>{const el=document.getElementById('cloud-import-open');return el&&!el.hidden;});
+    if(!(await menu.isVisible())){
+      const upper=page.locator('#mobile-menu-toggle');
+      const trigger=await upper.isVisible()?upper:page.locator('#stage-tools-toggle');
+      await trigger.click();
+    }
+    await menu.waitFor({state:'visible'});
+    const category=menu.locator('details').filter({has:button});
+    assert.equal(await category.count(),1,'Drive importer must belong to exactly one menu category');
+    if(!(await category.evaluate(el=>el.open)))await category.locator('summary').click();
+    await button.waitFor({state:'visible'});
+    await button.click();
+    await page.locator('#cloud-import-dialog[open]').waitFor();
+  }
   const scriptErrors=[];page.on('pageerror',error=>scriptErrors.push(error.message));
   await page.route('https://accounts.google.com/**',route=>route.fulfill({status:200,
     headers:{'Access-Control-Allow-Origin':'*','Content-Type':'application/javascript'},body:''}));
@@ -418,14 +437,11 @@ try{
   const firstCount=payloadUploads;
   // After first DB exists, reopen the importer from the visible stage menu.
   await page.click('#cloud-import-close');
-  await page.click('#mobile-menu-toggle');
-  await page.locator('#mobile-stage-menu').waitFor({state:'visible'});
-  await page.click('#cloud-import-open');
-  await page.locator('#cloud-import-dialog[open]').waitFor();
+  await openDriveImporter();
   await page.click('#cloud-import-select-all');
   await page.click('#cloud-import-start');
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น')&&
-    document.getElementById('cloud-import-status').textContent.includes('ข้ามซ้ำ 4'),{timeout:60000});
+    document.getElementById('cloud-import-status').textContent.includes('ข้ามซ้ำ 4'),null,{timeout:60000});
   assert.equal(payloadUploads,firstCount,'Second upload should be 100% deduplicated by MD5');
   // Cancel/pause while an additional large file is being prepared. A browser
   // restart should not lose the completed DB and can reselect the same folder.
@@ -441,11 +457,7 @@ try{
   await page.click('#cloud-import-start');
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.includes('หยุดงานแล้ว'),null,{timeout:30000});
   await page.reload({waitUntil:'domcontentloaded'});
-  await page.waitForFunction(()=>{const item=document.getElementById('cloud-import-open');return item&&!item.hidden;});
-  // The floating mobile menu is intentionally hidden at desktop viewport
-  // widths. Trigger the same existing import button handler directly.
-  await page.evaluate(()=>document.getElementById('cloud-import-open').click());
-  await page.locator('#cloud-import-dialog[open]').waitFor();
+  await openDriveImporter();
   await page.locator('#cloud-import-start:not([disabled])').waitFor();
   assert.equal((await page.locator('#cloud-import-start').textContent()).trim(),'เริ่ม');
   const chooserPromise=page.waitForEvent('filechooser');
