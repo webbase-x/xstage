@@ -932,6 +932,9 @@ public sealed class DownloadEngine
     private static string PartPath(string work, int index) => Path.Combine(work, index.ToString("D2") + ".part");
 
     // Pure policy, exercised by deterministic network telemetry simulations.
+    // In-process diagnostic hook for measured adaptive scheduling tests.
+    internal Action<int, int, double>? RangeConcurrencySample { get; set; }
+
     public static int NextRangeConcurrency(int current, int count, int ceiling,
         double previousRate, double rate)
     {
@@ -1040,6 +1043,7 @@ public sealed class DownloadEngine
                 var ceiling = AdaptiveSegmentPlanner.RecommendWithLimits(job.Parts,
                     job.TotalBytes, rate, false, GlobalLimitKib, job.FileSpeedLimitKib);
                 target = NextRangeConcurrency(target, count, ceiling, previousRate, rate);
+                RangeConcurrencySample?.Invoke(target, active.Count, rate);
                 previousRate = rate;
                 previousBytes = bytes;
                 previousTick = now;

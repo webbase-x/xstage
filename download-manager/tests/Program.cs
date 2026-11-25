@@ -213,6 +213,41 @@ if (args.Length == 0)
         }
     }
     finally { try { Directory.Delete(rangeRoot, true); } catch { } }
+    // Exercise the production adaptive scheduler with a slow/fast/slow link.
+    var adaptiveRoot = Path.Combine(Path.GetTempPath(), "xstage-adaptive-transition-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(adaptiveRoot);
+    try
+    {
+        var adaptivePayload = new byte[48 * 1024 * 1024];
+        new Random(619).NextBytes(adaptivePayload);
+        using var adaptiveServer = new FileServer(adaptivePayload);
+        adaptiveServer.ChunkDelayMs = 120;
+        var adaptiveEngine = new DownloadEngine(Path.Combine(adaptiveRoot, "state"));
+        adaptiveEngine.ConfigurePerformance(1, 1, 0);
+        int observedTarget = 0;
+        var samples = new System.Collections.Concurrent.ConcurrentQueue<(int Target, int Active, double Rate)>();
+        adaptiveEngine.RangeConcurrencySample = (target, active, rate) =>
+        {
+            samples.Enqueue((target, active, rate));
+            Interlocked.Exchange(ref observedTarget, target);
+        };
+        var adaptiveJob = adaptiveEngine.Add(adaptiveServer.Url + "range/measured-adaptive.bin", adaptiveRoot, 32);
+        await WaitFor(() => Volatile.Read(ref observedTarget) == 1, 30000);
+        adaptiveServer.ChunkDelayMs = 1;
+        await WaitFor(() => Volatile.Read(ref observedTarget) >= 2, 30000);
+        adaptiveServer.ChunkDelayMs = 120;
+        await WaitFor(() => Volatile.Read(ref observedTarget) == 1, 30000);
+        adaptiveServer.ChunkDelayMs = 1;
+        await WaitFor(() => adaptiveJob.Status is "Completed" or "Failed", 120000);
+        if (adaptiveJob.Status != "Completed" || adaptiveJob.SegmentsUsed != 32 ||
+            !SHA256.HashData(await File.ReadAllBytesAsync(adaptiveJob.CompletedPath)).SequenceEqual(SHA256.HashData(adaptivePayload)))
+            throw new Exception("Adaptive transition changed geometry or corrupted bytes: " + adaptiveJob.Error);
+        if (samples.Any(x => x.Target < 1 || x.Target > 32 || x.Active < 0 || x.Active > 32))
+            throw new Exception("Adaptive concurrency bounds violated.");
+        Console.WriteLine("PASS: live adaptive target slow-fast-slow, immutable 32-range geometry, SHA-256; " +
+            string.Join(" | ", samples.Select(x => $"{x.Target}/{x.Active}:{x.Rate / 1024:F0} KiB/s")));
+    }
+    finally { try { Directory.Delete(adaptiveRoot, true); } catch { } }
     SmartSyncPlannerTests.Run();
     await SmartSyncBackgroundTests.RunAsync();
     await SmartSyncTransferTests.RunAsync();
