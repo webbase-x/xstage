@@ -205,6 +205,20 @@ function openCheckpoint(){
               r.onsuccess=()=>done(r.result||null);r.onerror=()=>done(null);
             }catch{done(null);}
           }),
+          getMany:keys=>new Promise(done=>{
+            // One transaction for a bounded group instead of one per song.
+            // Failed/aborted reads are cache misses, not proof of verification.
+            const values=new Map();
+            try{
+              const t=db.transaction('verified'),store=t.objectStore('verified');
+              for(const key of new Set(keys)){
+                const r=store.get(key);
+                r.onsuccess=()=>{if(r.result)values.set(key,r.result);};
+              }
+              t.oncomplete=()=>done(values);
+              t.onerror=t.onabort=()=>done(new Map());
+            }catch{done(new Map());}
+          }),
           put:(key,value)=>new Promise(done=>{
             try{const t=db.transaction('verified','readwrite');
               t.objectStore('verified').put(value,key);
@@ -216,6 +230,15 @@ function openCheckpoint(){
       };
     }catch{resolve(null);}
   });
+}
+async function readVerifiedBatch(checkpoint,keys){
+  const unique=[...new Set(keys.filter(Boolean))];
+  if(!checkpoint||!unique.length)return new Map();
+  try{
+    if(checkpoint.getMany)return await checkpoint.getMany(unique);
+    const entries=await Promise.all(unique.map(async key=>[key,await checkpoint.get(key)]));
+    return new Map(entries);
+  }catch{return new Map();}
 }
 function pendingKey(s){return JOB+entryKey(s.sub,s.rootId);}
 function pending(s){try{return scope.localStorage?.getItem(pendingKey(s))||'';}catch{return '';}}
@@ -313,14 +336,17 @@ async function compareCatalog(files,rows,checkpoint,s,folder,check=()=>{},canoni
   }
   for(let i=0;i<pending.length;i+=64){
     check();
-    await Promise.all(pending.slice(i,i+64).map(async file=>{
+    const batch=pending.slice(i,i+64);
+    const savedBatch=await readVerifiedBatch(checkpoint,batch.map(file=>checkpointKey(s,folder,file)));
+    check();
+    for(const file of batch){
       const key=checkpointKey(s,folder,file);
-      const saved=key&&checkpoint?await checkpoint.get(key):null;
+      const saved=key?savedBatch.get(key):null;
       if(saved&&saved.packedMd5===String(file.md5Checksum).toLowerCase()&&
         /^[a-f0-9]{32}$/i.test(saved.midiHash||'')&&Number.isSafeInteger(saved.midiSize)&&saved.midiSize>0&&
         midi.has(saved.midiHash.toLowerCase()+':'+saved.midiSize))duplicates++;
       else newFiles++;
-    }));
+    }
   }
   check();
   return {matchedRows,duplicates,newFiles,stale,other,duplicateRows,uncertain,
@@ -691,10 +717,10 @@ function createWorkflow(options={}){
         const inFlight=new Map(),signatureCounts=new Map();
         const signatureOf=file=>{const sig=packageSignature(file);return sig?file.ext+':'+sig:'';};
         for(const file of remaining){const sig=signatureOf(file);if(sig)signatureCounts.set(sig,(signatureCounts.get(sig)||0)+1);}
-        const inspect=async file=>{
+        const inspect=async (file,savedBatch)=>{
           check();
           const key=checkpointKey(initial,chosen.id,file);
-          const saved=key?(memoryChecks.get(key)||(checkpoint?await checkpoint.get(key):null)):null;
+          const saved=key?(memoryChecks.get(key)||savedBatch.get(key)):null;
           check();
           if(saved&&saved.packedMd5===String(file.md5Checksum).toLowerCase()&&
               /^[a-f0-9]{32}$/i.test(saved.midiHash)&&Number.isSafeInteger(saved.midiSize)&&
@@ -736,8 +762,11 @@ function createWorkflow(options={}){
             if(batch.length&&bytes+size>limits.bytes)break;
             batch.push(file);bytes+=size;offset++;
           }
+          const keys=batch.map(file=>checkpointKey(initial,chosen.id,file)).filter(key=>key&&!memoryChecks.has(key));
+          const savedBatch=await readVerifiedBatch(checkpoint,keys);
+          check();pauseBoundary();
           const outcomes=await Promise.allSettled(batch.map(file=>
-            inspect(file)));
+            inspect(file,savedBatch)));
           for(let i=0;i<outcomes.length;i++){
             check();
             const result=outcomes[i];

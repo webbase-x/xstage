@@ -129,8 +129,13 @@ vm.runInNewContext(read('cloud-drive-folders.js'),context,{filename:'cloud-drive
 }
 let current={sub:'account1',rootId:root,token:'token1'},pick={id:music,name:'XMID'};
 const savedMetadata=new Map();
+let checkpointBatches=0,checkpointSingles=0;
 const workflow=window.XStageDriveFolders.init({
-  openCheckpoint:async()=>({get:async key=>savedMetadata.get(key),put:async(key,value)=>savedMetadata.set(key,value)}),
+  openCheckpoint:async()=>({
+    get:async key=>{checkpointSingles++;return savedMetadata.get(key);},
+    getMany:async keys=>{checkpointBatches++;return new Map(keys.map(key=>[key,savedMetadata.get(key)]));},
+    put:async(key,value)=>savedMetadata.set(key,value)
+  }),
   session:()=>current,hasFullRead:()=>true,chooseFolder:async()=>pick,
   refresh:async()=>{},ensureAuth:async()=>{}
 });
@@ -163,6 +168,9 @@ assert.notEqual(lastRows[0].code,lastRows[1].code,
   'Distinct MIDI with colliding embedded song code must receive an alias');
 assert.equal(uploads,0,'Rebuilding must not upload any source file');
 assert.equal(reads,4,'Resume reuses two verified packages and retries only the failed file');
+assert.equal(checkpointSingles,0,'Checkpoint lookup must use the batched transaction API');
+assert.ok(checkpointBatches>0,'Resume must look up saved checkpoints in bounded groups');
+console.log('PASS: batched checkpoint lookups and individually durable verification writes');
 assert.match(element('xstage-drive-folder-status').textContent,/ฐานเดิม 0 เพลง/);
 assert.match(element('xstage-drive-folder-status').textContent,/MIDI ซ้ำ 1 \(มีในฐานแล้ว 0 · ซ้ำในรอบนี้ 1\)/);
 assert.match(element('xstage-drive-folder-status').textContent,/รูปแบบอื่นที่ยังไม่ได้ทำดัชนี 1/);
