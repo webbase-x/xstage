@@ -15,7 +15,7 @@ for(const id of ['xstage-drive-folder-music','xstage-drive-folder-soundfont',
   assert.ok(html.includes('id="'+id+'"'),'Missing media source control: '+id);
 assert.ok(html.includes('cloud-drive-folders.js?v=')&&
   html.includes('pc-extensions.js?v=1206-scoped-fx')&&
-  html.includes('browser-midi.js?v=1217-fixed-soundfont'),
+  Number(html.match(/browser-midi\.js\?v=(\d+)-fixed-soundfont/)?.[1])>=1217,
   'Page must load updated Drive folder, SoundFont and FX implementations');
 assert.ok(app.includes('ensureLibraryLayout(drive,actual.id,')&&
   app.includes('xstage-drive-main-select')&&!app.includes('new google.picker.PickerBuilder()')&&
@@ -61,7 +61,7 @@ assert.ok(app.includes('Array.isArray(x.parents)&&x.parents.includes(current.id)
 assert.ok(app.includes('!preferredRootId&&roots.length===1'));
 assert.ok(settings.includes("ids.MIDI=await child(ids.SONGS,'MIDI'")&&!settings.includes("add('เปลี่ยนโฟลเดอร์'"));
 assert.ok(app.includes("dialog.addEventListener('cancel',event=>{event.preventDefault();finish();})"));
-assert.ok(soundfont.includes('showPermission(!fullRead&&!!chosenFolder'));
+assert.ok(soundfont.includes('showPermission(!fullRead,'),'Limited access must show permission recovery for the default source too');
 assert.ok(importer.includes('xstage:drive-sources-open')&&settings.includes('xstage:drive-sources-open'));
 assert.ok(html.includes('id="xstage-drive-read-all"')&&html.includes('id="xstage-drive-scan-counts"'));
 assert.ok(app.includes('ensureImporterGoogleAuth(true,true,true)')&&app.includes('grantedDriveReadAndWrite(newToken)'));

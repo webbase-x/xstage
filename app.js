@@ -2117,17 +2117,27 @@ async function activeDriveCatalog(dbId,token){
   return direct.length?{pointer:directCatalogPointer(direct[0])}:null;
 }
 async function pollPublishedCatalog(){
-  if(!state.token||!state.catalogDbDirId||state.catalogPolling)return;
-  const authId=state.authId,token=state.token;
+  if(!state.token||!state.libraryRootId||isRetiredDriveRoot(state.libraryRootId)||state.catalogPolling)return;
+  const authId=state.authId,token=state.token,rootId=state.libraryRootId,sub=state.accountSub;
+  const sameLibrary=()=>authId===state.authId&&state.token===token&&
+    state.libraryRootId===rootId&&state.accountSub===sub;
   state.catalogPolling=true;
   try{
-    const published=await activeDriveCatalog(state.catalogDbDirId,token);
+    // PC may create DB/songs.sqlite3 after Android/Web opened an empty library.
+    // Discover the exact DB folder again; never search outside the chosen root.
+    const dbDirs=await driveList(`'${rootId}' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
+    if(!sameLibrary())return;
+    if(dbDirs.length>1)throw Error('พบ DB ซ้ำในคลังที่เลือก');
+    const dbId=dbDirs[0]?.id||'';
+    if(!dbId)return; // A temporarily unavailable/syncing DB must not erase the active queue.
+    const published=await activeDriveCatalog(dbId,token);
+    if(!sameLibrary())return;
+    state.catalogDbDirId=dbId;
     const pointer=published?.pointer;
-    if(!pointer||authId!==state.authId||state.token!==token||!pointer.generation||
-       pointer.generation===state.catalogGeneration)return;
-    const cacheOwner=libraryCacheOwner(state.accountSub,state.libraryRootId);
+    if(!pointer||!pointer.generation||pointer.generation===state.catalogGeneration)return;
+    const cacheOwner=libraryCacheOwner(sub,rootId);
     const catalog=await readPublishedCatalog(pointer,token,{sub:cacheOwner});
-    if(authId!==state.authId||state.token!==token)return;
+    if(!sameLibrary())return;
     const countBefore=state.songs.length;
     state.manifest=catalog;
     state.songs=catalog.songs.filter(playable);
@@ -2140,8 +2150,7 @@ async function pollPublishedCatalog(){
     ui.libraryState.textContent='Google Drive · '+(state.libraryRootOwnedByMe?'คลังของฉัน':state.libraryRootOwnerEmail?'แชร์โดย '+state.libraryRootOwnerEmail:'คลังที่แชร์ให้ฉัน')+' · อัปเดตแล้ว';
     setStatus(`ฐานเพลงอัปเดต: ${num(countBefore)} → ${num(state.songs.length)} เพลง`,'success');
   }catch(error){
-    if(state.token===token&&authId===state.authId)
-      console.warn('X-Stage catalog refresh:',error?.message||error);
+    if(sameLibrary())console.warn('X-Stage catalog refresh:',error?.message||error);
   }finally{state.catalogPolling=false;}
 }
 setInterval(pollPublishedCatalog,45000);
@@ -4687,7 +4696,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1217';
+    script.src='./assets/vendor/qrcode.min.js?v=1218';
     script.async=true;
     let done=false;
     const finish=error=>{

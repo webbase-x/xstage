@@ -60,6 +60,16 @@ jobs:
       - name: Run cross-platform regression checks before Android build
         run: npm test
 
+      - name: Install pinned SQLite engine for cross-platform acceptance
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund sql.js@1.13.0
+
+      - name: Verify PC / Web / Android single SQLite database
+        run: |
+          node scripts/test-shared-sqlite-cross-runtime.mjs
+          node scripts/test-shared-sqlite-pc-builder.mjs
+          node scripts/test-shared-sqlite-drive-link.mjs
+          node scripts/test-android-shared-db-refresh.mjs
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
