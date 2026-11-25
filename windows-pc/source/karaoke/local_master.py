@@ -109,10 +109,11 @@ def activate(home, data, settings, *, installed=False):
             if current == "pc":
                 settings["pc_only_backup"] = backup.name
         snapshot(staged, local)
-        if settings.get("shared_drive_root") != pending["root"]:
-            settings.pop("shared_drive_folder_id", None)
-        settings.update(library_mode="google-drive", shared_local_master=True,
-                        shared_drive_root=pending["root"])
+        if not pending.get("local_only"):
+            if settings.get("shared_drive_root") != pending["root"]:
+                settings.pop("shared_drive_folder_id", None)
+            settings["shared_drive_root"] = pending["root"]
+        settings.update(library_mode="google-drive", shared_local_master=True)
         settings["shared_source_songs"] = pending.get("source_songs") or str(Path(pending["root"]) / "SONGS")
         settings.pop("pending_online_master", None)
         settings.pop("pending_pc_only", None)
@@ -146,3 +147,75 @@ def activate(home, data, settings, *, installed=False):
         if not target.exists() and kind(data / "songs.sqlite3") == "pc":
             snapshot(data / "songs.sqlite3", target)
     return target
+
+def export_portable(home, drive_root, *, overwrite=False, cancel=None):
+    """Publish a completed PC snapshot independently of catalog scanning.
+
+    The destination must be the selected library root. Do not modify songs
+    or device settings, and retain an existing destination as a backup.
+    """
+    from .shared_song_library import validate_shared
+    from .shared_drive_layout import inspect
+    home = Path(home).resolve(strict=True)
+    source = home / "DB" / "songs.sqlite3"
+    root = Path(inspect(drive_root)["root"])
+    if not root.is_dir() or not (root / "SONGS").is_dir():
+        raise ValueError("กรุณาคัดลอกโฟลเดอร์ SONGS ไปยังคลัง Google Drive ก่อน")
+    _safe(source.parent)
+    _safe(source)
+    validate_sqlite_sidecars(source.parent, (source.name,))
+    validate_shared(home, source)
+    target = root / "DB" / "songs.sqlite3"
+    _safe(target.parent)
+    _safe(target)
+    if source.resolve() == target.resolve():
+        raise ValueError("ต้นทางและปลายทางเป็นไฟล์เดียวกัน")
+    def stopped():
+        if cancel is not None and cancel.is_set():
+            raise InterruptedError("ยกเลิกก่อนเผยแพร่ฐานข้อมูล")
+    stopped()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    stage = target.with_name(".export-" + secrets.token_hex(16) + ".sqlite3")
+    try:
+        snapshot(source, stage)
+        validate_shared(root, stage)
+        # Drive file IDs belong to a particular cloud folder, not the PC
+        # catalog. Resolve them from the selected folder at playback time.
+        import json
+        with closing(sqlite3.connect(stage)) as db:
+            for ident, payload, path, size in db.execute(
+                    "SELECT id,payload,path,original_file_size FROM songs"):
+                stopped()
+                row = json.loads(payload)
+                parts = path.split("/")
+                if (len(parts) < 2 or parts[0] != "SONGS" or
+                    any(x in ("", ".", "..") or ":" in x or chr(92) in x for x in parts)):
+                    raise ValueError("พาธเพลงในฐานไม่ปลอดภัย: " + path)
+                media = root.joinpath(*parts)
+                if (not media.is_file() or media.is_symlink() or
+                    (root / "SONGS").resolve() not in media.resolve().parents or
+                    (size is not None and media.stat().st_size != size)):
+                    raise ValueError("เพลงบน Drive ไม่ตรงกับฐาน PC: " + path)
+                for key in ("xmid", "xsk"):
+                    if row.get(key):
+                        row[key]["fileId"] = ""
+                        row["pendingDriveLink"] = True
+                db.execute("UPDATE songs SET payload=? WHERE id=?",
+                           (json.dumps(row, ensure_ascii=False, separators=(",", ":")), ident))
+            db.commit()
+        validate_shared(root, stage)
+        stopped()
+        if target.exists():
+            if not overwrite:
+                raise FileExistsError("มีฐานปลายทางแล้ว · ต้องยืนยันก่อนเขียนทับ")
+            _prepare_replacement(target)
+            backup = target.with_name("songs-" + secrets.token_hex(8) + ".sqlite3.bak")
+            snapshot(target, backup)
+        stopped()
+        _prepare_replacement(target)
+        if not overwrite and target.exists():
+            raise FileExistsError("พบฐานปลายทางใหม่ · ไม่เขียนทับ")
+        os.replace(stage, target)
+        return target
+    finally:
+        stage.unlink(missing_ok=True)

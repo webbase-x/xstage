@@ -44,8 +44,15 @@ for(const pathname of ['../10001.xmid','SONGS/../secret.xmid',
  const bad=song();bad.xmid.path=pathname;
  await assert.rejects(resolver(bad,token),/ไม่ปลอดภัย/);
 }
+// A portable catalog may use the chosen source as SONGS itself.
+files.push({id:'flatDriveSong100',name:'flat.xmid',parents:['songsFolder100'],
+  mimeType:'application/octet-stream',size:'300',md5Checksum:'a'.repeat(32)});
+const flat=song();flat.xmid.path='SONGS/flat.xmid';
+await resolver(flat,token);
+assert.equal(flat.xmid.fileId,'flatDriveSong100');
+assert.equal(flat.pendingDriveLink,false);
 const duplicate=song();
-files.push({...files.at(-1),id:'otherDriveSong101'});
+files.push({...files.find(x=>x.id==='actualDriveSong100'),id:'otherDriveSong101'});
 await assert.rejects(resolver(duplicate,token),/ซ้ำ\/ไม่พบ/);
 assert.equal(duplicate.xmid.fileId,'');
 console.log('PASS: PC-made DB paths resolve to exactly one Google Drive file by root, package size and MD5');
