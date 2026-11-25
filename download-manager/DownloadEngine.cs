@@ -18,6 +18,7 @@ public sealed class DownloadEngine
     private readonly object _saveLock = new();
     private readonly TransferSlotQueue _slots = new();
     private readonly TransferRateGate _globalSpeed = new();
+    private readonly ConcurrentDictionary<string, TransferRateGate> _sharedJobSpeed = new();
     private readonly ConcurrentDictionary<string, TransferRateGate> _fileSpeed = new();
     private readonly ConcurrentDictionary<string, byte> _active = new();
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, IncludeFields = true };
@@ -190,6 +191,10 @@ public sealed class DownloadEngine
             throw new ArgumentOutOfRangeException(nameof(concurrentJobs));
         if (globalLimitKib != 0 && globalLimitKib is < 64 or > 1_048_576)
             throw new ArgumentOutOfRangeException(nameof(globalLimitKib));
+        // yt-dlp rate is fixed at process launch. Do not change the shared
+        // allocation while any queued or running transfer holds an old share.
+        if (!_active.IsEmpty && (concurrentJobs != MaxConcurrentJobs || globalLimitKib != GlobalLimitKib))
+            throw new InvalidOperationException("กรุณาหยุดงานดาวน์โหลดก่อนเปลี่ยนจำนวนงานหรือความเร็วรวม");
         // Save all three before changing live limits; no partially committed
         // performance profile is ever restored after an interrupted write.
         _state.SavePerformanceSettings(concurrentJobs, perHostJobs, globalLimitKib);
@@ -285,12 +290,19 @@ public sealed class DownloadEngine
         }
     }
 
+    public static int SharedJobBudgetKib(int globalLimitKib, int slots) =>
+        globalLimitKib == 0 ? 0 : Math.Max(1, globalLimitKib / Math.Max(1, slots));
+
     private Task LimitNetworkReadAsync(DownloadJob job, int bytes, CancellationToken ct)
     {
         var fileGate = job.FileSpeedLimitKib > 0
             ? _fileSpeed.GetOrAdd(job.Id, _ => new TransferRateGate(job.FileSpeedLimitKib))
             : null;
-        return TransferRateLimiter.WaitAsync(_globalSpeed, fileGate, bytes, ct);
+        var share = SharedJobBudgetKib(GlobalLimitKib, MaxConcurrentJobs);
+        var shared = _sharedJobSpeed.GetOrAdd(job.Id, _ => new TransferRateGate());
+        shared.Configure(share);
+        return Task.WhenAll(TransferRateLimiter.WaitAsync(_globalSpeed, fileGate, bytes, ct),
+            shared.WaitForBytesAsync(bytes, ct));
     }
 
     private static int ReadBufferSize(DownloadJob job, int globalLimitKib) =>
@@ -522,6 +534,7 @@ public sealed class DownloadEngine
             {
                 slot?.Dispose();
                 _fileSpeed.TryRemove(job.Id, out _);
+                _sharedJobSpeed.TryRemove(job.Id, out _);
                 _active.TryRemove(job.Id, out _);
                 if (ReferenceEquals(job.Cancellation, cts)) job.Cancellation = null;
                 cts.Dispose();
@@ -755,7 +768,8 @@ public sealed class DownloadEngine
         Directory.CreateDirectory(job.Folder);
         if (SocialVideoDownloader.IsVideoUrl(job.Url))
         {
-            await SocialVideoDownloader.DownloadAsync(job, WorkDir(job), ct, GlobalLimitKib);
+            await SocialVideoDownloader.DownloadAsync(job, WorkDir(job), ct,
+                SharedJobBudgetKib(GlobalLimitKib, MaxConcurrentJobs));
             return;
         }
         var probe = await ProbeAsync(job, ct);
