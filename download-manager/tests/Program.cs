@@ -7,6 +7,50 @@ using System.Security.Cryptography;
 using System.Text;
 using XStageDownloadManager;
 
+if (args.Length == 2 && args[0] == "--mixed-bandwidth")
+{
+    var root = Path.Combine(Path.GetTempPath(), "xstage-mixed-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var payload = new byte[1024 * 1024];
+        new Random(723).NextBytes(payload);
+        var hash = SHA256.HashData(payload);
+        using var server = new FileServer(payload);
+        var engine = new DownloadEngine(Path.Combine(root, "state"));
+        const int cap = 256;
+        engine.ConfigurePerformance(1, 1, DownloadEngine.NativePoolBudgetKib(cap, 2, 1));
+        var info = new System.Diagnostics.ProcessStartInfo(Path.GetFullPath(args[1]))
+        { UseShellExecute = false, CreateNoWindow = true };
+        var output = Path.Combine(root, "external.bin");
+        foreach (var arg in new[] { "--ignore-config", "--no-playlist", "--force-generic-extractor",
+            "--limit-rate", DownloadEngine.SharedJobBudgetKib(cap, 2) + "K",
+            "-N", "1", "-o", output, server.Url + "plain/external.bin" })
+            info.ArgumentList.Add(arg);
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        using var process = System.Diagnostics.Process.Start(info) ??
+            throw new Exception("Cannot start bundled yt-dlp");
+        try
+        {
+            var native = engine.Add(server.Url + "range/native.bin", root, 8);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+            await process.WaitForExitAsync(timeout.Token);
+            await WaitFor(() => native.Status is "Completed" or "Failed", 90000);
+            if (process.ExitCode != 0 || native.Status != "Completed")
+                throw new Exception("Mixed transfer failed: " + native.Error);
+            foreach (var file in new[] { output, native.CompletedPath })
+                if (!SHA256.HashData(await File.ReadAllBytesAsync(file)).SequenceEqual(hash))
+                    throw new Exception("Mixed transfer SHA-256 mismatch.");
+            var rate = payload.Length * 2d / 1024 / timer.Elapsed.TotalSeconds;
+            if (rate > cap * 1.20) throw new Exception($"Mixed aggregate rate exceeded cap: {rate:F1} KiB/s");
+            Console.WriteLine($"PASS: actual yt-dlp + native HTTP aggregate {rate:F1} KiB/s, SHA-256 verified");
+        }
+        finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+    }
+    finally { try { Directory.Delete(root, true); } catch { } }
+    return;
+}
+
 if (args.Length == 0)
 {
     // Deterministic virtual link telemetry: no dependence on CI wall-clock jitter.
