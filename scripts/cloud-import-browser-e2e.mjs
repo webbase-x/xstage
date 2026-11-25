@@ -201,6 +201,10 @@ try{
     await button.waitFor({state:'visible'});
     await button.click();
     await page.locator('#cloud-import-dialog[open]').waitFor();
+    // The importer intentionally resets the local fallback accordion each
+    // time it opens. Reveal the controls before selecting files or resuming.
+    const local=page.locator('#cloud-import-local-options');
+    if(!(await local.evaluate(el=>el.open)))await local.locator('summary').click();
   }
   const scriptErrors=[];page.on('pageerror',error=>scriptErrors.push(error.message));
   await page.route('https://accounts.google.com/**',route=>route.fulfill({status:200,
