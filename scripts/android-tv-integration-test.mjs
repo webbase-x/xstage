@@ -318,3 +318,10 @@ assert.ok(parityFix.includes('#lyrics')&&parityFix.includes('z-index:90!importan
 assert.ok(nativeMeter.includes("document.getElementById('stage-viz-right')")&&
   nativeMeter.includes('view.mirror?LEVELS-1-index:index'),
   'TV must paint both visual meters from live media-capture FFT levels');
+
+// Restored-token startup must explain why QR is not shown and report catalog progress.
+assert.ok(app.includes('ได้รับสิทธิ์แล้ว')&&app.includes('ไม่ต้องสแกน QR ซ้ำ'));
+assert.ok(app.includes("const status=$('android-tv-auth-status');")&&app.includes("Math.round(Number(progress))+'%'"));
+const ambiguousRoot=app.slice(app.indexOf('if(!root){',app.indexOf('async function openDrive(')),app.indexOf('if(preferredRootId&&String(root.id)',app.indexOf('async function openDrive(')));
+assert.ok(ambiguousRoot.includes('state.songs=[]')&&ambiguousRoot.includes('setSharedLibraryGate(true')&&ambiguousRoot.includes('setAndroidTvStageAccess(true,account.sub)'), 'Verified ambiguous root must expose only empty library selection, not deadlock behind QR');
+assert.ok(app.includes('if(authId!==state.authId)return;\n    state.manifest=catalog;'),'Cancelled catalog load cannot activate stale library');
