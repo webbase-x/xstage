@@ -34,6 +34,35 @@ def kind(path):
             return "pc"
         raise ValueError("ไม่รู้จักโครงสร้างฐานเพลง PC")
 
+def _prepare_replacement(target):
+    """Let SQLite checkpoint its own WAL; never unlink a user's journal."""
+    target = Path(target)
+    _safe(target.parent)
+    _safe(target)
+    validate_sqlite_sidecars(target.parent, (target.name,))
+    sidecars = [target.with_name(target.name + suffix)
+                for suffix in ("-wal", "-shm", "-journal")]
+    if any(p.exists() for p in sidecars):
+        if not target.is_file() or sidecars[2].exists():
+            raise ValueError("ฐานปลายทางมี journal ค้าง · ไม่เขียนทับ")
+        try:
+            with closing(sqlite3.connect(target.resolve().as_uri() + "?mode=rw",
+                                         uri=True, timeout=0.2)) as db:
+                # A busy reader or writer must prevent replacement. A clean
+                # read-only WAL session on Windows can leave valid sidecars
+                # even after all handles have closed.
+                busy, frames, copied = db.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+                if busy or (frames >= 0 and copied != frames):
+                    raise ValueError("ฐานปลายทางยังเปิดอยู่ · ไม่เขียนทับ")
+                if db.execute("PRAGMA journal_mode=DELETE").fetchone()[0].lower() != "delete":
+                    raise ValueError("ไม่สามารถปิด WAL อย่างปลอดภัย")
+        except sqlite3.Error as error:
+            raise ValueError("ฐานปลายทางยังเปิดอยู่หรือ WAL ไม่พร้อม · ไม่เขียนทับ") from error
+    validate_sqlite_sidecars(target.parent, (target.name,))
+    if any(p.exists() for p in sidecars):
+        raise ValueError("ฐานปลายทางยังเปิดอยู่หรือมี journal ค้าง · ไม่เขียนทับ")
+
+
 def snapshot(source, target):
     source, target = Path(source), Path(target)
     _safe(target.parent)
@@ -46,10 +75,7 @@ def snapshot(source, target):
             if db.execute("PRAGMA quick_check(1)").fetchone()[0] != "ok":
                 raise ValueError("สำเนาฐานเพลงไม่สมบูรณ์")
             db.execute("PRAGMA journal_mode=DELETE")
-        validate_sqlite_sidecars(target.parent, (target.name,))
-        if any(target.with_name(target.name + suffix).exists()
-               for suffix in ("-wal", "-shm", "-journal")):
-            raise ValueError("ฐานปลายทางยังเปิดอยู่หรือมี journal ค้าง · ไม่เขียนทับ")
+        _prepare_replacement(target)
         _safe(target)
         os.replace(stage, target)
     finally:
