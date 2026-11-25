@@ -158,6 +158,18 @@ def _old_refs(path):
     return refs
 
 
+def _old_ids(path):
+    if not path.is_file():
+        return {}
+    try:
+        with closing(sqlite3.connect(path.as_uri() + "?mode=ro&immutable=1", uri=True)) as db:
+            return {str(rel).casefold(): ident for rel, ident in db.execute(
+                "SELECT original_relative_path,web_song_id FROM songs")
+                if isinstance(ident, str) and re.fullmatch(r"[A-Za-z0-9_./:-]{1,240}", ident)}
+    except (sqlite3.Error, ValueError):
+        return {}
+
+
 def _files(root, cancel):
     songs = root / "SONGS"
     files = []
@@ -281,6 +293,7 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         raise ValueError("DB/songs.sqlite3 ไม่ใช่ไฟล์ SQLite ปกติ หยุดเพื่อไม่เขียนนอกคลัง")
     original_signature = _hash(old_file) if old_file.exists() else None
     references = _old_refs(old_file)
+    old_ids = _old_ids(old_file) if not deduplicate else {}
     rows, midi_hashes, paths, codes, ids = [], set(), set(), set(), set()
     duplicates = reused = 0
     for index, (relative, row, cached) in enumerate(_verified_rows(songs, root, references, cache_dir, cancel, full_verify, deduplicate), 1):
@@ -298,8 +311,8 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         else:
             # Online verifies package MD5, not a duplicate MIDI fingerprint.
             # Retain each path, including byte-identical packages in different folders.
-            row["webSongId"] = "browser/" + file_kind(row) + "/" + hashlib.sha256(
-                relative.casefold().encode("utf-8")).hexdigest()
+            row["webSongId"] = old_ids.get(key) or ("browser/" + file_kind(row) + "/" + hashlib.sha256(
+                relative.casefold().encode("utf-8")).hexdigest())
             row.pop("midiHash", None)
         base_code = row["code"]
         if base_code.casefold() in codes:
@@ -345,6 +358,8 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         stage = Path(local_database).absolute().parent / (".songs-" + secrets.token_hex(10) + ".sqlite3")
 
     try:
+        if stage.parent.is_symlink() or getattr(stage.parent, "is_junction", lambda: False)():
+            raise ValueError("โฟลเดอร์ฐาน PC เป็นลิงก์ที่ไม่ปลอดภัย")
         stage.parent.mkdir(parents=True, exist_ok=True)
         _stop(cancel)
         generation = secrets.token_hex(12)
