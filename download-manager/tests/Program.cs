@@ -44,6 +44,31 @@ if (args.Length == 0)
     if (DownloadEngine.SharedJobBudgetKib(0, 8) != 0)
         throw new Exception("Unlimited bandwidth mode regressed.");
     Console.WriteLine("PASS: shared native/media bandwidth budgets for 1–8 slots");
+    // Simulate media reservations arriving and leaving while native jobs run.
+    foreach (var cap in new[] { 64, 65, 128, 1024, 10240, 1048576 })
+    foreach (var slots in Enumerable.Range(1, 8))
+    {
+        var share = DownloadEngine.SharedJobBudgetKib(cap, slots);
+        var previous = cap;
+        for (var media = 0; media < slots; media++)
+        {
+            var pool = DownloadEngine.NativePoolBudgetKib(cap, slots, media);
+            if (pool <= 0 || pool > previous || (long)pool + (long)media * share > cap)
+                throw new Exception("Native pool exceeds shared cap after media arrival.");
+            previous = pool;
+        }
+        for (var media = slots - 1; media >= 0; media--)
+        {
+            var pool = DownloadEngine.NativePoolBudgetKib(cap, slots, media);
+            if (pool < previous || pool != cap - media * share)
+                throw new Exception("Native pool failed to reclaim media reservation.");
+            previous = pool;
+        }
+        if (previous != cap) throw new Exception("Idle media reservation leaked.");
+    }
+    if (DownloadEngine.NativePoolBudgetKib(0, 8, 7) != 0)
+        throw new Exception("Unlimited native pool regressed.");
+    Console.WriteLine("PASS: native bandwidth redistribution on simulated media arrivals and departures");
     SmartSyncPlannerTests.Run();
     await SmartSyncBackgroundTests.RunAsync();
     await SmartSyncTransferTests.RunAsync();
