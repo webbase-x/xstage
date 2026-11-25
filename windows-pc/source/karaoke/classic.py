@@ -70,13 +70,14 @@ class ClassicApp(KaraokeApp):
             return
         try:
             from .shared_song_library import validate_shared
-            validate_shared(self.settings.get("shared_drive_root", ""))
+            validate_shared(self.settings.get("shared_drive_root", ""),
+                self.library.path if self.settings.get("shared_local_master") else None)
             signature = self.library.file_signature()
             if signature != self._shared_db_last_signature:
                 self._shared_db_last_signature = signature
                 self.refresh_library()
                 self.refresh_queue()
-                self.status_var.set("Google Drive · อ่านฐาน PC/Online ล่าสุดแล้ว · "
+                self.status_var.set("ฐานเพลง PC/Online · อ่านฐานที่เลือกแล้ว · "
                                     "ไม่ขัดจังหวะเพลงที่กำลังเล่น")
         except (ValueError, OSError, sqlite3.DatabaseError) as error:
             self.status_var.set("Google Drive · ฐานยังไม่พร้อม: "+str(error))
