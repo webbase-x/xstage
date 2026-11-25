@@ -69,6 +69,46 @@ if (args.Length == 0)
     if (DownloadEngine.NativePoolBudgetKib(0, 8, 7) != 0)
         throw new Exception("Unlimited native pool regressed.");
     Console.WriteLine("PASS: native bandwidth redistribution on simulated media arrivals and departures");
+    // Real loopback TCP/HTTP payloads, independent of internet availability.
+    var bandwidthRoot = Path.Combine(Path.GetTempPath(), "xstage-bandwidth-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(bandwidthRoot);
+    try
+    {
+        var payload = new byte[512 * 1024];
+        new Random(12345).NextBytes(payload);
+        var expectedHash = SHA256.HashData(payload);
+        using var link = new FileServer(payload);
+        var engine = new DownloadEngine(Path.Combine(bandwidthRoot, "state"));
+        engine.ConfigurePerformance(2, 2, 256);
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        var first = engine.Add(link.Url + "range/first.bin", bandwidthRoot, 8);
+        var second = engine.Add(link.Url + "range/second.bin", bandwidthRoot, 8);
+        await WaitFor(() => Interlocked.Read(ref first.DownloadedBytes) >= 32768 &&
+            Interlocked.Read(ref second.DownloadedBytes) >= 32768);
+        engine.Pause(first);
+        await WaitFor(() => first.Status == "Paused" && first.Cancellation is null);
+        var saved = Interlocked.Read(ref first.DownloadedBytes);
+        if (saved <= 0 || saved >= payload.Length)
+            throw new Exception("Bandwidth test did not retain a partial file.");
+        engine.Start(first);
+        await WaitFor(() => (first.Status is "Completed" or "Failed") &&
+            (second.Status is "Completed" or "Failed"), 60000);
+        timer.Stop();
+        foreach (var item in new[] { first, second })
+        {
+            if (item.Status != "Completed")
+                throw new Exception("Loopback transfer failed: " + item.Error);
+            if (!SHA256.HashData(await File.ReadAllBytesAsync(item.CompletedPath)).SequenceEqual(expectedHash))
+                throw new Exception("Loopback SHA-256 mismatch after pause/resume.");
+        }
+        var kibPerSecond = payload.Length * 2d / 1024 / timer.Elapsed.TotalSeconds;
+        // Allow modest scheduling/buffering tolerance, but reject independent
+        // 256 KiB/s caps that could double aggregate throughput.
+        if (kibPerSecond > 256 * 1.20)
+            throw new Exception($"Aggregate HTTP bandwidth exceeded cap: {kibPerSecond:F1} KiB/s");
+        Console.WriteLine($"PASS: loopback HTTP aggregate {kibPerSecond:F1} KiB/s; pause/resume and SHA-256");
+    }
+    finally { try { Directory.Delete(bandwidthRoot, true); } catch { } }
     SmartSyncPlannerTests.Run();
     await SmartSyncBackgroundTests.RunAsync();
     await SmartSyncTransferTests.RunAsync();
