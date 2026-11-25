@@ -1527,7 +1527,7 @@ async function resolvePcDriveLink(song,token,signal){
   if(!root||!token)throw Error('กรุณาเชื่อมคลัง XStageKaraoke บน Google Drive');
   const raw=String(media.path||'').replace(/\\/g,'/');
   const parts=raw.split('/');
-  if(parts[0]!=='SONGS'||parts.length<3||parts.length>20||
+  if(parts[0]!=='SONGS'||parts.length<2||parts.length>20||
     parts.some(part=>!part||part==='.'||part==='..'||part.includes(':')))
     throw Error('ตำแหน่งเพลงจากฐาน PC ไม่ปลอดภัย: '+raw);
   const expected=String(media.md5Checksum||'').toLowerCase();
