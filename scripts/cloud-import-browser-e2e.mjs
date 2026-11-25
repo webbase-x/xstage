@@ -28,6 +28,8 @@ const server=http.createServer((req,res)=>{
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const port=server.address().port,records=new Map(),children=new Map(),sessions=new Map();
 let serial=0,sessionIndex=0,payloadUploads=0,rootCreated=0;
+let pauseGate=null; // Deterministic fault injection during a real resumable PUT.
+
 const id=()=>('drive'+String(++serial).padStart(8,'0'));
 const group=parent=>{if(!children.has(parent))children.set(parent,[]);return children.get(parent);};
 const ref={rootId:null};
@@ -96,7 +98,18 @@ async function routeDrive(route){
     assert.equal(start,session.size);
     assert.equal(bytes.length,end-start+1);
     session.size+=bytes.length;session.parts.push(bytes);
-    if(session.size<total)return send(308,null,{Range:'bytes=0-'+(session.size-1)});
+    if(session.size<total){
+      if(pauseGate&&session.meta.name.startsWith('K300-')){
+        const gate=pauseGate;pauseGate=null;
+        gate.entered({bytes:session.size,total,uploadId:url.searchParams.get('upload_id')});
+        await gate.releasePromise;
+        // The user may have aborted this HTTP request while it was held.
+        // A completed remote chunk remains recorded, but it is not a file.
+        try{return await send(308,null,{Range:'bytes=0-'+(session.size-1)});}
+        catch(error){if(!gate.aborted)throw error;return;}
+      }
+      return send(308,null,{Range:'bytes=0-'+(session.size-1)});
+    }
     const data=Buffer.concat(session.parts);
     const record={...session.meta,id:id(),ownedByMe:true,md5Checksum:createHash('md5').update(data).digest('hex'),
       size:String(data.length)};
@@ -417,6 +430,7 @@ try{
     'Manually timed LRC must become real lyrics JSON');
   assert.ok([...records.values()].some(x=>x.name.endsWith('.sf2')));
   const firstCount=payloadUploads;
+  console.log('PASS: initial browser import, 4 songs, SoundFont, video metadata and one real SQLite snapshot');
   // After first DB exists, reopen the importer from the visible stage menu.
   await page.click('#cloud-import-close');
   // The transport menu is the visible desktop control. The old mobile
@@ -435,6 +449,7 @@ try{
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น')&&
     document.getElementById('cloud-import-status').textContent.includes('ข้ามซ้ำ 4'),null,{timeout:60000});
   assert.equal(payloadUploads,firstCount,'Second upload should be 100% deduplicated by MD5');
+  console.log('PASS: reopen menu and reimport identical folder without any new payload uploads');
   // Cancel/pause while an additional large file is being prepared. A browser
   // restart should not lose the completed DB and can reselect the same folder.
   const k300=Buffer.alloc(9*1024*1024+77);k300.write('ID3',0,'ascii');
@@ -443,17 +458,53 @@ try{
   await page.locator('#cloud-import-input').setInputFiles(dir);
   await page.waitForFunction(()=>document.getElementById('cloud-import-ready').textContent==='5');
   await page.click('#cloud-import-select-all');
-  await page.click('#cloud-import-start');
-  await page.locator('#cloud-import-start:not([disabled])').waitFor();
-  assert.equal((await page.locator('#cloud-import-start').textContent()).trim(),'พัก');
-  await page.click('#cloud-import-start');
-  await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.includes('หยุดงานแล้ว'),null,{timeout:30000});
+  const beforePause=activeDbFiles()[0];
+  const beforePauseDigest=createHash('sha256').update(records.get(beforePause.id).data).digest('hex');
+  // Hold a real first resumable chunk after the fake Drive has accepted it.
+  // This removes the race between the pause click and a fast CI upload.
+  let enter,release,timer;
+  const entered=new Promise(resolve=>{enter=resolve;});
+  const releasePromise=new Promise(resolve=>{release=resolve;});
+  const gate={entered:enter,releasePromise,aborted:false};
+  pauseGate=gate;
+  try{
+    await page.click('#cloud-import-start');
+    const chunk=await Promise.race([entered,new Promise((_,reject)=>{
+      timer=setTimeout(()=>reject(new Error('K300 did not reach the resumable upload boundary')),60000);
+    })]);
+    assert.equal(chunk.bytes,8*1024*1024);
+    assert.ok(chunk.bytes<chunk.total);
+    assert.equal((await page.locator('#cloud-import-start').textContent()).trim(),'พัก');
+    await page.click('#cloud-import-start');
+    gate.aborted=true;
+    // Use the current user-facing state and require the Start button to be
+    // enabled after the pause checkpoint has been saved, not just clicked.
+    await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.includes('พักงานแล้ว')&&
+      document.getElementById('cloud-import-start').textContent.trim()==='เริ่ม'&&
+      !document.getElementById('cloud-import-start').disabled,null,{timeout:30000});
+    assert.equal(activeDbFiles().length,1);
+    assert.equal(activeDbFiles()[0].id,beforePause.id);
+    assert.equal(createHash('sha256').update(records.get(beforePause.id).data).digest('hex'),beforePauseDigest);
+    assert.equal([...records.values()].filter(x=>/^K300-.*\.mp3$/i.test(x.name)&&!x.trashed).length,0);
+    console.log('PASS: real pause during resumable PUT; 8 MiB accepted, original SQLite unchanged, checkpoint saved');
+  }catch(error){
+    console.error('Pause diagnostics:',await page.locator('#cloud-import-status').textContent(),
+      'button:',await page.locator('#cloud-import-start').textContent(),'errors:',scriptErrors);
+    throw error;
+  }finally{
+    clearTimeout(timer);pauseGate=null;release();
+  }
   await page.reload({waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>{const item=document.getElementById('cloud-import-open');return item&&!item.hidden;});
-  // The floating mobile menu is intentionally hidden at desktop viewport
-  // widths. Trigger the same existing import button handler directly.
-  await page.evaluate(()=>document.getElementById('cloud-import-open').click());
+  await page.locator('#stage-tools-toggle:visible, #mobile-menu-toggle:visible').first().click();
+  await page.locator('#mobile-stage-menu').waitFor({state:'visible'});
+  const resumeMenu=page.locator('#mobile-stage-menu details').filter({has:page.locator('#cloud-import-open')});
+  if(!await resumeMenu.evaluate(el=>el.open))await resumeMenu.locator('summary').click();
+  await page.click('#cloud-import-open');
   await page.locator('#cloud-import-dialog[open]').waitFor();
+  await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.includes('พบงานค้าง'));
+  const resumeLocal=page.locator('#cloud-import-local-options');
+  if(!await resumeLocal.evaluate(el=>el.open))await resumeLocal.locator('summary').click();
   await page.locator('#cloud-import-start:not([disabled])').waitFor();
   assert.equal((await page.locator('#cloud-import-start').textContent()).trim(),'เริ่ม');
   const chooserPromise=page.waitForEvent('filechooser');
@@ -483,6 +534,9 @@ try{
     assert.equal(finalDb.exec('SELECT count(*) FROM songs')[0].values[0][0],5,
       'Resuming must preserve four existing songs and publish the missing fifth');
   }finally{finalDb.close();}
+  assert.equal([...records.values()].filter(x=>/^K300-.*\.mp3$/i.test(x.name)&&!x.trashed).length,1,
+    'Resuming must publish exactly one complete copy of the interrupted song');
+  assert.equal(rootCreated,1,'Resume must use the same existing Drive root');
   assert.deepEqual(scriptErrors,[], 'No browser JavaScript errors are allowed');
   console.log('PASS: Chromium folder selection, Google session, private Drive uploads, single SQLite catalog and replay-safe MD5 dedup');
   await context.close();
