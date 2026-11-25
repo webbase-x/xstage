@@ -19,6 +19,19 @@ internal static class SmartSyncFolderTests
         Directory.CreateDirectory(pc); Directory.CreateDirectory(drive);
         try
         {
+            // Catalog control files must never enter ordinary media sync.
+            if (!SmartSyncFolders.IsCatalogControlPath("CACHE/.xstage-import-lock-a.json") ||
+                !SmartSyncFolders.IsCatalogControlPath("BACKUP/songs-backup-a.sqlite3") ||
+                !SmartSyncFolders.IsCatalogControlPath("DB/songs.sqlite3") ||
+                SmartSyncFolders.IsCatalogControlPath("SONGS/MIDI/10001.xmid"))
+                throw new Exception("Catalog control isolation failed");
+            if (SmartSyncFolders.CompareCanonicalCatalogs(pc, drive, default) != "")
+                throw new Exception("Missing catalogs must not be reported as synchronized");
+            Directory.CreateDirectory(Path.Combine(pc,"DB"));
+            File.WriteAllText(Path.Combine(pc,"DB","songs.sqlite3"),"unfinished");
+            if (!SmartSyncFolders.CompareCanonicalCatalogs(pc,drive,default).Contains("ยังไม่ครบ"))
+                throw new Exception("Missing peer DB must not be copied");
+            Directory.Delete(Path.Combine(pc,"DB"),true);
             var preferencesFile = Path.Combine(root, "settings", "smart-sync.json");
             if (SmartSyncPreferencesStore.Load(preferencesFile) != new SmartSyncPreferences())
                 throw new Exception("Missing preferences must start with safe defaults");

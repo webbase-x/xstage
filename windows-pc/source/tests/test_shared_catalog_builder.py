@@ -106,7 +106,7 @@ class SharedPcBuilderTests(unittest.TestCase):
         self.assertTrue(result["candidate_only"])
         self.assertEqual(old.read_bytes(),b"existing canonical")
         candidate=Path(result["database"])
-        self.assertEqual(candidate.parent,self.root/"CACHE")
+        self.assertEqual(candidate.parent.resolve(),(self.root/"CACHE").resolve())
         self.assertTrue(candidate.name.startswith("songs-pc-candidate-"))
         with closing(sqlite3.connect(candidate)) as db:
             self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0],"ok")

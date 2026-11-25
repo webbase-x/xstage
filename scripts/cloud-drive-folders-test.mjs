@@ -309,3 +309,26 @@ console.log('PASS: explicit shared PC/Online SQLite rebuild ignores legacy rows 
 assert.match(read('cloud-drive-folders.js'),/decoded\.candidate\.baseMd5/);
 assert.match(read('cloud-drive-folders.js'),/verified\.midiSha256!==row\.midiSha256/);
 assert.match(read('cloud-drive-folders.js'),/scope\.XStageCloudImport\.publishSingleCatalog/);
+
+// Real package decoding and candidate handoff; no production Drive is touched.
+{
+ const verify=window.XStageDriveFolders.verifyPcCandidate;
+ const generation='pc-generation';
+ const candidateRows=lastRows.map(row=>({...row}));
+ const allFiles=records.filter(f=>/\\.xmid$/i.test(f.name)).map(f=>({...f,relative:f.name,ext:'xmid'}));
+ // The raw file inventory may contain byte-identical copies whose FakeDrive
+ // entries deliberately share package content; give those copies their bytes.
+ for(const f of allFiles)if(!blobs.has(f.id)){
+   const source=allFiles.find(x=>x.md5Checksum===f.md5Checksum&&blobs.has(x.id));
+   if(source)blobs.set(f.id,blobs.get(source.id));
+ }
+ const old={pointer:{catalogMd5:'a'.repeat(32)},rows:new Map([['video',{webSongId:'video',video:{fileId:'video123'}}]])};
+ const decoded={kind:'snapshot',generation,candidate:{producer:'karaoke-pc-candidate-v1',baseMd5:'a'.repeat(32)},songs:candidateRows};
+ assert.ok(candidateRows.every(row=>/^[a-f0-9]{64}$/.test(row.midiSha256||'')),'New scan stores verified SHA-256');
+ const verified=await verify(new FakeDrive(),decoded,old,allFiles);
+ assert.equal(verified.size,candidateRows.length+1);assert.ok(verified.has('video'));
+ await assert.rejects(verify(new FakeDrive(),{...decoded,candidate:{...decoded.candidate,baseMd5:'b'.repeat(32)}},old,allFiles),/ฐาน Cloud เปลี่ยน/);
+ await assert.rejects(verify(new FakeDrive(),{...decoded,songs:[{...candidateRows[0],midiSha256:'f'.repeat(64)},...candidateRows.slice(1)]},old,allFiles),/MIDI ในฐาน PC ไม่ตรง/);
+ await assert.rejects(verify(new FakeDrive(),{...decoded,songs:candidateRows.slice(1)},old,allFiles),/Cloud มีเพลงที่ไม่อยู่/);
+ console.log('PASS: PC candidate Cloud identity, stale baseline, SHA mismatch, missing songs and preservation of other media');
+}

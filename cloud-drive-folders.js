@@ -302,6 +302,39 @@ async function compareCatalog(files,rows,checkpoint,s,folder,check=()=>{},canoni
   return {matchedRows,duplicates,newFiles,stale,other,duplicateRows,uncertain,
     equal:!newFiles&&!stale&&!duplicateRows&&!uncertain&&matchedRows+duplicates===files.length};
 }
+async function verifyPcCandidate(drive,decoded,existing,files,check=()=>{}){
+  if(decoded.candidate?.producer!=='karaoke-pc-candidate-v1'||
+     (existing.pointer?.catalogMd5||'').toLowerCase()!==decoded.candidate.baseMd5)
+    fail('ฐาน Cloud เปลี่ยนหลัง PC สร้าง · สร้างฐานใหม่จาก PC ก่อน');
+  const byPath=packagePathIndex(files);
+  const candidates=new Map(),covered=new Set(),rows=new Map();
+  // Preserve unrelated imported audio/video rows rather than dropping them.
+  for(const [id,row] of existing.rows)if(!row.xmid&&!row.xsk)rows.set(id,row);
+  for(const row of decoded.songs){
+    const media=row.xmid||row.xsk,kind=row.xmid?'xmid':'xsk';
+    if(!media||!/^([a-f0-9]{64})$/.test(row.midiSha256||''))fail('ฐาน PC ไม่มี SHA-256 ของ MIDI');
+    const actual=byPath.get(media.path);
+    if(!actual||actual.ext!==kind||packageSignature(actual)!==packageSignature(media))
+      fail('ไฟล์ในฐาน PC ยังไม่ตรงกับ Cloud: '+String(media.path||''));
+    const verified=await inspectPackage(drive,actual,check);
+    if(verified.midiSha256!==row.midiSha256||verified.midiHash!==row.midiHash||verified.midiSize!==row.midiSize)
+      fail('MIDI ในฐาน PC ไม่ตรงกับข้อมูล Cloud');
+    if(candidates.has(verified.midiSha256))fail('พบ MIDI ซ้ำในฐาน PC');
+    candidates.set(verified.midiSha256,verified.midiSize);covered.add(actual.id);
+    if(rows.has(row.webSongId))fail('รหัสเพลงชนกับฐานเดิม');
+    rows.set(row.webSongId,{...row,originalRelativePath:actual.relative,originalFilename:actual.name,
+      pendingDriveLink:false,[kind]:{...media,fileId:actual.id}});
+  }
+  for(const actual of files){
+    if(covered.has(actual.id))continue;
+    const verified=await inspectPackage(drive,actual,check);
+    if(candidates.get(verified.midiSha256)!==verified.midiSize)
+      fail('Cloud มีเพลงที่ไม่อยู่ในฐาน PC · กรุณาซิงก์แล้วสร้างฐานอีกครั้ง');
+  }
+
+  check();
+  return rows;
+}
 function createWorkflow(options={}){
   const labels={music:'คลังเพลง',soundfont:'SoundFont',fx:'FX'};
   const nodes=Object.fromEntries(KIND.map(k=>[k,$('xstage-drive-folder-'+k+'-name')]));
@@ -818,31 +851,7 @@ function createWorkflow(options={}){
           const chosen=readSelections(initial.sub,initial.rootId).music;
           await verifyFolder(drive,chosen?.id,initial.rootId,'music');
           const inventory=await walkMusic(drive,chosen.id,check,display);
-          const byPath=packagePathIndex(inventory.files);
-          const candidates=new Map(),covered=new Set(),rows=new Map();
-          // Preserve unrelated imported audio/video rows rather than dropping them.
-          for(const [id,row] of existing.rows)if(!row.xmid&&!row.xsk)rows.set(id,row);
-          for(const row of decoded.songs){
-            const media=row.xmid||row.xsk,kind=row.xmid?'xmid':'xsk';
-            if(!media||!/^([a-f0-9]{64})$/.test(row.midiSha256||''))fail('ฐาน PC ไม่มี SHA-256 ของ MIDI');
-            const actual=byPath.get(media.path);
-            if(!actual||actual.ext!==kind||packageSignature(actual)!==packageSignature(media))
-              fail('ไฟล์ในฐาน PC ยังไม่ตรงกับ Cloud: '+String(media.path||''));
-            const verified=await inspectPackage(drive,actual,check);
-            if(verified.midiSha256!==row.midiSha256||verified.midiHash!==row.midiHash||verified.midiSize!==row.midiSize)
-              fail('MIDI ในฐาน PC ไม่ตรงกับข้อมูล Cloud');
-            if(candidates.has(verified.midiSha256))fail('พบ MIDI ซ้ำในฐาน PC');
-            candidates.set(verified.midiSha256,verified.midiSize);covered.add(actual.id);
-            if(rows.has(row.webSongId))fail('รหัสเพลงชนกับฐานเดิม');
-            rows.set(row.webSongId,{...row,originalRelativePath:actual.relative,originalFilename:actual.name,
-              pendingDriveLink:false,[kind]:{...media,fileId:actual.id}});
-          }
-          for(const actual of inventory.files){
-            if(covered.has(actual.id))continue;
-            const verified=await inspectPackage(drive,actual,check);
-            if(candidates.get(verified.midiSha256)!==verified.midiSize)
-              fail('Cloud มีเพลงที่ไม่อยู่ในฐาน PC · กรุณาซิงก์แล้วสร้างฐานอีกครั้ง');
-          }
+          const rows=await verifyPcCandidate(drive,decoded,existing,inventory.files,check);
           check();
           if(!scope.confirm?.('ยืนยันเผยแพร่ฐาน PC '+decoded.songs.length+' เพลง · คงเพลงรูปแบบอื่น '+(rows.size-decoded.songs.length)+' รายการ · สำรองฐานเดิมก่อน?'))return;
           await scope.XStageCloudImport.publishSingleCatalog({drive,rootId:initial.rootId,pointer:existing.pointer,rows,check,status:display});
@@ -896,5 +905,5 @@ function createWorkflow(options={}){
     getSelection:(sub,root,kind)=>readSelections(sub,root)[kind]||null,
     cancel:requestPause};
 }
-scope.XStageDriveFolders={init:createWorkflow,readSelections,walkMusic,verifyFolder,countSourceFiles,compareCatalog,verifiedPackageRows,inspectionLimits,ensureLibraryLayout};
+scope.XStageDriveFolders={init:createWorkflow,readSelections,walkMusic,verifyFolder,countSourceFiles,compareCatalog,verifiedPackageRows,inspectionLimits,ensureLibraryLayout,verifyPcCandidate};
 })(typeof window!=='undefined'?window:globalThis);

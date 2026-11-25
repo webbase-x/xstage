@@ -424,8 +424,12 @@ try{
   const menuToggle=page.locator('#stage-tools-toggle:visible, #mobile-menu-toggle:visible').first();
   await menuToggle.click();
   await page.locator('#mobile-stage-menu').waitFor({state:'visible'});
+  const driveMenu=page.locator('#mobile-stage-menu details').filter({has:page.locator('#cloud-import-open')});
+  if(!await driveMenu.evaluate(el=>el.open))await driveMenu.locator('summary').click();
   await page.click('#cloud-import-open');
   await page.locator('#cloud-import-dialog[open]').waitFor();
+  const localOptions=page.locator('#cloud-import-local-options');
+  if(!await localOptions.evaluate(el=>el.open))await localOptions.locator('summary').click();
   await page.click('#cloud-import-select-all');
   await page.click('#cloud-import-start');
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น')&&

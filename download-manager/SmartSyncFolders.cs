@@ -13,7 +13,7 @@ public sealed record SmartSyncFolderPlan(string Pc, string Drive, SmartSyncDirec
     IReadOnlyList<SyncDecision> Decisions, IReadOnlyDictionary<string, SyncFingerprint> PcFiles,
     IReadOnlyDictionary<string, SyncFingerprint> DriveFiles, int DatabaseReviewCount,
     SmartSyncMode Mode = SmartSyncMode.FullVerify, XmidConflictPolicy ConflictPolicy = XmidConflictPolicy.Skip,
-    XmidDuplicateCleanup? DuplicateCleanup = null);
+    XmidDuplicateCleanup? DuplicateCleanup = null, string CatalogStatus = "");
 public sealed record SmartSyncFolderResult(int Copied, int Identical, int Review, int SkippedDirection);
 public sealed record XmidDuplicateCleanup(int PcArchived, int DriveArchived, int Preserved, IReadOnlyList<string> Samples);
 public sealed record SmartSyncScanProgress(string Phase, string RelativePath, int PcFiles, int DriveFiles,
@@ -131,6 +131,53 @@ public static class SmartSyncFolders
                 part.StartsWith(".xstage-catalog-", StringComparison.OrdinalIgnoreCase)));
     }
 
+    // Diagnostic only: these are two LOCAL snapshots; Drive Desktop owns
+    // cloud synchronization. Never select a winner or copy a live database.
+    public static string CompareCanonicalCatalogs(string pc, string drive, CancellationToken ct)
+    {
+        const string relative = "DB/songs.sqlite3";
+        var left = SmartSyncTransfer.ResolveLocalPath(pc, relative);
+        var right = SmartSyncTransfer.ResolveLocalPath(drive, relative);
+        if (!File.Exists(left) && !File.Exists(right)) return "";
+        if (!File.Exists(left) || !File.Exists(right))
+            return "ฐานร่วมยังไม่ครบสองฝั่ง · รอ Drive ซิงก์/เผยแพร่ผ่าน Karaoke Online";
+        if (new[] { left, right }.Any(p => new[] { "-wal", "-shm", "-journal" }.Any(s => File.Exists(p + s))))
+            return "ฐานร่วมมี SQLite journal ค้าง · ไม่เปรียบเทียบหรือส่งฐาน";
+        try
+        {
+            (string Hash, string Generation) Read(string path)
+            {
+                ct.ThrowIfCancellationRequested();
+                var before = new FileInfo(path);
+                long size = before.Length, stamp = before.LastWriteTimeUtc.Ticks;
+                string hash;
+                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    hash = Convert.ToHexString(SHA256.HashDataAsync(stream, ct).GetAwaiter().GetResult());
+                using var db = new SqliteConnection(new SqliteConnectionStringBuilder
+                { DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+                db.Open();
+                using var cmd = db.CreateCommand();
+                cmd.CommandText = "PRAGMA quick_check(1)";
+                if (!string.Equals(cmd.ExecuteScalar()?.ToString(), "ok", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("SQLite quick_check");
+                cmd.CommandText = "SELECT value FROM catalog_meta WHERE key='format'";
+                if (cmd.ExecuteScalar()?.ToString() != "xstage-sqlite3-v1")
+                    throw new InvalidDataException("catalog format");
+                cmd.CommandText = "SELECT value FROM catalog_meta WHERE key='generation'";
+                var generation = cmd.ExecuteScalar()?.ToString() ?? "";
+                var after = new FileInfo(path);
+                if (after.Length != size || after.LastWriteTimeUtc.Ticks != stamp || generation.Length == 0)
+                    throw new InvalidDataException("catalog changed");
+                return (hash, generation);
+            }
+            var a = Read(left); var b = Read(right);
+            return a == b ? "ฐานร่วมในเครื่องตรงกัน (SHA-256) · ยังไม่ยืนยัน Cloud"
+                : "ฐานร่วมต่างรุ่นหรือ SHA-256 ต่างกัน · ไม่เขียนทับ · ตรวจการเผยแพร่/Drive ซิงก์";
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception) { return "ยังยืนยันความสมบูรณ์ฐานร่วมไม่ได้ · ไม่ส่งหรือเขียนทับ"; }
+    }
+
     private static SyncFingerprint HashExisting(string root, string relative, SyncFingerprint expected, CancellationToken ct)
     {
         var path = SmartSyncTransfer.ResolveLocalPath(root, relative);
@@ -219,7 +266,8 @@ public static class SmartSyncFolders
             ? d with { Action = SyncAction.Conflict, Note = "ปลายทางซ้ำ · ตรวจสอบเอง" } : d).ToArray();
         ct.ThrowIfCancellationRequested();
         reporter.Publish("ตรวจสอบเสร็จ", "", false);
-        return new SmartSyncFolderPlan(pc, drive, direction, decisions, Unique(l.Entries), Unique(r.Entries), l.Review + r.Review, mode, policy, cleanup);
+        return new SmartSyncFolderPlan(pc, drive, direction, decisions, Unique(l.Entries), Unique(r.Entries), l.Review + r.Review, mode, policy, cleanup,
+            CompareCanonicalCatalogs(pc, drive, ct));
     }
 
     // Numeric or letter-prefixed IDs, including Google copy suffixes and our
