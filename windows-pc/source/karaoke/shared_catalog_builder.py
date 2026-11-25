@@ -270,7 +270,7 @@ def _verified_rows(songs, root, references, cache_dir, cancel, full_verify, fing
             cache.commit()
 
 
-def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=None, full_verify=False, deduplicate=True):
+def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=None, full_verify=False, deduplicate=True, local_database=None):
     """Create fresh verified snapshot; atomically replace after explicit consent."""
     root = _root(root_value)
     songs = _files(root, cancel)
@@ -339,6 +339,7 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
                    "createdBy": "Karaoke PC", "pid": os.getpid(),
                    "createdAt": time.time()}, handle)
     stage = root / "CACHE" / (".songs-" + secrets.token_hex(10) + ".sqlite3")
+    local_stage = None
     try:
         _stop(cancel)
         generation = secrets.token_hex(12)
@@ -377,11 +378,32 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
             if _hash(backup) != original_signature:
                 raise ValueError("ไฟล์สำรองฐานเดิมไม่ผ่าน SHA-256")
         _stop(cancel)
+        if local_database is not None:
+            local = Path(local_database).absolute()
+            local.parent.mkdir(parents=True, exist_ok=True)
+            if local.parent.is_symlink() or local.is_symlink() or local.resolve() == old_file.resolve():
+                raise ValueError("ฐานหลัก PC ต้องเป็นไฟล์ในเครื่องที่แยกจาก Drive")
+            if local.exists():
+                with closing(sqlite3.connect(local.as_uri() + "?mode=ro", uri=True)) as previous:
+                    meta = dict(previous.execute("SELECT key,value FROM catalog_meta"))
+                    if meta.get("pcSchema") != "shared-v1":
+                        raise ValueError("พบฐาน PC เดิมคนละโครงสร้าง · ไม่เขียนทับ")
+                backup = local.with_name("songs-" + secrets.token_hex(8) + ".sqlite3.bak")
+                shutil.copyfile(local, backup)
+            local_stage = local.with_name(".songs-" + secrets.token_hex(12) + ".sqlite3")
+            with closing(sqlite3.connect(stage)) as src, closing(sqlite3.connect(local_stage)) as dst:
+                src.backup(dst)
+                if dst.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                    raise ValueError("สำเนาฐาน PC ไม่สมบูรณ์")
+            _stop(cancel)
+            os.replace(local_stage, local)
         os.replace(stage, old_file)  # same Drive volume, atomic local replacement
         return {"scanned": len(songs), "accepted": len(rows),
                 "duplicates": duplicates, "reused": reused, "generation": generation,
                 "database": str(old_file),
                 "pending_drive_ids": sum(bool(row.get("pendingDriveLink")) for _, row in rows)}
     finally:
+        if local_stage is not None:
+            local_stage.unlink(missing_ok=True)
         stage.unlink(missing_ok=True)
         lock.unlink(missing_ok=True)
