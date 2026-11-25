@@ -111,3 +111,5 @@ The long-term target is an IDM / aria2 / yt-dlp / JDownloader-class application 
 
 ### Adaptive performance development — 2026-11-25 (no version change)
 - Windows CI [45568612344](https://github.com/webbase-x/xstage/actions/runs/45568612344) passed: native loopback 220.1 KiB/s, mixed actual yt-dlp/native 201.7 KiB/s against 256 KiB/s, pause/resume and SHA-256. Prior mixed test used static shares. Follow-up serializes native pool updates with production media reservation lifecycle, retains outstanding rate reservations, and exercises actual process launch/exit plus cancellation using the same lifecycle. Pending fresh development CI. Next: measured 1/8/32-range backpressure and changing network conditions, then remaining roadmap; physical field tests remain outstanding. No release/tag/version bump.
+
+- Follow-up (development only): actual loopback range geometry 1/8/32, two network delay phases, peak observed server connections, request count, throughput and SHA-256. Geometry is not a guarantee of 32 simultaneously active workers. Pending Windows CI; live target transition and physical field tests still outstanding. No version change.
