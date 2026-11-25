@@ -549,6 +549,7 @@ function createWorkflow(options={}){
     const resumingFresh=pending(initial)===chosen.id&&isFreshPending(initial);
     if(resumingFresh)fresh=true;
     if(!fresh&&!isPaused(initial,chosen.id)&&(comparisonState==='equal'||comparisonState==='checking'))return;
+    if(fresh&&!options.hasFullRead?.()){display('ต้องอนุญาตอ่าน Drive ครบก่อนสร้างฐานใหม่');return;}
     if(fresh&&!resumingFresh){
       const confirmed=scope.confirm?.(
         'สร้างฐานเพลงร่วม PC / Online ใหม่จาก XMID/XSK ทุกไฟล์ใน XStageKaraoke/SONGS?\\n'+
@@ -568,7 +569,7 @@ function createWorkflow(options={}){
       const check=()=>{
         if(controller.signal.aborted)fail('ยกเลิกการสร้างฐาน');
         const now=options.session?.();
-        if(!now||now.sub!==initial.sub||now.rootId!==initial.rootId)
+        if(!now||now.sub!==initial.sub||now.rootId!==initial.rootId||(fresh&&!options.hasFullRead?.()))
           fail('บัญชี Google หรือคลัง XStageKaraoke เปลี่ยนระหว่างทำงาน');
       };
       const drive=new scope.XStageCloudImport.Drive(()=>options.session()?.token,check);
@@ -610,7 +611,7 @@ function createWorkflow(options={}){
         if(!listing.files.length)
           fail('ไม่พบ XMID/XSK ที่อ่านได้ในโฟลเดอร์นี้ · ยังไม่ได้แก้ไข DB');
         let reconciled=0;
-        if(!fresh&&options.hasFullRead?.()){
+        if(!fresh&&options.hasFullRead?.()&&musicRoot.name==='SONGS'&&musicRoot.parents?.includes(initial.rootId)){
           // A missing checksum is not proof of deletion or modification.
           if(listing.files.some(file=>!packageSignature(file)))
             fail('รายการ Cloud ยังไม่มี MD5/ขนาดครบ · ไม่แก้รายการเดิม');
@@ -877,7 +878,7 @@ function createWorkflow(options={}){
           const pointer=current?{directFile:true,catalogFileId:current.id,catalogMd5:String(current.md5Checksum||'')}:null;
           if(!scope.confirm?.('กู้คืน '+file.name+' ('+decoded.songs.length+' เพลง)? ฐานปัจจุบันจะถูกสำรองก่อน และไม่ลบไฟล์เพลง'))return;
           await scope.XStageCloudImport.publishSingleCatalog({drive,rootId:initial.rootId,pointer,
-            rows:new Map(decoded.songs.map(row=>[row.webSongId,row])),check,status:display});
+            rows:new Map(decoded.songs.map(row=>[row.webSongId,row])),check,status:display,explicitRestore:true});
         }
         display(mode==='pc'?'เผยแพร่ฐานที่สร้างจาก PC สำเร็จ · ฐาน Cloud ผ่านการตรวจแล้ว':'กู้คืนฐานสำรองสำเร็จ');
         await options.refresh?.();

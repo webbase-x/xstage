@@ -2091,7 +2091,7 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
   };
   async function fetchImmutable(id,label){
     if(typeof id!=='string'||!id)throw Error('ฐานเพลงไม่มี Drive File ID');
-    const cacheKey=pointer.directFile?id+':'+pointer.generation:id;
+    const cacheKey=pointer.directFile?id+':'+pointer.generation+(pointer.catalogMd5?':verified-md5-v1':''):id;
     if(state.catalogCache.has(cacheKey)){report(label+' · พร้อมแล้ว',true);return state.catalogCache.get(cacheKey);}
     const persisted=await loadCatalogPiece(sub,cacheKey);
     if(persisted){
@@ -2132,7 +2132,14 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
       if(buffer.byteLength>maxBytes)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกิน 192 MB');
       bytes=new Uint8Array(buffer);
     }
+    if(pointer.catalogMd5){
+      if(!/^[a-f0-9]{32}$/i.test(pointer.catalogMd5)||
+         !window.XStageImportCore?.hashBlob||
+         await window.XStageImportCore.hashBlob(new Blob([bytes]))!==pointer.catalogMd5.toLowerCase())
+        throw Error('MD5 ฐานเพลงไม่ตรงกับ Drive · ใช้ฐานเดิมก่อน');
+    }
     const data=await codec.read(bytes);
+    if(data.candidate)throw Error('ฐาน PC ยังไม่ผ่านการเผยแพร่ · ไม่เปิดเป็นฐานหลัก');
     rememberCatalog(cacheKey,data);
     await saveCatalogPiece(sub,cacheKey,data);
     report(label+' · ดาวน์โหลดแล้ว',false);
@@ -2152,7 +2159,7 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
 function directCatalogPointer(file){
   if(!file?.id||file.name!=='songs.sqlite3')throw Error('DB/songs.sqlite3 ไม่ถูกต้อง');
   return {schemaVersion:1,layoutVersion:6,format:'xstage-sqlite3-v1',
-    directFile:true,catalogFileId:file.id,deltaFileIds:[],
+    directFile:true,catalogFileId:file.id,catalogMd5:String(file.md5Checksum||''),deltaFileIds:[],
     generation:'sqlite:'+file.id+':'+String(file.md5Checksum||file.modifiedTime||file.size||'')};
 }
 async function activeDriveCatalog(dbId,token){

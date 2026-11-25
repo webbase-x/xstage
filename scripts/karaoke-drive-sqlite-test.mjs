@@ -138,3 +138,7 @@ await assert.rejects(codec.create('snapshot',[{...pcPending,xmid:{...pcPending.x
 
 await assert.rejects(codec.read(new Uint8Array(400)),/ไม่ใช่ฐานข้อมูล SQLite3/);
 console.log('PASS: real SQLite3 binary (SQLite format 3), schema, single canonical snapshot, legacy delta reader, Thai titles, integrity and corruption guard');
+
+assert.ok(app.includes("catalogMd5:String(file.md5Checksum||'')"));
+assert.ok(app.includes('verified-md5-v1')&&app.includes('hashBlob(new Blob([bytes]))!==pointer.catalogMd5.toLowerCase()'));
+assert.ok(app.includes('if(data.candidate)throw Error('),'A staged PC candidate must not become the live player catalog');

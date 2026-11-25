@@ -547,7 +547,7 @@ async function loadCatalog(drive,root,{verifyChecksum=false}={}){
         fail('ขนาดหรือ MD5 ของฐานเพลงไม่ตรงกับ Drive · กรุณาตรวจอีกครั้ง');
     }
     const base=await scope.XStageDriveSQLite.read(bytes);
-    if(base.schemaVersion!==1||base.kind!=='snapshot'||!Array.isArray(base.songs))
+    if(base.schemaVersion!==1||base.kind!=='snapshot'||base.candidate||!Array.isArray(base.songs))
       fail('DB/songs.sqlite3 ไม่ใช่ฐานข้อมูลเพลงที่ถูกต้อง');
     const rows=new Map();
     for(const row of base.songs){
@@ -668,7 +668,7 @@ async function recoverInterruptedCatalog({drive,rootId,dbRoot,cacheRoot,check,st
     return true;
   }finally{await lease.release();}
 }
-async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
+async function publishSingleCatalog({drive,rootId,pointer,rows,check,status,explicitRestore=false}){
   check();
   const dbRoot=await drive.ensurePath(rootId,['DB']);
   const cacheRoot=await drive.ensurePath(rootId,['CACHE']);
@@ -676,7 +676,7 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
   // Do not leave an empty BACKUP directory in a brand-new library.
   let backupRoot=null;
   let lease=null,journal=null;
-  if(!pointer&&await recoverInterruptedCatalog({drive,rootId,dbRoot,cacheRoot,check,status}))
+  if(!pointer&&!explicitRestore&&await recoverInterruptedCatalog({drive,rootId,dbRoot,cacheRoot,check,status}))
     fail('กู้คืนฐานเดิมแล้ว · ตรวจและเริ่มงานใหม่จากฐานที่กู้คืน');
   try{
   const codec=scope.XStageDriveSQLite;
