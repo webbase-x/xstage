@@ -80,6 +80,42 @@ class SharedPcBuilderTests(unittest.TestCase):
         self.assertEqual(Path(library.get(library.search("10001")[0]["id"])["path"]), self.songs / "10001.xmid")
         self.assertEqual(library.path, master)
 
+    def test_export_portable_after_copy_without_rebuilding(self):
+        from karaoke.local_master import activate, export_portable
+        import shutil
+        home = Path(self.tmp.name) / "Installed"
+        home.mkdir()
+        result = build(home, source_songs=self.root / "SONGS", local_only=True, deduplicate=False)
+        settings = {"pending_online_master": {"root": str(home), "generation": result["generation"],
+                    "source_songs": str(self.root / "SONGS"), "local_only": True}}
+        source = activate(home, home / "data", settings, installed=True)
+        before = source.read_bytes()
+        destination = Path(self.tmp.name) / "User chosen cloud name"
+        destination.mkdir()
+        shutil.copytree(self.root / "SONGS", destination / "SONGS")
+        (destination / "SOUNDFONT").mkdir()
+        exported = export_portable(home, destination)
+        self.assertEqual(exported, destination / "DB/songs.sqlite3")
+        self.assertEqual(source.read_bytes(), before)
+        self.assertEqual(SharedSongLibrary(destination, {}).count(), 1)
+        with self.assertRaises(FileExistsError):
+            export_portable(home, destination)
+        old = exported.read_bytes()
+        missing = destination / "SONGS/MIDI/XMID/1/10001.xmid"
+        missing.unlink()
+        with self.assertRaises(ValueError):
+            export_portable(home, destination, overwrite=True)
+        self.assertEqual(exported.read_bytes(), old)
+        shutil.copy2(self.songs / "10001.xmid", missing)
+        stop = threading.Event()
+        stop.set()
+        with self.assertRaises(InterruptedError):
+            export_portable(home, destination, overwrite=True, cancel=stop)
+        self.assertEqual(exported.read_bytes(), old)
+        export_portable(home, destination, overwrite=True)
+        self.assertEqual(len(list(exported.parent.glob("*.bak"))), 1)
+        self.assertEqual(source.read_bytes(), before)
+
     def test_preview_and_publish_compatible_sqlite(self):
         before=build(self.root,publish=False)
         self.assertEqual(before["accepted"],1)
