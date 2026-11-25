@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>X-Stage MIDI SoundFont Lab</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,"Noto Sans Thai",sans-serif;background:#101624;color:#f4f8ff}
+body{max-width:760px;margin:24px auto;padding:16px}a{color:#9ad4ff}main{background:#1b283a;border:1px solid #40526a;padding:24px;border-radius:20px}
+h1{font-size:1.65rem}p{line-height:1.6;color:#c8d8ef}label{display:block;margin:18px 0 6px}
+input[type=file],select,button{padding:10px;max-width:100%;font:inherit;border-radius:9px}
+button{background:#1475be;color:white;border:0;margin:6px;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}
+section{margin-top:12px}#status{background:#111b2a;padding:12px;border-radius:9px;min-height:2em}
+input[type=range]{width:100%}.line{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+small{color:#9fb1c8}button:focus-visible,input:focus-visible{outline:3px solid #ffcc48}
+</style></head><body><a href="./">← กลับ X-Stage (M4A และ Google Drive เดิม)</a>
+<main><h1>ทดลอง MIDI + SoundFont</h1>
+<p>ระบบทดสอบแยกจากเวทีจริง ไฟล์ MIDI และ SoundFont อ่านจากเครื่องนี้เท่านั้น ไม่อัปโหลดไป GitHub หรือ Google Drive และไม่รบกวนคิวเพลง M4A</p>
+<section><label for="mode">โหมดเล่น</label><select id="mode"><option value="auto">อัตโนมัติ (ค่าเริ่มต้น)</option><option value="midi">MIDI โดยตรง</option><option value="audio">เน้นไฟล์เสียง M4A เดิม</option></select>
+<label for="quality">คุณภาพการสังเคราะห์</label><select id="quality"><option value="balanced">สมดุล (ค่าเริ่มต้น)</option><option value="light">ประหยัดทรัพยากร</option><option value="high">คุณภาพสูง</option></select>
+<label><input type="checkbox" id="cache" checked> แคช SoundFont บนอุปกรณ์นี้ (ขนาดไม่เกิน 64 MiB)</label></section>
+<section><label for="font">SoundFont .SF2 / .SF3 จากเครื่อง</label><input type="file" id="font" accept=".sf2,.sf3">
+<label for="midi">ไฟล์ MIDI / KAR จากเครื่อง</label><input type="file" id="midi" accept=".mid,.midi,.kar"></section>
+<section class="line"><button id="play">▶ เล่น</button><button id="pause" disabled>Ⅱ พัก</button><button id="stop" disabled>■ หยุด</button><button id="clear">ล้างแคช SoundFont</button></section>
+<section><label for="seek">ตำแหน่งเล่น</label><input id="seek" type="range" min="0" max="1000" value="0" disabled>
+<div id="position">00:00 / 00:00</div><label for="speed">ความเร็ว <output id="speed-value">100%</output></label><input id="speed" type="range" min="50" max="150" step="5" value="100"></section>
+<p role="status" aria-live="polite" id="status">ยังไม่เริ่ม · เลือก SoundFont และ MIDI เพื่อทดสอบ</p>
+<small>ทดลองแยกส่วน: ยังไม่ใช่ระบบ Karaoke Lyrics / NCN / คิวเพลง / Google Drive MIDI รุ่นใช้งานจริง เครื่องเล่นหลักยังเป็น M4A ตามเดิม การเล่นบน Android TV ต้องทดสอบกับอุปกรณ์จริง</small>
+</main><script type="module" src="./midi-lab.js"></script></body></html>
