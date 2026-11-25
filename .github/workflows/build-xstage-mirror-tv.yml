@@ -52,8 +52,8 @@ jobs:
           assert "onDone = { saveName() }" in editor
           assert "fieldBringIntoView.bringIntoView()" in editor
           assert "left = saveFocus" in editor and "right = cancelFocus" in editor
-          assert 'VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.16")' in recipe
-          assert 'BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "118")' in recipe
+          assert 'VERSION = os.environ.get("XSTAGE_MIRROR_VERSION", "0.2.17")' in recipe
+          assert 'BUILD = os.environ.get("XSTAGE_MIRROR_BUILD", "119")' in recipe
           assert "right = tabFocus[index + 1]" in recipe
           assert "right = choiceFocus[index + 1]" in recipe
           print("PASS: Mirror TV UI source and remote focus preflight")
