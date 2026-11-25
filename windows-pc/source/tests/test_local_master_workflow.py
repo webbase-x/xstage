@@ -5,9 +5,11 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 import sqlite3
+import subprocess
+import sys
 import threading
 from karaoke.library_setup import prepare_online
-from karaoke.local_master import activate, kind
+from karaoke.local_master import activate, kind, snapshot
 from karaoke.library import SongLibrary
 from karaoke.shared_catalog_builder import build
 from karaoke.shared_song_library import SharedSongLibrary
@@ -85,6 +87,63 @@ class LocalMasterWorkflowTests(TestCase):
         self.assertEqual(SongLibrary(native).count(), 1)
         self.assertEqual(SongLibrary(legacy).count(), 1)
         self.assertTrue(legacy.is_file())
+
+    def test_closed_wal_with_committed_frames_is_recovered_before_replacement(self):
+        target = self.data / "songs.sqlite3"
+        source = self.data / "new.sqlite3"
+        archive = self.data / "archive.sqlite3"
+        # Simulate an interrupted process: SQLite has committed a WAL frame,
+        # but the last connection never executed its normal cleanup.
+        script = (
+            "import os, sqlite3, sys\n"
+            "db=sqlite3.connect(sys.argv[1])\n"
+            "db.execute('PRAGMA journal_mode=WAL')\n"
+            "db.execute('PRAGMA wal_autocheckpoint=0')\n"
+            "db.execute('CREATE TABLE songs (title TEXT)')\n"
+            "db.execute(\"INSERT INTO songs VALUES ('committed')\")\n"
+            "db.commit()\n"
+            "os._exit(0)\n"
+        )
+        subprocess.run([sys.executable, "-c", script, str(target)], check=True)
+        self.assertTrue(target.with_name(target.name + "-wal").is_file())
+        with closing(sqlite3.connect(source)) as db:
+            db.execute("CREATE TABLE songs (title TEXT)")
+            db.execute("INSERT INTO songs VALUES ('replacement')")
+            db.commit()
+        snapshot(target, archive)
+        snapshot(source, target)
+        with closing(sqlite3.connect(archive)) as db:
+            self.assertEqual(db.execute("SELECT title FROM songs").fetchone()[0], "committed")
+        with closing(sqlite3.connect(target)) as db:
+            self.assertEqual(db.execute("SELECT title FROM songs").fetchone()[0], "replacement")
+        for suffix in ("-wal", "-shm", "-journal"):
+            self.assertFalse(target.with_name(target.name + suffix).exists())
+
+    def test_active_wal_reader_blocks_replacement_and_preserves_database(self):
+        target = self.data / "songs.sqlite3"
+        source = self.data / "new.sqlite3"
+        with closing(sqlite3.connect(source)) as db:
+            db.execute("CREATE TABLE songs (title TEXT)")
+            db.execute("INSERT INTO songs VALUES ('replacement')")
+            db.commit()
+        with closing(sqlite3.connect(target)) as writer:
+            writer.execute("PRAGMA journal_mode=WAL")
+            writer.execute("CREATE TABLE songs (title TEXT)")
+            writer.execute("INSERT INTO songs VALUES ('original')")
+            writer.commit()
+            with closing(sqlite3.connect(target)) as reader:
+                reader.execute("BEGIN")
+                self.assertEqual(reader.execute("SELECT title FROM songs").fetchone()[0], "original")
+                writer.execute("UPDATE songs SET title='committed'")
+                writer.commit()
+                with self.assertRaises(ValueError):
+                    snapshot(source, target)
+                self.assertEqual(writer.execute("SELECT title FROM songs").fetchone()[0], "committed")
+                self.assertEqual(reader.execute("SELECT title FROM songs").fetchone()[0], "original")
+                reader.rollback()
+        snapshot(source, target)
+        with closing(sqlite3.connect(target)) as db:
+            self.assertEqual(db.execute("SELECT title FROM songs").fetchone()[0], "replacement")
 
     def test_cancel_transfer_does_not_remove_source(self):
         cancel = threading.Event()
