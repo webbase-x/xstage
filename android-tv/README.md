@@ -1,5 +1,17 @@
 ## Shared XStageKaraoke library — Android TV / APK
 
+Android uses the same canonical `DB/songs.sqlite3` snapshot as PC and Web.
+The hosted player re-discovers the selected root's DB folder every 45 seconds,
+including when PC creates the first database after Android has signed in.
+An updated catalog does not replace the active song or queue. A temporarily
+missing database does not erase the existing catalog. Duplicate DB folders
+and retired roots are rejected; changing account/root invalidates in-flight reads.
+Android CI exercises real SQLite files built by both PC and Web, on-demand PC
+file-ID linking, and the shared refresh path before building the APK.
+Google Drive access still requires the existing account's OAuth permissions;
+this change does not grant additional access or bypass Google consent.
+
+
 Android TV and tablets load the **same hosted** X-Stage Karaoke Online player
 at `https://webbase-x.github.io/xstage/karaoke.html`: one playback engine,
 one song catalog, one queue/remote protocol and one Google Drive layout.
