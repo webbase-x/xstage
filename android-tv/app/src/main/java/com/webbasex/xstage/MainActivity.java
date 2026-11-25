@@ -47,6 +47,32 @@ public final class MainActivity extends Activity {
     private GoogleDeviceAuth googleAuth;
     private XStageUpdateManager updateManager;
     private boolean webAppReady;
+    // Cold-start OAuth runs in parallel with the hosted UI. Keep the latest
+    // result in memory until the trusted page explicitly requests login.
+    private boolean startupLoginPrefetch;
+    private long startupLoginStartedAt;
+    private String startupLoginResult;
+
+    private void dispatchGoogleLoginResult(String script) {
+        if (startupLoginPrefetch) startupLoginResult = script;
+        else callJavascript(script);
+    }
+
+    private void clearStartupLoginPrefetch() {
+        startupLoginPrefetch = false;
+        startupLoginResult = null;
+    }
+
+    private void requestGoogleLoginOnMain() {
+        if (startupLoginPrefetch && android.os.SystemClock.elapsedRealtime() - startupLoginStartedAt < 60000L) {
+            String result = startupLoginResult;
+            clearStartupLoginPrefetch();
+            if (result != null) callJavascript(result);
+            return; // Keep the existing poll; never issue a second QR.
+        }
+        clearStartupLoginPrefetch();
+        googleAuth.startDeviceLogin();
+    }
     private volatile boolean webTextEditingActive;
     private volatile boolean playbackAudioFocusHeld;
     private AudioManager audioManager;
@@ -164,7 +190,7 @@ public final class MainActivity extends Activity {
                     payload.put("verification_url", verificationUrl);
                     payload.put("expires_in", expiresInSeconds);
                 } catch (Exception ignored) {}
-                callJavascript("window.XStageAndroidDeviceCode&&window.XStageAndroidDeviceCode(" +
+                dispatchGoogleLoginResult("window.XStageAndroidDeviceCode&&window.XStageAndroidDeviceCode(" +
                         JSONObject.quote(payload.toString()) + ");");
             }
 
@@ -176,13 +202,13 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onToken(String accessToken, long expiresInSeconds) {
-                callJavascript("window.XStageReceiveAndroidToken&&window.XStageReceiveAndroidToken(" +
+                dispatchGoogleLoginResult("window.XStageReceiveAndroidToken&&window.XStageReceiveAndroidToken(" +
                         JSONObject.quote(accessToken) + "," + expiresInSeconds + ");");
             }
 
             @Override
             public void onError(String message) {
-                callJavascript("window.XStageAndroidAuthError&&window.XStageAndroidAuthError(" +
+                dispatchGoogleLoginResult("window.XStageAndroidAuthError&&window.XStageAndroidAuthError(" +
                         JSONObject.quote(message) + ");");
             }
 
@@ -262,6 +288,11 @@ public final class MainActivity extends Activity {
             }
         });
 
+        if (!googleAuth.hasStoredSession()) {
+            startupLoginPrefetch = true;
+            startupLoginStartedAt = android.os.SystemClock.elapsedRealtime();
+            googleAuth.startDeviceLogin();
+        }
         webView.loadUrl(buildAppUrl());
         webView.requestFocus();
     }
@@ -515,17 +546,23 @@ public final class MainActivity extends Activity {
 
         @JavascriptInterface
         public void requestGoogleLogin() {
-            runOnUiThread(() -> googleAuth.startDeviceLogin());
+            runOnUiThread(() -> requestGoogleLoginOnMain());
         }
 
         @JavascriptInterface
         public void cancelGoogleLogin() {
-            googleAuth.cancel();
+            runOnUiThread(() -> {
+                clearStartupLoginPrefetch();
+                googleAuth.cancel();
+            });
         }
 
         @JavascriptInterface
         public void restoreGoogleSession() {
-            googleAuth.restoreSession();
+            runOnUiThread(() -> {
+                clearStartupLoginPrefetch();
+                googleAuth.restoreSession();
+            });
         }
 
         @JavascriptInterface
@@ -535,7 +572,10 @@ public final class MainActivity extends Activity {
 
         @JavascriptInterface
         public void logoutGoogle() {
-            googleAuth.logout();
+            runOnUiThread(() -> {
+                clearStartupLoginPrefetch();
+                googleAuth.logout();
+            });
         }
 
         @JavascriptInterface
