@@ -337,3 +337,10 @@ assert.ok(app.includes('if(authId!==state.authId)return;\n    state.manifest=cat
 assert.deepEqual(guardScenario({hasSession:true,token:''}).calls,['login'],'no silent restore before QR authorization even when a remembered token exists');
 assert.ok(app.includes("void renderAndroidTvLoginQr('https://www.google.com/device')"),'Show official QR before Google issues a unique code');
 assert.ok(app.includes('if(sequence!==androidTvQrRenderSequence)return;'),'Late QR render must not overwrite verified login UI');
+
+// Native URL resolution must not concatenate karaoke.html and downloads.
+assert.ok(updater.includes('return new URL(new URL(BuildConfig.XSTAGE_WEB_URL), relative);'));
+for(const path of ['downloads/android-tv-latest.json?t=', 'downloads/android-play-latest.json?t=', 'downloads/'])assert.ok(updater.includes('updateUrl("'+path+'"'));
+assert.ok(!updater.includes('BuildConfig.XSTAGE_WEB_URL + "downloads/'));
+const publishWorkflow=read('.github/workflows/build-android-tv.yml');
+assert.ok(publishWorkflow.includes('cp downloads/android-tv-latest.json karaoke.htmldownloads/android-tv-latest.json')&&publishWorkflow.includes('cmp "downloads/${APK_NAME}" "karaoke.htmldownloads/${APK_NAME}"'),'Legacy installed APK feed must publish the exact same release bytes');
