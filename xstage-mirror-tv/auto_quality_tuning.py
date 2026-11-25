@@ -141,11 +141,17 @@ change(renderer,
             if (scheduledOutputBufferRelease) {
                 // schedule frame at VSYNC matching its NTP presentation time
                 val ptsUs = info.presentationTimeUs
-                if (_ptsBaseUs == Long.MIN_VALUE) {
+                val now = System.nanoTime()
+                val target = if (_ptsBaseUs == Long.MIN_VALUE) now else
+                    _wallBaseNs + (ptsUs - _ptsBaseUs) * 1000L
+                // Discontinuous sender timestamps must not park decoder output buffers.
+                if (_ptsBaseUs == Long.MIN_VALUE || target - now > 250_000_000L || now - target > 250_000_000L) {
                     _ptsBaseUs = ptsUs
-                    _wallBaseNs = System.nanoTime()
+                    _wallBaseNs = now
+                    c.releaseOutputBuffer(idx, true)
+                } else {
+                    c.releaseOutputBuffer(idx, maxOf(now, target))
                 }
-                c.releaseOutputBuffer(idx, _wallBaseNs + (ptsUs - _ptsBaseUs) * 1000L)
             } else {
                 c.releaseOutputBuffer(idx, true)
             }
@@ -180,7 +186,10 @@ change(renderer,
                 c.releaseOutputBuffer(idx, true)
             }
         }
-        if (latestDecodedBuffer >= 0) c.releaseOutputBuffer(latestDecodedBuffer, true)
+        if (latestDecodedBuffer >= 0) {
+            _ptsBaseUs = Long.MIN_VALUE
+            c.releaseOutputBuffer(latestDecodedBuffer, true)
+        }
     }''')
 
 settings = package / "ui/SettingsScreen.kt"
