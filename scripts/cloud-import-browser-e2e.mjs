@@ -459,7 +459,22 @@ try{
   await page.locator('#cloud-import-start:not([disabled])').waitFor();
   assert.equal((await page.locator('#cloud-import-start').textContent()).trim(),'พัก');
   await page.click('#cloud-import-start');
-  await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.includes('หยุดงานแล้ว'),null,{timeout:30000});
+  // Wait for the real paused status AND enabled Start: performStart saves
+  // the checkpoint before clearing running/lockPending in its finally blocks.
+  try{
+    await page.waitForFunction(()=>{
+      const status=document.getElementById('cloud-import-status');
+      const start=document.getElementById('cloud-import-start');
+      return status.textContent.startsWith('พักงานแล้ว')&&
+        !start.disabled&&start.textContent.trim()==='เริ่ม';
+    },null,{timeout:30000});
+  }catch(error){
+    const status=await page.locator('#cloud-import-status').textContent();
+    const start=await page.locator('#cloud-import-start').textContent();
+    throw new Error('Pause/checkpoint did not finish: '+JSON.stringify({status,start}),{cause:error});
+  }
+  assert.deepEqual(activeDbFiles().map(x=>x.name),['songs.sqlite3'],
+    'Pausing must preserve the previously published SQLite database');
   await page.reload({waitUntil:'domcontentloaded'});
   await openDriveImporter();
   await page.locator('#cloud-import-start:not([disabled])').waitFor();
