@@ -102,6 +102,12 @@ class SharedPcBuilderTests(unittest.TestCase):
             export_portable(home, destination)
         old = exported.read_bytes()
         missing = destination / "SONGS/MIDI/XMID/1/10001.xmid"
+        original = missing.read_bytes()
+        missing.write_bytes(bytes([original[0] ^ 1]) + original[1:])
+        with self.assertRaisesRegex(ValueError, "MD5"):
+            export_portable(home, destination, overwrite=True)
+        self.assertEqual(exported.read_bytes(), old)
+        missing.write_bytes(original)
         missing.unlink()
         with self.assertRaises(ValueError):
             export_portable(home, destination, overwrite=True)
