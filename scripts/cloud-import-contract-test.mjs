@@ -659,3 +659,10 @@ console.log('PASS: WEB upload DOM, visible Start, selection/review/resume, Drive
   for(const mode of ['success','rollback','foreign','foreign-after-stage','missing-md5'])await simulate(mode);
   console.log('PASS: SQLite publication conflict, rollback isolation and source MD5 simulations');
 }
+
+// A Drive inventory marked incomplete is not authoritative, even if it returned files.
+{
+ const d=new Drive(()=> 'test-token',()=>{});
+ d.fetch=async()=>({json:async()=>({files:[],incompleteSearch:true})});
+ await assert.rejects(d.list("'rootFolder123' in parents"),/ค้นหาไม่ครบ/);
+}

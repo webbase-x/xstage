@@ -553,6 +553,34 @@ function createWorkflow(options={}){
         const originalCount=rows.size;
         const baseLabel='ฐานเดิม '+originalCount+' เพลง';
         display(baseLabel+' · กำลังตรวจดัชนี MIDI เดิม…');
+        // Inventory first: a changed/missing package must not seed the old
+        // raw-MIDI index and accidentally hide its replacement.
+        const listing=await walkMusic(drive,chosen.id,()=>{check();pauseBoundary();},message=>display(baseLabel+' · '+message));
+        pauseBoundary();
+        if(!listing.files.length)
+          fail('ไม่พบ XMID/XSK ที่อ่านได้ในโฟลเดอร์นี้ · ยังไม่ได้แก้ไข DB');
+        let reconciled=0;
+        if(!fresh&&options.hasFullRead?.()){
+          const byId=new Map(listing.files.map(file=>[file.id,file]));
+          const byPath=packagePathIndex(listing.files);
+          for(const [id,row] of rows){
+            const media=row.xmid||row.xsk;
+            if(!media)continue; // unrelated audio/video entries stay intact
+            const current=matchingPackageFile(row,byId,byPath);
+            if(current){
+              const path='SONGS/'+current.relative;
+              if(media.path!==path||media.fileId!==current.id||row.pendingDriveLink===true){
+                rows.set(id,{...row,originalRelativePath:current.relative,originalFilename:current.name,
+                  pendingDriveLink:false,[row.xmid?'xmid':'xsk']:{...media,path,fileId:current.id}});
+                reconciled++;
+              }
+            }else{
+              // Only a complete, full-read inventory can prove the current
+              // package is no longer valid. The prior DB remains in BACKUP.
+              rows.delete(id);reconciled++;
+            }
+          }
+        }
         const indexed=await scope.XStageCloudImport.buildMidiIndex(rows,drive,()=>{check();pauseBoundary();});
         pauseBoundary();
         const hashes=indexed.hashes;
@@ -565,10 +593,7 @@ function createWorkflow(options={}){
           if(!codes.has(k))codes.set(k,[]);
           codes.get(k).push(row);
         }
-        const listing=await walkMusic(drive,chosen.id,()=>{check();pauseBoundary();},message=>display(existingLabel+' · '+message));
         pauseBoundary();
-        if(!listing.files.length)
-          fail('ไม่พบ XMID/XSK ที่อ่านได้ในโฟลเดอร์นี้ · ยังไม่ได้แก้ไข DB');
         let added=0,duplicates=0,alreadyRegistered=0,duplicateInBatch=0,invalid=0,reused=0,skipped=0,downloaded=0,shared=0;
         const known=verifiedPackageRows(listing.files,rows,musicRoot.name==='SONGS'&&musicRoot.parents?.includes(initial.rootId)),remaining=[];
         const markDuplicate=row=>{
@@ -688,7 +713,7 @@ function createWorkflow(options={}){
           pauseBoundary();
         }
         check();pauseBoundary();
-        const needsPublication=Boolean(fresh||added||indexed.duplicates||indexed.backfilled);
+        const needsPublication=Boolean(fresh||added||reconciled||indexed.duplicates||indexed.backfilled);
         if(needsPublication){
           publishing=true;render();
           display(existingLabel+' · เพิ่มใหม่ '+added+' · '+duplicateLabel()+' · กำลังสร้างและยืนยัน DB/songs.sqlite3 ครั้งเดียว…');
@@ -699,6 +724,7 @@ function createWorkflow(options={}){
         setPending(initial,'');setFreshPending(initial,false);markPaused(initial,chosen.id,false);
         display((needsPublication?'สร้างฐานเสร็จ':'ตรวจเสร็จ · ไม่มีข้อมูลใหม่ให้เผยแพร่')+
           ' · '+existingLabel+' · เพิ่มใหม่ '+added+' เพลง · ข้าม '+duplicateLabel()+
+          ' · ปรับรายการที่ย้าย/เปลี่ยน/ไม่พบ '+reconciled+
           ' · ข้ามจากฐาน '+skipped+' · ดาวน์โหลดตรวจจริง '+downloaded+' · ใช้จุดบันทึก '+reused+' · ใช้ผลไฟล์เหมือนกัน '+shared+
           ' · ไฟล์ผิดรูปแบบ '+invalid+
           ' · รูปแบบอื่นที่ยังไม่ได้ทำดัชนี '+listing.otherCount+

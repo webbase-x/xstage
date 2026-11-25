@@ -176,7 +176,7 @@ try{
   const context=await browser.newContext({serviceWorkers:'block'});
   await context.addInitScript(()=>{
     try{Object.defineProperty(window,'showDirectoryPicker',{value:undefined,configurable:true});}catch{}
-    localStorage.setItem('xstage-google-token-v2',JSON.stringify({
+    sessionStorage.setItem('xstage-google-token-v2',JSON.stringify({
       token:'TEST_BEARER_FOR_E2E_1234567890123456',sub:'SUB_MOCK_E2E',
       expiresAt:Date.now()+3600000}));
   });
@@ -416,14 +416,17 @@ try{
   const firstCount=payloadUploads;
   // After first DB exists, reopen the importer from the visible stage menu.
   await page.click('#cloud-import-close');
-  await page.click('#mobile-menu-toggle');
+  // The transport menu is the visible desktop control. The old mobile
+  // toolbar button is hidden at this viewport.
+  const menuToggle=page.locator('#stage-tools-toggle:visible, #mobile-menu-toggle:visible').first();
+  await menuToggle.click();
   await page.locator('#mobile-stage-menu').waitFor({state:'visible'});
   await page.click('#cloud-import-open');
   await page.locator('#cloud-import-dialog[open]').waitFor();
   await page.click('#cloud-import-select-all');
   await page.click('#cloud-import-start');
   await page.waitForFunction(()=>document.getElementById('cloud-import-status').textContent.startsWith('เสร็จสิ้น')&&
-    document.getElementById('cloud-import-status').textContent.includes('ข้ามซ้ำ 4'),{timeout:60000});
+    document.getElementById('cloud-import-status').textContent.includes('ข้ามซ้ำ 4'),null,{timeout:60000});
   assert.equal(payloadUploads,firstCount,'Second upload should be 100% deduplicated by MD5');
   // Cancel/pause while an additional large file is being prepared. A browser
   // restart should not lose the completed DB and can reselect the same folder.

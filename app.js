@@ -1017,10 +1017,12 @@ function savePendingAuth(token,expiresAt){
   if(!token||!(expiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS))return;
   const value=JSON.stringify({token,expiresAt});
   try{sessionStorage.setItem(PENDING_AUTH_KEY,value);}catch{}
-  try{localStorage.setItem(PENDING_AUTH_KEY,value);}catch{}
+  // Keep access tokens tab-scoped; remembered account metadata is separate.
+  try{localStorage.removeItem(PENDING_AUTH_KEY);}catch{}
 }
 function readPendingAuth(){
-  for(const store of [(()=>{try{return sessionStorage}catch{return null}})(),(()=>{try{return localStorage}catch{return null}})()].filter(Boolean)){
+  try{localStorage.removeItem(PENDING_AUTH_KEY);}catch{}
+  for(const store of [(()=>{try{return sessionStorage}catch{return null}})()].filter(Boolean)){
     try{
       const current=JSON.parse(store.getItem(PENDING_AUTH_KEY)||'null');
       if(current&&typeof current.token==='string'&&current.token.length>25&&Number.isFinite(current.expiresAt)&&current.expiresAt>Date.now()+AUTH_EXPIRY_MARGIN_MS)return current;
@@ -1033,14 +1035,14 @@ function saveActiveAuth(token,expiresAt,sub){
   const readOnly=!!token&&token===fullDriveReadToken;
   const value=JSON.stringify({token,expiresAt,sub,readOnly});
   try{sessionStorage.setItem(ACTIVE_AUTH_KEY,value);}catch{}
-  // Expanded read tokens stay in this tab only, never persistent localStorage.
-  try{if(readOnly)localStorage.removeItem(ACTIVE_AUTH_KEY);
-      else localStorage.setItem(ACTIVE_AUTH_KEY,value);}catch{}
+  // Never persist bearer credentials across browser sessions. The remembered
+  // account is still available for Google reauthorization on the next visit.
+  try{localStorage.removeItem(ACTIVE_AUTH_KEY);localStorage.removeItem(LEGACY_ACTIVE_AUTH_KEY);}catch{}
 }
 function readActiveAuth(){
   const stores=[];
   try{stores.push(sessionStorage);}catch{}
-  try{stores.push(localStorage);}catch{}
+  try{localStorage.removeItem(ACTIVE_AUTH_KEY);localStorage.removeItem(LEGACY_ACTIVE_AUTH_KEY);}catch{}
   for(const store of stores){
     try{
       const current=JSON.parse(store.getItem(ACTIVE_AUTH_KEY)||store.getItem(LEGACY_ACTIVE_AUTH_KEY)||'null');

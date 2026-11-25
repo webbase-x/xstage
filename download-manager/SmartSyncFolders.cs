@@ -93,13 +93,16 @@ public static class SmartSyncFolders
                     throw new InvalidDataException("พบไฟล์หรือโฟลเดอร์ลิงก์ กรุณาใช้โฟลเดอร์ Mirror ที่ดาวน์โหลดครบแล้ว");
                 if ((attributes & FileAttributes.Directory) != 0)
                 {
-                    // Reserved backup tree: never include it in either direction.
-                    if (!Paths.Equals(path, Path.Combine(root, DuplicateBackupFolder))) pending.Push(path);
+                    // Catalog control folders are not ordinary transferable media.
+                    // Never mirror leases, publisher candidates, backup or logs.
+                    var dirRelative = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
+                    if (!IsCatalogControlPath(dirRelative) &&
+                        !Paths.Equals(path, Path.Combine(root, DuplicateBackupFolder))) pending.Push(path);
                     continue;
                 }
                 var relative = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
                 reporter.Publish(phase, relative, pc);
-                if (SmartSyncTransfer.IsDatabaseSidecar(relative) || SmartSyncTransfer.IsDatabaseCandidate(relative))
+                if (IsCatalogControlPath(relative) || SmartSyncTransfer.IsDatabaseSidecar(relative) || SmartSyncTransfer.IsDatabaseCandidate(relative))
                 { review++; reporter.Publish(phase, relative, pc, review: 1); continue; }
                 // A crash may have left an unpublished staging file.
                 if (Path.GetFileName(path).StartsWith(".xstage-sync-", StringComparison.OrdinalIgnoreCase))
@@ -116,6 +119,16 @@ public static class SmartSyncFolders
             }
         }
         return (entries, review);
+    }
+
+    public static bool IsCatalogControlPath(string relative)
+    {
+        var parts = relative.Split('/');
+        // Do not copy root-level control trees or any publisher lock.
+        return parts.Length > 0 && (new[] { "DB", "CACHE", "BACKUP", "LOGS" }
+            .Contains(parts[0], StringComparer.OrdinalIgnoreCase) ||
+            parts.Any(part => part.StartsWith(".xstage-import-lock-", StringComparison.OrdinalIgnoreCase) ||
+                part.StartsWith(".xstage-catalog-", StringComparison.OrdinalIgnoreCase)));
     }
 
     private static SyncFingerprint HashExisting(string root, string relative, SyncFingerprint expected, CancellationToken ct)
@@ -462,6 +475,8 @@ public static class SmartSyncFolders
             var destinationRoot = upload ? plan.Drive : plan.Pc;
             var sourceMap = upload ? plan.PcFiles : plan.DriveFiles;
             var sourcePath = d.SourcePath ?? d.RelativePath;
+            if (IsCatalogControlPath(sourcePath) || IsCatalogControlPath(d.RelativePath))
+                throw new InvalidDataException("ไฟล์ควบคุมฐานเพลงต้องใช้ตัวเผยแพร่ฐานโดยเฉพาะ");
             if (!sourceMap.TryGetValue(sourcePath, out var observed))
                 throw new InvalidDataException("ข้อมูลไฟล์ต้นทางเปลี่ยน กรุณาตรวจสอบใหม่");
             var expected = d.SourceFingerprint ?? observed;

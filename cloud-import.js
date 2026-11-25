@@ -133,13 +133,14 @@ class Drive {
     const rows=[],seenPageTokens=new Set();let next='';
     do{
       this.assertLive();
-      const params=new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,size,md5Checksum,createdTime,modifiedTime,ownedByMe,parents)',
+      const params=new URLSearchParams({q,fields:'nextPageToken,incompleteSearch,files(id,name,mimeType,size,md5Checksum,createdTime,modifiedTime,ownedByMe,parents)',
         pageSize:'1000'});
       if(next)params.set('pageToken',next);
       const result=await (await this.fetch(API+'?'+params)).json();
       if(!result || (result.files!=null&&!Array.isArray(result.files)) ||
          (result.nextPageToken!=null&&typeof result.nextPageToken!=='string'))
         fail('Google Drive ส่งรายการไฟล์ที่มีโครงสร้างไม่ถูกต้อง');
+      if(result.incompleteSearch===true)fail('Google Drive รายงานว่าค้นหาไม่ครบ · ไม่อนุญาตให้แก้ฐาน');
       rows.push(...(result.files||[]));
       next=result.nextPageToken||'';
       if(rows.length>300000)fail('พบไฟล์บน Drive มากเกินขีดจำกัดการตรวจต่อครั้ง');
@@ -610,7 +611,7 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
   // On the first publication there is no prior DB to back up.
   // Do not leave an empty BACKUP directory in a brand-new library.
   let backupRoot=null;
-  const lease=await acquireCatalogLease(drive,cacheRoot,check,status);
+  let lease=null;
   try{
   const codec=scope.XStageDriveSQLite;
   if(!codec)fail('ไม่พบตัวอ่าน SQLite3 บนเว็บ');
@@ -656,6 +657,9 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
      uploaded.songs.length!==rows.size)
     fail('ฐาน SQLite3 บน Drive ตรวจสอบไม่ผ่าน · ยังไม่แทนที่ฐานเดิม');
   // A fresh listing (not listChildren's cache) is the only source of truth.
+  // Acquire the short-lived advisory lease only after the expensive
+  // SQLite encode, upload and re-read. Never hold a lease through a long scan.
+  lease=await acquireCatalogLease(drive,cacheRoot,check,status);
   const before=await verifySource();
   if(before.length)backupRoot=await drive.ensurePath(rootId,['BACKUP']);
   await lease.assertOwner();
@@ -676,7 +680,7 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
     if((await listActive()).length)
       fail('อีกอุปกรณ์เผยแพร่ฐานเพลงระหว่างสลับไฟล์ · ไม่เขียนทับ');
     await drive.moveToFolder(staged.id,cacheRoot,dbRoot,'songs.sqlite3');
-    const active=(await drive.listChildren(dbRoot)).filter(x=>
+    const active=(await drive.list("'"+driveId(dbRoot)+"' in parents and trashed=false")).filter(x=>
       /\.sqlite3$/i.test(x.name)&&x.mimeType!==MIME_FOLDER);
     if(active.length!==1||active[0].id!==staged.id||active[0].name!=='songs.sqlite3')
       fail('DB ต้องมี songs.sqlite3 เพียงไฟล์เดียว');
@@ -687,6 +691,11 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
     if(final.kind!=='snapshot'||final.generation!==generation||
        final.songs.length!==rows.size)
       fail('อ่าน SQLite3 จาก DB หลังเผยแพร่ไม่ผ่าน · สำเนาเก่าอยู่ BACKUP');
+    await lease.assertOwner();
+    const confirmed=await listActive();
+    if(confirmed.length!==1||confirmed[0].id!==staged.id||
+       String(confirmed[0].md5Checksum||'').toLowerCase()!==digest)
+      fail('ฐานถูกเปลี่ยนระหว่างยืนยันการเผยแพร่');
   }catch(error){
     // Roll back ONLY this publication's file. Never move, rename, or delete
     // a foreign writer's canonical database, even when it appeared mid-switch.
@@ -717,7 +726,7 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status}){
     deltaFileIds:[],songCount:rows.size};
   status?.('เผยแพร่ DB/songs.sqlite3 โดยตรง · '+rows.size.toLocaleString('th-TH')+' เพลง');
   return {pointer:next};
-  }finally{await lease.release();}
+  }finally{await lease?.release();}
 }
 // Global raw-MIDI content identity. Package filenames, lyrics, source codes and
 // folders cannot create a second song when the enclosed MIDI bytes match.
