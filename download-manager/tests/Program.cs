@@ -16,7 +16,7 @@ if (args.Length == 2 && args[0] == "--mixed-bandwidth")
         var payload = new byte[1024 * 1024];
         new Random(723).NextBytes(payload);
         var hash = SHA256.HashData(payload);
-        using var server = new FileServer(payload);
+        using var mixedServer = new FileServer(payload);
         var engine = new DownloadEngine(Path.Combine(root, "state"));
         const int cap = 256;
         engine.ConfigurePerformance(1, 1, DownloadEngine.NativePoolBudgetKib(cap, 2, 1));
@@ -25,14 +25,14 @@ if (args.Length == 2 && args[0] == "--mixed-bandwidth")
         var output = Path.Combine(root, "external.bin");
         foreach (var arg in new[] { "--ignore-config", "--no-playlist", "--force-generic-extractor",
             "--limit-rate", DownloadEngine.SharedJobBudgetKib(cap, 2) + "K",
-            "-N", "1", "-o", output, server.Url + "plain/external.bin" })
+            "-N", "1", "-o", output, mixedServer.Url + "plain/external.bin" })
             info.ArgumentList.Add(arg);
         var timer = System.Diagnostics.Stopwatch.StartNew();
         using var process = System.Diagnostics.Process.Start(info) ??
             throw new Exception("Cannot start bundled yt-dlp");
         try
         {
-            var native = engine.Add(server.Url + "range/native.bin", root, 8);
+            var native = engine.Add(mixedServer.Url + "range/native.bin", root, 8);
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
             await process.WaitForExitAsync(timeout.Token);
             await WaitFor(() => native.Status is "Completed" or "Failed", 90000);
