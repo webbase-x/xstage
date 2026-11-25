@@ -26,6 +26,7 @@ class SharedSongLibraryTests(unittest.TestCase):
                 INSERT INTO catalog_meta VALUES('format','xstage-sqlite3-v1');
                 INSERT INTO catalog_meta VALUES('schemaVersion','1');
                 INSERT INTO catalog_meta VALUES('kind','snapshot');
+                INSERT INTO catalog_meta VALUES('generation','test-generation-1');
                 INSERT INTO catalog_meta VALUES('pcSchema','shared-v1');
                 INSERT INTO catalog_meta VALUES('pathBase','SONGS');
                 CREATE TABLE songs (
@@ -80,6 +81,19 @@ class SharedSongLibraryTests(unittest.TestCase):
         row = library.get(1417)
         self.assertEqual(row["playable"],0)
         self.assertEqual(row["path"],"")
+
+    def test_reject_missing_generation_and_unpublished_candidate(self):
+        with closing(sqlite3.connect(self.database)) as db:
+            with db:
+                db.execute("DELETE FROM catalog_meta WHERE key='generation'")
+        with self.assertRaisesRegex(ValueError, "ไม่มีรุ่นข้อมูล"):
+            validate_shared(str(self.root))
+        with closing(sqlite3.connect(self.database)) as db:
+            with db:
+                db.execute("INSERT INTO catalog_meta VALUES('generation','candidate-generation')")
+                db.execute("INSERT INTO catalog_meta VALUES('producer','karaoke-pc-candidate-v1')")
+        with self.assertRaisesRegex(ValueError, "ยังไม่ใช่ฐานหลัก"):
+            validate_shared(str(self.root))
 
     def test_reject_legacy_catalog_and_report_missing_drive(self):
         with closing(sqlite3.connect(self.database)) as db:
