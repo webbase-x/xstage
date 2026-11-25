@@ -9,12 +9,12 @@ on:
       version:
         description: "Semantic version e.g. 0.2.0"
         required: true
-        default: "0.2.16"
+        default: "0.2.17"
         type: string
       version_code:
         description: "Increasing Android version code"
         required: true
-        default: "118"
+        default: "119"
         type: string
 
 permissions:
@@ -29,11 +29,11 @@ jobs:
     if: >-
       github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # Keep this release bound to the v0.2.16 live-playback regression tests.
+    # Keep this release bound to the v0.2.17 live-playback regression tests.
     timeout-minutes: 120
     env:
-      XSTAGE_MIRROR_VERSION: ${{ inputs.version || '0.2.16' }}
-      XSTAGE_MIRROR_BUILD: ${{ inputs.version_code || '118' }}
+      XSTAGE_MIRROR_VERSION: ${{ inputs.version || '0.2.17' }}
+      XSTAGE_MIRROR_BUILD: ${{ inputs.version_code || '119' }}
       XSTAGE_MIRROR_KEYSTORE_BASE64: ${{ secrets.XSTAGE_MIRROR_KEYSTORE_BASE64 }}
       XSTAGE_MIRROR_STORE_PASSWORD: ${{ secrets.XSTAGE_MIRROR_STORE_PASSWORD }}
       XSTAGE_MIRROR_KEY_ALIAS: ${{ secrets.XSTAGE_MIRROR_KEY_ALIAS }}
@@ -173,7 +173,7 @@ jobs:
       - name: Preserve verified signed release APK and GPLv3 source before publication
         uses: actions/upload-artifact@v4
         with:
-          name: X-Stage-Mirror-TV-signed-release-build${{ inputs.version_code || '118' }}
+          name: X-Stage-Mirror-TV-signed-release-build${{ inputs.version_code || '119' }}
           path: dist/*
           if-no-files-found: error
           retention-days: 30
