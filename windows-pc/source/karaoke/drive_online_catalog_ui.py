@@ -7,6 +7,7 @@ from pathlib import Path
 from tkinter import ttk, filedialog, messagebox
 
 from . import drive_online_catalog as catalog
+from .library_setup import remembered_drive_root, remember_drive_library
 
 
 def open_shared_drive_catalog(app, *, parent=None):
@@ -22,18 +23,24 @@ def open_shared_drive_catalog(app, *, parent=None):
               style="Muted.TLabel").pack(anchor="w", pady=(3, 12))
     row = ttk.Frame(body)
     row.pack(fill="x", pady=4)
-    selected_root = tk.StringVar(value=str(app.settings.get("shared_drive_root", "")))
-    root_entry = ttk.Entry(row, textvariable=selected_root)
+    selected_root = tk.StringVar(value=remembered_drive_root(app.settings))
+    root_entry = ttk.Entry(row, textvariable=selected_root, state="readonly")
     root_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
     def browse():
         chosen = filedialog.askdirectory(parent=window,
             title="เลือกโฟลเดอร์หลักคลังเพลงใน Google Drive for desktop",
             initialdir=selected_root.get() or str(Path.home()))
         if chosen:
-            if str(Path(chosen).resolve()) != str(Path(selected_root.get() or chosen).resolve()):
-                drive_id.set("")
-            selected_root.set(chosen)
-            load()
+            if getattr(app, "_shared_build_busy", False):
+                return
+            try:
+                _, root = remember_drive_library(app, chosen)
+                if str(root) != selected_root.get():
+                    drive_id.set("")
+                selected_root.set(str(root))
+                load()
+            except (ValueError, OSError) as exc:
+                summary.set(str(exc))
     ttk.Button(row, text="เลือกโฟลเดอร์ Google Drive…", command=browse).pack(side="left")
     id_row = ttk.Frame(body)
     id_row.pack(fill="x", pady=(0, 7))
@@ -191,4 +198,13 @@ def open_shared_drive_catalog(app, *, parent=None):
     body.bind("<Destroy>", close, add="+")
     if selected_root.get().strip():
         load()
+    def refresh_target():
+        saved = remembered_drive_root(app.settings)
+        if saved and saved != selected_root.get():
+            selected_root.set(saved)
+            drive_id.set("")
+            results.clear()
+            tree.delete(*tree.get_children())
+            load()
+    body.refresh_target = refresh_target
     return body

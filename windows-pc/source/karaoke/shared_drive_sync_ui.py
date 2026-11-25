@@ -7,6 +7,7 @@ from pathlib import Path
 from tkinter import ttk, filedialog, messagebox
 
 from . import shared_drive_sync as sync
+from .library_setup import remembered_drive_root, remember_drive_library
 
 
 def open_drive_push(app, *, parent=None):
@@ -21,7 +22,7 @@ def open_drive_push(app, *, parent=None):
     ttk.Label(frame, text="ส่งเพลง, SoundFont และ FX ไป XStageKaraoke โดยไม่แก้ DB/songs.sqlite3",
               style="Muted.TLabel").pack(anchor="w", pady=(0, 12))
     source_var = tk.StringVar()
-    root_var = tk.StringVar(value=str(app.settings.get("shared_drive_root", "")))
+    root_var = tk.StringVar(value=remembered_drive_root(app.settings))
     area_var = tk.StringVar(value="SONGS")
     status = tk.StringVar(value="เลือกต้นทางและปลายทาง แล้วกดตรวจรายการก่อนส่ง")
     preview = [None]
@@ -36,6 +37,15 @@ def open_drive_push(app, *, parent=None):
         location = filedialog.askdirectory(parent=dialog, title=caption,
                                            initialdir=target.get() or str(Path.home()))
         if location:
+            if target is root_var:
+                if is_running() or getattr(app, "_shared_build_busy", False):
+                    return
+                try:
+                    _, root = remember_drive_library(app, location)
+                    location = str(root)
+                except (ValueError, OSError) as exc:
+                    status.set(str(exc))
+                    return
             target.set(location)
             reset()
 
@@ -43,7 +53,7 @@ def open_drive_push(app, *, parent=None):
         row = ttk.Frame(frame)
         row.pack(fill="x", pady=5)
         ttk.Label(row, text=title, width=20).pack(side="left")
-        ttk.Entry(row, textvariable=var).pack(side="left", fill="x", expand=True, padx=6)
+        ttk.Entry(row, textvariable=var, state="readonly" if var is root_var else "normal").pack(side="left", fill="x", expand=True, padx=6)
         ttk.Button(row, text="เลือกโฟลเดอร์…",
                    command=lambda:choose(var,caption)).pack(side="left")
 
@@ -185,4 +195,9 @@ def open_drive_push(app, *, parent=None):
     root_var.trace_add("write",reset)
     source_var.trace_add("write",reset)
     area_var.trace_add("write",reset)
+    def refresh_target():
+        saved = remembered_drive_root(app.settings)
+        if saved and not is_running() and root_var.get() != saved:
+            root_var.set(saved)
+    frame.refresh_target = refresh_target
     return frame

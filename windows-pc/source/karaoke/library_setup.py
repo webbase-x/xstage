@@ -3,7 +3,7 @@ from pathlib import Path
 import os
 import shutil
 import tempfile
-from .shared_drive_layout import setup
+from .shared_drive_layout import setup, inspect, DEFAULT_NAME
 
 DRIVE_DOWNLOAD = "https://www.google.com/drive/download/"
 PACKAGES = {".xmid", ".xsk"}
@@ -17,6 +17,47 @@ def drive_roots():
             if candidate.is_dir():
                 roots.append(candidate)
     return roots
+
+def remembered_drive_root(settings):
+    """Selection is independent of which SQLite snapshot is active."""
+    pending = settings.get("pending_online_master") or {}
+    return str(settings.get("catalog_drive_root") or pending.get("root") or
+               settings.get("shared_drive_root") or "")
+
+def drive_library(value, *, explicit=False, remembered=""):
+    """Resolve the selected library, including a selection inside SONGS.
+    Never guess another Drive if the remembered mount is unavailable.
+    """
+    if not value:
+        raise ValueError("กรุณาเลือกโฟลเดอร์หลัก Google Drive ครั้งแรก")
+    selected = Path(value).expanduser()
+    if not selected.is_dir() or selected.is_symlink():
+        raise ValueError("ไม่พบคลัง Google Drive ที่เลือก · ตรวจ Drive for desktop")
+    selected = selected.resolve(strict=True)
+    for volume in drive_roots():
+        mount = volume.resolve(strict=True)
+        if mount not in selected.parents:
+            continue
+        for candidate in (selected, *selected.parents):
+            if candidate == mount:
+                break
+            if ((candidate / "SONGS").is_dir() or
+                candidate.name.casefold() == DEFAULT_NAME.casefold() or
+                (remembered and candidate == Path(remembered).resolve())):
+                inspect(candidate)
+                return mount, candidate
+        if explicit:
+            inspect(selected)
+            return mount, selected
+    raise ValueError("เลือกโฟลเดอร์หลักคลังเพลงใน My Drive ของ Google Drive for desktop")
+
+def remember_drive_library(app, value, *, explicit=True):
+    mount, root = drive_library(value, explicit=explicit,
+                                remembered=remembered_drive_root(app.settings))
+    if str(root) != remembered_drive_root(app.settings) or not app.settings.get("catalog_drive_root"):
+        app.settings["catalog_drive_root"] = str(root)
+        app.save_settings()
+    return mount, root
 
 def _inside(child, parent):
     return child == parent or parent in child.parents
@@ -37,7 +78,7 @@ def _equal(left, right, cancel):
             if not chunk:
                 return True
 
-def prepare_online(source, drive, name="XStageKaraoke", *, cancel=None, progress=None):
+def prepare_online(source, drive, name="XStageKaraoke", *, cancel=None, progress=None, target_root=None):
     """Copy supported Online packages, preserve relative paths and fail on collisions.
 
     The selected Drive mount must be one of the detected My Drive folders.
@@ -51,7 +92,10 @@ def prepare_online(source, drive, name="XStageKaraoke", *, cancel=None, progress
     source = Path(source).resolve(strict=True)
     if not source.is_dir():
         raise ValueError("เลือกโฟลเดอร์คลังเพลงก่อน")
-    root = drive / name
+    root = Path(target_root).absolute() if target_root is not None else drive / name
+    if not _inside(root.resolve(), drive) or root.resolve() == drive:
+        raise ValueError("คลังปลายทางต้องอยู่ภายใน My Drive ที่เลือก")
+    inspect(root)
     if root.is_symlink():
         raise ValueError("คลังปลายทางเป็น symbolic link")
     songs = root / "SONGS"

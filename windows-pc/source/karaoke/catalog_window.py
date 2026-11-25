@@ -9,6 +9,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from .dialog_layout import ActionBar, DialogWindow, scrollable_tree
 from .library import SearchReader, normalize
+from .library_setup import remembered_drive_root
 
 
 def selected_shared_root(source):
@@ -264,7 +265,7 @@ class CatalogWindow:
         if key not in self.page_views:
             if key == 'build':
                 from .shared_catalog_builder_ui import open_builder
-                view = open_builder(self.app, initial_root=initial_root or self.source,
+                view = open_builder(self.app, initial_root=initial_root or remembered_drive_root(self.app.settings) or self.source,
                                     parent=self.pages[key])
             elif key == 'drive':
                 from .drive_online_catalog_ui import open_shared_drive_catalog
@@ -280,6 +281,9 @@ class CatalogWindow:
                 raise ValueError(key)
             self.page_views[key] = view
         view = self.page_views[key]
+        refresh_target = getattr(view, 'refresh_target', None)
+        if refresh_target:
+            refresh_target()
         if key == 'build' and initial_root is not None:
             view.set_source(initial_root)
         return view

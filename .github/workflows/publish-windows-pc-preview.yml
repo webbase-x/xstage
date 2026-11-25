@@ -3,7 +3,7 @@ name: Publish X-Stage Karaoke PC Windows binary preview
 on:
   workflow_run:
     workflows:
-      - 'X-Stage Karaoke PC installer candidate (v1.0.86)'
+      - 'X-Stage Karaoke PC installer candidate (v1.0.87)'
     types: [completed]
 
 permissions:
@@ -26,7 +26,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       SOURCE_RUN: ${{ github.event.workflow_run.id }}
       SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
-      TAG: "xstage-karaoke-pc-preview-v1.0.86-build1086"
+      TAG: "xstage-karaoke-pc-preview-v1.0.87-build1087"
       INSTALLER: "X-StageKaraoke.exe"
     steps:
       - uses: actions/checkout@v5
@@ -39,7 +39,7 @@ jobs:
           python3 - <<'PY'
           import json
           d=json.load(open('windows-pc/manifest.json',encoding='utf8'))
-          assert d['source_imported'] and d['version']=='1.0.86' and d['build']==1086
+          assert d['source_imported'] and d['version']=='1.0.87' and d['build']==1087
           PY
           verified=$(gh run view "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --json conclusion,headSha --jq '[.conclusion,.headSha]|join(" ")')
           test "$verified" = "success $SOURCE_SHA" || { echo "::error::Original candidate run was not successful"; exit 1; }
@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name "X-Stage-Karaoke-PC-Windows-v1.0.86-build1086-CANDIDATE" --dir dist
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name "X-Stage-Karaoke-PC-Windows-v1.0.87-build1087-CANDIDATE" --dir dist
           exe=$(find dist -type f -name "$INSTALLER" -print -quit)
           check=$(find dist -type f -name "$INSTALLER.sha256" -print -quit)
           test -n "$exe" && test -n "$check"
@@ -99,7 +99,7 @@ jobs:
           info={
             'channel':'preview','available':True,
             'name':'X-Stage Karaoke PC Windows PREVIEW',
-            'platform':'windows-x64','version':'1.0.86','build':1086,
+            'platform':'windows-x64','version':'1.0.87','build':1087,
             'installer_file':name,'sha256':os.environ['HASH'],
             'download_url':'https://webbase-x.github.io/xstage/downloads/'+name,
             'source_commit':os.environ['SOURCE_SHA'],

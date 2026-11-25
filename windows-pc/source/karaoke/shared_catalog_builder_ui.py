@@ -7,9 +7,8 @@ from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
 
 from . import shared_catalog_builder as builder
-from .library_setup import drive_roots, prepare_online, DRIVE_DOWNLOAD
+from .library_setup import drive_roots, prepare_online, DRIVE_DOWNLOAD, remembered_drive_root, drive_library, remember_drive_library
 import webbrowser
-from tkinter import simpledialog
 
 
 def open_builder(app, initial_root=None, *, parent=None):
@@ -25,15 +24,35 @@ def open_builder(app, initial_root=None, *, parent=None):
               style="Muted.TLabel").pack(anchor="w", pady=(6, 15))
     row = ttk.Frame(frame)
     row.pack(fill="x", pady=(2, 12))
-    folder = tk.StringVar(value=str(initial_root or app.settings.get("shared_drive_root", "")))
-    ttk.Entry(row, textvariable=folder).pack(side="left", fill="x", expand=True, padx=(0, 8))
+    saved_root = remembered_drive_root(app.settings)
+    folder = tk.StringVar(value=str(initial_root or saved_root))
+    target = tk.StringVar(value=saved_root)
+    ttk.Entry(row, textvariable=folder, state="readonly").pack(side="left", fill="x", expand=True, padx=(0, 8))
     def select():
         name = filedialog.askdirectory(parent=panel, title="เลือกโฟลเดอร์คลังเพลง",
                                        initialdir=folder.get() or str(Path.home()))
-        if name:
-            folder.set(name)
-            state["approved"] = None
-    ttk.Button(row, text="เลือกคลังเพลง…", command=select).pack(side="left")
+        if name and not state["busy"]:
+            set_source(name)
+    ttk.Button(row, text="เปลี่ยนต้นทางเพลง…", command=select).pack(side="left")
+    target_row = ttk.Frame(frame)
+    target_row.pack(fill="x", pady=(0, 8))
+    ttk.Label(target_row, text="คลัง Google Drive").pack(side="left", padx=(0, 8))
+    ttk.Entry(target_row, textvariable=target, state="readonly").pack(side="left", fill="x", expand=True)
+    def change_target():
+        if state["busy"] or getattr(app, "_shared_build_busy", False):
+            return
+        chosen = filedialog.askdirectory(parent=panel, title="เปลี่ยนโฟลเดอร์หลัก Google Drive", initialdir=target.get() or str(Path.home()), mustexist=True)
+        if chosen:
+            try:
+                _, root = remember_drive_library(app, chosen)
+                old = target.get()
+                target.set(str(root))
+                if not folder.get() or folder.get() == old:
+                    folder.set(str(root))
+                state["approved"] = None
+            except (ValueError, OSError) as exc:
+                status.set(str(exc))
+    ttk.Button(target_row, text="เปลี่ยนคลัง…", command=change_target).pack(side="left", padx=(8, 0))
 
     full_verify = tk.BooleanVar(value=False)
     ttk.Checkbutton(frame, text="ตรวจแพ็กเกจใหม่ทั้งหมด (ช้ากว่า)", variable=full_verify).pack(anchor="w")
@@ -71,24 +90,34 @@ def open_builder(app, initial_root=None, *, parent=None):
         if not requested:
             status.set("กรุณาเลือก XStageKaraoke ก่อน")
             return
-        drive = None
-        name = None
+        try:
+            # If the source is already a Drive library, remember that exact root.
+            # Otherwise use the saved target; never ask for My Drive/name again.
+            try:
+                source_mount, source_root = drive_library(requested, remembered=target.get())
+            except (ValueError, OSError):
+                source_root = None
+            selected = target.get() or remembered_drive_root(app.settings)
+            if source_root is not None and not selected:
+                _, source_root = remember_drive_library(app, source_root)
+                selected = str(source_root)
+            if not selected:
+                change_target()
+                selected = target.get()
+                if not selected:
+                    return
+            drive, root = drive_library(selected, explicit=True, remembered=selected)
+            if source_root is not None and source_root != root:
+                raise ValueError("ต้นทางอยู่ในคลัง Drive อื่น · เปลี่ยนคลังให้ตรงก่อน ไม่คัดลอกข้ามคลังอัตโนมัติ")
+            target.set(str(root))
+            if source_root == root:
+                requested = str(root)
+            if not publish and source_root != root:
+                raise ValueError("ตรวจเพลงซ้ำในคลัง Drive ที่เลือกได้หลังส่งไฟล์เข้าคลังแล้ว")
+        except (ValueError, OSError) as exc:
+            status.set(str(exc))
+            return
         if publish:
-            roots = drive_roots()
-            if not roots:
-                if messagebox.askyesno("ไม่พบ Google Drive", "PC + Online ต้องใช้ Google Drive for desktop ที่เข้าสู่ระบบแล้ว\nเปิดหน้าดาวน์โหลด Google Drive หรือไม่?", parent=panel):
-                    webbrowser.open(DRIVE_DOWNLOAD)
-                return
-            chosen = filedialog.askdirectory(parent=panel, title="เลือก My Drive ของ Google Drive", initialdir=str(roots[0]), mustexist=True)
-            if not chosen:
-                return
-            drive = Path(chosen).resolve()
-            if drive not in [p.resolve() for p in roots]:
-                messagebox.showwarning("เลือก Google Drive", "กรุณาเลือก My Drive โดยตรง", parent=panel)
-                return
-            name = simpledialog.askstring("ชื่อคลัง Google Drive", "ชื่อโฟลเดอร์หลัก (ใช้ของเดิมถ้ามี)", initialvalue="XStageKaraoke", parent=panel)
-            if not name:
-                return
             if not messagebox.askyesno(
                 "ยืนยันสร้าง SQLite ใหม่จาก Karaoke PC",
                 "จะคัดลอก XMID/XSK2 ไปยังคลัง Google Drive หากอยู่นอกคลัง\n"
@@ -99,6 +128,7 @@ def open_builder(app, initial_root=None, *, parent=None):
                 parent=panel
             ):
                 return
+        selected_library = root
         verify_all = full_verify.get()
         state["busy"] = True
         app._shared_build_busy = True
@@ -134,7 +164,7 @@ def open_builder(app, initial_root=None, *, parent=None):
                         app._active_reader = None
                         app._search_thread = None
                         reader_stopped = True
-                root = prepare_online(requested, drive, name, cancel=stop, progress=update) if publish else Path(requested).resolve()
+                root = prepare_online(requested, drive, selected_library.name, cancel=stop, progress=update, target_root=selected_library) if publish else selected_library
                 result = builder.build(root, progress=update, cancel=stop,
                                        publish=publish, cache_dir=Path(app.data_dir) / "index-cache",
                                        full_verify=verify_all, deduplicate=not publish,
@@ -222,8 +252,24 @@ def open_builder(app, initial_root=None, *, parent=None):
               style="Muted.TLabel", wraplength=860).pack(anchor="w")
     def set_source(value):
         if not state["busy"]:
-            folder.set(str(value))
+            try:
+                _, root = remember_drive_library(app, value, explicit=False)
+                target.set(str(root))
+                folder.set(str(root))
+            except (ValueError, OSError):
+                folder.set(str(value))
             state["approved"] = None
+
+    def refresh_target():
+        if not state["busy"]:
+            old = target.get()
+            saved = remembered_drive_root(app.settings)
+            if saved and saved != old:
+                target.set(saved)
+                if not folder.get() or folder.get() == old:
+                    folder.set(saved)
+                state["approved"] = None
+    frame.refresh_target = refresh_target
 
     def on_destroy(event):
         if event.widget is frame:
