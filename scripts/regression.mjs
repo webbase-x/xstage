@@ -428,6 +428,9 @@ assert.ok(app.includes('function androidTvNativeBridgeReady()'),'web app must de
 assert.ok(app.includes('window.XStageAndroidDeviceCode'),'web app must render Google device codes from Android');
 assert.ok(app.includes('function bootAndroidTvAuthentication()'),'Android TV app must bootstrap authentication automatically');
 assert.ok(app.includes('startAndroidTvDeviceLogin(true)'),'Android TV must open device login immediately when no stored session exists');
+assert.match(androidMain,/if \(!googleAuth\.hasStoredSession\(\)\) \{\s*startupLoginPrefetch = true;[\s\S]*?googleAuth\.startDeviceLogin\(\);\s*\}\s*webView\.loadUrl\(buildAppUrl\(\)\)/,'cold startup must prefetch the Google device code before loading the hosted UI, without replacing a stored session');
+assert.match(androidMain,/String result = startupLoginResult;\s*clearStartupLoginPrefetch\(\);\s*if \(result != null\) callJavascript\(result\);\s*return;/,'the first web login request must consume prefetched results without issuing a duplicate QR');
+assert.match(app,/showAndroidTvAuthPanel\(\);[\s\S]*?void ensureAndroidTvQrLibrary\(\)\.catch\(\(\)=>\{\}\);[\s\S]*?window\.XStageAndroid\.requestGoogleLogin\(\)/,'QR renderer and device authorization must load in parallel');
 assert.ok(app.includes("id=\"android-tv-auth-qr\""),'Android TV login overlay must include a QR canvas');
 assert.ok(app.includes(`./assets/vendor/qrcode.min.js?v=${version.build}`),'Android login must load the same-origin QR renderer');
 assert.ok(app.includes('armAndroidTvLoginWatchdog()'),'Android login must time out instead of hanging while waiting for a Google device code');
