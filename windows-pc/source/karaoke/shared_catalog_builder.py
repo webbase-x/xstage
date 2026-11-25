@@ -350,13 +350,18 @@ def _root(value):
     return root
 
 
-def _read_xsk(path):
+def _read_xsk(path, *, package_digest=None):
     if path.stat().st_size > MAX_XSK_BYTES:
         raise ValueError("XSK ใหญ่เกินขอบเขต")
     with path.open("rb") as stream:
         if stream.read(4) != b"XSK2":
             raise ValueError("รองรับเฉพาะ XSK2 ที่ไม่เข้ารหัส")
         packed = stream.read(MAX_XSK_BYTES + 1)
+    if len(packed) + 4 != path.stat().st_size or len(packed) + 4 > MAX_XSK_BYTES:
+        raise ValueError("ขนาด XSK เปลี่ยนหรือเกินขอบเขต")
+    if package_digest is not None:
+        package_digest.update(b"XSK2")
+        package_digest.update(packed)
     with zipfile.ZipFile(io.BytesIO(packed)) as z:
         entries = z.infolist()
         if len(entries) != 2 or len({x.filename for x in entries}) != 2:
@@ -441,10 +446,11 @@ def _files(root, cancel):
 
 def _record(relative, file, old, *, fingerprint=True):
     ext = file.suffix.lower()
+    package_digest = hashlib.md5()
     if ext == ".xmid":
-        midi, doc = read_xmid(file)
+        midi, doc = read_xmid(file, package_digest=package_digest)
     else:
-        midi, doc = _read_xsk(file)
+        midi, doc = _read_xsk(file, package_digest=package_digest)
     code = str(doc.get("code") or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", code):
         raise ValueError("รหัสเพลงในแพ็กเกจไม่รองรับ: " + str(file))
@@ -460,7 +466,7 @@ def _record(relative, file, old, *, fingerprint=True):
     lines = doc.get("lines") or []
     placeholder = len(lines) == 1 and str(lines[0].get("text") or "").strip().lower() == "x-stage karaoke"
     midi_hash = hashlib.md5(midi).hexdigest() if fingerprint else None
-    packed_hash = _hash(file)
+    packed_hash = package_digest.hexdigest()
     kind = ext[1:]
     ident = "browser/" + kind + "/" + packed_hash
     media_path = "SONGS/" + relative
@@ -496,7 +502,11 @@ def _verified_rows(songs, root, references, cache_dir, cancel, full_verify, fing
     if cache_dir is None:
         for relative, file in songs:
             _stop(cancel)
-            yield relative, (_record(relative, file, references) if fingerprint else _record(relative, file, references, fingerprint=False)), False
+            stamp = _file_stamp(file)
+            row = (_record(relative, file, references) if fingerprint else _record(relative, file, references, fingerprint=False))
+            if _file_stamp(file) != stamp:
+                raise ValueError("ไฟล์เปลี่ยนระหว่างตรวจ: " + relative)
+            yield relative, row, False
         return
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -564,11 +574,13 @@ def _build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=No
     if old_file.is_symlink() or (old_file.exists() and not old_file.is_file()):
         raise ValueError("DB/songs.sqlite3 ไม่ใช่ไฟล์ SQLite ปกติ หยุดเพื่อไม่เขียนนอกคลัง")
     local_first = local_database is not None and not candidate_only
-    original_signature = _hash(old_file) if old_file.exists() else None
+    # Local-first publication only consumes SHA-256; avoid a second read
+    # of the old, potentially large synchronized database.
+    original_signature = _hash(old_file) if not local_first and old_file.exists() else None
     original_sha = _sha256(old_file) if local_first and old_file.exists() else None
     references = _old_refs(old_file)
     old_ids = _old_ids(old_file) if not deduplicate else {}
-    rows, midi_hashes, paths, codes, ids = [], set(), set(), set(), set()
+    rows, midi_hashes, paths, codes, ids = [], {}, set(), set(), set()
     duplicates = reused = 0
     for index, (relative, row, cached) in enumerate(_verified_rows(songs, root, references, cache_dir, cancel, full_verify, deduplicate), 1):
         reused += int(cached)
@@ -578,10 +590,13 @@ def _build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=No
             raise ValueError("พบชื่อไฟล์ซ้ำบน Windows: " + relative)
         paths.add(key)
         if deduplicate:
+            fingerprint = (row["midiSize"], row["midiSha256"])
             if row["midiHash"] in midi_hashes:
+                if midi_hashes[row["midiHash"]] != fingerprint:
+                    raise ValueError("MD5 MIDI ตรงกันแต่ SHA-256/ขนาดต่างกัน · ไม่ข้ามเพลง")
                 duplicates += 1
                 continue
-            midi_hashes.add(row["midiHash"])
+            midi_hashes[row["midiHash"]] = fingerprint
         else:
             # Online verifies package MD5, not a duplicate MIDI fingerprint.
             # Retain each path, including byte-identical packages in different folders.
@@ -653,8 +668,11 @@ def _build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=No
                                **({"producer": "karaoke-pc-candidate-v1",
                                    "baseMd5": original_signature or ""}
                                   if candidate_only else {})}.items()])
-            for ordinal, (ident, row) in enumerate(rows):
-                db.execute(INSERT, (ident, ordinal, row["webSongId"],
+            def parameters():
+                for ordinal, (ident, row) in enumerate(rows):
+                    if ordinal % 128 == 0:
+                        _stop(cancel)
+                    yield (ident, ordinal, row["webSongId"],
                     "SONGS/" + row["originalRelativePath"], "MIDI",
                     unicodedata.normalize("NFC",
                         " ".join(str(row.get(k, "")) for k in ("code","title","artist"))).lower(),
@@ -662,7 +680,8 @@ def _build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=No
                     row["sourceFormat"], row["originalFilename"],
                     row["originalRelativePath"], row["originalFileSize"],
                     row["sourceCode"], row["midiSize"], row.get("midiHash"),
-                    json.dumps(row, ensure_ascii=False, separators=(",",":"))))
+                    json.dumps(row, ensure_ascii=False, separators=(",",":")))
+            db.executemany(INSERT, parameters())
             db.commit()
             if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                 raise ValueError("SQLite ที่สร้างไม่ผ่าน integrity_check")

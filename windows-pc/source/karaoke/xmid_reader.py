@@ -12,7 +12,7 @@ MAX_METADATA = 32 * 1024 * 1024
 MAX_MIDI = 64 * 1024 * 1024
 
 
-def read_xmid(path):
+def read_xmid(path, *, package_digest=None):
     """Validate container and return embedded MIDI bytes and Studio metadata.
 
     Metadata SHA-256 is always checked. MIDI SHA-256 is checked as well, so
@@ -41,6 +41,11 @@ def read_xmid(path):
             raise ValueError("SHA-256 ของ MIDI XMID ไม่ตรง")
         if media[:4] not in (b"MThd", b"NCN1"):
             raise ValueError("XMID ไม่ได้บรรจุ MIDI ที่รองรับ")
+        if package_digest is not None:
+            # The validated header, metadata and MIDI are the complete
+            # package. Hash those same bytes without reopening Drive files.
+            for block in (header, payload, media):
+                package_digest.update(block)
         return media, doc
 
 

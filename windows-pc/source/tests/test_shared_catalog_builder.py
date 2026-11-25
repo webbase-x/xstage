@@ -205,6 +205,30 @@ class SharedPcBuilderTests(unittest.TestCase):
         self.assertEqual(drive.read_bytes(),before)
         self.assertEqual(other.read_bytes(),before)
 
+    def test_package_fingerprint_reads_each_package_once(self):
+        from unittest.mock import patch
+        from karaoke import shared_catalog_builder as builder
+        changed=bytearray(self.midi);changed[13]=97
+        xsk=self.songs/"10003.xsk"
+        xsk.write_bytes(_xsk("10003","เพลง XSK","นักร้อง",bytes(changed)))
+        files=[self.songs/"10001.xmid",xsk]
+        expected={file.name:hashlib.md5(file.read_bytes()).hexdigest() for file in files}
+        reads={file.name:0 for file in files}
+        original=Path.open
+        def track(path,*args,**kwargs):
+            if path.name in reads and args and args[0]=="rb":
+                reads[path.name]+=1
+            return original(path,*args,**kwargs)
+        with patch.object(Path,"open",track):
+            result=build(self.root)
+        self.assertEqual(result["accepted"],2)
+        self.assertEqual(reads,{file.name:1 for file in files})
+        with closing(sqlite3.connect(self.root/"DB/songs.sqlite3")) as db:
+            for (payload,) in db.execute("SELECT payload FROM songs"):
+                row=json.loads(payload)
+                media=row[row["sourceFormat"].lower()]
+                self.assertEqual(media["md5Checksum"],expected[row["originalFilename"]])
+
     def test_pc_candidate_never_replaces_active_catalog(self):
         old=self.root/"DB/songs.sqlite3"
         old.write_bytes(b"existing canonical")

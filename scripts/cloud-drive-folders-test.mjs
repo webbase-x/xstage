@@ -100,6 +100,33 @@ window.XStageCloudImport={
   publishSingleCatalog:async({rows})=>{published++;lastRows=[...rows.values()];}
 };
 vm.runInNewContext(read('cloud-drive-folders.js'),context,{filename:'cloud-drive-folders.js'});
+// Inventory simulation: parallel siblings must merge deterministically,
+// respect the concurrency bound and fail closed on duplicate identities.
+{
+  const folder=(id,name)=>({id,name,mimeType:'application/vnd.google-apps.folder'});
+  const file=(id,name)=>({id,name,mimeType:'application/octet-stream',size:'1'});
+  const rootId='benchRoot123';
+  const folders=Array.from({length:24},(_,i)=>folder('benchFolder'+i,'dir'+i));
+  let active=0,peak=0,calls=0;
+  const drive={listChildren:async id=>{
+    calls++;active++;peak=Math.max(peak,active);
+    try{
+      await new Promise(resolve=>setTimeout(resolve,2));
+      if(id===rootId)return folders;
+      const i=Number(id.slice('benchFolder'.length));
+      return [file('benchFile'+i,'song.xmid')];
+    }finally{active--;}
+  }};
+  const result=await window.XStageDriveFolders.walkMusic(drive,rootId,()=>{});
+  assert.equal(result.files.length,24);
+  assert.equal(result.folders,25);
+  assert.equal(calls,25);
+  assert.ok(peak>1&&peak<=8,'bounded parallel folder listing');
+  assert.equal(result.files.map(x=>x.relative).join(','),folders.map(x=>x.name+'/song.xmid').join(','));
+  const duplicate={listChildren:async id=>id===rootId?folders.slice(0,2):[file('sameFile123','song.xmid')]};
+  await assert.rejects(window.XStageDriveFolders.walkMusic(duplicate,rootId,()=>{}),/File ID ซ้ำ/);
+  console.log('PASS: parallel folder inventory, deterministic merge, bounded concurrency and duplicate ID guard; peak '+peak);
+}
 let current={sub:'account1',rootId:root,token:'token1'},pick={id:music,name:'XMID'};
 const savedMetadata=new Map();
 const workflow=window.XStageDriveFolders.init({

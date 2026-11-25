@@ -134,15 +134,27 @@ async function countSourceFiles(drive,start,check=()=>{},collect=null){
 }
 async function walkMusic(drive,start,check,progress){
   const folders=[{id:start,path:'',depth:0}],seen=new Set();
-  const files=[],portablePaths=new Set();let count=0;
-  while(folders.length){
+  const files=[],portablePaths=new Set(),fileIds=new Set();let count=0,cursor=0,lastReport=0;
+  // Bounded BFS: keep stable merge order regardless of network latency.
+  // Avoid Array.shift() on large inventories and cap concurrent metadata calls.
+  const workers=Math.min(8,inspectionLimits(scope.navigator).workers);
+  while(cursor<folders.length){
     check();
-    const folder=folders.shift();
-    if(seen.has(folder.id)||retired.has(folder.id))fail('พบโฟลเดอร์วนซ้ำหรือคลังที่ยกเลิก');
-    seen.add(folder.id);
-    if(seen.size>MAX_FOLDERS)fail('จำนวนโฟลเดอร์เพลงมากเกินขอบเขตการตรวจ');
-    const children=await drive.listChildren(folder.id);
-    for(const item of children){
+    const batch=[];
+    while(cursor<folders.length&&batch.length<workers){
+      const folder=folders[cursor++];
+      if(!isId(folder.id)||seen.has(folder.id)||retired.has(folder.id))fail('พบโฟลเดอร์วนซ้ำหรือคลังที่ยกเลิก');
+      seen.add(folder.id);
+      if(seen.size>MAX_FOLDERS)fail('จำนวนโฟลเดอร์เพลงมากเกินขอบเขตการตรวจ');
+      batch.push(folder);
+    }
+    // Drain all started requests before propagating a failure or pause.
+    const results=await Promise.allSettled(batch.map(folder=>drive.listChildren(folder.id)));
+    check();
+    for(let i=0;i<batch.length;i++){
+      const folder=batch[i],result=results[i];
+      if(result.status==='rejected')throw result.reason;
+      for(const item of result.value){
       if(!isId(item.id))fail('Google Drive คืน File ID ไม่ถูกต้อง');
       const name=String(item.name||'');
       if(!name||name==='.'||name==='..'||/[\\/:*?"<>|\u0000-\u001f]/.test(name))
@@ -155,6 +167,8 @@ async function walkMusic(drive,start,check,progress){
         if(retired.has(item.id))fail('พบคลังที่ถูกยกเลิกภายในรายการที่เลือก');
         folders.push({id:item.id,path:folder.path+item.name+'/',depth:folder.depth+1});
       }else{
+        if(fileIds.has(item.id))fail('พบ File ID ซ้ำในคลังเพลง · ตรวจสอบก่อนสร้างฐาน');
+        fileIds.add(item.id);
         count++;
         if(count>MAX_FILES)fail('จำนวนไฟล์เกิน 300,000 รายการ');
         const ext=String(item.name||'').split('.').pop().toLowerCase();
@@ -162,7 +176,11 @@ async function walkMusic(drive,start,check,progress){
           files.push({...item,relative:folder.path+item.name,ext});
       }
     }
-    if(seen.size%10===0)progress?.('สแกน '+seen.size+' โฟลเดอร์ · พบ XMID/XSK '+files.length+' ไฟล์');
+    }
+    if(seen.size-lastReport>=10||cursor===folders.length){
+      lastReport=seen.size;
+      progress?.('สแกน '+seen.size+' โฟลเดอร์ · พบ XMID/XSK '+files.length+' ไฟล์');
+    }
   }
   return {files,otherCount:count-files.length,folders:seen.size};
 }
