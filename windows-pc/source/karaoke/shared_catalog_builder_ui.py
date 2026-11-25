@@ -9,7 +9,6 @@ from pathlib import Path
 from . import shared_catalog_builder as builder
 from .library_setup import remembered_drive_root, drive_library, remember_drive_library
 from .shared_drive_layout import setup
-import webbrowser
 
 
 def open_builder(app, initial_root=None, *, parent=None):
@@ -56,7 +55,7 @@ def open_builder(app, initial_root=None, *, parent=None):
     ttk.Label(frame, text="ฐานหลัก PC: " + str(Path(getattr(app, "home", app.data_dir)) / "DB" / "songs.sqlite3"), style="Muted.TLabel", wraplength=640).pack(anchor="w", pady=5)
     full_verify = tk.BooleanVar(value=False)
     ttk.Checkbutton(frame, text="ตรวจแพ็กเกจใหม่ทั้งหมด (ช้ากว่า)", variable=full_verify).pack(anchor="w")
-    status = tk.StringVar(value="เลือกคลังเพลง แล้วกดสร้างฐานและซิงก์ · ไม่ตรวจเพลงซ้ำ")
+    status = tk.StringVar(value="เลือกต้นทางเพลง แล้วสร้างฐาน PC · คัดลอกฐานไป Drive ได้ภายหลัง")
     ttk.Label(frame, textvariable=status, style="Muted.TLabel",
               wraplength=860).pack(fill="x", pady=8)
     progress = ttk.Progressbar(frame, mode="determinate", maximum=100)
@@ -88,7 +87,7 @@ def open_builder(app, initial_root=None, *, parent=None):
             return
         requested = folder.get().strip()
         if not requested:
-            status.set("กรุณาเลือก XStageKaraoke ก่อน")
+            status.set("กรุณาเลือกโฟลเดอร์ต้นทางเพลงก่อน")
             return
         try:
             source = Path(requested).resolve(strict=True)
@@ -246,15 +245,64 @@ def open_builder(app, initial_root=None, *, parent=None):
 
     inspect = ttk.Button(buttons, text="ตรวจเพลงซ้ำจากต้นทาง", command=lambda: submit(False, local_only=True))
     inspect.pack(side="left", padx=(0, 10))
-    confirm = ttk.Button(buttons, text="สร้างฐาน PC + สำเนา Online",
-                         command=lambda: submit(True))
+    confirm = ttk.Button(buttons, text="สร้าง/อัปเดตฐาน PC",
+                         command=lambda: submit(True, local_only=True))
     confirm.pack(side="left", padx=(0, 10))
     cancel = ttk.Button(buttons, text="หยุดอย่างปลอดภัย",
                         command=stop.set, state="disabled")
     cancel.pack(side="left")
-    def pc_only():
-        submit(True, local_only=True)
-    ttk.Button(buttons, text="สร้างฐาน PC เท่านั้น", command=pc_only).pack(side="left", padx=8)
+    def export_database():
+        if state["busy"] or getattr(app, "_shared_build_busy", False) or getattr(app, "scanning", False):
+            return
+        if app.settings.get("pending_online_master"):
+            status.set("เปิดโปรแกรมใหม่เพื่อใช้ฐานที่เพิ่งสร้างก่อนคัดลอก")
+            return
+        if not target.get():
+            change_target()
+        try:
+            _, root = drive_library(target.get(), explicit=True, remembered=target.get())
+            destination = root / "DB" / "songs.sqlite3"
+            overwrite = destination.exists()
+            if not messagebox.askyesno("คัดลอกฐาน PC ไป Online",
+                    "ตรวจสอบเพลงใน SONGS แล้วคัดลอกฐาน PC ไปยังคลังที่เลือก\n"
+                    "หากมีฐานเดิม ระบบจะสำรองก่อนแทนที่\n" + str(destination),
+                    parent=panel, default="no"):
+                return
+        except (ValueError, OSError) as exc:
+            status.set(str(exc))
+            return
+        state["busy"] = True
+        app._shared_build_busy = True
+        stop.clear()
+        inspect.configure(state="disabled")
+        confirm.configure(state="disabled")
+        export_button.configure(state="disabled")
+        cancel.configure(state="normal")
+        status.set("กำลังตรวจและคัดลอกฐาน SQLite ไป Google Drive…")
+        def worker():
+            from .local_master import export_portable
+            try:
+                result = export_portable(app.home, root, overwrite=overwrite, cancel=stop)
+                message = "คัดลอกฐานสำเร็จ · รอ Google Drive ซิงก์: " + str(result)
+            except Exception as exc:
+                message = "ไม่สำเร็จ · " + str(exc)
+            def done():
+                app._shared_build_busy = False
+                state["busy"] = False
+                if not state["closed"]:
+                    inspect.configure(state="normal")
+                    confirm.configure(state="normal")
+                    export_button.configure(state="normal")
+                    cancel.configure(state="disabled")
+                    status.set(message)
+            try:
+                app.after(0, done)
+            except RuntimeError:
+                pass
+        threading.Thread(target=worker, daemon=True, name="xstage-catalog-export").start()
+
+    export_button = ttk.Button(buttons, text="คัดลอกฐานไป Google Drive", command=export_database)
+    export_button.pack(side="left", padx=8)
 
     ttk.Label(frame, text="ตรวจสถานะซิงก์ใน Google Drive for desktop แล้วตรวจฐานบน Karaoke Online · ใช้โฟลเดอร์หลักเดียวกันทั้ง PC และ Web "
               "· SQLite ของ Song Studio Pro ยังแยก · ไม่มีการลบไฟล์เพลงต้นฉบับ",
