@@ -873,6 +873,20 @@ public sealed class DownloadEngine
 
     private static string PartPath(string work, int index) => Path.Combine(work, index.ToString("D2") + ".part");
 
+    // Pure policy, exercised by deterministic network telemetry simulations.
+    public static int NextRangeConcurrency(int current, int count, int ceiling,
+        double previousRate, double rate)
+    {
+        var maximum = Math.Max(1, Math.Min(count, ceiling));
+        current = Math.Clamp(current, 1, maximum);
+        if (!double.IsFinite(rate) || rate <= 0)
+            return Math.Max(1, current / 2);
+        if (double.IsFinite(previousRate) && previousRate > 0 &&
+            rate < previousRate * 0.75)
+            return Math.Max(1, current / 2);
+        return Math.Min(maximum, current * 2);
+    }
+
     private async Task ParallelDownloadAsync(DownloadJob job, string work, CancellationToken ct)
     {
         // Never re-partition an existing resumable transfer. Throughput-driven
@@ -967,10 +981,7 @@ public sealed class DownloadEngine
                 var rate = Math.Max(0, bytes - previousBytes) * 1000d / (now - previousTick);
                 var ceiling = AdaptiveSegmentPlanner.RecommendWithLimits(job.Parts,
                     job.TotalBytes, rate, false, GlobalLimitKib, job.FileSpeedLimitKib);
-                if (previousRate > 0 && rate < previousRate * 0.75)
-                    target = Math.Max(1, target / 2);
-                else if (rate > 0)
-                    target = Math.Min(Math.Min(count, ceiling), target * 2);
+                target = NextRangeConcurrency(target, count, ceiling, previousRate, rate);
                 previousRate = rate;
                 previousBytes = bytes;
                 previousTick = now;
