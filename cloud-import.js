@@ -578,26 +578,46 @@ async function acquireCatalogLease(drive,cacheRoot,check,status){
     token:id,createdAt:new Date().toISOString()});
   const hash=await core.hashBlob(blob,check);
   const mine=await drive.upload(cacheRoot,blob,name,'application/json',hash);
+  const leaseMs=5*60*1000;
   let released=false,lastRenew=Date.now();
+  const assertFresh=()=>{
+    if(released||Date.now()-lastRenew>=leaseMs)
+      fail('หมดอายุสิทธิ์เผยแพร่ฐาน · ต้องเริ่มตรวจฐานใหม่');
+  };
   const listLocks=async()=>{
     check();
     const found=await drive.list("'"+driveId(cacheRoot)+"' in parents and trashed=false");
     const now=Date.now();
     return found.filter(x=>x.name?.startsWith('.xstage-import-lock-')&&
       (!x.createdTime||!Number.isFinite(Date.parse(x.modifiedTime||x.createdTime))||
-       now-Date.parse(x.modifiedTime||x.createdTime)<5*60*1000)).sort((a,b)=>{
+       now-Date.parse(x.modifiedTime||x.createdTime)<leaseMs)).sort((a,b)=>{
         const byTime=String(a.createdTime||'').localeCompare(String(b.createdTime||''));
         return byTime||String(a.id).localeCompare(String(b.id));
       });
   };
+  const assertNoPc=locks=>{
+    // Drive Desktop has no cloud CAS and may not yet see our browser lock.
+    // Do not elect a browser ahead of any visible live PC writer.
+    if(locks.some(x=>/^\.xstage-import-lock-pc-/i.test(x.name||'')))
+      fail('Karaoke PC กำลังเผยแพร่ฐานเพลง · กรุณารอให้ Google Drive ซิงก์ก่อน');
+  };
   const assertOwner=async()=>{
-    const first=(await listLocks())[0];
-    if(released||!first||first.id!==mine.id)
+    assertFresh();
+    const locks=await listLocks();
+    assertFresh();
+    assertNoPc(locks);
+    if(!locks[0]||locks[0].id!==mine.id)
       fail('อีกเครื่องกำลังเผยแพร่ฐานเพลง · จะตรวจฐานล่าสุดก่อนทำต่อ');
     if(drive.renewCatalogLease&&Date.now()-lastRenew>=60000){
+      const started=Date.now();
       await drive.renewCatalogLease(mine.id);
-      lastRenew=Date.now();
-      if((await listLocks())[0]?.id!==mine.id)
+      // Never revive a lease that expired while the network call was stalled.
+      assertFresh();
+      lastRenew=started;
+      const renewed=await listLocks();
+      assertFresh();
+      assertNoPc(renewed);
+      if(renewed[0]?.id!==mine.id)
         fail('สิทธิ์เผยแพร่ฐานเปลี่ยนระหว่างต่ออายุ');
     }
   };
@@ -612,7 +632,11 @@ async function acquireCatalogLease(drive,cacheRoot,check,status){
     await sleep(650);
     for(let attempt=0;attempt<120;attempt++){
       check();
-      if((await listLocks())[0]?.id===mine.id)
+      assertFresh();
+      const locks=await listLocks();
+      assertFresh();
+      assertNoPc(locks);
+      if(locks[0]?.id===mine.id)
         return {assertOwner,release};
       status?.('อีกเครื่องกำลังอัปเดต songs.sqlite3 · รอคิวเผยแพร่');
       await sleep(1000);
@@ -660,6 +684,7 @@ async function recoverInterruptedCatalog({drive,rootId,dbRoot,cacheRoot,check,st
     if(data.kind!=='snapshot'||!data.generation)fail('ฐานสำรองไม่สมบูรณ์');
     await lease.assertOwner();
     if((await listActive()).length)return false;
+    await lease.assertOwner();
     await drive.moveToFolder(old[0].id,intent.backupRoot,dbRoot,'songs.sqlite3');
     const active=await listActive();
     if(active.length!==1||active[0].id!==intent.oldId)fail('กู้คืนฐานยังยืนยันไม่ได้');
@@ -747,12 +772,15 @@ async function publishSingleCatalog({drive,rootId,pointer,rows,check,status,expl
     if(older.length){
       check();
       status?.('สำรองฐานก่อนหน้า 1/1');
+      await lease.assertOwner();
+      await verifySource();
       await drive.moveToFolder(older[0].id,dbRoot,backupRoot,
         'songs-backup-'+generation+'.sqlite3');
     }
     await lease.assertOwner();
     if((await listActive()).length)
       fail('อีกอุปกรณ์เผยแพร่ฐานเพลงระหว่างสลับไฟล์ · ไม่เขียนทับ');
+    await lease.assertOwner();
     await drive.moveToFolder(staged.id,cacheRoot,dbRoot,'songs.sqlite3');
     const active=(await drive.list("'"+driveId(dbRoot)+"' in parents and trashed=false")).filter(x=>
       /\.sqlite3$/i.test(x.name)&&x.mimeType!==MIME_FOLDER);

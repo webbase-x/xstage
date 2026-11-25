@@ -217,6 +217,23 @@ await lease.assertOwner();
 await lease.release();
 assert.equal(releasedLockId,'lock-file-001');
 assert.equal(leases.size,0,'Writer lease must not linger after publication');
+// PC lock takes precedence even if the browser lock is older. The browser
+// must never trash a foreign lock when its own publication is denied.
+const pcId='pcLock123';
+leases.set(pcId,{id:pcId,name:'.xstage-import-lock-pc-'+ 'a'.repeat(24)+'.json',
+  createdTime:new Date(Date.now()+1000).toISOString()});
+await assert.rejects(ctx.XStageCloudImport.acquireCatalogLease(fakeLeasingDrive,
+  'cacheFolder123',()=>{},()=>{}),/Karaoke PC/);
+assert.equal(leases.size,1);assert.ok(leases.has(pcId));
+leases.clear();
+const interruptedLease=await ctx.XStageCloudImport.acquireCatalogLease(fakeLeasingDrive,
+  'cacheFolder123',()=>{},()=>{});
+leases.set(pcId,{id:pcId,name:'.xstage-import-lock-pc-'+ 'a'.repeat(24)+'.json',
+  createdTime:new Date().toISOString()});
+await assert.rejects(interruptedLease.assertOwner(),/Karaoke PC/);
+await interruptedLease.release();
+assert.ok(leases.has(pcId));leases.clear();
+console.log('PASS: visible PC writer blocks Online acquisition and revokes active browser lease without deleting foreign lock');
 const uploaded=new Map(),children=new Map(),sessions=new Map();
 let serial=0,sessionNumber=0,putRequests=0,multipartUploads=0;
 const id=()=>('item'+String(++serial).padStart(7,'0'));

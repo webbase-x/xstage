@@ -163,6 +163,48 @@ class SharedPcBuilderTests(unittest.TestCase):
         self.assertEqual(drive.read_bytes(),b"foreign revision")
         self.assertTrue(local.is_file())
 
+    def test_second_pc_process_cannot_lock_master(self):
+        import subprocess
+        import sys
+        from karaoke.shared_catalog_builder import _local_master_lock
+        local=Path(self.tmp.name)/"App/DB/songs.sqlite3"
+        code=("import sys; from karaoke.shared_catalog_builder import _local_master_lock; "
+              "from pathlib import Path; "
+              "lock=_local_master_lock(Path(sys.argv[1])); lock.__enter__(); lock.__exit__(None,None,None)")
+        with _local_master_lock(local):
+            blocked=subprocess.run([sys.executable,"-c",code,str(local)],capture_output=True)
+            self.assertNotEqual(blocked.returncode,0)
+            self.assertIn("Karaoke PC",blocked.stderr.decode("utf-8",errors="replace"))
+        allowed=subprocess.run([sys.executable,"-c",code,str(local)],capture_output=True)
+        self.assertEqual(allowed.returncode,0,allowed.stderr)
+
+    def test_pc_copy_refuses_visible_online_lock_and_keeps_its_file(self):
+        local=Path(self.tmp.name)/"App/DB/songs.sqlite3"
+        drive=self.root/"DB/songs.sqlite3"
+        build(self.root)
+        before=drive.read_bytes()
+        other=self.root/"CACHE"/(".xstage-import-lock-"+"a"*24+".json")
+        other.write_text("foreign writer",encoding="utf-8")
+        result=build(self.root,local_database=local)
+        self.assertTrue(result["local_committed"])
+        self.assertFalse(result["drive_copied"])
+        self.assertEqual(drive.read_bytes(),before)
+        self.assertEqual(other.read_text(encoding="utf-8"),"foreign writer")
+        self.assertEqual(list(other.parent.glob(".xstage-import-lock-*")),[other])
+
+    def test_pc_copy_refuses_duplicate_database(self):
+        local=Path(self.tmp.name)/"App/DB/songs.sqlite3"
+        drive=self.root/"DB/songs.sqlite3"
+        build(self.root)
+        other=drive.with_name("songs (1).sqlite3")
+        other.write_bytes(drive.read_bytes())
+        before=drive.read_bytes()
+        result=build(self.root,local_database=local)
+        self.assertTrue(result["local_committed"])
+        self.assertFalse(result["drive_copied"])
+        self.assertEqual(drive.read_bytes(),before)
+        self.assertEqual(other.read_bytes(),before)
+
     def test_pc_candidate_never_replaces_active_catalog(self):
         old=self.root/"DB/songs.sqlite3"
         old.write_bytes(b"existing canonical")
