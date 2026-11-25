@@ -193,7 +193,11 @@ public sealed class TransferRateGate
             // reservations: a settings save during active downloads could
             // otherwise grant the entire bandwidth budget a second time.
             if (_limitKib == limitKib) return;
-            _nextDueMs = Environment.TickCount64;
+            // Internal pool resizing preserves existing reserved service time.
+            // Never grant that queued bandwidth again at a reservation transition.
+            var now = Environment.TickCount64;
+            _nextDueMs = sharedAllocation && _limitKib > 0 && limitKib > 0
+                ? Math.Max(now, _nextDueMs) : now;
             _configurationVersion++;
             Volatile.Write(ref _limitKib, limitKib);
         }

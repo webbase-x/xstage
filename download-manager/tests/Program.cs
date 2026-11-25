@@ -19,7 +19,9 @@ if (args.Length == 2 && args[0] == "--mixed-bandwidth")
         using var mixedServer = new FileServer(payload);
         var engine = new DownloadEngine(Path.Combine(root, "state"));
         const int cap = 256;
-        engine.ConfigurePerformance(1, 1, DownloadEngine.NativePoolBudgetKib(cap, 2, 1));
+        engine.ConfigurePerformance(2, 2, cap);
+        if (engine.CurrentNativeBudgetKib != cap)
+            throw new Exception("Native pool must initially receive the entire budget.");
         var info = new System.Diagnostics.ProcessStartInfo(Path.GetFullPath(args[1]))
         { UseShellExecute = false, CreateNoWindow = true };
         var output = Path.Combine(root, "external.bin");
@@ -28,15 +30,27 @@ if (args.Length == 2 && args[0] == "--mixed-bandwidth")
             "-N", "1", "-o", output, mixedServer.Url + "plain/external.bin" })
             info.ArgumentList.Add(arg);
         var timer = System.Diagnostics.Stopwatch.StartNew();
-        using var process = System.Diagnostics.Process.Start(info) ??
-            throw new Exception("Cannot start bundled yt-dlp");
-        try
+        var native = engine.Add(mixedServer.Url + "range/native.bin", root, 8);
+        await WaitFor(() => Interlocked.Read(ref native.DownloadedBytes) >= 32768);
+        await engine.RunWithMediaReservationAsync("mixed-smoke", async share =>
         {
-            var native = engine.Add(mixedServer.Url + "range/native.bin", root, 8);
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
-            await process.WaitForExitAsync(timeout.Token);
-            await WaitFor(() => native.Status is "Completed" or "Failed", 90000);
-            if (process.ExitCode != 0 || native.Status != "Completed")
+            if (share != cap / 2 || engine.CurrentNativeBudgetKib != cap / 2)
+                throw new Exception("Native budget did not shrink before media launch.");
+            using var process = System.Diagnostics.Process.Start(info) ??
+                throw new Exception("Cannot start bundled yt-dlp");
+            try
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+                await process.WaitForExitAsync(timeout.Token);
+                if (process.ExitCode != 0) throw new Exception("yt-dlp failed.");
+            }
+            finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+        });
+        if (engine.CurrentNativeBudgetKib != cap)
+            throw new Exception("Native budget was not restored after media exit.");
+        await WaitFor(() => native.Status is "Completed" or "Failed", 90000);
+        {
+            if (native.Status != "Completed")
                 throw new Exception("Mixed transfer failed: " + native.Error);
             foreach (var file in new[] { output, native.CompletedPath })
                 if (!SHA256.HashData(await File.ReadAllBytesAsync(file)).SequenceEqual(hash))
@@ -45,7 +59,16 @@ if (args.Length == 2 && args[0] == "--mixed-bandwidth")
             if (rate > cap * 1.20) throw new Exception($"Mixed aggregate rate exceeded cap: {rate:F1} KiB/s");
             Console.WriteLine($"PASS: actual yt-dlp + native HTTP aggregate {rate:F1} KiB/s, SHA-256 verified");
         }
-        finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+        // Failure/cancellation must release the exact same production reservation.
+        try
+        {
+            await engine.RunWithMediaReservationAsync("cancel-smoke", _ =>
+                Task.FromCanceled(new CancellationToken(true)));
+            throw new Exception("Expected cancellation.");
+        }
+        catch (OperationCanceledException) { }
+        if (engine.CurrentNativeBudgetKib != cap)
+            throw new Exception("Cancelled media reservation leaked.");
     }
     finally { try { Directory.Delete(root, true); } catch { } }
     return;

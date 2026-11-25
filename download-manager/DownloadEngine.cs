@@ -19,6 +19,7 @@ public sealed class DownloadEngine
     private readonly TransferSlotQueue _slots = new();
     private readonly TransferRateGate _globalSpeed = new();
     private readonly TransferRateGate _nativePool = new();
+    private readonly object _bandwidthLock = new();
     private readonly ConcurrentDictionary<string, byte> _mediaReservations = new();
     private readonly ConcurrentDictionary<string, TransferRateGate> _fileSpeed = new();
     private readonly ConcurrentDictionary<string, byte> _active = new();
@@ -311,10 +312,41 @@ public sealed class DownloadEngine
         // Reserve a fixed share for every possible external process slot.
         // Native jobs share the remaining pool, including unused native shares.
         // External processes reserve their share before launch.
-        var media = _mediaReservations.Count;
-        var budget = NativePoolBudgetKib(GlobalLimitKib, MaxConcurrentJobs, media);
-        _nativePool.Configure(budget, sharedAllocation: true);
-        return TransferRateLimiter.WaitAsync(_nativePool, fileGate, bytes, ct);
+        lock (_bandwidthLock)
+        {
+            RefreshNativeBudget();
+            return TransferRateLimiter.WaitAsync(_nativePool, fileGate, bytes, ct);
+        }
+    }
+
+    private void RefreshNativeBudget() =>
+        _nativePool.Configure(NativePoolBudgetKib(GlobalLimitKib, MaxConcurrentJobs,
+            _mediaReservations.Count), sharedAllocation: true);
+
+    internal int CurrentNativeBudgetKib
+    {
+        get { lock (_bandwidthLock) { RefreshNativeBudget(); return _nativePool.LimitKibPerSecond; } }
+    }
+
+    internal async Task RunWithMediaReservationAsync(string id, Func<int, Task> run)
+    {
+        int share;
+        lock (_bandwidthLock)
+        {
+            if (!_mediaReservations.TryAdd(id, 0))
+                throw new InvalidOperationException("Duplicate media reservation.");
+            share = SharedJobBudgetKib(GlobalLimitKib, MaxConcurrentJobs);
+            RefreshNativeBudget();
+        }
+        try { await run(share); }
+        finally
+        {
+            lock (_bandwidthLock)
+            {
+                _mediaReservations.TryRemove(id, out _);
+                RefreshNativeBudget();
+            }
+        }
     }
 
     private static int ReadBufferSize(DownloadJob job, int globalLimitKib) =>
@@ -779,15 +811,9 @@ public sealed class DownloadEngine
         Directory.CreateDirectory(job.Folder);
         if (SocialVideoDownloader.IsVideoUrl(job.Url))
         {
-            _mediaReservations.TryAdd(job.Id, 0);
-            _nativePool.Configure(NativePoolBudgetKib(GlobalLimitKib, MaxConcurrentJobs,
-                _mediaReservations.Count), sharedAllocation: true);
-            try
-            {
-                await SocialVideoDownloader.DownloadAsync(job, WorkDir(job), ct,
-                    SharedJobBudgetKib(GlobalLimitKib, MaxConcurrentJobs), sharedAllocation: true);
-            }
-            finally { _mediaReservations.TryRemove(job.Id, out _); }
+            await RunWithMediaReservationAsync(job.Id, share =>
+                SocialVideoDownloader.DownloadAsync(job, WorkDir(job), ct,
+                    share, sharedAllocation: true));
             return;
         }
         var probe = await ProbeAsync(job, ct);
