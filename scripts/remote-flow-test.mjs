@@ -99,3 +99,45 @@ assert.ok(player.includes('publishPlaybackStatus(\'loading\'')&&player.includes(
 assert.ok(source.includes("type:'playback-status'")&&remote.includes("data.type==='playback-status'"),
   'mobile remote must receive actual TV playback feedback');
 console.log('X-Stage mobile remote request contract: 9 behavioral cases and real playback feedback passed');
+
+ 
+// Exercise real reconnect functions with a simulated phone, PeerJS and clock.
+const segment=(start,end)=>{const a=remote.indexOf(start),b=remote.indexOf(end,a);assert.ok(a>=0&&b>a);return remote.slice(a,b);};
+const lifecycle=segment('  function scheduleReconnect(){','  function report(')
+  +segment('  function closeTransport(){','  function drawResults(')
+  +segment('  function connect(){','  reconnectButton.addEventListener')
+  +segment('  function recoverConnection(){',"  window.addEventListener('online'");
+function connectionHarness(){
+  const callbacks=[],sent=[],timers=new Map();let seq=0,created=0,destroyed=0;
+  class Emitter{constructor(){this.handlers={};}on(k,fn){this.handlers[k]=fn;}emit(k,v){this.handlers[k]?.(v);}}
+  class Peer extends Emitter{constructor(){super();created++;}connect(){this.channel=new Emitter();this.channel.open=true;this.channel.send=x=>sent.push(x);this.channel.close=()=>{this.channel.open=false;this.channel.emit('close');};return this.channel;}destroy(){destroyed++;this.emit('error',{});}reconnect(){}}
+  const doc={hidden:false},nav={onLine:true};
+  const factory=new Function('Peer','document','navigator','setTimeout','clearTimeout','sent',lifecycle+`
+    let peer=null,conn=null,connected=false,ready=false,connecting=false,connectWatchdog=0,lastReceived=0;
+    let reconnectTimer=0,reconnectAttempts=0,ownerAuthRequest=0,ownerLoginBusy=false,ownerAutoAttempted=false;
+    const hostId='host',secret='key',controls={},reconnectButton={},scanLink={};
+    const validPair=()=>true,report=()=>{},setRole=()=>{},discardOwnerToken=()=>{},resetButtons=()=>{};
+    function clearConnectWatchdog(){clearTimeout(connectWatchdog);connectWatchdog=0;}
+    function armConnectWatchdog(){clearConnectWatchdog();connectWatchdog=setTimeout(()=>disconnected('timeout'),30000);}
+    function handleMessage(msg){if(msg.type==='ready'){clearConnectWatchdog();connected=true;connecting=false;reconnectAttempts=0;}if(msg.type==='status')ready=msg.ready;}
+    function send(msg){if(connected&&conn?.open)conn.send(msg);}
+    return {connect,recoverConnection,disconnected,peer:()=>peer,channel:()=>conn,flags:()=>({connected,connecting,ready})};
+  `);
+  const h=factory(Peer,doc,nav,(fn)=>{timers.set(++seq,fn);return seq;},id=>timers.delete(id),sent);
+  return {h,doc,nav,sent,timers,created:()=>created,destroyed:()=>destroyed};
+}
+{
+ const x=connectionHarness();x.h.connect();const first=x.h.peer();x.h.recoverConnection();assert.equal(x.created(),1,'foreground during handshake must not replace Peer');
+ first.emit('open');x.h.channel().emit('open');assert.equal(x.h.flags().connected,false,'transport open is not authenticated');
+ x.h.channel().emit('data',{type:'ready'});x.h.channel().emit('data',{type:'status',ready:false});
+ x.h.recoverConnection();assert.equal(x.created(),1,'unready library must not break approved pairing');
+ assert.equal(x.sent.at(-1).type,'refresh');
+ const old=x.h.channel();old.emit('close');assert.equal(x.destroyed(),1,'failed peer must be cleaned up');
+ assert.equal(x.h.flags().connected,false);x.h.recoverConnection();assert.equal(x.created(),2);
+ old.emit('close');assert.equal(x.h.flags().connecting,true,'old channel close cannot invalidate new pairing');
+}
+{
+ const x=connectionHarness();x.nav.onLine=false;x.h.connect();assert.equal(x.created(),0,'offline must not open Peer');
+ x.nav.onLine=true;x.h.recoverConnection();assert.equal(x.created(),1);
+}
+console.log('Remote reconnect simulation: handshake, unready library, stale callbacks and offline recovery passed');

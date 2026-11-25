@@ -42,7 +42,7 @@
       window.history.replaceState(null,'',location.pathname+location.search+'#'+savedFragment.toString());
     }
   }
-  let peer=null,conn=null,connected=false,ready=false,connectWatchdog=0;
+  let peer=null,conn=null,connected=false,ready=false,connecting=false,connectWatchdog=0,lastReceived=0;
   let lastNotifiedUpdateBuild=0;
   let searchTimer=null,querySequence=0,activeTab='search',role='guest';
   let ownerAccessToken='';
@@ -76,11 +76,11 @@
   }
   function resetButtons(){for(const id of [...pendingRequests.keys()])releaseRequest(id);}
   function scheduleReconnect(){
-    if(reconnectTimer||!hostId||!secret||document.hidden||navigator.onLine===false||reconnectAttempts>=3)return;
+    if(reconnectTimer||connected||connecting||!validPair(hostId,secret)||document.hidden||navigator.onLine===false||reconnectAttempts>=3)return;
     const wait=[1500,3500,8000][reconnectAttempts++];
     reconnectTimer=setTimeout(()=>{
       reconnectTimer=0;
-      if(!connected&&document.visibilityState!=='hidden')connect();
+      if(!connected&&!connecting&&!document.hidden&&navigator.onLine!==false)connect();
     },wait);
   }
   function report(message,state='info'){status.textContent=message;status.dataset.state=state;}
@@ -131,9 +131,16 @@
   });
   controls.hidden=true;setTab('search');setRole('guest');
 
+  function closeTransport(){
+    const oldChannel=conn,oldPeer=peer;
+    // Invalidate first: close/error callbacks from old transports cannot tear down a new pairing.
+    conn=null;peer=null;connecting=false;connected=false;ready=false;lastReceived=0;
+    try{oldChannel?.close();}catch{}
+    try{oldPeer?.destroy();}catch{}
+  }
   function disconnected(message){
-    clearConnectWatchdog();resetButtons();
-    connected=false;ready=false;controls.hidden=true;setRole('guest');
+    clearConnectWatchdog();resetButtons();closeTransport();
+    controls.hidden=true;setRole('guest');
     ownerAuthRequest++;ownerLoginBusy=false;ownerAutoAttempted=false;discardOwnerToken();
     reconnectButton.hidden=!hostId||!secret;scanLink.hidden=false;report(message,'disconnected');
     scheduleReconnect();
@@ -320,7 +327,7 @@
     if(!data||typeof data!=='object')return;
     if(data.type==='pending'){armConnectWatchdog(45000);report('กำลังรอจอหลักอนุมัติการเชื่อมต่อครั้งแรก…','pending');return;}
     if(data.type==='ready'){
-      clearConnectWatchdog();reconnectAttempts=0;
+      clearConnectWatchdog();reconnectAttempts=0;connecting=false;lastReceived=Date.now();
       connected=true;controls.hidden=false;reconnectButton.hidden=true;scanLink.hidden=true;setRole('guest');
       report('เชื่อมต่อแล้ว · Guest ใช้คำสั่งพื้นฐานได้ทันที','connected');
       if(search.value.trim())search.dispatchEvent(new Event('input'));else drawResults([]);
@@ -538,29 +545,31 @@
   report('กำลังเชื่อมต่อรีโมท X-Stage…','connecting');
 
   function connect(){
+    if(connected||connecting||!validPair(hostId,secret)||navigator.onLine===false)return;
     clearConnectWatchdog();
     if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=0;}
     setRole('guest');
     ownerAuthRequest++;ownerLoginBusy=false;ownerAutoAttempted=false;discardOwnerToken();
-    const previous=peer;
-    if(previous){try{previous.destroy();}catch{}}
-    const current=new Peer();peer=current;conn=null;
+    closeTransport();connecting=true;
+    let current;
+    try{current=new Peer();peer=current;}catch{disconnected('เริ่มระบบรีโมทไม่สำเร็จ');return;}
     armConnectWatchdog(18000);
     current.on('open',()=>{
       if(peer!==current)return;
       report('พบเซิร์ฟเวอร์รีโมท · กำลังจับคู่กับเวที…','connecting');
-      const channel=current.connect(hostId,{reliable:true,serialization:'json'});
+      let channel;
+      try{channel=current.connect(hostId,{reliable:true,serialization:'json'});}catch{disconnected('จับคู่กับเวทีไม่สำเร็จ');return;}
       conn=channel;
       channel.on('open',()=>{
         if(peer!==current||conn!==channel)return;
         // Do not clear the watchdog before receiving the authenticated
         // "ready" message. A WebRTC connection can open but never be approved.
         armConnectWatchdog(30000);
-        connected=true;report('กำลังยืนยัน QR กับจอหลัก…','pending');
-        channel.send({type:'hello',key:secret});
+        report('กำลังยืนยัน QR กับจอหลัก…','pending');
+        try{channel.send({type:'hello',key:secret});}catch{disconnected('ส่งรหัสจับคู่ไม่สำเร็จ');}
       });
       channel.on('data',message=>{
-        if(peer===current&&conn===channel)handleMessage(message);
+        if(peer===current&&conn===channel){lastReceived=Date.now();handleMessage(message);}
       });
       channel.on('close',()=>{
         if(peer===current&&conn===channel)disconnected('การเชื่อมต่อหลุด · กำลังลองเชื่อมต่อใหม่');
@@ -568,6 +577,12 @@
       channel.on('error',()=>{
         if(peer===current&&conn===channel)disconnected('เชื่อมต่อกับเวทีไม่ได้');
       });
+    });
+    current.on('disconnected',()=>{
+      if(peer!==current)return;
+      // Signalling can drop while the encrypted data channel is still healthy.
+      if(connected&&conn?.open){try{current.reconnect();}catch{}return;}
+      disconnected('เซิร์ฟเวอร์จับคู่หลุด · กำลังลองใหม่');
     });
     current.on('error',err=>{
       if(peer===current)disconnected('เครือข่ายไม่พร้อม: '+String(err?.type||'ไม่ทราบสาเหตุ'));
@@ -578,14 +593,27 @@
     try{connect();reconnectButton.hidden=true;report('กำลังเชื่อมต่ออีกครั้ง…','reconnecting');}
     catch{disconnected('เชื่อมต่อไม่สำเร็จ');}
   });
-  window.addEventListener('online',()=>{if(!ready){reconnectAttempts=0;connect();}});
-  document.addEventListener('visibilitychange',()=>{
-    if(!document.hidden&&!ready){reconnectAttempts=0;connect();}
-  });
+  function recoverConnection(){
+    if(document.hidden||navigator.onLine===false)return;
+    if(connected&&conn?.open){lastReceived=Date.now();send({type:'refresh'});return;}
+    if(connected)disconnected('ช่องทางรีโมทปิด · กำลังเชื่อมต่อใหม่');
+    if(connecting)return;
+    reconnectAttempts=0;connect();
+  }
+  window.addEventListener('online',recoverConnection);
+  window.addEventListener('offline',()=>disconnected('อินเทอร์เน็ตขาด · จะเชื่อมต่อใหม่เมื่อออนไลน์'));
+  window.addEventListener('pageshow',recoverConnection);
+  document.addEventListener('visibilitychange',recoverConnection);
+  // Host broadcasts status every 1.2 s. Detect silent WebRTC failures without
+  // disturbing an approved connection just because Drive is not yet ready.
+  const livenessTimer=setInterval(()=>{
+    if(document.hidden||navigator.onLine===false||!connected)return;
+    if(!conn?.open||Date.now()-lastReceived>30000)disconnected('จอหลักไม่ตอบสนอง · กำลังเชื่อมต่อใหม่');
+  },5000);
   try{connect();}catch{disconnected('เริ่มระบบรีโมทไม่สำเร็จ');}
   window.addEventListener('beforeunload',()=>{
     clearConnectWatchdog();resetButtons();
     if(reconnectTimer)clearTimeout(reconnectTimer);
-    discardOwnerToken();try{conn?.close();peer?.destroy();}catch{}
+    clearInterval(livenessTimer);discardOwnerToken();closeTransport();
   });
 })();
