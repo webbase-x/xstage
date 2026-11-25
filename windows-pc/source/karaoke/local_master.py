@@ -85,7 +85,17 @@ def activate(home, data, settings, *, installed=False):
     """Call before opening any song reader. Legacy database and archives survive."""
     home, data = Path(home), Path(data)
     pending = settings.get("pending_online_master")
+    pending_shared = settings.get("pending_shared_drive")
     pc_only = settings.get("pending_pc_only") is True
+    if pending_shared and not pc_only:
+        from .shared_song_library import validate_shared
+        root = validate_shared(pending_shared["root"])
+        # Activate the exact synced canonical file, not a stale local copy.
+        settings.update(library_mode="google-drive", shared_drive_root=str(root))
+        settings.pop("shared_local_master", None)
+        settings.pop("pending_shared_drive", None)
+        settings.pop("pending_online_master", None)
+        return master_path(home, data, installed=installed)
     local = home / "DB" / "songs.sqlite3"
     if pending or pc_only or settings.get("shared_local_master") or settings.get("catalog_local_master"):
         target = local

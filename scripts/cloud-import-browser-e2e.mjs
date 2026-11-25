@@ -125,6 +125,9 @@ async function routeDrive(route){
       item.trashed=true;
       return send(200,{id:itemId,trashed:true});
     }
+    if(metadata.modifiedTime&&!url.searchParams.has('removeParents')){
+      item.modifiedTime=metadata.modifiedTime;return send(200,item);
+    }
     const from=url.searchParams.get('removeParents');
     const to=url.searchParams.get('addParents');
     assert.ok(from&&to&&from!==to,'Move must specify source and target folder');

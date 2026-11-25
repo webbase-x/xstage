@@ -149,7 +149,7 @@ class KaraokeApp(tk.Tk):
             self.settings.update(font_size=max(84, min(120, size)), lyric_layout_version=1)
         import sys
         from .local_master import activate
-        pending_mode = bool(self.settings.get("pending_online_master") or self.settings.get("pending_pc_only"))
+        pending_mode = bool(self.settings.get("pending_online_master") or self.settings.get("pending_pc_only") or self.settings.get("pending_shared_drive"))
         local_catalog = activate(self.home, self.data_dir, self.settings,
                                  installed=bool(getattr(sys, "frozen", False)))
         if pending_mode:

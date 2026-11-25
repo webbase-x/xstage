@@ -668,3 +668,27 @@ console.log('PASS: WEB upload DOM, visible Start, selection/review/resume, Drive
 }
 
 assert.throws(()=>sameMidiBytes(new Map([['a',{midiSize:8,midiSha256:'a'.repeat(64)}]]),'a',8,'b'.repeat(64)),/SHA-256 ต่างกัน/);
+
+// Recovery after a process dies between the two Drive moves, using only a
+// checksum-pinned intent and its original backup, never a random file.
+{
+ const oldBytes=new TextEncoder().encode(JSON.stringify({kind:'snapshot',generation:'old',songs:[]}));
+ const md5=bytes=>createHash('md5').update(bytes).digest('hex');
+ const root='rootFolder123',db='dbFolder123',cache='cacheFolder123',backup='backupFolder123',generation='a'.repeat(24);
+ const intent={format:'xstage-catalog-intent-v1',rootId:root,dbRoot:db,cacheRoot:cache,backupRoot:backup,generation,oldId:'oldFile123',oldMd5:md5(oldBytes)};
+ const intentBytes=new TextEncoder().encode(JSON.stringify(intent));
+ const entries=new Map([
+ ['backupFolder123',{id:backup,name:'BACKUP',parent:root,mimeType:'application/vnd.google-apps.folder'}],
+ ['oldFile123',{id:'oldFile123',parent:backup,name:'songs-backup-'+generation+'.sqlite3',md5Checksum:md5(oldBytes),bytes:oldBytes,size:oldBytes.length}],
+ ['intentFile123',{id:'intentFile123',parent:cache,name:'.xstage-catalog-intent-'+generation+'.json',md5Checksum:md5(intentBytes),size:intentBytes.length,bytes:intentBytes}]]);
+ const mock={list:async q=>[...entries.values()].filter(x=>q.includes("'"+x.parent+"' in parents")&&(!q.includes("name='songs.sqlite3'")||x.name==='songs.sqlite3')),
+ getSqlite:async id=>entries.get(id).bytes,
+ upload:async(parent,blob,name,_mime,digest)=>{const id='leaseFile123';entries.set(id,{id,parent,name,md5Checksum:digest,createdTime:new Date().toISOString()});return {id}},
+ trashFile:async id=>entries.delete(id),moveToFolder:async(id,from,to,name)=>{const x=entries.get(id);assert.equal(x.parent,from);Object.assign(x,{parent:to,name})}};
+ const args={drive:mock,rootId:root,dbRoot:db,cacheRoot:cache,check:()=>{}};
+ assert.equal(await ctx.XStageCloudImport.recoverInterruptedCatalog(args),true);
+ assert.equal(entries.get('oldFile123').parent,db);assert.equal(entries.get('oldFile123').name,'songs.sqlite3');
+ assert.equal(entries.has('intentFile123'),false);
+ assert.equal(await ctx.XStageCloudImport.recoverInterruptedCatalog(args),false);
+ console.log('PASS: crash recovery restores checksum-pinned original snapshot and never replaces an active catalog');
+}

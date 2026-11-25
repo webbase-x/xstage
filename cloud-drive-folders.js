@@ -566,6 +566,9 @@ function createWorkflow(options={}){
           fail('ไม่พบ XMID/XSK ที่อ่านได้ในโฟลเดอร์นี้ · ยังไม่ได้แก้ไข DB');
         let reconciled=0;
         if(!fresh&&options.hasFullRead?.()){
+          // A missing checksum is not proof of deletion or modification.
+          if(listing.files.some(file=>!packageSignature(file)))
+            fail('รายการ Cloud ยังไม่มี MD5/ขนาดครบ · ไม่แก้รายการเดิม');
           const byId=new Map(listing.files.map(file=>[file.id,file]));
           const byPath=packagePathIndex(listing.files);
           for(const [id,row] of rows){
@@ -683,6 +686,8 @@ function createWorkflow(options={}){
             const item=result.value;
             const old=hashes.get(item.midiHash);
             if(old){
+              if(old.midiSha256&&item.midiSha256&&old.midiSha256!==item.midiSha256)
+                fail('MD5 MIDI ตรงกันแต่ SHA-256 ต่างกัน · ต้องตรวจไฟล์ต้นฉบับ');
               if(Number(old.midiSize||old.midi?.size||0)>0&&
                  Number(old.midiSize||old.midi?.size)!==item.midiSize)
                 fail('พบ MD5 MIDI ตรงกันแต่ขนาดข้อมูลต่างกัน');
