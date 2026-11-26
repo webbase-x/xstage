@@ -11,6 +11,9 @@ import json
 import sqlite3
 import os
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 from contextlib import closing
 from pathlib import Path
 
@@ -22,6 +25,45 @@ from .legacy import catalog_location
 from .library import SearchCancelled, canonical, normalize
 from .managed_import import catalog_hints, stopped
 from .fast_catalog import CACHE_REV, CatalogBuildResult, _cache_path, _make_cache, _stage
+
+
+# Bounded I/O parallelism; SQLite and metadata merges remain on one thread.
+_READ_WORKERS = 8
+_READ_BATCH = 32
+_worker = threading.local()
+
+
+def _read_quick(item, cancelled):
+    path, old_id, state, cached_stamp, reader, resume_stamp, resume_data = item
+    stopped(cancelled)
+    try:
+        if state in ('deleted','moved','recycled','excluded'):
+            return ('protected', None, None, None, False)
+        inspector = getattr(_worker, 'inspector', None)
+        if inspector is None:
+            inspector = _worker.inspector = Inspector()
+        if Path(path).is_symlink() or getattr(Path(path), 'is_junction', lambda: False)():
+            raise ValueError('ไม่รองรับลิงก์ไฟล์เพลง')
+        stamp, sizes = signature(path, inspector)
+        if (old_id is not None and state != 'missing' and cached_stamp == stamp
+                and reader == CACHE_REV and trusted_stamp(stamp)):
+            return ('unchanged', stamp, sizes, None, False)
+        if resume_stamp == stamp and resume_data and trusted_stamp(stamp):
+            try:
+                record = json.loads(resume_data)
+                if isinstance(record, dict) and record.get('path') == path:
+                    return ('read', stamp, sizes, record, True)
+            except (TypeError, ValueError):
+                pass
+        record, _ = inspector.inspect(path)
+        if signature(path, inspector)[0] != stamp:
+            raise ValueError('ไฟล์เปลี่ยนขณะอ่านข้อมูลเพลง')
+        record['_rich'] = sorted(record.get('_rich', ()))
+        return ('read', stamp, sizes, record, False)
+    except SearchCancelled:
+        raise
+    except (OSError, ValueError, EOFError, sqlite3.Error) as error:
+        return ('failed', None, None, str(error), False)
 
 
 def pending_count(library):
@@ -111,6 +153,7 @@ def _quick_cache(cache, plan):
             cache.execute('''INSERT INTO pending(path,stamp,size_key)
                 SELECT path,stamp,size_key FROM quick_plan.staged WHERE 1
                 ON CONFLICT(path) DO UPDATE SET stamp=excluded.stamp,size_key=excluded.size_key''')
+            cache.execute('DELETE FROM quick_resume WHERE path IN (SELECT path FROM quick_plan.staged)')
         return plan.db.execute('SELECT count(*) FROM staged').fetchone()[0]
     finally:
         cache.execute('DETACH DATABASE quick_plan')
@@ -146,6 +189,11 @@ def build_quick_catalog(library, source, songs_root, *, copy_external=False,
         version = db.execute('PRAGMA main.data_version').fetchone()[0]
         cache = _make_cache(_cache_path(library))
         try:
+            cache.execute('''CREATE TABLE IF NOT EXISTS quick_resume (
+                path TEXT PRIMARY KEY, stamp TEXT NOT NULL, reader TEXT NOT NULL, data TEXT NOT NULL)''')
+            cache.commit()
+            metrics['resume_hits'] = 0
+            metrics['read_workers'] = _READ_WORKERS
             emit(dict(type='phase', phase='ระยะที่ 1/2 — สำรวจชื่อไฟล์เพลง', total=None))
             plan.folder(scan_root, cancelled=cancelled, events=emit)
             if base:
@@ -165,43 +213,66 @@ def build_quick_catalog(library, source, songs_root, *, copy_external=False,
             plan.db.commit()
             plan.db.execute('ATTACH DATABASE ? AS catalog_existing', (str(library.path),))
             plan.db.execute('ATTACH DATABASE ? AS checked_existing', (str(_cache_path(library)),))
-            inspector = Inspector()
-            emit(dict(type='phase', phase='ระยะที่ 1/2 — ตรวจเฉพาะข้อมูลใหม่และเปลี่ยน', total=plan.count()))
+            emit(dict(type='phase', phase='ระยะที่ 1/2 — ตรวจเฉพาะข้อมูลใหม่และเปลี่ยน (อ่านพร้อมกัน)', total=plan.count()))
             checked = 0
             try:
-                sql = '''SELECT f.path,s.id,s.duplicate_state,c.stamp,c.reader
+                sql = '''SELECT f.path,s.id,s.duplicate_state,c.stamp,c.reader,r.stamp,r.data
                     FROM files f LEFT JOIN catalog_existing.songs s ON s.path=f.path
-                    LEFT JOIN checked_existing.checked c ON c.path=f.path ORDER BY f.path'''
-                for path, old_id, state, cached_stamp, reader in plan.db.execute(sql):
-                    stopped(cancelled)
-                    if not Path(path).is_relative_to(scan_root):
-                        continue  # Ignore out-of-root paths from legacy catalog hints.
-                    checked += 1
-                    try:
-                        if Path(path).is_symlink() or getattr(Path(path), 'is_junction', lambda: False)():
-                            raise ValueError('ไม่รองรับลิงก์ไฟล์เพลง')
-                        stamp, sizes = signature(path, inspector)
-                        if old_id is not None and state not in ('missing','deleted','moved','recycled','excluded') and (
-                                cached_stamp == stamp and reader == CACHE_REV and trusted_stamp(stamp)):
-                            metrics['unchanged'] += 1
+                    LEFT JOIN checked_existing.checked c ON c.path=f.path
+                    LEFT JOIN checked_existing.quick_resume r ON r.path=f.path AND r.reader=?
+                    ORDER BY f.path'''
+                cursor = plan.db.execute(sql, (CACHE_REV,))
+                last_emit = time.monotonic()
+                with ThreadPoolExecutor(max_workers=_READ_WORKERS, thread_name_prefix='xstage-catalog') as pool:
+                    while True:
+                        stopped(cancelled)
+                        batch = cursor.fetchmany(_READ_BATCH)
+                        if not batch:
+                            break
+                        batch = [item for item in batch if Path(item[0]).is_relative_to(scan_root)]
+                        if not batch:
                             continue
-                        if state in ('deleted','moved','recycled','excluded'):
-                            continue  # Do not resurrect protected tombstones.
-                        old = db.execute('SELECT * FROM songs WHERE path=?', (path,)).fetchone()
-                        record = _inspect(inspector, plan, path, old)
-                        if signature(path, inspector)[0] != stamp:
-                            raise ValueError('ไฟล์เปลี่ยนขณะอ่านข้อมูลเพลง')
-                        _stage(plan, path, old, stamp, sizes, None, record, managed, verify=1)
-                        metrics['updated' if old else 'added'] += 1
-                    except SearchCancelled:
-                        raise
-                    except (OSError, ValueError, EOFError, sqlite3.Error) as error:
-                        metrics['failed'] += 1
-                        if len(metrics['warnings']) < 30:
-                            metrics['warnings'].append(f'{path}: {error}')
-                    if checked % 512 == 0 or checked == plan.count():
-                        emit(dict(type='progress', done=checked, total=plan.count(), path=path,
-                                  added=metrics['added'], updated=metrics['updated']))
+                        checkpoint = []
+                        for item, result in zip(batch, pool.map(lambda item: _read_quick(item, cancelled), batch)):
+                            stopped(cancelled)
+                            path = item[0]
+                            checked += 1
+                            status, stamp, sizes, raw, reused = result
+                            if status == 'unchanged':
+                                metrics['unchanged'] += 1
+                            elif status == 'failed':
+                                metrics['failed'] += 1
+                                if len(metrics['warnings']) < 30:
+                                    metrics['warnings'].append(f'{path}: {raw}')
+                            elif status == 'read':
+                                try:
+                                    old = db.execute('SELECT * FROM songs WHERE path=?', (path,)).fetchone()
+                                    # Apply current hints/user edits on the SQLite owner thread.
+                                    record = _inspect(SimpleNamespace(inspect=lambda _: (dict(raw), [])), plan, path, old)
+                                    _stage(plan, path, old, stamp, sizes, None, record, managed, verify=1)
+                                    metrics['updated' if old else 'added'] += 1
+                                    if reused:
+                                        metrics['resume_hits'] += 1
+                                    elif trusted_stamp(stamp):
+                                        checkpoint.append((path, stamp, CACHE_REV, json.dumps(raw, ensure_ascii=False)))
+                                except (OSError, ValueError, EOFError, sqlite3.Error) as error:
+                                    metrics['failed'] += 1
+                                    if len(metrics['warnings']) < 30:
+                                        metrics['warnings'].append(f'{path}: {error}')
+                        # Save validated metadata in small transactions. Cancellation never
+                        # publishes an incomplete catalog; a restart can reuse these rows.
+                        if checkpoint:
+                            try:
+                                with cache:
+                                    cache.executemany('INSERT OR REPLACE INTO quick_resume VALUES (?,?,?,?)', checkpoint)
+                            except sqlite3.Error as error:
+                                if len(metrics['warnings']) < 30:
+                                    metrics['warnings'].append('บันทึกจุดทำต่อไม่สำเร็จ: ' + str(error))
+                        if time.monotonic() - last_emit >= .5 or checked == plan.count():
+                            emit(dict(type='progress', done=checked, total=plan.count(), path=batch[-1][0],
+                                      added=metrics['added'], updated=metrics['updated'],
+                                      resume_hits=metrics['resume_hits'], read_workers=_READ_WORKERS))
+                            last_emit = time.monotonic()
                 # This JOIN only materializes old paths absent from selected inventory;
                 # outside folders/drives are neither checked nor modified.
                 sql_missing = '''SELECT s.id,s.path,s.duplicate_state,s.playable,s.duplicate_of

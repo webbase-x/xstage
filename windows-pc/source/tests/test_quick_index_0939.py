@@ -119,6 +119,22 @@ class QuickIndex0939Tests(FastCatalog0934Tests):
         self.assertEqual(pending_count(self.lib), 0)
         self.assertTrue(song.exists())
 
+    def test_cancelled_quick_scan_reuses_validated_metadata_on_restart(self):
+        self.add_song('one')
+        self.add_song('two')
+        cancel = threading.Event()
+        def callback(event):
+            if event.get('phase') == 'ยืนยันไฟล์ใหม่ก่อนบันทึกฐาน':
+                cancel.set()
+        with self.assertRaises(SearchCancelled):
+            self.quick(cancelled=cancel, events=callback)
+        self.assertEqual(self.lib.count(), 0)
+        with patch('karaoke.quick_catalog.Inspector.inspect', side_effect=AssertionError('reopened validated song')):
+            result = self.quick()
+        self.assertEqual(result.metrics['resume_hits'], 2)
+        self.assertEqual(self.lib.count(), 2)
+        self.assertEqual(pending_count(self.lib), 2)
+
     def test_disappearing_file_aborts_before_commit(self):
         song = self.add_song('one')
         def callback(event):

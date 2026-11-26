@@ -1,7 +1,7 @@
 ; X-Stage Karaoke PC — runtime-only Windows installer.
 ; Build/testing/source files stay in CI and are never distributed to end users.
-#define AppVersion "1.0.88"
-#define BuildNumber "1088"
+#define AppVersion "1.0.89"
+#define BuildNumber "1089"
 #define AppExe "X-StageKaraoke.exe"
 
 [Setup]
