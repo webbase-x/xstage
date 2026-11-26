@@ -1,11 +1,16 @@
 """Safety tests for the shared Drive for desktop publisher."""
 import importlib.util
+import sys
+import shutil
 import tempfile
 import threading
 import unittest
 from pathlib import Path
 
 MODULE = Path(__file__).resolve().parents[1] / "shared_drive_sync.py"
+sys.path.insert(0,str(MODULE.parent))
+import plus_core as core
+import metadata_recovery
 spec = importlib.util.spec_from_file_location("shared_drive_sync", MODULE)
 shared = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(shared)
@@ -86,6 +91,36 @@ class SharedDrivePublisherTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             shared.publish(str(self.source), str(self.drive), "FX", plan=preview)
         self.assertFalse((self.drive / "FX" / "new.wav").exists())
+
+    def test_reviewed_metadata_only_xmid_update_and_no_db_write(self):
+        workspace=Path(self.temp.name)/"workspace"
+        fixture=Path(__file__).parent/"fixtures"/"dontreecrab_ncn"
+        original=Path(self.temp.name)/"original"
+        shutil.copytree(fixture,original)
+        core.import_folder(workspace,original)
+        song=core.songs(workspace)[0]
+        with core.connect(workspace) as db:
+            db.execute("UPDATE xstage_songs SET title=original_code,artist='' WHERE id=?",(song["id"],))
+            db.execute("UPDATE xstage_lyric_versions SET title=?,artist='' WHERE song_id=?",(song["original_code"],song["id"]))
+        first=Path(core.build_song(workspace,song["id"])["path"])
+        relative=Path("MIDI")/"XMID"/"0"/first.name
+        target=self.drive/"SONGS"/relative
+        target.parent.mkdir(parents=True)
+        target.write_bytes(first.read_bytes())
+        (self.drive/"DB"/"songs.sqlite3").write_bytes(b"catalog")
+        self.assertEqual(metadata_recovery.run(workspace)["rebuilt"],1)
+        src=self.source/relative
+        src.parent.mkdir(parents=True)
+        shutil.copyfile(first,src)
+        plan=shared.inspect(str(self.source),str(self.drive),"SONGS")
+        self.assertEqual(plan["stats"]["metadata_update"],1)
+        with self.assertRaises(ValueError):
+            shared.publish(str(self.source),str(self.drive),"SONGS")
+        result=shared.publish(str(self.source),str(self.drive),"SONGS",plan=plan)
+        self.assertEqual(result["updated"],1)
+        self.assertEqual(core.read_xfile(target)["title"],"Test Song")
+        self.assertEqual((self.drive/"DB"/"songs.sqlite3").read_bytes(),b"catalog")
+        self.assertEqual(shared.inspect(str(self.source),str(self.drive),"SONGS")["stats"]["identical"],1)
 
 
 if __name__ == "__main__":
