@@ -373,7 +373,11 @@ function parseFont(data){
 // Decode each sample once, then share the pending Promise across those notes.
 const pendingSampleBuffers=new WeakMap();
 async function sampleBuffer(font,index,context){
-  if(font.cache.has(index))return font.cache.get(index);
+  if(font.cache.has(index)){
+    // Map insertion order is the eviction order: retain frequently used notes.
+    const cached=font.cache.get(index);font.cache.delete(index);font.cache.set(index,cached);
+    return cached;
+  }
   let pending=pendingSampleBuffers.get(font);
   if(!pending){pending=new Map();pendingSampleBuffers.set(font,pending);}
   if(pending.has(index))return pending.get(index);
