@@ -1,8 +1,8 @@
-"""Safe, review-first publishing to the user's existing Google Drive for desktop.
+"""Review-first publishing to the user's selected Google Drive desktop library.
 
 Never opens or overwrites DB/songs.sqlite3: the Online catalog publisher owns it.
-Google Drive for desktop uploads successfully published files asynchronously.
-No OAuth token, destructive duplicate removal, or source-file deletion.
+Only verified metadata-only XMID replacements may overwrite a reviewed path.
+Google Drive for desktop uploads published files asynchronously.
 """
 from __future__ import annotations
 
@@ -150,6 +150,32 @@ def _inventory(target, cancel=None):
     return by_size
 
 
+def _metadata_only_repair(source, destination):
+    """Same embedded media, song ID, code, version, and lyrics; identity only."""
+    if source.suffix.lower()!=".xmid" or destination.suffix.lower()!=".xmid":
+        return False
+    try:
+        import plus_core as core
+        new=core.read_xfile(source,verify_media=True)
+        old=core.read_xfile(destination,verify_media=True)
+        # Ignore byte offsets: title/artist lengths may differ.
+        keys=("songId","code","lyricsVersionId","timingStatus","lines","mediaSha256","mediaBytes")
+        if any(new[k]!=old[k] for k in keys):
+            return False
+        improved=False
+        for field in ("title","artist"):
+            if new[field]==old[field]:
+                continue
+            old_bad=core.identity_missing(old[field],old["code"],field) or (
+                field=="title" and core.identity_missing(old[field],destination.stem,field))
+            if not old_bad or core.identity_missing(new[field],new["code"],field):
+                return False
+            improved=True
+        return improved
+    except (OSError,ValueError,UnicodeError,KeyError,ImportError):
+        return False
+
+
 def inspect(source, drive_root, area, cancel=None, progress=None):
     """Read-only preflight. No mkdir, upload, delete or SQLite writes."""
     if area not in AREAS:
@@ -171,7 +197,7 @@ def inspect(source, drive_root, area, cancel=None, progress=None):
     seen_new = set()
     entries = []
     stats = dict(area=area, scanned=0, new=0, identical=0,
-                 duplicate=0, conflict=0, bytes=0, skipped_sidecars=0)
+                 duplicate=0, conflict=0, metadata_update=0, bytes=0, skipped_sidecars=0)
     for src, relative in _walk(content, area, structured, cancel):
         _check_cancel(cancel)
         stats["scanned"] += 1
@@ -180,12 +206,16 @@ def inspect(source, drive_root, area, cancel=None, progress=None):
         key = str(relative).casefold()
         size = src.stat().st_size
         source_hash = _digest(src, cancel)
+        target_sha=None
         if key in selected:
             status = "conflict"
         else:
             selected[key] = src
             if dst.exists():
                 status = "identical" if dst.is_file() and dst.stat().st_size == size and _digest(dst, cancel) == source_hash else "conflict"
+                if status=="conflict" and area=="SONGS" and dst.is_file() and _metadata_only_repair(src,dst):
+                    target_sha=_digest(dst,cancel).hex()
+                    status="metadata_update"
             elif (size, source_hash) in seen_new:
                 status = "duplicate"
             else:
@@ -201,10 +231,10 @@ def inspect(source, drive_root, area, cancel=None, progress=None):
                 if status == "new":
                     seen_new.add((size, source_hash))
         entry = dict(source=str(src), relative=str(relative), status=status,
-                     bytes=size, sha256=source_hash.hex())
+                     bytes=size, sha256=source_hash.hex(), target_sha256=target_sha)
         entries.append(entry)
         stats[status] += 1
-        if status == "new":
+        if status in ("new","metadata_update"):
             stats["bytes"] += size
         if progress and stats["scanned"] % 20 == 0:
             progress(dict(stats), "ตรวจไฟล์ " + str(stats["scanned"]) + " รายการ")
@@ -227,29 +257,35 @@ def _publish_exclusive(temp, destination):
 
 
 def publish(source, drive_root, area, progress=None, cancel=None, plan=None):
-    """Publish already verified, new files only. A cancellation preserves success."""
+    """Publish new files and explicitly reviewed identity-only repairs."""
     snapshot = inspect(source, drive_root, area, cancel, progress)
     if plan is not None:
-        expected = [(x["relative"], x["bytes"], x["sha256"], x["status"])
+        expected = [(x["relative"], x["bytes"], x["sha256"], x["status"], x.get("target_sha256"))
                     for x in plan["items"]]
-        actual = [(x["relative"], x["bytes"], x["sha256"], x["status"])
+        actual = [(x["relative"], x["bytes"], x["sha256"], x["status"], x.get("target_sha256"))
                   for x in snapshot["items"]]
         if plan.get("root") != snapshot["root"] or plan.get("area") != area or expected != actual:
             raise ValueError("แหล่งเพลง/Drive เปลี่ยนหลังตรวจ กรุณาตรวจรายการใหม่ก่อนส่ง")
     if snapshot["stats"]["conflict"]:
         raise ValueError("พบชื่อไฟล์ชนกับไฟล์เดิม/ตำแหน่งซ้ำ ไม่ส่งไฟล์ใดจนกว่าจะตรวจรายการ")
+    if snapshot["stats"]["metadata_update"] and plan is None:
+        raise ValueError("ต้องตรวจรายการและยืนยันก่อนแทนที่ XMID ที่ซ่อม Metadata")
     root = Path(snapshot["root"])
-    outcome = dict(snapshot["stats"], phase="publish", published=0,
+    outcome = dict(snapshot["stats"], phase="publish", published=0, updated=0,
                    published_bytes=0, cancelled=False)
     for entry in snapshot["items"]:
-        if entry["status"] != "new":
+        if entry["status"] not in ("new","metadata_update"):
             continue
+        replacing=entry["status"]=="metadata_update"
         try:
             _check_cancel(cancel)
             src = Path(entry["source"])
             dest = root / area / entry["relative"]
             _safe_path(root, dest)
-            if dest.exists():
+            if replacing:
+                if not dest.is_file() or _digest(dest,cancel).hex()!=entry["target_sha256"]:
+                    raise ValueError("XMID ปลายทางเปลี่ยนหลังตรวจ: "+str(dest))
+            elif dest.exists():
                 raise FileExistsError("ปลายทางมีไฟล์ใหม่แล้ว: " + str(dest))
             dest.parent.mkdir(parents=True, exist_ok=True)
             _safe_path(root, dest)
@@ -269,7 +305,15 @@ def publish(source, drive_root, area, progress=None, cancel=None, plan=None):
                 if tmp.stat().st_size != entry["bytes"] or h.hexdigest() != entry["sha256"]:
                     raise ValueError("ต้นทางเปลี่ยน/ตรวจ SHA-256 ไม่ผ่าน: " + str(src))
                 _check_cancel(cancel)
-                _publish_exclusive(tmp, dest)
+                if replacing:
+                    # Recheck the approved destination immediately before
+                    # atomic replace. Unknown/conflicting files stay intact.
+                    if not dest.is_file() or _digest(dest,cancel).hex()!=entry["target_sha256"]:
+                        raise ValueError("XMID ปลายทางเปลี่ยนระหว่างส่ง: "+str(dest))
+                    os.replace(tmp,dest)
+                    outcome["updated"]+=1
+                else:
+                    _publish_exclusive(tmp, dest)
                 outcome["published"] += 1
                 outcome["published_bytes"] += entry["bytes"]
                 if progress:

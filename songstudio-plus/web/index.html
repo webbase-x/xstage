@@ -100,7 +100,7 @@
               <a href="https://webbase-x.github.io/xstage/karaoke.html" rel="noopener noreferrer">เปิด Karaoke Online</a>
               <span>การสร้างไฟล์ไม่ได้อัปโหลดไปยังบัญชี Drive หรือเครื่อง Karaoke PC โดยอัตโนมัติ</span>
             </div>
-            <div class="recover-action"><button class="quiet-btn recover-btn" id="recover-lyrics" type="button">↺ ตรวจซ่อมเนื้อร้อง</button></div>
+            <div class="recover-action"><button class="quiet-btn recover-btn" id="recover-lyrics" type="button">↺ ตรวจซ่อมเนื้อร้อง</button><button class="quiet-btn recover-btn" id="recover-metadata" type="button">ตรวจและซ่อมชื่อเพลง / XMID</button><p id="metadata-recovery-report" class="field-hint" aria-live="polite"></p></div>
           </article>
           <article class="panel progress-panel">
             <div class="panel-head"><h2>สถานะการทำงาน</h2><span class="status-badge" id="activity-status">พร้อมทำงาน</span></div>
@@ -160,7 +160,7 @@
             <p class="drive-operation-status" id="drive-status" role="status" aria-live="polite">ยังไม่เชื่อมต่อ · เลือกคลัง XStageKaraoke หรือกดตรวจสอบโครงสร้าง</p>
             <section class="drive-push-panel" aria-labelledby="drive-push-title">
               <h3 id="drive-push-title">ส่งไฟล์จากเครื่องขึ้น Google Drive · ใช้กับ Karaoke Online</h3>
-              <p class="field-hint">เลือกโฟลเดอร์ต้นทางบนเครื่อง และโฟลเดอร์ XStageKaraoke ของ Google Drive for desktop ด้านบน ระบบส่งเฉพาะไฟล์ใหม่โดยไม่เขียนทับหรือลบไฟล์เดิม</p>
+              <p class="field-hint">เลือกโฟลเดอร์ต้นทางบนเครื่อง และโฟลเดอร์ XStageKaraoke ของ Google Drive for desktop ด้านบน ระบบส่งไฟล์ใหม่และรายการซ่อม Metadata ของ XMID เดิมหลังตรวจ SHA-256 และยืนยัน ไม่แทนที่ไฟล์ที่เป็นคนละเพลง ไม่ลบไฟล์เดิม</p>
               <label class="field-label" for="drive-push-source">โฟลเดอร์ไฟล์ต้นทาง</label>
               <div class="input-wrap"><span class="folder-glyph">▤</span><input id="drive-push-source" spellcheck="false" autocomplete="off" placeholder="เช่น D:\\Music\\XStagePrepared"><button type="button" id="drive-push-browse" class="browse-btn">เลือกโฟลเดอร์</button></div>
               <label class="field-label" for="drive-push-area">ประเภทที่จะส่ง</label>

@@ -184,15 +184,30 @@ def index_component(path: Path, index: dict):
                code, path.suffix.lower())] = str(path)
 
 
+def lyric_rows(raw):
+    """Decode full text before newline normalization, including UTF-16 BOM."""
+    if raw.startswith((b"\xff\xfe",b"\xfe\xff")):
+        text=raw.decode("utf-16")
+    else:
+        text=_decode_text(raw.split(b"\x1a",1)[0])
+    return text.split("\x1a",1)[0].replace("\r\n","\n").replace("\r","\n").split("\n")
+
+
 def lyric_metadata(path: Path):
-    """Read only first ~8 KB of .LYR to keep scanning 100k songs fast."""
     with Path(path).open("rb") as source:
-        raw = source.read(8192)
-    lines = _decode_text(raw).splitlines()
-    if len(lines) < 4:
-        raise ValueError("ไฟล์ .LYR มีหัวข้อมูลไม่ครบ 4 บรรทัด")
-    return {"title": lines[0].strip(), "artist": lines[1].strip(),
-            "key": lines[2].strip()}
+        raw=source.read(1024*1024+1)
+    if len(raw)>1024*1024: raise ValueError("LYR exceeds 1 MB")
+    lines=lyric_rows(raw)
+    if len(lines)<2: raise ValueError("LYR metadata incomplete")
+    title=re.sub(r"^(?:title|song title|ชื่อเพลง)\s*[:=]\s*","",lines[0].strip(),flags=re.I)
+    artist=re.sub(r"^(?:artist|singer|ศิลปิน|นักร้อง)\s*[:=]\s*","",lines[1].strip(),flags=re.I)
+    return {"title":title,"artist":artist,"key":lines[2].strip() if len(lines)>2 else ""}
+
+
+def midi_metadata(events):
+    tags=[v[2:].strip() for tick,track,order,tag,v in events
+          if tick==0 and tag in (1,5) and v.startswith("@T") and v[2:].strip()]
+    return {"title":tags[0] if tags else "", "artist":tags[1] if len(tags)>1 else ""}
 
 
 def _varlen(source: bytes, pos: int, end: int):
@@ -420,7 +435,13 @@ def ncn_document(companions):
                          " · ต้องมี .MID + .LYR + .CUR รหัสเดียวกัน")
     lyric_file = Path(companions["lyrics"])
     cursor_file = Path(companions["cursor"])
-    source_bytes = lyric_file.read_bytes().split(b"\x1a", 1)[0]
+    source_bytes = lyric_file.read_bytes()
+    utf16=source_bytes.startswith((b"\xff\xfe",b"\xfe\xff"))
+    if utf16:
+        # A Unicode text conversion can retain legacy CP874 cursor offsets.
+        # Reject nonrepresentable text rather than inventing cursor positions.
+        source_bytes="\n".join(lyric_rows(source_bytes)).encode("cp874")
+    source_bytes=source_bytes.split(b"\x1a",1)[0]
     if len(source_bytes) > 1024 * 1024:
         raise ValueError("ไฟล์ NCN .LYR ใหญ่เกิน 1 MB")
     # Legacy NCN is CP874. Normalize line endings in bytes before consuming
@@ -428,11 +449,7 @@ def ncn_document(companions):
     rows = source_bytes.replace(b"\r\n", b"\n").replace(b"\r", b"\n").split(b"\n")
     if len(rows) < 5:
         raise ValueError("NCN .LYR ไม่มีข้อมูลเนื้อร้องเริ่มจากบรรทัดที่ 5")
-    meta = {
-        "title": _decode_text(rows[0]).strip(),
-        "artist": _decode_text(rows[1]).strip(),
-        "key": _decode_text(rows[2]).strip(),
-    }
+    meta = lyric_metadata(lyric_file)
     raw_cursor = cursor_file.read_bytes()
     if len(raw_cursor) > 2 * 1024 * 1024:
         raise ValueError("ไฟล์ NCN .CUR ใหญ่เกิน 2 MB")
@@ -450,21 +467,35 @@ def ncn_document(companions):
     # restore the original CP874 byte granularity ONLY when the CUR entry
     # count supports it; never silently synthesize missing CUR positions.
     body = list(rows[4:])
+    body_encoding="cp874"
+    def count_positions(items):
+        return sum(1+len(item) for item in items if item.strip())
     try:
         utf8_text=source_bytes.decode("utf-8-sig")
-        if any(ord(char)>127 for char in utf8_text):
-            utf8_rows=utf8_text.replace("\r\n","\n").replace("\r","\n").split("\n")
-            cp874_body=[line.encode("cp874") for line in utf8_rows[4:]]
-            def count_positions(items):
-                return sum(1+len(item) for item in items if item.strip())
-            original_total=count_positions(body)
-            legacy_total=count_positions(cp874_body)
-            if legacy_total!=original_total and (
-                 abs(len(positions)-legacy_total)<=abs(len(positions)-original_total)):
-                body=cp874_body
+    except UnicodeError:
+        utf8_text=None
+    if utf8_text is not None and any(ord(ch)>127 for ch in utf8_text):
+        utf8_rows=utf8_text.replace("\r\n","\n").replace("\r","\n").split("\n")
+        native=[line.encode("utf-8") for line in utf8_rows[4:]]
+        try:
+            legacy=[line.encode("cp874") for line in utf8_rows[4:]]
+        except UnicodeError:
+            legacy=None
+        # Exact byte count is necessary for a native Unicode cursor layout.
+        # Converted legacy collections may still have surplus tail entries.
+        if legacy is not None and (count_positions(native)==count_positions(legacy) or
+              abs(len(positions)-count_positions(legacy))<=abs(len(positions)-count_positions(native))):
+            body=legacy
+            if count_positions(native)!=count_positions(legacy):
                 warnings.append("UTF-8 Lyrics ใช้ CUR ตามจำนวนไบต์ CP874 ดั้งเดิม")
-    except (UnicodeError,ValueError):
-        pass
+        elif len(positions)==count_positions(native):
+            body=native
+            body_encoding="utf-8"
+        else:
+            raise ValueError("UTF-8 LYR: cannot verify CUR alignment")
+    if utf16 and len(positions)!=count_positions(body):
+        raise ValueError("UTF-16 LYR: legacy CUR alignment cannot be verified")
+    meta["cursorEncoding"]=body_encoding
     while body and not body[-1].strip(b" \x00\x1a"):
         body.pop()
     removed_footers = 0
@@ -481,7 +512,7 @@ def ncn_document(companions):
     # lines have real CUR entries. Otherwise a short/damaged cursor remains
     # incomplete; never mislabel missing real lyrics as fully synchronized.
     while body and len(positions) < needed(body):
-        candidate = body[-1].strip(b" \x00\x1a").decode("cp874", errors="replace")
+        candidate = body[-1].strip(b" \x00\x1a").decode(body_encoding, errors="replace")
         candidate = candidate.strip(decorations)
         if not footer.fullmatch(candidate) or len(positions) < needed(body[:-1]):
             break
@@ -497,8 +528,10 @@ def ncn_document(companions):
     blank_markers=(blanks>0 and len(positions)==needed(body)+blanks)
     if blank_markers:
         warnings.append("CUR มีตำแหน่งบรรทัดว่างตามต้นฉบับ")
-    division, tempo_map, _, midi_duration = midi_events(
+    division, tempo_map, events, midi_duration = midi_events(
         Path(companions["midi"]), include_duration=True)
+    for field,value in midi_metadata(events).items():
+        if not meta.get(field) and value: meta[field]=value
     rendered = []
     previous_pos = 0
     cursor_index = 0
@@ -512,14 +545,18 @@ def ncn_document(companions):
         chars = []
         text_parts = []
         # Use the *original source bytes* to preserve NCN Cursor alignment.
-        for byte in b"\n" + raw_line:
-            if cursor_index >= len(positions):
+        cursor_index += 1  # one NCN line marker
+        for char in raw_line.decode(body_encoding, errors="replace"):
+            width=len(char.encode(body_encoding, errors="replace"))
+            if cursor_index+width > len(positions):
                 timing_incomplete = True
                 break
             position = positions[cursor_index]
-            cursor_index += 1
-            if byte in (10, 13):  # One NCN line marker has no printable glyph.
-                continue
+            # A native UTF-8 cue group is only accepted when every byte
+            # carries the same verified onset. No per-byte glyph corruption.
+            if width>1 and any(value!=position for value in positions[cursor_index:cursor_index+width]):
+                raise ValueError("UTF-8 LYR: ambiguous multi-byte CUR positions")
+            cursor_index += width
             if position == 65535:  # Historical end/untimed position marker.
                 timing_incomplete = True
                 continue
@@ -533,7 +570,6 @@ def ncn_document(companions):
                 timing_incomplete = True
                 stop_song = True
                 break
-            char = bytes([byte]).decode("cp874", errors="replace")
             text_parts.append(char)
             if unicodedata.category(char).startswith("M") and chars:
                 chars[-1]["text"] += char
