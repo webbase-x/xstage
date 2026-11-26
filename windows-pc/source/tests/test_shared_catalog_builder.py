@@ -78,7 +78,7 @@ class SharedPcBuilderTests(unittest.TestCase):
         library = SharedSongLibrary(home, settings, database=master)
         self.assertEqual(library.count(), 1)
         self.assertTrue(Path(library.get(library.search("10001")[0]["id"])["path"]).samefile(self.songs / "10001.xmid"))
-        self.assertEqual(library.path, master)
+        self.assertTrue(library.path.samefile(master))
 
     def test_export_portable_after_copy_without_rebuilding(self):
         from karaoke.local_master import activate, export_portable
