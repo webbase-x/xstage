@@ -180,8 +180,14 @@ final class XStageUpdateManager {
 
     // Play builds must never install the public debug APK, whose package and signature differ.
     // Play availability is advertised only after a verified listing is published.
+    // Resolve relative to the hosted karaoke document, not by concatenating
+    // filenames onto karaoke.html. All update metadata and APKs share /downloads/.
+    private static URL updateUrl(String relative) throws Exception {
+        return new URL(new URL(BuildConfig.XSTAGE_WEB_URL), relative);
+    }
+
     private LatestUpdate fetchPlayLatest() throws Exception {
-        URL url = new URL(BuildConfig.XSTAGE_WEB_URL + "downloads/android-play-latest.json?t=" + System.currentTimeMillis());
+        URL url = updateUrl("downloads/android-play-latest.json?t=" + System.currentTimeMillis());
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setConnectTimeout(12000);
         connection.setReadTimeout(12000);
@@ -229,8 +235,8 @@ final class XStageUpdateManager {
     }
 
     private LatestUpdate fetchLatest() throws Exception {
-        String endpoint = BuildConfig.XSTAGE_WEB_URL + "downloads/android-tv-latest.json?t=" + System.currentTimeMillis();
-        HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
+        URL endpoint = updateUrl("downloads/android-tv-latest.json?t=" + System.currentTimeMillis());
+        HttpURLConnection connection = (HttpURLConnection) endpoint.openConnection();
         connection.setRequestMethod("GET");
         connection.setConnectTimeout(12000);
         connection.setReadTimeout(12000);
@@ -265,7 +271,7 @@ final class XStageUpdateManager {
         if (!sha256.matches("[0-9a-f]{64}")) {
             throw new IllegalStateException("ไม่มี SHA-256 สำหรับตรวจสอบ APK อัปเดต");
         }
-        String apkUrl = BuildConfig.XSTAGE_WEB_URL + "downloads/" + Uri.encode(file, "/");
+        String apkUrl = updateUrl("downloads/" + Uri.encode(file, "/")).toExternalForm();
         return new LatestUpdate(version, build, apkUrl, sha256, file, false);
     }
 

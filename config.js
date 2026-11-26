@@ -13,4 +13,4 @@ window.XSTAGE_DRIVE_LAYOUT=Object.freeze({
   soundfont:'SOUNDFONT',fx:'FX',backup:'BACKUP',cache:'CACHE',logs:'LOGS'
 });
 // The karaoke HTML owns its running build; config is only a fallback for other pages.
-if (!window.XSTAGE_RELEASE) window.XSTAGE_RELEASE = { version: '1.0.219', build: 1219 };
+if (!window.XSTAGE_RELEASE) window.XSTAGE_RELEASE = { version: '1.0.220', build: 1220 };

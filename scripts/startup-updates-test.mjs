@@ -207,6 +207,11 @@ assert.ok(app.includes("android-tv-update-now')?.addEventListener('click'"),'APK
 assert.ok(!app.includes("button?.click();"),'APK release notification cannot silently start installer');
 assert.ok(android.includes('BuildConfig.DEBUG ? fetchLatest() : fetchPlayLatest()'),'test APK must remain separate from production Play channel');
 assert.ok(android.includes('MessageDigest.getInstance("SHA-256")'),'APK updates must verify downloads');
+assert.ok(android.includes('new URL(new URL(BuildConfig.XSTAGE_WEB_URL), relative)'),'resolve download paths relative to the hosted document');
+assert.ok(!android.includes('BuildConfig.XSTAGE_WEB_URL + "downloads/'),'never concatenate paths onto karaoke.html');
+assert.ok(android.includes('updateUrl("downloads/android-tv-latest.json?t="')&&android.includes('updateUrl("downloads/android-play-latest.json?t="')&&android.includes('updateUrl("downloads/" + Uri.encode(file, "/")),'all native update endpoints use the same resolver');
+const legacyPublish=read('.github/workflows/build-android-tv.yml');
+assert.ok(legacyPublish.includes('cmp downloads/android-tv-latest.json karaoke.htmldownloads/android-tv-latest.json')&&legacyPublish.includes('cmp "downloads/${APK_NAME}" "karaoke.htmldownloads/${APK_NAME}"'),'older APKs receive identical verified bytes and metadata');
 assert.ok(apk.includes('offerPublishedAndroidApk(apk)'),'Android browser visitors must see an APK-or-Web choice');
 assert.ok(apk.includes('ANDROID_APK_NEVER_ASK_KEY'),'APK offer must support opt-out');
 assert.ok(!apk.includes('ANDROID_TV_APK_FALLBACK'),'do not offer an unverified stale APK link');
