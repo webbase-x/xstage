@@ -209,7 +209,7 @@ assert.ok(android.includes('BuildConfig.DEBUG ? fetchLatest() : fetchPlayLatest(
 assert.ok(android.includes('MessageDigest.getInstance("SHA-256")'),'APK updates must verify downloads');
 assert.ok(android.includes('new URL(new URL(BuildConfig.XSTAGE_WEB_URL), relative)'),'resolve download paths relative to the hosted document');
 assert.ok(!android.includes('BuildConfig.XSTAGE_WEB_URL + "downloads/'),'never concatenate paths onto karaoke.html');
-assert.ok(android.includes('updateUrl("downloads/android-tv-latest.json?t="')&&android.includes('updateUrl("downloads/android-play-latest.json?t="')&&android.includes('updateUrl("downloads/" + Uri.encode(file, "/")),'all native update endpoints use the same resolver');
+assert.ok(android.includes('updateUrl("downloads/android-tv-latest.json?t="')&&android.includes('updateUrl("downloads/android-play-latest.json?t="')&&android.includes('updateUrl("downloads/" + Uri.encode(file, "/"))'),'all native update endpoints use the same resolver');
 const legacyPublish=read('.github/workflows/build-android-tv.yml');
 assert.ok(legacyPublish.includes('cmp downloads/android-tv-latest.json karaoke.htmldownloads/android-tv-latest.json')&&legacyPublish.includes('cmp "downloads/${APK_NAME}" "karaoke.htmldownloads/${APK_NAME}"'),'older APKs receive identical verified bytes and metadata');
 assert.ok(apk.includes('offerPublishedAndroidApk(apk)'),'Android browser visitors must see an APK-or-Web choice');
