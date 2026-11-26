@@ -36,7 +36,7 @@
     <header class="topbar">
       <a class="brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
         <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1218" alt="" width="48" height="48">
-        <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small><small id="karaoke-release-label">Karaoke Web v1.0.219 · Build 1218</small></span>
+        <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small><small id="karaoke-release-label">Karaoke Web v1.0.219 · Build 1219</small></span>
       </a>
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
       <div class="account-tools">
@@ -552,6 +552,8 @@
 (function(){
   var bridge=window.XStageAndroid;
   if(!bridge||typeof bridge.onLoginScreenReady!=='function')return;
+  // Build 1219+ has its own native recovery controls, including the updater.
+  try{if(Number(bridge.getAppBuild())>=1219)return;}catch(e){}
   setTimeout(function(){
     var root=document.documentElement;
     var auth=document.getElementById('android-tv-auth-panel');
@@ -570,10 +572,14 @@
     // The existing APK can remove its logo, but the authorization gate stays locked.
     try{bridge.onLoginScreenReady();}catch(e){}
     retry.focus();
+    var previousActivate=window.XStageTvActivateFocused;
+    var recoveryActivate=function(){retry.click();};
+    window.XStageTvActivateFocused=recoveryActivate;
     var check=setInterval(function(){
       var auth=document.getElementById('android-tv-auth-panel');
       if(!root.classList.contains('xstage-native-auth-pending')||(auth&&!auth.hidden)){
         panel.remove();clearInterval(check);
+        if(window.XStageTvActivateFocused===recoveryActivate)window.XStageTvActivateFocused=previousActivate;
       }
     },500);
   },16000);
