@@ -40,7 +40,7 @@
   let confirmationPending=false;
   let lyricDialogLoading=false;
   let issuesDialogLoading=false;
-  const labels={import:"นำเข้าเพลง",drive:"Google Drive",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
+  const labels={ncn:"NCN to XMID",import:"นำเข้าเพลง",drive:"Google Drive",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
                 library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
   const number = v => Number(v||0).toLocaleString("en-US");
@@ -963,7 +963,7 @@
   }
   async function startJob(kind,payload){
     try{
-      const endpoint=kind==="import"?"/api/import":
+      const endpoint=kind==="ncn-direct"?"/api/ncn-direct":kind==="import"?"/api/import":
         kind==="import-file"?"/api/import/file":
         kind==="song-download"?"/api/import/download":kind==="drive-import"?"/api/import/google-drive":
         kind==="drive-push-preview"?"/api/drive/push-preview":kind==="drive-push"?"/api/drive/push":kind==="recover"?"/api/recover-lyrics":
@@ -999,6 +999,16 @@
         state.lastJobRevision=Number(job.revision??state.lastJobRevision);
       }
       $("cancel-job").hidden=!state.activeJob;
+      $("ncn-start").disabled=!state.ready||Boolean(state.activeJob);
+      $("ncn-stop").disabled=!(job?.kind==="ncn-direct"&&job.status==="running");
+      if(job?.kind==="ncn-direct"){
+        const n=job.progress||{}, result=job.result||{};
+        const s=Object.assign({},n,result);
+        text("ncn-progress", (job.error||job.message||"")+" · "+number(s.done)+" / "+number(s.total)+" · สำเร็จ "+number(s.converted)+" · มีไฟล์เดิม "+number(s.skipped)+" · ข้าม/ผิดพลาด "+number(s.failed));
+        $("ncn-progress-bar").max=Math.max(1,Number(s.total||0));
+        $("ncn-progress-bar").value=Number(s.done||0);
+        text("ncn-report",s.report?"รายงาน: "+s.report:"");
+      }
       updateBuildSelection();
       $("import-start").disabled=!state.ready||Boolean(state.activeJob);
       $("import-file-start").disabled=!state.ready||Boolean(state.activeJob);
@@ -1029,7 +1039,7 @@
         job.status==="running"&&sinceProgress>=30);
       text("activity-status",job.status==="running"?"กำลังทำงาน":
           job.status==="completed"?"เสร็จเรียบร้อย":job.status==="failed"?"ข้อผิดพลาด":"หยุดแล้ว");
-      text("activity-title",job.kind==="lyrics-edit"?"แทนที่เนื้อร้องเป็นชุด":
+      text("activity-title",job.kind==="ncn-direct"?"NCN to XMID":job.kind==="lyrics-edit"?"แทนที่เนื้อร้องเป็นชุด":
           job.kind==="song-download"?"ดาวน์โหลดและนำเข้าเพลง HTTPS":
           job.kind==="drive-import"?"ดาวน์โหลดเพลงจาก XStageKaraoke":
           job.kind==="drive-push-preview"?"ตรวจไฟล์ก่อนส่ง Google Drive":
@@ -2526,6 +2536,23 @@
   }
 
   function bind(){
+    for(const [id,target] of [["ncn-source-pick","ncn-source"],["ncn-dest-pick","ncn-dest"]]){
+      $(id).addEventListener("click",async()=>{
+        $(id).disabled=true;
+        try{
+          const found=await api("/api/pick",{kind:"folder",current:$(target).value.trim()},0);
+          if(found.path)$(target).value=found.path;
+        }catch(error){toast(error.message,true);}
+        finally{$(id).disabled=false;}
+      });
+    }
+    $("ncn-start").addEventListener("click",()=>{
+      if(!state.ready||state.activeJob)return;
+      const source=$("ncn-source").value.trim(),destination=$("ncn-dest").value.trim();
+      if(!source||!destination)return toast("เลือกต้นทางและปลายทาง",true);
+      void startJob("ncn-direct",{source,destination});
+    });
+    $("ncn-stop").addEventListener("click",()=>{$("cancel-job").click();});
     $("toast-dismiss").addEventListener("click",dismissToast);
     $("confirm-dialog").addEventListener("cancel",()=>{
       $("confirm-dialog").returnValue="cancel";

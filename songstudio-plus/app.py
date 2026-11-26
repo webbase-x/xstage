@@ -21,6 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import plus_core as core
+import ncn_direct
 import db_maintenance as dbmaint
 import risk_audit as risks
 import preview_player as preview
@@ -518,6 +519,11 @@ class Handler(BaseHTTPRequestHandler):
                     return drivesync.publish(snapshot["source"],snapshot["root"],
                         snapshot["area"],progress,cancel,plan=snapshot)
                 result=self.state.start_job("drive-push",push_drive)
+            elif path=="/api/ncn-direct":
+                source=body.get("source","")
+                destination=body.get("destination","")
+                result=self.state.start_job("ncn-direct",lambda progress,cancel:
+                    ncn_direct.convert_folder(source,destination,progress,cancel))
             elif path=="/api/import":
                 source=body.get("folder","")
                 self.state.diagnostic("import.request",folder=source,

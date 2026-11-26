@@ -406,7 +406,7 @@ def to_lrc(lines):
     return "\n".join(rows) + ("\n" if rows else "")
 
 
-def ncn_document(companions):
+def ncn_document(companions, *, header_rows=4, metadata_override=None):
     """NCN24 MIDI/LYR/CUR synchronisation, adapted from X-Stage Karaoke PC.
 
     A CUR entry represents one *CP874 source byte*, not a Unicode grapheme.
@@ -426,9 +426,9 @@ def ncn_document(companions):
     # Legacy NCN is CP874. Normalize line endings in bytes before consuming
     # CUR indices: Windows CRLF is ONE line marker, not two time entries.
     rows = source_bytes.replace(b"\r\n", b"\n").replace(b"\r", b"\n").split(b"\n")
-    if len(rows) < 5:
+    if len(rows) <= header_rows or header_rows < 1:
         raise ValueError("NCN .LYR ไม่มีข้อมูลเนื้อร้องเริ่มจากบรรทัดที่ 5")
-    meta = {
+    meta = dict(metadata_override) if metadata_override is not None else {
         "title": _decode_text(rows[0]).strip(),
         "artist": _decode_text(rows[1]).strip(),
         "key": _decode_text(rows[2]).strip(),
@@ -449,12 +449,12 @@ def ncn_document(companions):
     # historical CUR offsets indexed by CP874 bytes. Decode the text and
     # restore the original CP874 byte granularity ONLY when the CUR entry
     # count supports it; never silently synthesize missing CUR positions.
-    body = list(rows[4:])
+    body = list(rows[header_rows:])
     try:
         utf8_text=source_bytes.decode("utf-8-sig")
         if any(ord(char)>127 for char in utf8_text):
             utf8_rows=utf8_text.replace("\r\n","\n").replace("\r","\n").split("\n")
-            cp874_body=[line.encode("cp874") for line in utf8_rows[4:]]
+            cp874_body=[line.encode("cp874") for line in utf8_rows[header_rows:]]
             def count_positions(items):
                 return sum(1+len(item) for item in items if item.strip())
             original_total=count_positions(body)
