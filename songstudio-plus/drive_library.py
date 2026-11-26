@@ -65,7 +65,7 @@ def resolve_root(value=""):
             "ไม่พบ XStageKaraoke ใน Google Drive สำหรับเดสก์ท็อป "
             "กรุณาเลือกโฟลเดอร์ XStageKaraoke ที่ซิงก์อยู่บนเครื่อง")
     if not all((root / part).is_dir() for part in REQUIRED):
-        raise ValueError("คลังที่เลือกต้องมี SONGS, DB และ SOUNDFONT")
+        raise ValueError("คลังที่เลือก (XStageKaraoke หรือโฟลเดอร์ที่กำหนดเอง) ต้องมี SONGS, DB และ SOUNDFONT")
     return root
 
 

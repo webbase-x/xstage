@@ -1004,7 +1004,7 @@ def import_folder(workspace,source,progress=None,cancel=None,selected_file=None)
                 # stat-only stamp avoids re-parsing unchanged successful
                 # sources; new/changed companions are decoded and compared
                 # through the SQLite lyric-version table.
-                if comps.get(".lyr"):
+                if comps.get(".lyr") and any(identity_missing(song[f],song["original_code"],f) for f in ("title","artist")):
                     try:
                         merge_song_identity(db,song,ncn_reader.lyric_metadata(comps[".lyr"]))
                         song=db.execute("SELECT * FROM xstage_songs WHERE id=?",(song_id,)).fetchone()

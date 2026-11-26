@@ -36,3 +36,22 @@ class MetadataRecoveryTests(unittest.TestCase):
             self.assertEqual(core.read_xfile(output)["artist"],"DontreeCrab")
             self.assertEqual(core.songs(workspace)[0]["export_code"],song["export_code"])
             self.assertEqual(metadata_recovery.run(workspace)["rebuilt"],0)
+
+    def test_utf8_native_cursor_with_verified_byte_groups(self):
+        import struct
+        fixture=Path(__file__).parent/"fixtures"/"dontreecrab_ncn"
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"source"
+            shutil.copytree(fixture,root)
+            midi=root/"Song"/"1"/"test.mid"
+            lyr=root/"Lyrics"/"1"/"test.lyr"
+            cur=root/"Cursor"/"1"/"test.cur"
+            lyr.write_text("เพลงทดสอบ\nนักร้อง\nC\n\nกข\n",encoding="utf-8")
+            cur.write_bytes(struct.pack("<7H",0,1,1,1,2,2,2))
+            doc=ncn_reader.ncn_document(ncn_reader.resolve_companions(midi))
+            self.assertEqual(doc["lines"][0]["text"],"กข")
+            self.assertTrue(doc["metadata"]["timingComplete"])
+            self.assertEqual(doc["metadata"]["cursorEncoding"],"utf-8")
+            cur.write_bytes(struct.pack("<7H",0,1,2,3,4,5,6))
+            with self.assertRaisesRegex(ValueError,"ambiguous"):
+                ncn_reader.ncn_document(ncn_reader.resolve_companions(midi))

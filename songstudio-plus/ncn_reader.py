@@ -467,31 +467,35 @@ def ncn_document(companions):
     # restore the original CP874 byte granularity ONLY when the CUR entry
     # count supports it; never silently synthesize missing CUR positions.
     body = list(rows[4:])
+    body_encoding="cp874"
+    def count_positions(items):
+        return sum(1+len(item) for item in items if item.strip())
     try:
         utf8_text=source_bytes.decode("utf-8-sig")
-        if any(ord(char)>127 for char in utf8_text):
-            utf8_rows=utf8_text.replace("\r\n","\n").replace("\r","\n").split("\n")
-            cp874_body=[line.encode("cp874") for line in utf8_rows[4:]]
-            def count_positions(items):
-                return sum(1+len(item) for item in items if item.strip())
-            original_total=count_positions(body)
-            legacy_total=count_positions(cp874_body)
-            if legacy_total!=original_total and (
-                 abs(len(positions)-legacy_total)<=abs(len(positions)-original_total)):
-                body=cp874_body
-                warnings.append("UTF-8 Lyrics ใช้ CUR ตามจำนวนไบต์ CP874 ดั้งเดิม")
-    except (UnicodeError,ValueError):
-        pass
-    if utf16 and len(positions)!=sum(1+len(row) for row in body if row.strip()):
-        raise ValueError("UTF-16 LYR: legacy CUR alignment cannot be verified")
-    try:
-        unicode_body=source_bytes.decode("utf-8-sig").splitlines()[4:]
-        if any(ord(ch)>127 for line in unicode_body for ch in line):
-            native=[line.encode("utf-8") for line in unicode_body]
-            if body==native:
-                raise ValueError("UTF-8 native cursor layout needs explicit alignment review")
     except UnicodeError:
-        pass
+        utf8_text=None
+    if utf8_text is not None and any(ord(ch)>127 for ch in utf8_text):
+        utf8_rows=utf8_text.replace("\r\n","\n").replace("\r","\n").split("\n")
+        native=[line.encode("utf-8") for line in utf8_rows[4:]]
+        try:
+            legacy=[line.encode("cp874") for line in utf8_rows[4:]]
+        except UnicodeError:
+            legacy=None
+        # Exact byte count is necessary for a native Unicode cursor layout.
+        # Converted legacy collections may still have surplus tail entries.
+        if legacy is not None and (count_positions(native)==count_positions(legacy) or
+              abs(len(positions)-count_positions(legacy))<=abs(len(positions)-count_positions(native))):
+            body=legacy
+            if count_positions(native)!=count_positions(legacy):
+                warnings.append("UTF-8 Lyrics ใช้ CUR ตามจำนวนไบต์ CP874 ดั้งเดิม")
+        elif len(positions)==count_positions(native):
+            body=native
+            body_encoding="utf-8"
+        else:
+            raise ValueError("UTF-8 LYR: cannot verify CUR alignment")
+    if utf16 and len(positions)!=count_positions(body):
+        raise ValueError("UTF-16 LYR: legacy CUR alignment cannot be verified")
+    meta["cursorEncoding"]=body_encoding
     while body and not body[-1].strip(b" \x00\x1a"):
         body.pop()
     removed_footers = 0
@@ -508,7 +512,7 @@ def ncn_document(companions):
     # lines have real CUR entries. Otherwise a short/damaged cursor remains
     # incomplete; never mislabel missing real lyrics as fully synchronized.
     while body and len(positions) < needed(body):
-        candidate = body[-1].strip(b" \x00\x1a").decode("cp874", errors="replace")
+        candidate = body[-1].strip(b" \x00\x1a").decode(body_encoding, errors="replace")
         candidate = candidate.strip(decorations)
         if not footer.fullmatch(candidate) or len(positions) < needed(body[:-1]):
             break
@@ -541,14 +545,18 @@ def ncn_document(companions):
         chars = []
         text_parts = []
         # Use the *original source bytes* to preserve NCN Cursor alignment.
-        for byte in b"\n" + raw_line:
-            if cursor_index >= len(positions):
+        cursor_index += 1  # one NCN line marker
+        for char in raw_line.decode(body_encoding, errors="replace"):
+            width=len(char.encode(body_encoding, errors="replace"))
+            if cursor_index+width > len(positions):
                 timing_incomplete = True
                 break
             position = positions[cursor_index]
-            cursor_index += 1
-            if byte in (10, 13):  # One NCN line marker has no printable glyph.
-                continue
+            # A native UTF-8 cue group is only accepted when every byte
+            # carries the same verified onset. No per-byte glyph corruption.
+            if width>1 and any(value!=position for value in positions[cursor_index:cursor_index+width]):
+                raise ValueError("UTF-8 LYR: ambiguous multi-byte CUR positions")
+            cursor_index += width
             if position == 65535:  # Historical end/untimed position marker.
                 timing_incomplete = True
                 continue
@@ -562,7 +570,6 @@ def ncn_document(companions):
                 timing_incomplete = True
                 stop_song = True
                 break
-            char = bytes([byte]).decode("cp874", errors="replace")
             text_parts.append(char)
             if unicodedata.category(char).startswith("M") and chars:
                 chars[-1]["text"] += char
