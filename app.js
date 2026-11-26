@@ -1463,6 +1463,10 @@ function showCatalogLoading(title,detail,progress=null){
     if(ui.catalogProgressValue)ui.catalogProgressValue.textContent=value+'%';
   }
   if(ui.catalogLoading)ui.catalogLoading.hidden=false;
+  if(androidTvNativeBridgeReady()&&document.documentElement.classList.contains('xstage-native-auth-pending')){
+    const status=$('android-tv-auth-status');
+    if(status)status.textContent=[title,detail,Number.isFinite(Number(progress))?Math.round(Number(progress))+'%':''].filter(Boolean).join(' · ');
+  }
 }
 function hideCatalogLoading(){
   if(ui.catalogLoading)ui.catalogLoading.hidden=true;
@@ -2285,6 +2289,9 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       setSearchAvailability(false);ui.songTotal.textContent='0 เพลง';
       ui.resultCount.textContent='กรุณาเลือกคลังหลัก';
       setSharedLibraryGate(true,preferredRootId?'คลังหลักเดิมไม่สามารถเข้าถึงได้ · เลือกใหม่เอง':'พบหลายคลัง · กรุณาเลือกโฟลเดอร์หลักก่อน');
+      // Account and live Drive listing are verified. Expose only the empty
+      // library selection gate, never a previous library or its songs.
+      setAndroidTvStageAccess(true,account.sub);
       return;
     }
     if(preferredRootId&&String(root.id)!==preferredRootId&&instant){
@@ -2314,6 +2321,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     const cacheOwner=libraryCacheOwner(account.sub,root.id);
     if(!instant){
       const rootCached=await loadLatestCachedCatalog(account.sub,root.id);
+      if(authId!==state.authId)return;
       if(rootCached){instant=rootCached;applyInstantCatalog(instant);}
     }
     // DB/songs.sqlite3 is the only permitted catalog; never query JSON pointers.
@@ -2388,6 +2396,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       }
     }
 
+    if(authId!==state.authId)return;
     state.manifest=catalog;
     state.catalogPointerId='';
     state.catalogDbDirId=dbId;
@@ -4664,6 +4673,11 @@ function androidTvAuthPanel(){
   }
   $('android-tv-auth-retry')?.addEventListener('click',()=>{
     $('android-tv-auth-retry').hidden=true;
+    // Invalidate a slow startup catalog request before requesting a new code.
+    if(androidTvLoginInProgress&&!androidTvVerifiedConnectionSub){
+      ++state.authId;
+      clearPendingAuth();clearActiveAuth();resetPrivate({keepAuth:true});
+    }
     startAndroidTvDeviceLogin(true);
   });
   $('android-tv-auth-cancel')?.addEventListener('click',()=>{
@@ -4696,7 +4710,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1218';
+    script.src='./assets/vendor/qrcode.min.js?v=1219';
     script.async=true;
     let done=false;
     const finish=error=>{
@@ -4712,7 +4726,9 @@ function ensureAndroidTvQrLibrary(){
   return androidTvQrLibraryPromise;
 }
 window.XStageEnsureQrLibrary=ensureAndroidTvQrLibrary;
+let androidTvQrRenderSequence=0;
 async function renderAndroidTvLoginQr(url){
+  const sequence=++androidTvQrRenderSequence;
   const canvas=$('android-tv-auth-qr');
   const wait=$('android-tv-auth-qr-wait');
   if(!canvas)return;
@@ -4720,14 +4736,17 @@ async function renderAndroidTvLoginQr(url){
   if(wait){wait.hidden=false;wait.textContent='กำลังสร้าง QR…';}
   try{
     await ensureAndroidTvQrLibrary();
+    if(sequence!==androidTvQrRenderSequence)return;
     canvas.width=248;canvas.height=248;
     await QRCode.toCanvas(canvas,String(url||'https://www.google.com/device'),{
       width:248,margin:2,errorCorrectionLevel:'M',
       color:{dark:'#07131f',light:'#ffffff'}
     });
+    if(sequence!==androidTvQrRenderSequence)return;
     canvas.hidden=false;
     if(wait)wait.hidden=true;
   }catch{
+    if(sequence!==androidTvQrRenderSequence)return;
     if(wait){wait.hidden=false;wait.textContent='เปิด google.com/device บนมือถือ แล้วกรอกรหัสด้านขวา';}
   }
 }
@@ -4736,14 +4755,20 @@ function showAndroidTvAuthPanel(){
   setAndroidTvStageAccess(false);
   panel.hidden=false;
   notifyAndroidTvLoginReady();
+  $('android-tv-auth-title').textContent='เข้าสู่ระบบ Google ผ่านมือถือ';
+  $('android-tv-auth-url').textContent='https://www.google.com/device';
   $('android-tv-auth-code').textContent='----';
-  $('android-tv-auth-status').textContent='กำลังเตรียมรหัส…';
+  $('android-tv-auth-status').textContent='สแกน QR เพื่อเปิด Google · กำลังขอรหัสเข้าสู่ระบบ…';
   $('android-tv-auth-retry').hidden=true;
   const qr=$('android-tv-auth-qr');if(qr)qr.hidden=true;
   const qrWait=$('android-tv-auth-qr-wait');if(qrWait){qrWait.hidden=false;qrWait.textContent='กำลังขอรหัสจาก Google…';}
+  // The official verification page is usable before the unique code arrives.
+  // Show it immediately; only Google can issue the code shown alongside it.
+  void renderAndroidTvLoginQr('https://www.google.com/device');
   setTimeout(()=>$('android-tv-auth-cancel')?.focus?.(),20);
 }
 function hideAndroidTvAuthPanel(){
+  ++androidTvQrRenderSequence;
   const panel=$('android-tv-auth-panel');
   if(panel)panel.hidden=true;
 }
@@ -4756,6 +4781,7 @@ window.XStageAndroidDeviceCode=payload=>{
   panel.hidden=false;
   const verificationUrl=String(data.verification_url||'https://www.google.com/device');
   $('android-tv-auth-url').textContent=verificationUrl;
+  $('android-tv-auth-title').textContent='เข้าสู่ระบบ Google ผ่านมือถือ';
   $('android-tv-auth-code').textContent=String(data.user_code||'----');
   $('android-tv-auth-status').textContent='สแกน QR และอนุญาตบนมือถือ…';
   $('android-tv-auth-retry').hidden=true;
@@ -4777,6 +4803,7 @@ window.XStageAndroidAuthError=message=>{
   panel.hidden=false;
   const missingOauth=text.includes('ยังไม่ได้ตั้งค่า Google OAuth')||text.includes('XSTAGE_TV_OAUTH_CLIENT_ID');
   if(missingOauth){
+    ++androidTvQrRenderSequence;
     const qr=$('android-tv-auth-qr');if(qr)qr.hidden=true;
     const wait=$('android-tv-auth-qr-wait');
     if(wait){wait.hidden=false;wait.textContent='ยังไม่ได้ตั้งค่า Google OAuth สำหรับ APK รุ่นนี้';}
@@ -4798,7 +4825,13 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
   const existingSub=state.token&&state.accountSub?state.accountSub:'';
   // Silent background refresh must never place a full-screen dialog on lyrics.
   if(!existingSub){
+    ++androidTvQrRenderSequence;
     androidTvAuthPanel().hidden=false;
+    $('android-tv-auth-title').textContent='กำลังเปิดคลังเพลง Google Drive';
+    $('android-tv-auth-code').textContent='ได้รับสิทธิ์แล้ว';
+    const qr=$('android-tv-auth-qr');if(qr)qr.hidden=true;
+    const wait=$('android-tv-auth-qr-wait');if(wait){wait.hidden=false;wait.textContent='ไม่ต้องสแกน QR ซ้ำ · กำลังตรวจสอบคลังเพลง';}
+    $('android-tv-auth-retry').hidden=false;
     $('android-tv-auth-status').textContent='กำลังตรวจสอบบัญชีและสิทธิ์ Google Drive…';
   }
   ui.login.disabled=ui.gateLogin.disabled=true;
@@ -4826,8 +4859,7 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
       window.XStageAndroidAuthError(error?.message||'เปิด Google Drive ไม่สำเร็จ');
     }
   }finally{
-    androidTvLoginInProgress=false;
-    if(authId===state.authId)ui.login.disabled=ui.gateLogin.disabled=false;
+    if(authId===state.authId){androidTvLoginInProgress=false;ui.login.disabled=ui.gateLogin.disabled=false;}
   }
 };
 window.XStageAndroidSignedOut=()=>{
@@ -4990,17 +5022,8 @@ function startAndroidTvDeviceLogin(automatic=false){
 function bootAndroidTvAuthentication(){
   if(androidTvBootAuthStarted||!androidTvNativeBridgeReady()||state.token)return;
   androidTvBootAuthStarted=true;
-  if(androidTvHasStoredGoogleSession()){
-    const panel=androidTvAuthPanel();
-    panel.hidden=false;
-    $('android-tv-auth-status').textContent='กำลังตรวจสอบสิทธิ์ Google Drive ที่บันทึกไว้…';
-    $('android-tv-auth-retry').hidden=false;
-    setAndroidTvStageAccess(false);
-    notifyAndroidTvLoginReady();
-    setStatus('กำลังกู้คืน Google Drive ในแอป Android…');
-    restoreAndroidTvGoogleSession();
-    return;
-  }
+  // Every fresh APK launch deliberately starts a new Google device login.
+  // Remembered refresh tokens are only used for renewals after sign-in.
   startAndroidTvDeviceLogin(true);
 }
 // Re-check the native Drive session before access tokens expire and after TV wake.
@@ -5014,7 +5037,7 @@ function guardAndroidTvSession(){
   if(!expired){androidTvRefreshingSession=false;return;}
   if(androidTvRefreshingSession)return;
   androidTvRefreshingSession=true;
-  if(androidTvHasStoredGoogleSession()){
+  if(androidTvVerifiedConnectionSub&&androidTvHasStoredGoogleSession()){
     if(state.token) {
       // Keep currently loaded audio and the queue alive while restoring the
       // encrypted native refresh token for the same Google account.

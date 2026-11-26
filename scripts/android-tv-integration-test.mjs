@@ -318,3 +318,29 @@ assert.ok(parityFix.includes('#lyrics')&&parityFix.includes('z-index:90!importan
 assert.ok(nativeMeter.includes("document.getElementById('stage-viz-right')")&&
   nativeMeter.includes('view.mirror?LEVELS-1-index:index'),
   'TV must paint both visual meters from live media-capture FFT levels');
+
+// Restored-token startup must explain why QR is not shown and report catalog progress.
+assert.ok(app.includes('ได้รับสิทธิ์แล้ว')&&app.includes('ไม่ต้องสแกน QR ซ้ำ'));
+assert.ok(app.includes("const status=$('android-tv-auth-status');")&&app.includes("Math.round(Number(progress))+'%'"));
+const ambiguousRoot=app.slice(app.indexOf('if(!root){',app.indexOf('async function openDrive(')),app.indexOf('if(preferredRootId&&String(root.id)',app.indexOf('async function openDrive(')));
+assert.ok(ambiguousRoot.includes('state.songs=[]')&&ambiguousRoot.includes('setSharedLibraryGate(true')&&ambiguousRoot.includes('setAndroidTvStageAccess(true,account.sub)'), 'Verified ambiguous root must expose only empty library selection, not deadlock behind QR');
+assert.ok(app.includes('if(authId!==state.authId)return;\n    state.manifest=catalog;'),'Cancelled catalog load cannot activate stale library');
+
+// QR-first cold launch must not consult or restore a remembered token.
+{
+  const bootSrc=segment(app,'function bootAndroidTvAuthentication(){','// Re-check the native Drive session');
+  const calls=[];
+  const boot=new Function('androidTvBootAuthStarted','androidTvNativeBridgeReady','state','startAndroidTvDeviceLogin','androidTvHasStoredGoogleSession','restoreAndroidTvGoogleSession',bootSrc+'\nreturn bootAndroidTvAuthentication;')(false,()=>true,{},()=>calls.push('qr'),()=>{throw Error('Cold launch must not consult stored session');},()=>{throw Error('Cold launch must not restore stored session');});
+  boot();boot();
+  assert.deepEqual(calls,['qr'],'cold launch requests QR exactly once');
+}
+assert.deepEqual(guardScenario({hasSession:true,token:''}).calls,['login'],'no silent restore before QR authorization even when a remembered token exists');
+assert.ok(app.includes("void renderAndroidTvLoginQr('https://www.google.com/device')"),'Show official QR before Google issues a unique code');
+assert.ok(app.includes('if(sequence!==androidTvQrRenderSequence)return;'),'Late QR render must not overwrite verified login UI');
+
+// Native URL resolution must not concatenate karaoke.html and downloads.
+assert.ok(updater.includes('return new URL(new URL(BuildConfig.XSTAGE_WEB_URL), relative);'));
+for(const path of ['downloads/android-tv-latest.json?t=', 'downloads/android-play-latest.json?t=', 'downloads/'])assert.ok(updater.includes('updateUrl("'+path+'"'));
+assert.ok(!updater.includes('BuildConfig.XSTAGE_WEB_URL + "downloads/'));
+const publishWorkflow=read('.github/workflows/build-android-tv.yml');
+assert.ok(publishWorkflow.includes('cp downloads/android-tv-latest.json karaoke.htmldownloads/android-tv-latest.json')&&publishWorkflow.includes('cmp "downloads/${APK_NAME}" "karaoke.htmldownloads/${APK_NAME}"'),'Legacy installed APK feed must publish the exact same release bytes');

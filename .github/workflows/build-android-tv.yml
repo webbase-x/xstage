@@ -251,9 +251,17 @@ jobs:
           }
           pathlib.Path('downloads/android-tv-latest.json').write_text(json.dumps(info,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
           PY
+          # Installed 1216/1218 concatenate the hosted HTML filename and downloads.
+          # Keep their legacy endpoint current using the exact same verified bytes.
+          mkdir -p karaoke.htmldownloads
+          cp "downloads/${APK_NAME}" "karaoke.htmldownloads/${APK_NAME}"
+          cp "downloads/${APK_NAME}.sha256" "karaoke.htmldownloads/${APK_NAME}.sha256"
+          cp downloads/android-tv-latest.json karaoke.htmldownloads/android-tv-latest.json
+          cmp "downloads/${APK_NAME}" "karaoke.htmldownloads/${APK_NAME}"
+          cmp downloads/android-tv-latest.json karaoke.htmldownloads/android-tv-latest.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "downloads/${APK_NAME}" "downloads/${APK_NAME}.sha256" downloads/android-tv-latest.json
+          git add "downloads/${APK_NAME}" "downloads/${APK_NAME}.sha256" downloads/android-tv-latest.json "karaoke.htmldownloads/${APK_NAME}" "karaoke.htmldownloads/${APK_NAME}.sha256" karaoke.htmldownloads/android-tv-latest.json
           if git diff --cached --quiet; then
             echo "Published APK is unchanged"
             exit 0
@@ -270,7 +278,7 @@ jobs:
                 exit 1
               fi
               touched="$(git diff --name-only "$GITHUB_SHA" origin/main)"
-              if printf '%s\n' "$touched" | grep -Eq '^(android-tv/|version\.json$|config\.js$|app\.js$|index\.html$|remote\.html$|remote\.js$|style\.css$|xstage-ux\.css$|stage-controls\.js$|stage-ui\.js$|browser-midi\.js$|native-audio-meter\.js$|android-apk-download\.js$|\.github/workflows/build-android-tv\.yml$|downloads/android-tv-latest\.json$|downloads/X-Stage-Karaoke-Android-)'; then
+              if printf '%s\n' "$touched" | grep -Eq '^(android-tv/|version\.json$|config\.js$|app\.js$|index\.html$|remote\.html$|remote\.js$|style\.css$|xstage-ux\.css$|stage-controls\.js$|stage-ui\.js$|browser-midi\.js$|native-audio-meter\.js$|android-apk-download\.js$|\.github/workflows/build-android-tv\.yml$|downloads/android-tv-latest\.json$|downloads/X-Stage-Karaoke-Android-|karaoke\.htmldownloads/)'; then
                 echo "::error::Android or shared web sources changed while APK was building; rebuild from latest main"
                 exit 1
               fi
