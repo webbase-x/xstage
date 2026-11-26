@@ -6,27 +6,23 @@ on:
     paths:
       - "android-tv/**"
       - "version.json"
-      - "downloads/windows-pc-latest.json"
-      - "app.js"
-      - "config.js"
-      - "android-apk-download.js"
-      - "style.css"
-      - "index.html"
-      - "stage.html"
-      - "xstage-ux.css"
-      - "stage-controls.js"
-      - "remote.js"
-      - "remote.html"
+      - "package.json"
+      - "*.js"
+      - "*.css"
+      - "*.html"
+      - "assets/**"
       - "scripts/**"
       - ".github/workflows/build-android-tv.yml"
   pull_request:
     paths:
       - "android-tv/**"
       - "version.json"
-      - "app.js"
-      - "config.js"
-      - "android-apk-download.js"
-      - "style.css"
+      - "package.json"
+      - "*.js"
+      - "*.css"
+      - "*.html"
+      - "assets/**"
+      - "scripts/**"
       - ".github/workflows/build-android-tv.yml"
 
 permissions:
@@ -233,6 +229,31 @@ jobs:
           VERSION="$(python -c "import json; print(json.load(open('version.json', encoding='utf-8'))['version'])")"
           BUILD="$(python -c "import json; print(json.load(open('version.json', encoding='utf-8'))['build'])")"
           APK_NAME="X-Stage-Karaoke-Android-v${VERSION}-build${BUILD}.apk"
+          # A build number identifies immutable APK bytes. Do not silently replace
+          # an installed build, even when an unrelated web change triggers CI.
+          if [ -f downloads/android-tv-latest.json ]; then
+            PUBLISHED_BUILD="$(python -c "import json; print(int(json.load(open('downloads/android-tv-latest.json', encoding='utf-8'))['build']))")"
+            if [ "$BUILD" -lt "$PUBLISHED_BUILD" ]; then
+              echo "::error::Refusing to publish an older APK build"
+              exit 1
+            fi
+            if [ "$BUILD" -eq "$PUBLISHED_BUILD" ]; then
+              python - <<'PY'
+          import hashlib, json, pathlib
+          meta=json.load(open('downloads/android-tv-latest.json',encoding='utf-8'))
+          version=json.load(open('version.json',encoding='utf-8'))
+          assert meta['version']==version['version'], 'Version mismatch for published build'
+          name=f"X-Stage-Karaoke-Android-v{meta['version']}-build{meta['build']}.apk"
+          assert meta['file']==name, 'Unexpected published APK filename'
+          for folder in ('downloads','karaoke.htmldownloads'):
+              apk=pathlib.Path(folder)/name
+              assert hashlib.sha256(apk.read_bytes()).hexdigest()==meta['sha256'], 'Published APK hash mismatch'
+              assert json.loads((pathlib.Path(folder)/'android-tv-latest.json').read_text(encoding='utf-8'))==meta, 'Legacy update feed mismatch'
+          print('Existing build verified; bump version/build for new APK publication.')
+          PY
+              exit 0
+            fi
+          fi
           cp android-tv/app/build/outputs/apk/debug/app-debug.apk "downloads/${APK_NAME}"
           sha256sum "downloads/${APK_NAME}" > "downloads/${APK_NAME}.sha256"
           python - <<'PY'
@@ -276,7 +297,7 @@ jobs:
                 exit 1
               fi
               touched="$(git diff --name-only "$GITHUB_SHA" origin/main)"
-              if printf '%s\n' "$touched" | grep -Eq '^(android-tv/|version\.json$|config\.js$|app\.js$|index\.html$|remote\.html$|remote\.js$|style\.css$|xstage-ux\.css$|stage-controls\.js$|stage-ui\.js$|browser-midi\.js$|native-audio-meter\.js$|android-apk-download\.js$|\.github/workflows/build-android-tv\.yml$|downloads/android-tv-latest\.json$|downloads/X-Stage-Karaoke-Android-|karaoke\.htmldownloads/)'; then
+              if printf '%s\n' "$touched" | grep -Eq '^(android-tv/|version\.json$|package\.json$|[^/]+\.(js|css|html)$|assets/|scripts/|\.github/workflows/build-android-tv\.yml$|downloads/android-tv-latest\.json$|downloads/X-Stage-Karaoke-Android-|karaoke\.htmldownloads/)'; then
                 echo "::error::Android or shared web sources changed while APK was building; rebuild from latest main"
                 exit 1
               fi

@@ -53,4 +53,48 @@ assert.match(app,/requestNativePlaybackAudioFocus/,'Native playback must acquire
 assert.match(importer,/hasRelativePaths/,'Flat file-picker results should identify missing folder hierarchy');
 assert.match(index,/<footer class="bottom-bar">[^]*?<\/footer>/,'Stage footer must close correctly');
 assert.match(remote,/const nativeTvMode=\(\(\)=>/,'Native TV detection is a Boolean, not a function');
-console.log('PASS: AAC signatures, solo lyric timing and Web reliability contracts');
+
+ // Simulate startup metadata outage, reconnect, request coalescing and recovery.
+ {
+   const handlers={},docHandlers={},warnings=[];
+   const link={hidden:true,removeAttribute(key){delete this[key];}};
+   let requests=0, pending, aborted=0, timer;
+   const browser={
+     navigator:{userAgent:'Android'},
+     location:{href:'https://example.test/xstage/karaoke.html',search:''},
+     document:{hidden:false,getElementById:id=>id==='android-tv-apk-download'?link:null,
+       addEventListener:(name,fn)=>{docHandlers[name]=fn;}},
+     addEventListener:(name,fn)=>{handlers[name]=fn;},
+     URL,URLSearchParams,AbortController,
+     setTimeout:fn=>{timer=fn;return 1;},clearTimeout:()=>{},
+     console:{warn:(...args)=>warnings.push(args)},
+     fetch:(_url,options)=>{
+       requests++;
+       assert.equal(options.cache,'no-store');
+       assert.ok(options.signal);
+       return new Promise((resolve,reject)=>{
+         options.signal.addEventListener('abort',()=>{aborted++;reject(Error('timeout'));},{once:true});
+         pending=resolve;
+       });
+     }
+   };
+   browser.window=browser;
+   vm.runInNewContext(apk,browser);
+   assert.equal(requests,1);
+   handlers.online();docHandlers.visibilitychange();
+   assert.equal(requests,1,'Reconnect events must not duplicate active requests');
+   timer();
+   for(let i=0;i<8;i++)await Promise.resolve();
+   assert.equal(aborted,1);
+   assert.equal(link.hidden,true);
+   handlers.online();
+   assert.equal(requests,2,'Metadata fetch must recover after startup timeout');
+   pending({ok:true,json:async()=>({file:'X-Stage-Karaoke-Android-v1.0.220-build1220.apk',version:'1.0.220',build:1220,sha256:'a'.repeat(64)})});
+   for(let i=0;i<12;i++)await Promise.resolve();
+   assert.equal(link.hidden,false);
+   assert.match(link.href,/downloads\/X-Stage-Karaoke-Android-v1\.0\.220-build1220\.apk$/);
+   handlers.online();docHandlers.visibilitychange();
+   assert.equal(requests,2,'Healthy metadata must not be refetched on every visibility event');
+ }
+
+console.log('PASS: AAC signatures, solo lyric timing, APK reconnect and Web reliability contracts');
