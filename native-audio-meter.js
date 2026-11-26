@@ -93,6 +93,7 @@
     const data=sampleData;
     const playing=!player.paused&&!player.ended&&!player.muted&&player.volume>0;
     if(playing&&context.state==='running')analyser.getByteFrequencyData(data);
+    else data.fill(0); // Muted/suspended capture must not display a stale spectrum.
     const nyquist=(context.sampleRate||48000)/2;
     const upper=Math.min(15500,nyquist*.92),lower=40;
     let energy=0,bass=0;
