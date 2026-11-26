@@ -8,7 +8,8 @@
   const ANDROID_TV_LATEST_URL='./downloads/android-tv-latest.json';
   const ANDROID_APK_NEVER_ASK_KEY='xstage-android-apk-never-ask-v1';
   const ANDROID_APK_OFFERED_KEY='xstage-android-apk-offered-build-v1';
-  let verifiedAndroidApk=null;
+  let verifiedAndroidApk=null,apkRefreshInFlight=null;
+  const APK_METADATA_TIMEOUT_MS=12000;
   // Remove only the old X-Stage worker for this page scope and its shell cache.
   // Do not disturb the separate Song Studio scope, private media or OAuth state.
   async function retireLegacyPwa(){
@@ -32,11 +33,18 @@
     const source=new URLSearchParams(location.search).get('source');
     return source!=='android-tv'&&source!=='android-tablet';
   };
-  async function refreshAndroidTvApkLink(){
+  function refreshAndroidTvApkLink(){
+    if(apkRefreshInFlight)return apkRefreshInFlight;
+    apkRefreshInFlight=fetchAndroidTvApkLink().finally(()=>{apkRefreshInFlight=null;});
+    return apkRefreshInFlight;
+  }
+  async function fetchAndroidTvApkLink(){
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),APK_METADATA_TIMEOUT_MS);
     try{
       const metaUrl=new URL(ANDROID_TV_LATEST_URL,location.href);
       metaUrl.searchParams.set('_',String(Date.now()));
-      const response=await fetch(metaUrl,{cache:'no-store'});
+      const response=await fetch(metaUrl,{cache:'no-store',signal:controller.signal});
       if(!response.ok)throw Error('HTTP '+response.status);
       const meta=await response.json();
       const file=String(meta?.file||'').trim();
@@ -64,7 +72,7 @@
         apkMenuLink.hidden=true;
       }
       return null;
-    }
+    }finally{clearTimeout(timeout);}
   }
   const downloadAndroidTvApk=async()=>{
     const apk=verifiedAndroidApk||await refreshAndroidTvApkLink();
@@ -123,6 +131,11 @@
   closeButton?.addEventListener('click',()=>dialog.close());
   dialog?.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
   if(isAndroidBrowser()){
-    void refreshAndroidTvApkLink().then(apk=>{if(apk)offerPublishedAndroidApk(apk);});
+    const refreshAndOffer=()=>refreshAndroidTvApkLink().then(apk=>{if(apk)offerPublishedAndroidApk(apk);});
+    const retryUnavailable=()=>{if(!verifiedAndroidApk&&!apkRefreshInFlight)void refreshAndOffer();};
+    // A transient connection error on startup must not hide APK downloads forever.
+    window.addEventListener('online',retryUnavailable);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)retryUnavailable();});
+    void refreshAndOffer();
   }else if(apkMenuLink){apkMenuLink.hidden=true;}
 })();
