@@ -25,6 +25,11 @@ import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Button;
+import android.view.Gravity;
+import android.webkit.WebResourceError;
 import android.webkit.JavascriptInterface;
 import android.webkit.SafeBrowsingResponse;
 import android.webkit.WebChromeClient;
@@ -47,6 +52,12 @@ public final class MainActivity extends Activity {
     private GoogleDeviceAuth googleAuth;
     private XStageUpdateManager updateManager;
     private boolean webAppReady;
+    private boolean loginScreenReady;
+    private LinearLayout startupRecovery;
+    private TextView startupStatus;
+    private Button startupRetry;
+    private final Handler startupHandler = new Handler(Looper.getMainLooper());
+    private final Runnable startupTimeout = () -> showStartupRecovery("หน้าเข้าสู่ระบบยังไม่พร้อม · ตรวจอินเทอร์เน็ตแล้วลองใหม่");
     private volatile boolean webTextEditingActive;
     private volatile boolean playbackAudioFocusHeld;
     private AudioManager audioManager;
@@ -195,24 +206,28 @@ public final class MainActivity extends Activity {
         updateManager = new XStageUpdateManager(this, new XStageUpdateManager.Listener() {
             @Override
             public void onUpdateAvailable(String version, int build) {
+                if (isStartupRecoveryVisible()) startupStatus.setText("พบรุ่นใหม่ v" + version + " · Build " + build + " · กดอัปเดต APK");
                 callJavascript("window.XStageAndroidUpdateAvailable&&window.XStageAndroidUpdateAvailable(" +
                         JSONObject.quote(version) + "," + build + ");");
             }
 
             @Override
             public void onUpdateStatus(String message) {
+                if (isStartupRecoveryVisible()) startupStatus.setText(message);
                 callJavascript("window.XStageAndroidUpdateStatus&&window.XStageAndroidUpdateStatus(" +
                         JSONObject.quote(message) + ");");
             }
 
             @Override
             public void onUpdateError(String message) {
+                if (isStartupRecoveryVisible()) startupStatus.setText(message);
                 callJavascript("window.XStageAndroidUpdateError&&window.XStageAndroidUpdateError(" +
                         JSONObject.quote(message) + ");");
             }
 
             @Override
             public void onNoUpdate() {
+                if (isStartupRecoveryVisible()) startupStatus.setText("ยังไม่มี APK รุ่นใหม่ · ลองเปิดหน้าเข้าสู่ระบบอีกครั้ง");
                 callJavascript("window.XStageAndroidNoUpdate&&window.XStageAndroidNoUpdate();");
             }
         });
@@ -244,6 +259,13 @@ public final class MainActivity extends Activity {
             @Override
             public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
                 super.onReceivedHttpError(view, request, errorResponse);
+                if (request.isForMainFrame()) showStartupRecovery("เปิด X-Stage ไม่สำเร็จ · HTTP " + errorResponse.getStatusCode());
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                if (request.isForMainFrame()) showStartupRecovery("เชื่อมต่อ X-Stage ไม่สำเร็จ · ตรวจอินเทอร์เน็ตแล้วลองใหม่");
             }
 
             @Override
@@ -262,7 +284,71 @@ public final class MainActivity extends Activity {
             }
         });
 
+        startupHandler.postDelayed(startupTimeout, 15000L);
         webView.loadUrl(buildAppUrl());
+        webView.requestFocus();
+    }
+
+    private boolean isStartupRecoveryVisible() {
+        return startupRecovery != null && startupRecovery.getVisibility() == View.VISIBLE;
+    }
+
+    private void showStartupRecovery(String message) {
+        if (loginScreenReady || isFinishing() || isDestroyed() || appRoot == null) return;
+        startupHandler.removeCallbacks(startupTimeout);
+        if (startupRecovery == null) {
+            startupRecovery = new LinearLayout(this);
+            startupRecovery.setOrientation(LinearLayout.VERTICAL);
+            startupRecovery.setGravity(Gravity.CENTER);
+            startupRecovery.setBackgroundColor(Color.rgb(6,19,33));
+            int padding = Math.round(24f * getResources().getDisplayMetrics().density);
+            startupRecovery.setPadding(padding,padding,padding,padding);
+            startupStatus = new TextView(this);
+            startupStatus.setTextColor(Color.WHITE);
+            startupStatus.setTextSize(22);
+            startupStatus.setGravity(Gravity.CENTER);
+            startupRecovery.addView(startupStatus);
+            startupRetry = new Button(this);
+            startupRetry.setText("ลองเปิดหน้าเข้าสู่ระบบใหม่");
+            startupRetry.setOnClickListener(v -> retryStartup());
+            startupRecovery.addView(startupRetry);
+            Button update = new Button(this);
+            update.setText("ตรวจสอบ APK รุ่นใหม่");
+            update.setOnClickListener(v -> {
+                if (updateManager != null) updateManager.checkForUpdates(true);
+                startupStatus.setText("กำลังตรวจสอบ APK รุ่นใหม่…");
+            });
+            startupRecovery.addView(update);
+            Button install = new Button(this);
+            install.setText("อัปเดต APK");
+            install.setOnClickListener(v -> {
+                if (updateManager != null) updateManager.installLatestUpdate();
+            });
+            startupRecovery.addView(install);
+            Button exit = new Button(this);
+            exit.setText("ออกจากแอป");
+            exit.setOnClickListener(v -> finish());
+            startupRecovery.addView(exit);
+            appRoot.addView(startupRecovery, new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        }
+        startupStatus.setText(message);
+        startupRecovery.setVisibility(View.VISIBLE);
+        startupRetry.requestFocus();
+    }
+
+    private void retryStartup() {
+        if (webView == null || loginScreenReady) return;
+        startupRecovery.setVisibility(View.GONE);
+        startupBanner.setVisibility(View.VISIBLE);
+        webAppReady = false;
+        webView.stopLoading();
+        if (googleAuth != null) googleAuth.cancel();
+        startupHandler.removeCallbacks(startupTimeout);
+        startupHandler.postDelayed(startupTimeout, 15000L);
+        // Bypass stale HTTP cache without clearing credentials or song data.
+        webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
+        webView.loadUrl(buildAppUrl() + "&startup_retry=" + System.currentTimeMillis());
         webView.requestFocus();
     }
 
@@ -328,6 +414,7 @@ public final class MainActivity extends Activity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (isStartupRecoveryVisible()) return super.dispatchKeyEvent(event);
         if (isTelevisionDevice() && event != null && event.getAction() == KeyEvent.ACTION_DOWN && !webTextEditingActive) {
             switch (event.getKeyCode()) {
                 case KeyEvent.KEYCODE_DPAD_LEFT:
@@ -358,6 +445,10 @@ public final class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (isStartupRecoveryVisible()) {
+            if (keyCode == KeyEvent.KEYCODE_BACK) { finish(); return true; }
+            return super.onKeyDown(keyCode, event);
+        }
         // Repeat arrows for navigation but never auto-repeat transport actions.
         if (event != null && event.getRepeatCount() > 0) {
             switch (keyCode) {
@@ -424,9 +515,9 @@ public final class MainActivity extends Activity {
         super.onResume();
         enterImmersiveMode();
         if (webView != null) webView.onResume();
-        if (updateManager != null && webAppReady) {
+        if (updateManager != null && (webAppReady || isStartupRecoveryVisible())) {
             updateManager.onResume();
-            updateManager.startMonitoring();
+            if (webAppReady) updateManager.startMonitoring();
         }
     }
 
@@ -439,6 +530,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        startupHandler.removeCallbacksAndMessages(null);
         releasePlaybackAudioFocus();
         if (googleAuth != null) googleAuth.close();
         if (updateManager != null) updateManager.close();
@@ -509,7 +601,13 @@ public final class MainActivity extends Activity {
         @JavascriptInterface
         public void onLoginScreenReady() {
             runOnUiThread(() -> {
+                if (webView == null || !isTrustedXStageUrl(Uri.parse(webView.getUrl() == null ? "" : webView.getUrl()))) return;
+                loginScreenReady = true;
+                startupHandler.removeCallbacks(startupTimeout);
                 if (startupBanner != null) startupBanner.setVisibility(View.GONE);
+                if (startupRecovery != null) startupRecovery.setVisibility(View.GONE);
+                webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+                webView.requestFocus();
             });
         }
 

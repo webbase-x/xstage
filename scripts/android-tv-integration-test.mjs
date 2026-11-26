@@ -293,8 +293,12 @@ console.log('Android TV integration: update detection, nonintrusive toast, login
 assert.ok(app.includes("function setAndroidTvStageAccess(granted,accountSub='')"),'native stage access gate must exist');
 assert.ok(app.includes("if(androidTvVerifiedConnectionSub&&(!state.token||"),'native stage must relock when token expires');
 assert.ok(app.includes("if(androidTvNativeBridgeReady()&&!androidTvVerifiedConnectionSub)throw error;"),'offline cache cannot unlock a first-time TV login');
-assert.ok(main.includes('onLoginScreenReady')&&main.includes('startupBanner.setVisibility(View.GONE)'),'native splash is dismissed only by login UI');
+assert.ok(main.includes('onLoginScreenReady')&&main.includes('startupBanner.setVisibility(View.GONE)'),'native login-ready bridge must dismiss splash');
 
+assert.ok(main.includes('startupHandler.postDelayed(startupTimeout, 15000L)')&&main.includes('request.isForMainFrame()')&&main.includes('showStartupRecovery'),'native startup has bounded recovery for timeout and main-frame failure');
+assert.ok(main.includes('WebSettings.LOAD_NO_CACHE')&&main.includes('if (isStartupRecoveryVisible()) return super.dispatchKeyEvent(event)'),'recovery supports fresh retry and native TV D-pad');
+assert.ok(main.includes('updateManager.installLatestUpdate()')&&main.includes('startupHandler.removeCallbacksAndMessages(null)'),'native recovery can update without hosted JS and cancels timers on destroy');
+assert.ok(read('karaoke.html').includes('xstage-native-startup-recovery'),'older APKs have independent hosted startup recovery');
 const ux = read('xstage-ux.css');
 const unified = ux.slice(ux.lastIndexOf('/* v1.0.91: Android TV stage shares the WEB stage design exactly.'));
 assert.ok(unified.includes('top:37%!important')&&unified.includes('width:min(72cqw,760px)!important'),'native TV uses identical WEB stage placement');

@@ -962,7 +962,7 @@ assert.ok(index.includes('xstage-native-auth-pending'),'native stage must be loc
 assert.ok(style.includes('html.xstage-native-auth-pending .app-shell'),'no stage before Drive login');
 assert.ok(app.includes('setAndroidTvStageAccess(true,account.sub)'),'only verified Google Drive can unlock stage');
 assert.ok(app.includes('if(androidTvNativeBridgeReady())return;\n  const saved=readActiveAuth();'),'native QR login must not be bypassed by stale web credentials');
-assert.ok(androidMain.includes('R.drawable.xstage_tv_splash')&&androidMain.includes('public void onLoginScreenReady()'),'native splash must remain until login UI is ready');
+assert.ok(androidMain.includes('R.drawable.xstage_tv_splash')&&androidMain.includes('public void onLoginScreenReady()'),'native splash must support login-ready callback');
 assert.ok(androidGradle.includes('splashFile.bytes = logoSource.bytes'),'the exact uploaded logo bytes must become native splash');
 assert.ok(singerStage.includes('class="stage-official-banner"'),'separate singer stage must use one original image');
 
