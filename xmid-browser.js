@@ -68,7 +68,7 @@ async function openPackage(file,{metadataOnly=false}={}){
   if(!(file instanceof Blob))fail('ไม่พบไฟล์');
   if(file.size<HEADER||file.size>HEADER+MAX_META+MAX_MIDI)fail('ขนาดไฟล์เกินขอบเขต');
   const header=new Uint8Array(await file.slice(0,HEADER).arrayBuffer());
-  const magic=decoder.decode(header.subarray(0,8));
+  const magic=String.fromCharCode(...header.subarray(0,8));
   if(magic!=='XSTGPLS1')fail('ไม่ใช่ XMID จาก Song Studio Pro');
   const view=new DataView(header.buffer);
   if(view.getUint32(8,true)!==1)fail('เวอร์ชันไฟล์ไม่รองรับ');
@@ -78,12 +78,14 @@ async function openPackage(file,{metadataOnly=false}={}){
      HEADER+metaSize+mediaSize!==file.size)fail('ส่วนหัวระบุขนาดผิดปกติ');
   const meta=new Uint8Array(await file.slice(HEADER,HEADER+metaSize).arrayBuffer());
   await verify(meta,header.subarray(60,92));
-  const result=metadata(meta);
+  let result;
+  try{result=metadata(meta);}
+  catch(error){if(/^XMID:/.test(String(error?.message||error)))throw error;fail('metadata ไม่ถูกต้อง: '+String(error?.message||error));}
   if(metadataOnly)return result;
   const midi=new Uint8Array(await file.slice(HEADER+metaSize).arrayBuffer());
   await verify(midi,header.subarray(28,60));
-  if(decoder.decode(midi.subarray(0,4))!=='MThd' &&
-     decoder.decode(midi.subarray(0,4))!=='NCN1')fail('สื่อใน XMID ไม่ใช่ MIDI');
+  const mediaMagic=String.fromCharCode(...midi.subarray(0,4));
+  if(mediaMagic!=='MThd' && mediaMagic!=='NCN1')fail('สื่อใน XMID ไม่ใช่ MIDI');
   return {...result,midi:new Blob([midi],{type:'audio/midi'})};
 }
 scope.XStageXmid={inspectMetadata:file=>openPackage(file,{metadataOnly:true}),openPackage};
