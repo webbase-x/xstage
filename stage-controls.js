@@ -153,9 +153,9 @@
   async function ensureRemoteLibraries(){
     if(typeof Peer==='function'&&typeof QRCode!=='undefined')return;
     remoteLibrariesPromise ||= (async()=>{
-      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1220','xstage-peerjs',()=>typeof Peer==='function');
+      await loadRemoteScript('./assets/vendor/peerjs.min.js?v=1221','xstage-peerjs',()=>typeof Peer==='function');
       if(typeof window.XStageEnsureQrLibrary==='function')await window.XStageEnsureQrLibrary();
-      else await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1220','xstage-qrcode',()=>typeof QRCode!=='undefined');
+      else await loadRemoteScript('./assets/vendor/qrcode.min.js?v=1221','xstage-qrcode',()=>typeof QRCode!=='undefined');
     })();
     try{await remoteLibrariesPromise;}
     catch(error){remoteLibrariesPromise=null;throw error;}
@@ -179,7 +179,7 @@
   const guestPermissions={search:true,request:true,playpause:true,'volume-up':true,'volume-down':true,mute:true};
   const ownerPermissions={...guestPermissions,next:true,'cancel-current':true,'fullscreen-on':true,'fullscreen-off':true,medley:true};
   const activity=[];
-  let session=null,sequence=0,pairingPaused=false,fullscreenPending=false;
+  let session=null,sequence=0,pairingPaused=false,fullscreenPending=false,sessionGeneration=0;
 
   function status(value){if(qrStatus)qrStatus.textContent=value;}
   function send(conn,data){if(conn?.open)try{conn.send(data);}catch{}}
@@ -226,8 +226,10 @@
     broadcastStatus();
   }
   function clearPeerSession(){
+    sessionGeneration++;
     if(!session)return;
     const active=session;session=null;
+    clearTimeout(active.reconnectTimer);clearTimeout(active.openTimer);
     for(const entry of active.connections.values())try{entry.conn.close();}catch{}
     try{active.peer?.destroy();}catch{}
     qrApprove.hidden=true;qrReject.hidden=true;hideFullscreenConfirm();
@@ -471,19 +473,39 @@
     session.secret=randomSecret();await renderSessionQr(session);broadcastStatus();
   }
 
+  function scheduleHostReconnect(active){
+    if(session!==active||active.peer?.destroyed||!active.peer?.disconnected||active.reconnectTimer)return;
+    if(navigator.onLine===false){status('เครือข่ายขาด · จะเชื่อมต่อรีโมทใหม่เมื่อออนไลน์');return;}
+    if(active.reconnectAttempts>=5){status('เชื่อมต่อรีโมทไม่สำเร็จ · กด “เปลี่ยน QR”');return;}
+    const wait=[1000,2000,4000,8000,15000][active.reconnectAttempts++];
+    status('เซิร์ฟเวอร์จับคู่หลุด · กำลังเชื่อมต่อใหม่');
+    active.reconnectTimer=setTimeout(()=>{
+      active.reconnectTimer=0;
+      if(session!==active||active.peer?.destroyed||!active.peer?.disconnected)return;
+      if(navigator.onLine===false)return;
+      try{active.peer.reconnect();}catch{scheduleHostReconnect(active);}
+    },wait);
+  }
+  window.addEventListener('online',()=>{
+    if(session?.peer?.disconnected){session.reconnectAttempts=0;scheduleHostReconnect(session);}
+  });
+
   async function createSession(){
-    clearPeerSession();pairingPaused=false;qrPanel.classList.remove('pairing-paused');status('กำลังเตรียมระบบรีโมท…');
-    try{await ensureRemoteLibraries();}catch(error){status(error?.message||'โหลดระบบรีโมทไม่ได้ กรุณาตรวจอินเทอร์เน็ต');return;}
+    clearPeerSession();const generation=sessionGeneration;
+    pairingPaused=false;qrPanel.classList.remove('pairing-paused');status('กำลังเตรียมระบบรีโมท…');
+    try{await ensureRemoteLibraries();}catch(error){if(generation===sessionGeneration)status(error?.message||'โหลดระบบรีโมทไม่ได้ กรุณาตรวจอินเทอร์เน็ต');return;}
+    if(generation!==sessionGeneration)return;
     if(typeof Peer!=='function'||typeof QRCode==='undefined'){status('ระบบรีโมทยังไม่พร้อม กรุณาตรวจอินเทอร์เน็ต');return;}
     if(!window.crypto?.getRandomValues){status('เบราว์เซอร์ไม่รองรับการเชื่อมต่ออย่างปลอดภัย');return;}
     const active={peer:null,peerId:'',secret:randomSecret(),connections:new Map(),pending:null};
     session=active;qrEnd.textContent='เปลี่ยน QR';status('กำลังติดต่อเซิร์ฟเวอร์รีโมท…');
     const peer=new Peer();active.peer=peer;
-    const peerOpenTimer=setTimeout(()=>{
+    active.reconnectAttempts=0;active.reconnectTimer=0;
+    const peerOpenTimer=active.openTimer=setTimeout(()=>{
       if(session!==active)return;status(nativeTvMode?'สร้าง QR นานเกินไป · กด MENU > สร้าง QR ใหม่':'สร้าง QR นานเกินไป · กดลองใหม่');
       try{peer.destroy();}catch{}session=null;qrEnd.textContent='ลองใหม่';
     },12000);
-    peer.on('open',async id=>{clearTimeout(peerOpenTimer);if(session!==active)return;active.peerId=id;await renderSessionQr(active);});
+    peer.on('open',async id=>{clearTimeout(peerOpenTimer);if(session!==active)return;clearTimeout(active.reconnectTimer);active.reconnectTimer=0;active.reconnectAttempts=0;active.peerId=id;await renderSessionQr(active);});
     peer.on('connection',conn=>{
       if(session!==active||pairingPaused){conn.close();return;}
       if(active.connections.size>=12){conn.close();return;}
@@ -534,13 +556,7 @@
         session=null;
       }
     });
-    peer.on('disconnected',()=>{
-      if(session!==active)return;
-      status('เซิร์ฟเวอร์จับคู่หลุด · กำลังเชื่อมต่อใหม่');
-      try{if(!peer.destroyed&&peer.disconnected)peer.reconnect();}catch{
-        status('เชื่อมต่อรีโมทไม่สำเร็จ · กด “เปลี่ยน QR”');
-      }
-    });
+    peer.on('disconnected',()=>{if(session===active)scheduleHostReconnect(active);});
   }
 
   qrApprove.addEventListener('click',()=>{const entry=session?.pending;if(entry?.conn?.open)approveEntry(entry);});

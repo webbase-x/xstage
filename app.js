@@ -2074,6 +2074,7 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
     if(state.catalogCache.has(cacheKey)){report(label+' · พร้อมแล้ว',true);return state.catalogCache.get(cacheKey);}
     const persisted=await loadCatalogPiece(sub,cacheKey);
     if(persisted){
+      state.catalogCache.clear(); // Only one full SQLite snapshot is needed in RAM.
       state.catalogCache.set(cacheKey,persisted);
       report(label+' · ใช้ส่วนที่โหลดไว้แล้ว',true);
       return persisted;
@@ -2084,12 +2085,9 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
     const buffer=await response.arrayBuffer();
     if(buffer.byteLength>192*1048576)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกิน 192 MB');
     const data=await codec.read(new Uint8Array(buffer));
+    state.catalogCache.clear();
     state.catalogCache.set(cacheKey,data);
     await saveCatalogPiece(sub,cacheKey,data);
-    if(state.catalogCache.size>40){
-      const oldest=state.catalogCache.keys().next().value;
-      state.catalogCache.delete(oldest);
-    }
     report(label+' · ดาวน์โหลดแล้ว',false);
     return data;
   }
@@ -4696,7 +4694,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1220';
+    script.src='./assets/vendor/qrcode.min.js?v=1221';
     script.async=true;
     let done=false;
     const finish=error=>{
@@ -4819,6 +4817,11 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
         // Renewal may fail while Google is briefly offline. Keep the existing
         // audio and queue; retry via the native refresh-token watchdog.
         clearPendingAuth();
+        androidTvRefreshingSession=false;
+        // Preserve the current stage and queue during transient renewal errors.
+        // A later native refresh or explicit login can recover the token.
+        setStatus(error?.message||'ต่ออายุ Google ไม่สำเร็จ · จะลองใหม่','error');
+        return;
       }else{
         setAndroidTvStageAccess(false);
         clearActiveAuth();resetPrivate({keepAuth:true});

@@ -42,7 +42,7 @@
       window.history.replaceState(null,'',location.pathname+location.search+'#'+savedFragment.toString());
     }
   }
-  let peer=null,conn=null,connected=false,ready=false,connectWatchdog=0;
+  let peer=null,conn=null,connected=false,ready=false,connectWatchdog=0,connecting=false;
   let lastNotifiedUpdateBuild=0;
   let searchTimer=null,querySequence=0,activeTab='search',role='guest';
   let ownerAccessToken='';
@@ -80,7 +80,7 @@
     const wait=[1500,3500,8000][reconnectAttempts++];
     reconnectTimer=setTimeout(()=>{
       reconnectTimer=0;
-      if(!connected&&document.visibilityState!=='hidden')connect();
+      if(!ready&&!connecting&&document.visibilityState!=='hidden')try{connect();}catch{disconnected('เชื่อมต่อใหม่ไม่สำเร็จ');}
     },wait);
   }
   function report(message,state='info'){status.textContent=message;status.dataset.state=state;}
@@ -133,7 +133,7 @@
 
   function disconnected(message){
     clearConnectWatchdog();resetButtons();
-    connected=false;ready=false;controls.hidden=true;setRole('guest');
+    connecting=false;connected=false;ready=false;controls.hidden=true;setRole('guest');
     ownerAuthRequest++;ownerLoginBusy=false;ownerAutoAttempted=false;discardOwnerToken();
     reconnectButton.hidden=!hostId||!secret;scanLink.hidden=false;report(message,'disconnected');
     scheduleReconnect();
@@ -320,7 +320,7 @@
     if(!data||typeof data!=='object')return;
     if(data.type==='pending'){armConnectWatchdog(45000);report('กำลังรอจอหลักอนุมัติการเชื่อมต่อครั้งแรก…','pending');return;}
     if(data.type==='ready'){
-      clearConnectWatchdog();reconnectAttempts=0;
+      clearConnectWatchdog();connecting=false;reconnectAttempts=0;
       connected=true;controls.hidden=false;reconnectButton.hidden=true;scanLink.hidden=true;setRole('guest');
       report('เชื่อมต่อแล้ว · Guest ใช้คำสั่งพื้นฐานได้ทันที','connected');
       if(search.value.trim())search.dispatchEvent(new Event('input'));else drawResults([]);
@@ -537,14 +537,18 @@
   if(typeof Peer!=='function'){report('โหลดระบบจับคู่ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ต');return;}
   report('กำลังเชื่อมต่อรีโมท X-Stage…','connecting');
 
-  function connect(){
+  function connect(force=false){
+    if(navigator.onLine===false){disconnected('เครือข่ายขาด · จะเชื่อมต่อใหม่เมื่อออนไลน์');return;}
+    if(connecting&&!force)return;
+    connecting=true;connected=false;ready=false;
     clearConnectWatchdog();
     if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=0;}
     setRole('guest');
     ownerAuthRequest++;ownerLoginBusy=false;ownerAutoAttempted=false;discardOwnerToken();
     const previous=peer;
+    peer=null;conn=null; // Ignore synchronous close callbacks from retired channels.
     if(previous){try{previous.destroy();}catch{}}
-    const current=new Peer();peer=current;conn=null;
+    const current=new Peer();peer=current;
     armConnectWatchdog(18000);
     current.on('open',()=>{
       if(peer!==current)return;
@@ -575,12 +579,12 @@
   }
   reconnectButton.addEventListener('click',()=>{
     reconnectAttempts=0;
-    try{connect();reconnectButton.hidden=true;report('กำลังเชื่อมต่ออีกครั้ง…','reconnecting');}
+    try{connect(true);reconnectButton.hidden=true;report('กำลังเชื่อมต่ออีกครั้ง…','reconnecting');}
     catch{disconnected('เชื่อมต่อไม่สำเร็จ');}
   });
-  window.addEventListener('online',()=>{if(!ready){reconnectAttempts=0;connect();}});
+  window.addEventListener('online',()=>{if(!ready&&!connecting){reconnectAttempts=0;try{connect();}catch{disconnected('เชื่อมต่อใหม่ไม่สำเร็จ');}}});
   document.addEventListener('visibilitychange',()=>{
-    if(!document.hidden&&!ready){reconnectAttempts=0;connect();}
+    if(!document.hidden&&!ready&&!connecting){reconnectAttempts=0;try{connect();}catch{disconnected('เชื่อมต่อใหม่ไม่สำเร็จ');}}
   });
   try{connect();}catch{disconnected('เริ่มระบบรีโมทไม่สำเร็จ');}
   window.addEventListener('beforeunload',()=>{

@@ -98,4 +98,28 @@ assert.ok(player.includes('publishPlaybackStatus(\'loading\'')&&player.includes(
   'host playback must report loading, actual playing, and Drive/media failures');
 assert.ok(source.includes("type:'playback-status'")&&remote.includes("data.type==='playback-status'"),
   'mobile remote must receive actual TV playback feedback');
-console.log('X-Stage mobile remote request contract: 9 behavioral cases and real playback feedback passed');
+
+ // Host reconnect: never create a second retry timer, preserve session, and stop on replacement.
+ const start=source.indexOf('  function scheduleHostReconnect(active){');
+ const end=source.indexOf("  window.addEventListener('online'",start);
+ assert.ok(start>=0&&end>start);
+ const timers=[],messages=[],net={onLine:true};
+ let reconnects=0;
+ const active={peer:{disconnected:true,destroyed:false,reconnect(){reconnects++;}},reconnectAttempts:0,reconnectTimer:0};
+ const hostRetry=new Function('session','navigator','status','setTimeout',
+   source.slice(start,end)+';return {scheduleHostReconnect,replace:()=>{session=null;}}')(
+   active,net,message=>messages.push(message),(fn,delay)=>{timers.push({fn,delay});return timers.length;});
+ hostRetry.scheduleHostReconnect(active);hostRetry.scheduleHostReconnect(active);
+ assert.equal(timers.length,1,'duplicate disconnect events must share one timer');
+ assert.equal(timers[0].delay,1000);
+ timers[0].fn();assert.equal(reconnects,1);
+ net.onLine=false;hostRetry.scheduleHostReconnect(active);
+ assert.equal(timers.length,1,'offline state must not start a peer reconnect');
+ net.onLine=true;hostRetry.scheduleHostReconnect(active);
+ assert.equal(timers[1].delay,2000);
+ hostRetry.replace();timers[1].fn();assert.equal(reconnects,1,'old session timer must not reconnect after replacement');
+ assert.ok(source.includes('if(generation!==sessionGeneration)return;'),'stale QR initialization must stop');
+ assert.ok(remote.includes('if(connecting&&!force)return;')&&remote.includes('peer=null;conn=null;'),
+   'mobile remote must suppress overlapping connect attempts and ignore retired peer callbacks');
+
+console.log('X-Stage mobile remote request and reconnect contract passed');

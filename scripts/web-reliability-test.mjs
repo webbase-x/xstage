@@ -97,4 +97,24 @@ assert.match(remote,/const nativeTvMode=\(\(\)=>/,'Native TV detection is a Bool
    assert.equal(requests,2,'Healthy metadata must not be refetched on every visibility event');
  }
 
-console.log('PASS: AAC signatures, solo lyric timing, APK reconnect and Web reliability contracts');
+
+ // Single SQLite snapshot in RAM; retain disk fallback and database validation.
+ const sqlite=read('drive-sqlite.js');
+ assert.ok(sqlite.includes('const songRows=db.prepare(rowsSql)')&&sqlite.includes('while(songRows.step())')&&sqlite.includes('finally{songRows.free();}'));
+ assert.ok(app.includes('state.catalogCache.clear(); // Only one full SQLite snapshot is needed in RAM.'));
+ assert.ok(importer.includes("this.importRootId=String(auth.rootId||'');")&&importer.includes("String(auth.rootId||'')!==this.importRootId"));
+ assert.ok(meter.includes('else data.fill(0);'),'muted or suspended meter must clear stale FFT data');
+ // Behavioral LRU test: recently used notes move to the end of the eviction order.
+ {
+   const begin=midi.indexOf('async function sampleBuffer(font,index,context){');
+   const end=midi.indexOf('async function decodeSampleBuffer(',begin);
+   assert.ok(begin>=0&&end>begin);
+   const cached={length:32,numberOfChannels:1};
+   const font={cache:new Map([[1,cached],[2,{}]])};
+   const get=new Function('pendingSampleBuffers','decodeSampleBuffer',midi.slice(begin,end)+';return sampleBuffer;')(
+     new WeakMap(),()=>{throw Error('Cached note must not be decoded again');});
+   assert.equal(await get(font,1,{}),cached);
+   assert.deepEqual([...font.cache.keys()],[2,1]);
+ }
+
+console.log('PASS: Web reliability, SQLite cursor, Drive root guard, audio meter and SoundFont LRU');
