@@ -193,6 +193,8 @@ def build_quick_catalog(library, source, songs_root, *, copy_external=False,
                 path TEXT PRIMARY KEY, stamp TEXT NOT NULL, reader TEXT NOT NULL, data TEXT NOT NULL)''')
             cache.commit()
             metrics['resume_hits'] = 0
+            metrics['checkpoint_saved'] = 0
+            metrics['checkpoint_errors'] = 0
             metrics['read_workers'] = _READ_WORKERS
             emit(dict(type='phase', phase='ระยะที่ 1/2 — สำรวจชื่อไฟล์เพลง', total=None))
             plan.folder(scan_root, cancelled=cancelled, events=emit)
@@ -265,13 +267,18 @@ def build_quick_catalog(library, source, songs_root, *, copy_external=False,
                             try:
                                 with cache:
                                     cache.executemany('INSERT OR REPLACE INTO quick_resume VALUES (?,?,?,?)', checkpoint)
+                                metrics['checkpoint_saved'] += len(checkpoint)
                             except sqlite3.Error as error:
+                                metrics['checkpoint_errors'] += 1
                                 if len(metrics['warnings']) < 30:
                                     metrics['warnings'].append('บันทึกจุดทำต่อไม่สำเร็จ: ' + str(error))
                         if time.monotonic() - last_emit >= .5 or checked == plan.count():
                             emit(dict(type='progress', done=checked, total=plan.count(), path=batch[-1][0],
                                       added=metrics['added'], updated=metrics['updated'],
-                                      resume_hits=metrics['resume_hits'], read_workers=_READ_WORKERS))
+                                      resume_hits=metrics['resume_hits'], read_workers=_READ_WORKERS,
+                                      checkpoint_saved=metrics['checkpoint_saved'],
+                                      checkpoint_errors=metrics['checkpoint_errors'],
+                                      songs_per_second=checked / max(.001, time.perf_counter()-start-metrics['inventory_seconds'])))
                             last_emit = time.monotonic()
                 # This JOIN only materializes old paths absent from selected inventory;
                 # outside folders/drives are neither checked nor modified.
@@ -328,7 +335,7 @@ def build_quick_catalog(library, source, songs_root, *, copy_external=False,
             metrics['catalog'] = library.count()
             metrics['total_seconds'] = round(time.perf_counter()-start, 4)
             metrics['result_status'] = ('partial' if (metrics['failed'] or plan.omitted or metrics['missing']
-                                                      or metrics['post_commit_errors']) else 'success')
+                                                      or metrics['post_commit_errors'] or metrics['checkpoint_errors']) else 'success')
             notes = [f'สร้างรายการด่วนแล้ว · ค้นหาได้ {metrics["catalog"]:,} เพลง · '
                      f'เพิ่ม {metrics["added"]:,} · ปรับ {metrics["updated"]:,} · '
                      f'รอตรวจเพลงซ้ำ {metrics["pending"]:,} รายการ',

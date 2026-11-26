@@ -506,7 +506,16 @@ class CatalogWindow:
                 self._indeterminate = False
             value = min(100, max(0, done * 100 / total)) if total else 0
             self.bar.configure(mode='determinate', value=value)
-            self.progress_detail.set(f'{value:.0f}% · {done:,} / {total:,} รายการ')
+            detail = f'{value:.0f}% · {done:,} / {total:,} รายการ'
+            rate = state.get('songs_per_second', 0)
+            if rate > 0:
+                seconds = max(0, int((total-done)/rate))
+                detail += f' · {rate:.1f} เพลง/วินาที · เหลือ ~{seconds//60}:{seconds%60:02d}'
+            if 'checkpoint_saved' in state:
+                detail += f" · เก็บจุดทำต่อ {state['checkpoint_saved'] + state.get('resume_hits', 0):,}"
+                if state.get('checkpoint_errors'):
+                    detail += ' · มีข้อผิดพลาดบันทึกจุดทำต่อ'
+            self.progress_detail.set(detail)
 
     def finish(self, result=None, error=None, cancelled=False):
         if self._closed:

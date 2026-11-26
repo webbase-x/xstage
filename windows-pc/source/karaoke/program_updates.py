@@ -1,7 +1,7 @@
 """Verified Windows release checks. No song library, queue or settings are touched.
 
-The update feed is intentionally unavailable until a separately tested Windows installer
-is published. UI/network work is kept off the audio/playback event loop.
+Stable and verified unsigned preview channels are separate. Preview installation
+always requires explicit user confirmation. UI/network work stays off playback.
 """
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from tkinter import messagebox
 from urllib.request import Request, urlopen
 
 FEED = 'https://webbase-x.github.io/xstage/downloads/windows-pc-latest.json'
+PREVIEW_FEED = 'https://webbase-x.github.io/xstage/downloads/windows-pc-preview-latest.json'
 DOWNLOADS = 'https://webbase-x.github.io/xstage/downloads/'
 FILE_PATTERN = re.compile(r'(?:X-StageKaraoke\.exe|X-Stage-Karaoke-PC-Windows-v[0-9.]+-build[0-9]+\.(?:exe|msi))\Z')
 HEX_PATTERN = re.compile(r'[0-9a-fA-F]{64}\Z')
@@ -49,21 +50,39 @@ def validate_manifest(info, current, current_build=0):
     return {'version': latest, 'name': name, 'sha256': digest.lower()}
 
 
-def check_release(current, current_build=None):
-    request = Request(FEED, headers={'Cache-Control': 'no-cache', 'User-Agent': 'XStageWindowsUpdater/1'})
+def _read_feed(url):
+    request = Request(url, headers={'Cache-Control': 'no-cache', 'User-Agent': 'XStageWindowsUpdater/1'})
     with urlopen(request, timeout=12) as response:
         data = response.read(32769)
     if len(data) > 32768:
         raise ValueError('ข้อมูลเวอร์ชันมีขนาดผิดปกติ')
+    return json.loads(data.decode('utf-8'))
+
+
+def check_release(current, current_build=None):
     if current_build is None:
         from . import __build__
         current_build = __build__
-    return validate_manifest(json.loads(data.decode('utf-8')), current, current_build)
+    stable = validate_manifest(_read_feed(FEED), current, current_build)
+    if stable:
+        return dict(stable, channel='stable')
+    preview = _read_feed(PREVIEW_FEED)
+    if not isinstance(preview, dict) or preview.get('available') is not True:
+        return None
+    if preview.get('channel') != 'preview' or preview.get('platform') != 'windows-x64':
+        raise ValueError('ข้อมูลช่องทาง Windows Preview ไม่ถูกต้อง')
+    update = validate_manifest(preview, current, current_build)
+    if update is None:
+        return None
+    if preview.get('download_url') != DOWNLOADS + update['name']:
+        raise ValueError('ตำแหน่งดาวน์โหลด Preview ไม่ถูกต้อง')
+    return dict(update, channel='preview')
 
 
-def fetch_verified_installer(update):
-    location = Path(tempfile.gettempdir()) / 'XStageUpdates'
-    location.mkdir(parents=True, exist_ok=True)
+def fetch_verified_installer(update, progress=None):
+    if not FILE_PATTERN.fullmatch(update['name']) or not HEX_PATTERN.fullmatch(update['sha256']):
+        raise ValueError('ข้อมูลตัวติดตั้งไม่ถูกต้อง')
+    location = Path(tempfile.mkdtemp(prefix='XStageUpdate-'))
     destination = location / update['name']
     partial = destination.with_suffix(destination.suffix + '.part')
     digest = hashlib.sha256()
@@ -71,12 +90,18 @@ def fetch_verified_installer(update):
     try:
         request = Request(DOWNLOADS + update['name'], headers={'User-Agent': 'XStageWindowsUpdater/1'})
         with urlopen(request, timeout=45) as remote, partial.open('wb') as local:
+            raw_total = remote.headers.get('Content-Length', '')
+            total = int(raw_total) if str(raw_total).isdigit() else 0
+            if total > MAX_INSTALLER_BYTES:
+                raise ValueError('ไฟล์ติดตั้งมีขนาดเกินขีดจำกัด')
             while chunk := remote.read(1024 * 1024):
                 count += len(chunk)
                 if count > MAX_INSTALLER_BYTES:
                     raise ValueError('ไฟล์ติดตั้งมีขนาดเกินขีดจำกัด')
                 digest.update(chunk)
                 local.write(chunk)
+                if progress:
+                    progress(count, total)
         if digest.hexdigest() != update['sha256']:
             raise ValueError('SHA-256 ของตัวติดตั้งไม่ตรงกับรุ่นที่ประกาศ')
         os.replace(partial, destination)
@@ -84,6 +109,11 @@ def fetch_verified_installer(update):
     finally:
         if partial.exists():
             partial.unlink()
+        if not destination.exists():
+            try:
+                location.rmdir()
+            except OSError:
+                pass
 
 
 def launch_installer(path):
@@ -96,7 +126,7 @@ def launch_installer(path):
 
 def check_in_background(app, current_version, interactive=False):
     """Use after() only for notifications; installer launch requires explicit confirmation."""
-    if getattr(app, '_xstage_update_check_running', False):
+    if getattr(app, '_xstage_update_check_running', False) or getattr(app, '_xstage_update_install_running', False):
         return
     app._xstage_update_check_running = True
 
@@ -124,23 +154,46 @@ def check_in_background(app, current_version, interactive=False):
             return
 
         def ask_update():
+            preview = update.get('channel') == 'preview'
+            warning = ('\nรุ่น Preview ผ่าน CI แต่ไม่มีลายเซ็น Authenticode อาจมี SmartScreen เตือน\n' if preview else '\n')
+            if getattr(app, '_xstage_update_install_running', False):
+                return
             if not messagebox.askyesno('มี X-Stage รุ่นใหม่',
                 f"มี X-Stage Karaoke PC v{update['version']} พร้อมอัปเดต\n"
-                'ต้องการดาวน์โหลดและเปิดตัวติดตั้งตอนนี้หรือไม่?\n'
-                'ระบบจะตรวจสอบ SHA-256 ก่อนเปิดตัวติดตั้ง และไม่ลบไฟล์เพลงของคุณ', parent=app):
+                + warning + 'ต้องการดาวน์โหลดและเปิดตัวติดตั้งตอนนี้หรือไม่?\n'
+                'ระบบจะตรวจสอบ SHA-256 ก่อนเปิดตัวติดตั้ง และไม่ลบไฟล์เพลงของคุณ', parent=app, default='no'):
                 return
+            app._xstage_update_install_running = True
             threading.Thread(target=install_worker, args=(update,), daemon=True, name='XStageInstallerFetch').start()
         on_ui(ask_update)
 
     def install_worker(update):
+        last_percent = -1
+        def progress(done, total):
+            nonlocal last_percent
+            percent = min(100, int(done * 100 / total)) if total else done // (1024 * 1024)
+            if percent == last_percent:
+                return
+            last_percent = percent
+            label = f'ดาวน์โหลดอัปเดต {percent}%' if total else f'ดาวน์โหลดอัปเดต {percent} MB'
+            def show():
+                status = getattr(app, 'status_var', None)
+                if status is not None:
+                    status.set(label)
+            on_ui(show)
         try:
-            path = fetch_verified_installer(update)
+            path = fetch_verified_installer(update, progress)
         except Exception as exc:
             message = str(exc)
+            on_ui(lambda: setattr(app, '_xstage_update_install_running', False))
             on_ui(lambda: messagebox.showerror('อัปเดต X-Stage ไม่สำเร็จ', message, parent=app))
             return
 
         def confirm_install():
+            app._xstage_update_install_running = False
+            if getattr(app, 'scanning', False) or getattr(app, '_shared_build_busy', False):
+                messagebox.showinfo('ตรวจอัปเดต X-Stage', 'กรุณาหยุดงานสร้างฐานเพลงอย่างปลอดภัยก่อนติดตั้ง', parent=app)
+                return
             if not messagebox.askyesno('ยืนยันติดตั้ง X-Stage',
                 'ดาวน์โหลดและตรวจ SHA-256 ผ่านแล้ว\n'
                 'บันทึกงานและปิดการเล่นเพลงก่อนติดตั้งต่อ\n'
