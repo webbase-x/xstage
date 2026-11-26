@@ -55,7 +55,8 @@ function metadata(bytes){
   document.metadataComplete=Boolean(identity.identityComplete);
   document.metadataIssues=[...(identity.title==='ไม่ระบุชื่อเพลง'?['missing-title']:[]),
     ...(identity.artist==='ไม่ระบุศิลปิน'?['missing-artist']:[]),
-    ...(placeholderLyrics?['missing-timed-lyrics']:[])];
+    ...(placeholderLyrics?['missing-timed-lyrics']:[]),
+    ...(/[\uFFFD\u0000-\u001F\u007F-\u009F]/.test(String(title||'')+' '+String(artist||''))?['suspect-text-encoding']:[])];
   if(placeholderLyrics){
     document.lines=[];
     document.lyricsMode='unavailable';
