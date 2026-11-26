@@ -95,7 +95,6 @@ class CatalogWindow:
         self._phase_total = None
         self._page = 0
         self.mode = tk.StringVar(self.window, value='quick')
-        self.usage = tk.StringVar(self.window, value='pc')
         self.duplicates = tk.StringVar(self.window, value='review')
         self.shutdown_after = tk.BooleanVar(self.window, value=False)
         self.duplicate_report_path = None
@@ -158,14 +157,14 @@ class CatalogWindow:
         tk.Label(source_card, text='ฐาน PC ปัจจุบัน: '+str(self.app.library.path),
                  bg=PANEL, fg=MUTED, wraplength=720, justify='left',
                  font=('Leelawadee UI', 9)).grid(row=2, column=0, columnspan=3, sticky='w', pady=(8, 0))
-        tk.Label(source_card, text='PC เท่านั้น: ใช้คลังตำแหน่งเดิม · PC + Online: ต้องเตรียมคลังบน Google Drive ก่อน',
+        tk.Label(source_card, text='ใช้คลังตำแหน่งเดิม · ส่งฐานไป Online จากแท็บสร้างฐาน / Sync',
                  bg=PANEL, fg=MUTED, wraplength=720, justify='left',
                  font=('Leelawadee UI', 9)).grid(row=3, column=0, columnspan=3, sticky='w')
 
         mode_row = ttk.Frame(source_card)
         mode_row.grid(row=4, column=0, columnspan=3, sticky='w', pady=(8, 0))
-        ttk.Radiobutton(mode_row, text='Karaoke PC เท่านั้น', value='pc', variable=self.usage).pack(side='left')
-        ttk.Radiobutton(mode_row, text='Karaoke PC + Online', value='online', variable=self.usage).pack(side='left', padx=(20, 0))
+        ttk.Button(mode_row, text='Google Drive', command=self._choose_google_drive).pack(side='left')
+        ttk.Button(mode_row, text='เปิด Google Drive', command=self._launch_google_drive).pack(side='left', padx=6)
 
         search_row = tk.Frame(body, bg=BG)
         search_row.grid(row=1, column=0, sticky='ew', pady=(12, 6))
@@ -320,6 +319,33 @@ class CatalogWindow:
         self.entry.selection_range(0, 'end')
         return 'break'
 
+    def _choose_google_drive(self):
+        from .library_setup import drive_roots
+        roots = drive_roots()
+        remembered = self.app.settings.get('catalog_google_source')
+        start = Path(remembered) if remembered else None
+        if start is None or not start.is_dir():
+            start = roots[0] if roots else Path.home()
+            existing = start / 'XStageKaraoke' / 'SONGS'
+            if existing.is_dir():
+                start = existing
+        folder = filedialog.askdirectory(parent=self.window, initialdir=str(start),
+                                         mustexist=True, title='เลือกคลังเพลง Google Drive')
+        if folder:
+            self.source = Path(folder)
+            self.source_text.set(str(self.source))
+            self.app.settings['catalog_google_source'] = str(self.source)
+            self.app.settings['catalog_source'] = str(self.source)
+            self.app.save_settings()
+
+    def _launch_google_drive(self):
+        from .library_setup import launch_drive
+        try:
+            launch_drive()
+            self.status.set('เปิด Google Drive แล้ว · เมื่อเชื่อมต่อสำเร็จให้เลือกคลังเพลงอีกครั้ง')
+        except (OSError, ValueError) as error:
+            messagebox.showwarning('Google Drive', str(error), parent=self.window)
+
     def _choose_folder(self):
         start = self.source if self.source.is_dir() else self.source.parent
         folder = filedialog.askdirectory(parent=self.window, initialdir=start, mustexist=True,
@@ -350,10 +376,6 @@ class CatalogWindow:
             source = self.source.resolve()
             managed = Path(self.app.managed_catalog_root()).resolve()
             copy_external = False
-            if mode == 'quick' and self.usage.get() == 'online':
-                from .shared_catalog_builder_ui import open_builder
-                open_builder(self.app, initial_root=source)
-                return
             if mode == 'clear':
                 if not messagebox.askyesno('ล้างรายการทั้งหมด',
                         f'ล้างรายชื่อเพลงทั้งหมดจากฐาน PC ภายในเครื่องหรือไม่?\n{self.app.library.path}\nรายการในคิวที่อ้างถึงคลังนี้จะถูกล้างด้วย\n'
