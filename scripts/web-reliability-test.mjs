@@ -118,3 +118,60 @@ assert.match(remote,/const nativeTvMode=\(\(\)=>/,'Native TV detection is a Bool
  }
 
 console.log('PASS: Web reliability, SQLite cursor, Drive root guard, audio meter and SoundFont LRU');
+
+
+ // Stream realistic catalog chunks; bound a stalled body even after headers.
+ {
+   const from=app.indexOf('async function readCatalogBytes(');
+   const to=app.indexOf('async function readPublishedCatalog(',from);
+   assert.ok(from>=0&&to>from);
+   const readBytes=new Function(app.slice(from,to)+';return readCatalogBytes;')();
+   function response(chunks,header=0){
+     let n=0,cancelled=0,released=0;
+     return {headers:{get:()=>String(header)},body:{getReader:()=>({
+       read:async()=>n<chunks.length?{done:false,value:Uint8Array.from(chunks[n++])}:{done:true},
+       cancel:async()=>{cancelled++;},releaseLock(){released++;}
+     })},counts:()=>[cancelled,released]};
+   }
+   let t=response([[1,2],[3,4]]);
+   assert.deepEqual([...await readBytes(t,4,50)],[1,2,3,4]);
+   assert.deepEqual(t.counts(),[0,1]);
+   t=response([[1,2],[3,4]]);
+   await assert.rejects(readBytes(t,3,50),/ใหญ่เกิน/);
+   assert.deepEqual(t.counts(),[1,1]);
+   let cancelled=0;
+   const stalled={body:{getReader:()=>({read:()=>new Promise(()=>{}),cancel:async()=>{cancelled++;},releaseLock(){}})}};
+   await assert.rejects(readBytes(stalled,4,10),/หยุดตอบสนอง/);
+   assert.equal(cancelled,1,'Hung response body must be cancelled');
+ }
+ // Mirror host snapshots retain playback state and reject closed windows.
+ {
+   const start=pc.indexOf('function sendStageSnapshot(){');
+   const end=pc.indexOf("$pc('pc-stage-pop').onclick",start);
+   assert.ok(start>=0&&end>start);
+   const messages=[],screen={closed:false,postMessage:(data,origin)=>messages.push({data,origin})};
+   const state={current:{title:'ทดสอบ',artist:'ศิลปิน'},lyrics:{lines:[{text:'ร้อง'}]},queue:[{}]};
+   const audio={src:'blob:test',currentTime:42,duration:120,paused:false};
+   const send=new Function('screen','state','audio','location',pc.slice(start,end)+';return sendStageSnapshot;')(screen,state,audio,{origin:'https://example.test'});
+   assert.equal(send(),true);
+   assert.equal(messages[0].data.time,42);
+   assert.equal(messages[0].data.playing,true);
+   assert.equal(messages[0].origin,'https://example.test');
+   screen.closed=true;assert.equal(send(),false);assert.equal(messages.length,1);
+   const mirror=read('stage.html');
+   const a=mirror.indexOf('function requestStageSync('),b=mirror.indexOf("window.addEventListener('pageshow'",a);
+   assert.ok(a>=0&&b>a);
+   let now=10000;const requests=[],status={textContent:''};
+   const opener={closed:false,postMessage:(d,o)=>requests.push({d,o})};
+   const doc={hidden:false,querySelector:()=>status};
+   const sync=new Function('Date','opener','location','document',
+     'let lastStageSyncRequest=0,lastStagePacketAt=0;'+mirror.slice(a,b)+';return {requestStageSync,checkStageConnection,received:()=>{lastStagePacketAt=Date.now();}};')(
+       {now:()=>now},opener,{origin:'https://example.test'},doc);
+   assert.equal(sync.requestStageSync(true),true);
+   assert.equal(sync.requestStageSync(),false);
+   sync.received();now+=1000;sync.checkStageConnection();assert.equal(requests.length,1);
+   now+=5000;sync.checkStageConnection();assert.equal(requests.length,2);
+   assert.match(status.textContent,/เชื่อมต่อ/);
+   opener.closed=true;now+=5000;sync.checkStageConnection();assert.match(status.textContent,/จอหลักปิด/);
+   assert.equal(requests.length,2);
+ }
