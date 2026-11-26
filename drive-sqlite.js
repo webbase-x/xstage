@@ -234,9 +234,11 @@ async function read(bytes){
       ?'SELECT web_song_id,payload,midi_md5,midi_size,id,path,kind FROM songs ORDER BY ordinal'
       :indexed?'SELECT web_song_id,payload,midi_md5,midi_size FROM songs'
       :'SELECT web_song_id,payload FROM songs';
-    const songRows=(db.exec(rowsSql)[0]?.values)||[];
+    // Step one row at a time to avoid a second complete JS copy of the catalog.
+    const songRows=db.prepare(rowsSql);
     const songs=[],rawMidiHashes=new Set();
-    for(const [id,payload,storedHash,storedSize,pcSongId,portablePath,portableKind] of songRows){
+    try{while(songRows.step()){
+      const [id,payload,storedHash,storedSize,pcSongId,portablePath,portableKind]=songRows.get();
       let song;
       try{song=JSON.parse(payload);}catch{fail('ข้อมูล JSON ในแถว SQLite ไม่ถูกต้อง');}
       if(!validId(id)||song?.webSongId!==id)fail('รหัสอ้างอิงในฐานเพลงไม่ตรงกัน');
@@ -258,7 +260,7 @@ async function read(bytes){
         }
       }
       songs.push(song);
-    }
+    }}finally{songRows.free();}
     const removes=(db.exec('SELECT web_song_id FROM removed_songs')[0]?.values||[]).map(x=>x[0]);
     return {schemaVersion:1,generation:metadata.generation||'',
       kind:metadata.kind, ...(metadata.kind==='snapshot'?{songs}:{upserts:songs,removes})};
