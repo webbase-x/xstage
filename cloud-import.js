@@ -1253,6 +1253,8 @@ class Importer {
     if(this.stopRequested)throw new DOMException('ผู้ใช้หยุดงาน','AbortError');
     const auth=this.session();
     if(!auth?.token||!auth.sub||auth.sub!==this.account)fail('บัญชี Google เปลี่ยนหรือสิทธิ์หมดอายุ · หยุดเพื่อความปลอดภัย');
+    if(this.importRootId&&String(auth.rootId||'')!==this.importRootId)
+      fail('คลังเพลงเปลี่ยนระหว่างนำเข้า · หยุดเพื่อป้องกันข้อมูลผิดคลัง');
   }
   async reauthorize(){
     if(this.running||this.lockPending||!this.options.reconnect)return;
@@ -1351,6 +1353,7 @@ class Importer {
     if(!auth?.token||!auth.sub){this.status('กรุณาล็อกอิน Google ก่อน');return;}
     if(this.selectedSub!==auth.sub){this.status('บัญชี Google เปลี่ยน · กรุณาเลือกโฟลเดอร์อีกครั้งเพื่อป้องกันนำเข้าผิดบัญชี');return;}
     this.account=auth.sub;
+    this.importRootId=String(auth.rootId||'');
     this.videoEditor?.releasePreview();
     this.running=true;this.stopRequested=false;this.catalogPublishing=false;this.pauseAfterPublication=false;this.stats={newSongs:0,updated:0,duplicates:0,conflicts:0,metadataPending:0,fonts:0,errors:0};
     this.progress(0,1);this.refreshButtons();
