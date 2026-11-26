@@ -116,4 +116,5 @@ console.log('PASS: portable XSK2 (no key), ZIP deflate, SHA-256, real identity a
  const broken=fixture({badHash:true});
  await assert.rejects(()=>xmid.openPackage(broken),/SHA-256/);
  await assert.rejects(()=>xmid.openPackage(fixture({lines:[{startTime:3,endTime:1,text:'ผิดเวลา'}]})),/เวลา/);
+ await assert.rejects(()=>xmid.openPackage(fixture({lines:[{startTime:1,endTime:3,text:' '}]})),/^Error: XMID: metadata/);
  console.log('PASS: XMID verified MIDI-only, missing metadata, Thai text, invalid timing and corrupt media digest');
