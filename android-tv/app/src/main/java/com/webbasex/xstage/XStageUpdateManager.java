@@ -86,20 +86,28 @@ final class XStageUpdateManager {
                 if (closed) return;
                 latest = update;
                 if (update != null && update.build > BuildConfig.VERSION_CODE) {
-                    boolean continueInstall = installRequested;
                     main.post(() -> {
+                        if (closed) return;
                         listener.onUpdateAvailable(update.version, update.build);
-                        if (continueInstall) {
+                        if (installRequested) {
                             installRequested = false;
                             installLatestUpdate();
                         }
                     });
                 } else {
-                    installRequested = false;
-                    main.post(listener::onNoUpdate);
+                    main.post(() -> {
+                        if (closed) return;
+                        installRequested = false;
+                        listener.onNoUpdate();
+                    });
                 }
             } catch (Exception e) {
-                if (!closed) main.post(() -> listener.onUpdateError(readable(e)));
+                // A failed explicit request must never install on a later periodic check.
+                main.post(() -> {
+                    if (closed) return;
+                    installRequested = false;
+                    listener.onUpdateError(readable(e));
+                });
             } finally {
                 checkInFlight.set(false);
             }
@@ -242,19 +250,21 @@ final class XStageUpdateManager {
         connection.setReadTimeout(12000);
         connection.setUseCaches(false);
         connection.setRequestProperty("Cache-Control", "no-cache");
-        int code = connection.getResponseCode();
-        InputStream stream = code >= 200 && code < 300
-                ? connection.getInputStream()
-                : connection.getErrorStream();
         StringBuilder body = new StringBuilder();
-        if (stream != null) {
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) body.append(line);
+        try {
+            int code = connection.getResponseCode();
+            if (code != 200) throw new IllegalStateException("ตรวจเวอร์ชันไม่สำเร็จ (HTTP " + code + ")");
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+                char[] chunk = new char[1024];
+                int count;
+                while ((count = reader.read(chunk)) != -1) {
+                    if (body.length() + count > 8192) throw new IllegalStateException("ข้อมูลรุ่น APK มีขนาดผิดปกติ");
+                    body.append(chunk, 0, count);
+                }
             }
+        } finally {
+            connection.disconnect();
         }
-        connection.disconnect();
-        if (code < 200 || code >= 300) throw new IllegalStateException("ตรวจเวอร์ชันไม่สำเร็จ (HTTP " + code + ")");
 
         JSONObject json = new JSONObject(body.toString());
         int build = json.optInt("build", 0);
@@ -360,7 +370,9 @@ final class XStageUpdateManager {
                 }
                 Uri uri = manager.getUriForDownloadedFile(id);
                 if (uri == null) throw new IllegalStateException("Android ไม่คืน URI ของไฟล์อัปเดต");
-                main.post(() -> launchInstaller(uri, update.version));
+                main.post(() -> {
+                    if (!closed) launchInstaller(uri, update.version);
+                });
             } catch (Exception e) {
                 main.post(() -> listener.onUpdateError(readable(e)));
             } finally {
