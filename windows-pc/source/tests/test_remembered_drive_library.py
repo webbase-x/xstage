@@ -37,3 +37,19 @@ class RememberedDriveTests(unittest.TestCase):
             "pending_online_master":{"root":"H:/new"}}), "H:/new")
         self.assertEqual(remembered_drive_root({"catalog_drive_root":"G:/chosen",
             "shared_drive_root":"G:/old"}), "G:/chosen")
+
+
+    def test_detect_stream_and_mirror_without_creating_library(self):
+        from karaoke.library_setup import drive_roots
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp) / "home"
+            volume = Path(temp) / "volume"
+            stream = volume / "My Drive"
+            mirror = home / "Google Drive"
+            stream.mkdir(parents=True)
+            mirror.mkdir(parents=True)
+            with patch("karaoke.library_setup.Path.home", return_value=home), \
+                 patch("karaoke.library_setup.os.listdrives", return_value=[str(volume)], create=True):
+                self.assertEqual(drive_roots(), [stream, mirror])
+            self.assertFalse((stream / "XStageKaraoke").exists())
+            self.assertFalse((mirror / "XStageKaraoke").exists())
