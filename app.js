@@ -4696,7 +4696,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1220';
+    script.src='./assets/vendor/qrcode.min.js?v=1221';
     script.async=true;
     let done=false;
     const finish=error=>{
@@ -4819,6 +4819,11 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
         // Renewal may fail while Google is briefly offline. Keep the existing
         // audio and queue; retry via the native refresh-token watchdog.
         clearPendingAuth();
+        androidTvRefreshingSession=false;
+        // Preserve the current stage and queue during transient renewal errors.
+        // A later native refresh or explicit login can recover the token.
+        setStatus(error?.message||'ต่ออายุ Google ไม่สำเร็จ · จะลองใหม่','error');
+        return;
       }else{
         setAndroidTvStageAccess(false);
         clearActiveAuth();resetPrivate({keepAuth:true});
