@@ -22,6 +22,7 @@ from pathlib import Path
 
 import plus_core as core
 import db_maintenance as dbmaint
+import metadata_recovery
 import risk_audit as risks
 import preview_player as preview
 import manual_editor as manual
@@ -572,6 +573,9 @@ class Handler(BaseHTTPRequestHandler):
             elif path=="/api/db/compact":
                 result=self.state.start_job("db-compact",lambda progress,cancel:
                     dbmaint.compact_database(self.state.workspace,progress,cancel))
+            elif path=="/api/recover-metadata":
+                result=self.state.start_job("metadata-recovery",lambda progress,cancel:
+                    metadata_recovery.run(self.state.workspace,progress,cancel))
             elif path=="/api/recover-lyrics":
                 result=self.state.start_job("recover",lambda progress,cancel:
                     core.recover_existing_lyrics(self.state.workspace,progress,cancel))

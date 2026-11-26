@@ -967,7 +967,7 @@
         kind==="import-file"?"/api/import/file":
         kind==="song-download"?"/api/import/download":kind==="drive-import"?"/api/import/google-drive":
         kind==="drive-push-preview"?"/api/drive/push-preview":kind==="drive-push"?"/api/drive/push":kind==="recover"?"/api/recover-lyrics":
-        kind==="swipe-audit"?"/api/swipe/scan":kind==="db-audit"?"/api/db/audit":
+        kind==="metadata-recovery"?"/api/recover-metadata":kind==="swipe-audit"?"/api/swipe/scan":kind==="db-audit"?"/api/db/audit":
         kind==="db-clean"?"/api/db/cleanup":
         kind==="db-compact"?"/api/db/compact":"/api/build";
       const result=await api(endpoint,payload);
@@ -1008,6 +1008,7 @@
       $("drive-push-preview").disabled=!state.ready||Boolean(state.activeJob);
       $("drive-push-submit").disabled=!state.ready||Boolean(state.activeJob)||!state.drivePushReady;
       $("recover-lyrics").disabled=!state.ready||Boolean(state.activeJob);
+      $("recover-metadata").disabled=!state.ready||Boolean(state.activeJob);
       $("risk-scan").disabled=!state.ready||Boolean(state.activeJob);
       $("db-health-check").disabled=!state.ready||Boolean(state.activeJob);
       $("db-detail-audit").disabled=!state.ready||Boolean(state.activeJob);
@@ -1039,12 +1040,17 @@
           job.kind==="db-audit"?"ตรวจพื้นที่และความสมบูรณ์ของ SQLite":
           job.kind==="db-clean"?"ล้างประวัติงาน SQLite ที่เสร็จแล้ว":
           job.kind==="db-compact"?"คืนพื้นที่ไฟล์ฐานข้อมูล SQLite":
+          job.kind==="metadata-recovery"?"ตรวจและซ่อม Metadata NCN / XMID":
           job.kind==="recover"?"ตรวจซ่อมเนื้อร้องจาก SQLite":
            job.kind==="swipe-audit"?"ตรวจหลักฐานปาดเนื้อจาก SQLite":"สร้างไฟล์ X-Stage Pro");
       text("activity-subtitle",job.status==="failed"?
         (job.error||job.message||"ดำเนินการไม่สำเร็จ"):
         (job.message||""));
       const p=job.progress||{};
+      if(job.kind==="metadata-recovery"){
+        const s=job.result||p;
+        text("metadata-recovery-report","ตรวจ "+number(s.done)+" / "+number(s.total)+" · แก้ข้อมูล "+number(s.updated)+" · สร้าง XMID ใหม่ "+number(s.rebuilt)+" · ต้องตรวจต่อ "+number(s.unresolved)+" · รายงาน: "+(s.report||""));
+      }
       // Use the engine's completed-song count; a running build must never
       // claim 100% because the UI drew an estimated animation.
       if(job.kind==="build"){
@@ -2933,6 +2939,11 @@
       if(state.activeJob)return toast("มีงานกำลังประมวลผลอยู่",true);
       void diagnostic("ui.import.click",{folder});
       void startJob("import",{folder});
+    });
+    $("recover-metadata").addEventListener("click",async()=>{
+      if(!state.ready||state.activeJob)return;
+      if(!await confirmTask("ตรวจและซ่อมชื่อเพลง / XMID","ตรวจจากต้นฉบับที่ลงทะเบียน เติมเฉพาะข้อมูลที่ขาดหรือเสียหาย ไม่เปลี่ยนรหัสเพลง ไม่แก้ต้นฉบับ และสร้าง XMID เดิมใหม่เฉพาะข้อมูลที่เปลี่ยน"))return;
+      void startJob("metadata-recovery",{});
     });
     $("recover-lyrics").addEventListener("click",async()=>{
       if(!await confirmTask("ตรวจซ่อมเนื้อร้องที่ลงทะเบียนไว้",
