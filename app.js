@@ -2053,12 +2053,50 @@ $('xstage-drive-main-select')?.addEventListener('click',openSharedLibraryPicker)
 
 // Player reads exclusively XStageKaraoke/DB/songs.sqlite3.
 
+async function readCatalogBytes(response,maxBytes=192*1048576,idleMs=30000){
+  const length=Number(response.headers?.get?.('Content-Length')||0);
+  if(length>maxBytes){
+    try{void response.body?.cancel?.().catch(()=>{});}catch{}
+    throw Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด');
+  }
+  let timer;
+  const bounded=task=>Promise.race([task,new Promise((_,reject)=>{
+    timer=setTimeout(()=>reject(Error('ดาวน์โหลดฐานเพลงหยุดตอบสนอง · กรุณาลองใหม่')),idleMs);
+  })]).finally(()=>clearTimeout(timer));
+  if(!response.body?.getReader){
+    const buffer=await bounded(response.arrayBuffer());
+    if(buffer.byteLength>maxBytes)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด');
+    return new Uint8Array(buffer);
+  }
+  const reader=response.body.getReader(),chunks=[];
+  let total=0,complete=false;
+  try{
+    while(true){
+      const {done,value}=await bounded(reader.read());
+      if(done){complete=true;break;}
+      total+=value.byteLength;
+      if(total>maxBytes)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด');
+      chunks.push(value);
+    }
+    const bytes=new Uint8Array(total);
+    let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+    return bytes;
+  }finally{
+    if(!complete)try{void reader.cancel().catch(()=>{});}catch{}
+    try{reader.releaseLock();}catch{}
+  }
+}
 async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
   if(pointer?.schemaVersion!==1||pointer?.layoutVersion!==6||
      pointer?.directFile!==true||pointer?.format!=='xstage-sqlite3-v1'||
      typeof pointer.catalogFileId!=='string'||!pointer.catalogFileId||
      (pointer.deltaFileIds||[]).length)
     throw Error('X-Stage รองรับเฉพาะ DB/songs.sqlite3 ไฟล์เดียว');
+  const authGeneration=state.authId;
+  const assertCurrent=()=>{if(state.authId!==authGeneration)throw new DOMException('คลังหรือบัญชีเปลี่ยน','AbortError');};
+  const validSnapshot=data=>data?.schemaVersion===1&&data.kind==='snapshot'&&
+    Array.isArray(data.songs)&&typeof data.generation==='string'&&!!data.generation&&
+    new Set(data.songs.map(song=>song?.webSongId)).size===data.songs.length;
   const totalPieces=1;
   let completedPieces=0;
   const report=(message,fromCache=false)=>{
@@ -2070,24 +2108,30 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
   };
   async function fetchImmutable(id,label){
     if(typeof id!=='string'||!id)throw Error('ฐานเพลงไม่มี Drive File ID');
+    assertCurrent();
     const cacheKey=pointer.directFile?id+':'+pointer.generation:id;
-    if(state.catalogCache.has(cacheKey)){report(label+' · พร้อมแล้ว',true);return state.catalogCache.get(cacheKey);}
+    const memoryKey=JSON.stringify([sub,cacheKey]);
+    if(state.catalogCache.has(memoryKey)){report(label+' · พร้อมแล้ว',true);return state.catalogCache.get(memoryKey);}
     const persisted=await loadCatalogPiece(sub,cacheKey);
-    if(persisted){
+    assertCurrent();
+    if(validSnapshot(persisted)){
       state.catalogCache.clear(); // Only one full SQLite snapshot is needed in RAM.
-      state.catalogCache.set(cacheKey,persisted);
+      state.catalogCache.set(memoryKey,persisted);
       report(label+' · ใช้ส่วนที่โหลดไว้แล้ว',true);
       return persisted;
     }
     const codec=window.XStageDriveSQLite;
     if(!codec)throw Error('ไม่พบตัวอ่าน SQLite3 กรุณาโหลดหน้าเว็บใหม่');
     const response=await privateFile(id,token);
-    const buffer=await response.arrayBuffer();
-    if(buffer.byteLength>192*1048576)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกิน 192 MB');
-    const data=await codec.read(new Uint8Array(buffer));
+    const bytes=await readCatalogBytes(response);
+    assertCurrent();
+    const data=await codec.read(bytes);
+    assertCurrent();
+    if(!validSnapshot(data))throw Error('ฐานข้อมูล SQLite3 หลักบน Drive ไม่รองรับ');
     state.catalogCache.clear();
-    state.catalogCache.set(cacheKey,data);
+    state.catalogCache.set(memoryKey,data);
     await saveCatalogPiece(sub,cacheKey,data);
+    assertCurrent();
     report(label+' · ดาวน์โหลดแล้ว',false);
     return data;
   }
@@ -5173,7 +5217,7 @@ setupMediaSession();
 // WITHOUT pausing the virtual transport. Remember playback intent while hidden
 // and restore the actual output graph on wake without restarting the song.
 let screenSleepIntent=null;
-let wakeRecoveryInFlight=false;
+let wakeRecoveryInFlight=false,wakeRecoveryTimer=0;
 let wakeNeedsGesture=false;
 function saveScreenSleepPlaybackIntent(){
   if(!state.current||state.loading||state.userPaused||state.userStopped)return;
@@ -5245,8 +5289,9 @@ async function recoverScreenAudio(){
   }finally{wakeRecoveryInFlight=false;}
 }
 function tryRecoverInterruptedPlayback(){
-  if(!mayRestoreScreenAudio())return;
-  setTimeout(()=>{
+  if(wakeRecoveryTimer||wakeRecoveryInFlight||!mayRestoreScreenAudio())return;
+  wakeRecoveryTimer=setTimeout(()=>{
+    wakeRecoveryTimer=0;
     if(mayRestoreScreenAudio())void recoverScreenAudio();
   },180);
 }
