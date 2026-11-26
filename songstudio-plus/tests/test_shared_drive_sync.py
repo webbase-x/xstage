@@ -97,6 +97,11 @@ class SharedDrivePublisherTests(unittest.TestCase):
         fixture=Path(__file__).parent/"fixtures"/"dontreecrab_ncn"
         original=Path(self.temp.name)/"original"
         shutil.copytree(fixture,original)
+        # A numeric NCN source code is a recognizable placeholder on both
+        # sides. Arbitrary non-numeric names are deliberately not assumed bad.
+        for ext,folder in (("mid","Song"),("lyr","Lyrics"),("cur","Cursor")):
+            old=original/folder/"1"/("test."+ext)
+            old.rename(old.with_name("00001."+ext))
         core.import_folder(workspace,original)
         song=core.songs(workspace)[0]
         with core.connect(workspace) as db:
