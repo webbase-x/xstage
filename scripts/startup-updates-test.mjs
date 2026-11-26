@@ -80,9 +80,44 @@ for(const [label,state,player,expected] of [
   ['live MIDI',{current:{},queue:[]},{src:'midi:live',paused:false,ended:false},true],
   ['queued pause',{current:{},queue:[{}]},{src:'midi:live',paused:true,ended:false},true],
   ['medley pause',{current:{},queue:[],medley:true},{src:'midi:live',paused:true,ended:false},true],
+  ['interrupted audio',{current:{},queue:[],resumeAfterInterruption:true},{src:'blob:audio',paused:true,ended:false},true],
+  ['interrupted MIDI',{current:{},queue:[],resumeAfterInterruption:true},{src:'midi:live',paused:true,ended:false},true],
+  ['explicit user pause',{current:{},queue:[],resumeAfterInterruption:true,userPaused:true},{src:'blob:audio',paused:true,ended:false},false],
+  ['explicit user stop',{current:{},queue:[],resumeAfterInterruption:true,userStopped:true},{src:'blob:audio',paused:true,ended:false},false],
   ['finished',{current:{},queue:[]},{src:'midi:live',paused:true,ended:true},false]
 ]){
   assert.equal(realBusy(state,player)(),expected,label+' playback update guard');
+}
+// Execute the real soft-refresh guard without browser or Drive dependencies.
+const softStart=app.indexOf('window.XStageSoftRefresh=async function(){');
+const softEnd=app.indexOf('// Restore a still-valid short-lived token',softStart);
+assert.ok(softStart>=0&&softEnd>softStart);
+for(const [windowFlags,state,flow] of [
+  [{XStageDriveBuildBusy:true},{},null],
+  [{},{authRecovering:true},null],
+  [{},{},{phase:'verifying'}],
+  [{},{loading:true},null]
+]){
+  const soft=new Function('window','state','webGoogleAuthFlow',app.slice(softStart,softEnd)+'\nreturn window.XStageSoftRefresh;');
+  assert.equal(await soft(windowFlags,state,flow)(),true,'busy operation must consume refresh without reload');
+}
+const mobileRefreshSource=read('mobile-layout.js');
+const pullStart=mobileRefreshSource.indexOf('async function finishPullRefresh(){');
+const pullEnd=mobileRefreshSource.indexOf("stage.addEventListener('touchstart'",pullStart);
+assert.ok(pullStart>=0&&pullEnd>pullStart);
+const makePull=new Function('window','console','resetPullRefresh',
+  'let pullRefreshRunning=true;'+mobileRefreshSource.slice(pullStart,pullEnd)+'\nreturn {run:finishPullRefresh,busy:()=>pullRefreshRunning};');
+for(const [label,refresh,expectedReloads] of [
+  ['handled',async()=>true,0],
+  ['failed',async()=>{throw Error('offline');},0],
+  ['idle fallback',async()=>false,1]
+]){
+  let reloads=0,resets=0;
+  const pull=makePull({XStageSoftRefresh:refresh,location:{reload(){reloads++;}}},{warn(){}},()=>{resets++;});
+  await pull.run();
+  assert.equal(reloads,expectedReloads,label);
+  assert.equal(resets,1,label+' reset');
+  assert.equal(pull.busy(),false,label+' releases gesture lock');
 }
 const nativeMain=read('android-tv/app/src/main/java/com/webbasex/xstage/MainActivity.java');
 const remote=read('remote.js');

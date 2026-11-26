@@ -158,7 +158,7 @@
   });
 
   // Pull-to-refresh for compact screens/Web App. Ignore all interactive/scrolling surfaces.
-  let pullStartY=0,pullDistance=0,pullActive=false,pullReady=false;
+  let pullStartY=0,pullDistance=0,pullActive=false,pullReady=false,pullRefreshRunning=false;
   const pullThreshold=88;
   const blockedPullTarget=target=>!!target.closest(
     'button,input,select,textarea,a,[contenteditable="true"],.stage-toolbar,.transport-panel,.mobile-stage-menu,.search-dock,.queue-dock,.pc-tools,.remote-pair-panel,.remote-request-panel,.xstage-eq-panel,.virtual-keyboard,.pc-dialog'
@@ -172,8 +172,22 @@
     }
     if(pullRefreshText)pullRefreshText.textContent='ดึงลงเพื่อรีเฟรช';
   }
+  async function finishPullRefresh(){
+    try{
+      if(typeof window.XStageSoftRefresh==='function'){
+        if(await window.XStageSoftRefresh())return;
+      }
+      window.location.reload();
+    }catch(error){
+      // A failed soft refresh is not permission to destroy a live session.
+      console.warn('X-Stage soft refresh:',error?.message||error);
+    }finally{
+      pullRefreshRunning=false;
+      resetPullRefresh();
+    }
+  }
   stage.addEventListener('touchstart',event=>{
-    if(!isCompact()||event.touches.length!==1||blockedPullTarget(event.target))return;
+    if(pullRefreshRunning||!isCompact()||event.touches.length!==1||blockedPullTarget(event.target))return;
     pullStartY=event.touches[0].clientY;
     pullDistance=0;pullActive=true;pullReady=false;
   },{passive:true});
@@ -199,27 +213,14 @@
     const refresh=pullReady;
     pullActive=false;
     if(refresh){
+      pullRefreshRunning=true;
       if(pullRefresh){
         pullRefresh.hidden=false;
         pullRefresh.classList.add('refreshing');
         pullRefresh.classList.remove('ready');
       }
       if(pullRefreshText)pullRefreshText.textContent='กำลังรีเฟรช…';
-      setTimeout(async()=>{
-        let handled=false;
-        try{
-          if(typeof window.XStageSoftRefresh==='function'){
-            handled=!!(await window.XStageSoftRefresh());
-          }
-        }catch(error){
-          console.warn('X-Stage soft refresh:',error?.message||error);
-        }
-        if(handled){
-          resetPullRefresh();
-          return;
-        }
-        window.location.reload();
-      },90);
+      setTimeout(finishPullRefresh,90);
     }else resetPullRefresh();
   },{passive:true});
   stage.addEventListener('touchcancel',resetPullRefresh,{passive:true});
