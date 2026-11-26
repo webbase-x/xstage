@@ -40,17 +40,22 @@ function metadata(bytes){
   if(offset!==bytes.length)fail('metadata มีข้อมูลส่วนเกิน');
   const document={schemaVersion:1,songCode:code,title,artist,sourceFormat:'XMID',
     songId,lyricsVersionId,timingStatus,lines};
-  scope.XStageImportCore?.validLyricsJson(document,code);
   if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(code))fail('รหัสเพลงไม่ปลอดภัย');
+  // A valid MIDI-only export may contain zero timed lyric lines.
+  // Validate all present lines; do not invent text or timing for missing lyrics.
+  if(lines.length)scope.XStageImportCore?.validLyricsJson(document,code);
   const identity=scope.XStageImportCore?.songIdentity(document,code);
   if(!identity)fail('ไม่พบระบบตรวจสอบชื่อเพลง');
   // Some intact XMID packages contain playable MIDI but do not contain
   // a real artist or timed lyrics. Preserve the original package bytes and
   // mark missing metadata explicitly instead of treating MIDI as corrupt.
-  const placeholderLyrics=lines.length===1&&
+  const placeholderLyrics=lines.length===0||lines.length===1&&
     /^x-stage karaoke$/i.test(String(lines[0].text||'').trim());
   document.title=identity.title;document.artist=identity.artist;
   document.metadataComplete=Boolean(identity.identityComplete);
+  document.metadataIssues=[...(identity.title==='ไม่ระบุชื่อเพลง'?['missing-title']:[]),
+    ...(identity.artist==='ไม่ระบุศิลปิน'?['missing-artist']:[]),
+    ...(placeholderLyrics?['missing-timed-lyrics']:[])];
   if(placeholderLyrics){
     document.lines=[];
     document.lyricsMode='unavailable';
