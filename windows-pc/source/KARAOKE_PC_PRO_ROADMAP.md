@@ -459,3 +459,9 @@ The user requested batched coding without physical QA. **This is a coding update
 - **Evidence labels:** `CODE COMPLETE` means implementation complete; `PASS-SIMULATION` requires an executed, passing simulated test; `PASS-CI` requires an observed passing Windows workflow at the relevant commit; `DEFERRED-HARDWARE` means physical verification is unavailable. Simulation does **not** certify real ASIO drivers, audio interfaces, monitors or live-stage performance.
 - **New test coverage:** `tests/test_p1_virtual_acceptance.py`, `tests/test_virtual_bus_mixer.py`, `tests/test_virtual_audio_integration.py` cover virtual 4/8/16-bus routing, percussion control routing, stereo PCM bus strips, gain/pan/mute/solo/meters/peak bounds, ASIO startup and runtime fallback.
 - **Current verification:** test files committed; no passing Windows CI result for the latest changes has been independently confirmed in this update. Keep P1/P2 acceptance PENDING-QA; hardware items DEFERRED-HARDWARE. Do not mark stable release PASS.
+
+
+## 2026-11-26 — Windows v1.0.88 regression recovery
+
+- PASS-CI: [run 45727434620](https://github.com/webbase-x/xstage/actions/runs/45727434620), exact source `376494e36c901274aa5f39a61d7f4791ab751681`: SQLite 14 tests; full regression 1301 tests, 0 failures, 0 errors, 81 skipped; isolated Tk GUI 18 passed, 0 failed, 1 retired. Native ASIO bridge compilation, BASS verification, installer compilation, silent install/uninstall preserving Data and Songs, Sigstore provenance verification and artifact upload all succeeded.
+- Preview publication run 45728361490 succeeded; not Stable. Physical ASIO and long playback remain DEFERRED-HARDWARE. Keep 24 of 27 historical acceptance items open pending individual evidence review; no new acceptance closure inferred from aggregate CI.
