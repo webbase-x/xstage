@@ -6,8 +6,8 @@
   "version": "1.0.88",
   "build": 1088,
   "installer_file": "X-StageKaraoke.exe",
-  "sha256": "fca95bb739a99d61586a646430a2596ead4a083c0809d7ad02ce0ad5cd5665ce",
+  "sha256": "b269946c4b9e21157e8fd480d09a9b7b50d74996671908f033b92a52218410a8",
   "download_url": "https://webbase-x.github.io/xstage/downloads/X-StageKaraoke.exe",
-  "source_commit": "376494e36c901274aa5f39a61d7f4791ab751681",
+  "source_commit": "e5cde70bcc9c99324a403ecc94907b5da677b938",
   "note": "Unsigned public binary preview from verified Windows CI. Not an official signed updater; SmartScreen may warn."
 }
