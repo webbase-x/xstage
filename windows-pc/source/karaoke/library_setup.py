@@ -3,20 +3,51 @@ from pathlib import Path
 import os
 import shutil
 import tempfile
+import subprocess
 from .shared_drive_layout import setup, inspect, DEFAULT_NAME
 
 DRIVE_DOWNLOAD = "https://www.google.com/drive/download/"
 PACKAGES = {".xmid", ".xsk"}
 
 def drive_roots():
-    # Drive Desktop stream volumes normally expose a My Drive directory.
+    """Find mounted streams and conventional mirrored folders without creating anything."""
+    volumes = getattr(os, "listdrives", lambda: [])()
+    if os.name == "nt" and not volumes:
+        import ctypes
+        mask = ctypes.windll.kernel32.GetLogicalDrives()
+        volumes = [chr(65+i) + ":\\" for i in range(26) if mask & (1 << i)]
+    candidates = [Path(v) / name for v in volumes
+                  for name in ("My Drive", "ไดรฟ์ของฉัน")]
+    candidates.extend(Path.home() / name for name in ("Google Drive", "My Drive", "ไดรฟ์ของฉัน"))
     roots = []
-    for volume in getattr(os, "listdrives", lambda: [])():
-        for name in ("My Drive", "ไดรฟ์ของฉัน"):
-            candidate = Path(volume) / name
-            if candidate.is_dir():
+    for candidate in candidates:
+        try:
+            if candidate.is_dir() and candidate not in roots:
                 roots.append(candidate)
+        except OSError:
+            continue
     return roots
+
+def launch_drive():
+    """Launch installed Drive from standard installation directories, not arbitrary executables."""
+    if os.name != "nt":
+        raise ValueError("Google Drive for desktop ต้องใช้ Windows")
+    for key in ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"):
+        base = os.environ.get(key)
+        if not base:
+            continue
+        root = Path(base) / "Google" / "Drive File Stream"
+        candidates = [root / "GoogleDriveFS.exe", *sorted(root.glob("*/GoogleDriveFS.exe"), reverse=True)]
+        for candidate in candidates:
+            if candidate.is_file():
+                subprocess.Popen([str(candidate)], shell=False)
+                return
+    for desktop in (Path.home() / "Desktop", Path(os.environ.get("PUBLIC", r"C:\Users\Public")) / "Desktop"):
+        shortcut = desktop / "Google Drive.lnk"
+        if shortcut.is_file():
+            os.startfile(str(shortcut))
+            return
+    raise ValueError("ไม่พบโปรแกรม Google Drive · เปิดจาก Start หรือ Desktop แล้วลองใหม่")
 
 def remembered_drive_root(settings):
     """Selection is independent of which SQLite snapshot is active."""
