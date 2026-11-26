@@ -2362,6 +2362,27 @@ try
         manager.GetQueueNames().Any(n => n != n.Trim()))
         throw new Exception("Queue list must trim and deduplicate legacy labels.");
 
+    // Build 40: external deletion must invalidate completed history durably.
+    var missingOutput = manager.Add(server.Url + "range/missing-output.bin", folder, 1);
+    manager.Pause(missingOutput);
+    missingOutput.CompletedPath = Path.Combine(folder, "build40-missing-output.bin");
+    File.WriteAllBytes(missingOutput.CompletedPath, new byte[] { 1, 2, 3 });
+    missingOutput.TotalBytes = 3;
+    missingOutput.DownloadedBytes = 3;
+    missingOutput.Status = "Completed";
+    manager.ReconcileMissingOutputs();
+    if (missingOutput.Status != "Completed")
+        throw new Exception("Existing completed output must remain completed.");
+    File.Delete(missingOutput.CompletedPath);
+    manager.ReconcileMissingOutputs();
+    if (missingOutput.Status != "Failed" || ProgressPresentation.FillFraction(missingOutput) != 0 ||
+        string.IsNullOrWhiteSpace(missingOutput.Error))
+        throw new Exception("Missing output must invalidate completed progress.");
+    var reopenedMissing = new DownloadEngine(isolatedEngineData).Jobs.Single(j => j.Id == missingOutput.Id);
+    if (reopenedMissing.Status != "Failed" || reopenedMissing.DownloadedBytes != 0 ||
+        reopenedMissing.Url != missingOutput.Url)
+        throw new Exception("Missing output state and original URL must survive SQLite reopen.");
+
     manager.SetDefaultParts(8);
     if (manager.DefaultParts != 8) throw new Exception("Default segment preference not saved.");
     var job = manager.Add(server.Url + "range/test%20file.bin", folder);

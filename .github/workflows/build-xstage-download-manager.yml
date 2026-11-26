@@ -2,6 +2,10 @@ name: Build X-Stage Download Manager Windows Preview
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'download-manager/**'
+      - '.github/workflows/build-xstage-download-manager.yml'
   push:
     paths:
       - 'download-manager/**'
@@ -12,7 +16,7 @@ permissions:
 
 concurrency:
   group: xstage-download-manager-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -295,12 +299,15 @@ jobs:
           $size = (Get-Item $setup).Length
           # Do not silently replace an existing immutable version with different bytes.
           $existing = gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            throw 'Release tag already exists: bump the application version before republishing.'
+          $reuseExisting = $LASTEXITCODE -eq 0
+          if ($reuseExisting) {
+            Write-Host 'Existing immutable release: verify published bytes before updating feed; never overwrite.'
           }
           $notes = "Windows 10/11 x64 Preview. Installer EXE only, installs to Program Files with UAC admin approval. In-app verified downloader, silent update and restart, priority and per-site download slots, HTTP speed controls and EWMA telemetry, readable artifact filenames and safe rename, resumable per-chunk retry, HTTP Range-to-single fallback, SQLite WAL persistent jobs/chunks and JSON migration, original X-Stage icon workspace and sortable download table with file type column, clipboard URL auto-paste, icon toolbar and category tree, video redownload with selectable quality/container and safe separate filenames, MP4 moov integrity checks and real FFmpeg conversion, yt-dlp error diagnostics and capped video streams, phase tracking and network stall watchdog, simplified toolbar, CDN filename and extension repair, resumable verified EXE download (with retries), video-only controls and single staged updater handoff. MP4 default, MKV/WEBM/MP3 output options. Opt-in Live Background Recorder monitors public HLS/DASH and supported live platform status without opening a video player; system-tray waiting, graceful recording to preserved MKV, pause-aware MP4 clips after stop, and no protected/DRM access. The app and PC must remain running. Bundled yt-dlp, Deno and FFmpeg; no DRM or private content bypass. SHA-256: $hash. Size: $size bytes. Unsigned preview; Windows will ask for user approval."
-          gh release create $tag $setup --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'X-Stage Download Manager v${{ steps.version.outputs.version }} Build ${{ steps.version.outputs.build }} (Windows Preview)' --notes $notes --prerelease
-          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publish failed' }
+          if (-not $reuseExisting) {
+            gh release create $tag $setup --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'X-Stage Download Manager v${{ steps.version.outputs.version }} Build ${{ steps.version.outputs.build }} (Windows Preview)' --notes $notes --prerelease
+            if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publish failed' }
+          }
           # Download published asset and compare bytes, not just release metadata.
           $verifyDir = Join-Path $env:RUNNER_TEMP 'xstage-release-verify'
           New-Item -ItemType Directory -Force -Path $verifyDir | Out-Null

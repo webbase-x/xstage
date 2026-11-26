@@ -96,6 +96,7 @@ public sealed class DownloadEngine
             if (!AllowedParts.Contains(job.Parts)) job.Parts = 4;
             job.PreviousBytes = job.DownloadedBytes;
         }
+        ReconcileMissingOutputs();
         Save();
     }
 
@@ -131,8 +132,30 @@ public sealed class DownloadEngine
         }
     }
 
+    // Reconcile completed history without deleting files or restarting jobs.
+    public void ReconcileMissingOutputs()
+    {
+        bool changed = false;
+        foreach (var job in Jobs.ToArray())
+        {
+            if (_active.ContainsKey(job.Id) || job.Status != "Completed") continue;
+            if (File.Exists(job.CompletedPath)) continue;
+            job.Error = "ไม่พบไฟล์ปลายทาง หรือไดรฟ์ไม่พร้อม — กด เริ่ม / ต่อ เพื่อดาวน์โหลดใหม่";
+            job.ResumeAfterRestart = false;
+            job.ResumeWhenNetworkReturns = false;
+            job.DownloadedBytes = 0;
+            job.PreviousBytes = 0;
+            job.VideoPercent = 0;
+            job.SegmentDownloadedBytes = Array.Empty<long>();
+            job.Status = "Failed";
+            changed = true;
+        }
+        if (changed) Save();
+    }
+
     public void SaveProgressIfDue()
     {
+        ReconcileMissingOutputs();
         if (Environment.TickCount64 - Interlocked.Read(ref _lastProgressSave) >= 2000)
             Save();
     }
