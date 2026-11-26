@@ -631,12 +631,37 @@ def content_sha(lines):
     canonical=json.dumps(lines,ensure_ascii=False,separators=(",",":"),sort_keys=True)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
+def identity_missing(value, original_code="", field="title"):
+    value=str(value or "").strip()
+    if not value or value.casefold() in {"unknown","unknown artist","untitled","n/a","ไม่ทราบ","ไม่ระบุศิลปิน","ไม่ระบุชื่อเพลง","-","?"}: return True
+    if field=="title" and (value.casefold()==str(original_code).casefold() or re.fullmatch(r"[A-Za-z]?[0-9]{4,}",value)): return True
+    return "\ufffd" in value or "\x00" in value or bool(re.search(r"(?:à¸.|à¹.){2}",value))
+
+
+def merge_song_identity(db,song,metadata):
+    # Preserve credible user values; repair each field independently.
+    values={}
+    for field in ("title","artist"):
+        incoming=str(metadata.get(field) or "").strip()[:255]
+        old=song[field]
+        values[field]=incoming if identity_missing(old,song["original_code"],field) and not identity_missing(incoming,song["original_code"],field) else old
+    if any(values[f]!=song[f] for f in values):
+        db.execute("UPDATE xstage_songs SET title=?,artist=? WHERE id=?",(values["title"],values["artist"],song["id"]))
+    for table in ("xstage_lyric_versions","xstage_lyric_drafts"):
+        for row in db.execute(f"SELECT rowid AS rid,title,artist FROM {table} WHERE song_id=?",(song["id"],)).fetchall():
+            fixed={f:values[f] if identity_missing(row[f],song["original_code"],f) and not identity_missing(values[f],song["original_code"],f) else row[f] for f in values}
+            if any(fixed[f]!=row[f] for f in values):
+                db.execute(f"UPDATE {table} SET title=?,artist=? WHERE rowid=?",(fixed["title"],fixed["artist"],row["rid"]))
+    return values
+
+
 def insert_version(db,song,media,doc,source_signature,origin="NCN"):
     lines=valid_lines(doc)
     if not lines:
         return (None,False)
     signature=content_sha(lines)
     meta=doc.get("metadata") or {}
+    identity=merge_song_identity(db,song,meta)
     status=("incomplete" if meta.get("timingComplete",True) is False else
             "original" if all(l[4]=="original" for l in lines) else "estimated")
     prior=db.execute("""SELECT id,timing_status FROM xstage_lyric_versions
@@ -651,8 +676,8 @@ def insert_version(db,song,media,doc,source_signature,origin="NCN"):
         _prefer_version(db,song["id"],prior["id"])
         return prior["id"],False
     version=uuid.uuid4().hex
-    title=str(meta.get("title") or song["title"]).strip()[:255]
-    artist=str(meta.get("artist") or song["artist"]).strip()[:255]
+    title=str(identity["title"]).strip()[:255]
+    artist=str(identity["artist"]).strip()[:255]
     db.execute("""INSERT INTO xstage_lyric_versions
       (id,song_id,content_sha256,source_sha256,origin,timing_status,title,artist,created_at,is_current)
       VALUES (?,?,?,?,?,?,?,?,?,0)""",
@@ -698,14 +723,13 @@ def save_draft(db,song,lyr_path,reason):
     raw=Path(lyr_path).read_bytes()
     if len(raw)>1024*1024:
         raise ValueError("ไฟล์ .LYR ใหญ่เกิน 1 MB")
-    raw=raw.split(b"\x1a",1)[0]
-    rows=raw.replace(b"\r\n",b"\n").replace(b"\r",b"\n").split(b"\n")
+    rows=ncn_reader.lyric_rows(raw)
     if len(rows)<5:
         raise ValueError("ไฟล์ .LYR ไม่มีหัวข้อมูลและเนื้อร้องครบตามโครงสร้าง NCN")
-    # Reuse the same CP874/UTF-8 fallback as the NCN timed parser.
-    title=ncn_reader._decode_text(rows[0]).strip()[:255]
-    artist=ncn_reader._decode_text(rows[1]).strip()[:255]
-    body=ncn_reader._decode_text(b"\n".join(rows[4:])).strip()
+    meta=ncn_reader.lyric_metadata(lyr_path)
+    title=meta["title"][:255]
+    artist=meta["artist"][:255]
+    body="\n".join(rows[4:]).strip()
     if not body:
         raise ValueError("ไฟล์ .LYR ไม่มีเนื้อร้องให้บันทึก")
     db.execute("""INSERT INTO xstage_lyric_drafts
@@ -716,9 +740,7 @@ def save_draft(db,song,lyr_path,reason):
           artist=excluded.artist,raw_text=excluded.raw_text,
           reason=excluded.reason,updated_at=excluded.updated_at""",
           (song["id"],str(Path(lyr_path).resolve()),title,artist,body,reason,now()))
-    if song["title"]==song["original_code"] and title:
-        db.execute("UPDATE xstage_songs SET title=?,artist=? WHERE id=?",
-                   (title,artist,song["id"]))
+    merge_song_identity(db,song,meta)
 
 
 def iter_source(root):
@@ -982,6 +1004,12 @@ def import_folder(workspace,source,progress=None,cancel=None,selected_file=None)
                 # stat-only stamp avoids re-parsing unchanged successful
                 # sources; new/changed companions are decoded and compared
                 # through the SQLite lyric-version table.
+                if comps.get(".lyr"):
+                    try:
+                        merge_song_identity(db,song,ncn_reader.lyric_metadata(comps[".lyr"]))
+                        song=db.execute("SELECT * FROM xstage_songs WHERE id=?",(song_id,)).fetchone()
+                    except (OSError,ValueError,UnicodeError):
+                        pass
                 cached_lyrics=db.execute("""SELECT * FROM xstage_lyric_scan_cache
                     WHERE source_path=?""",(original_path,)).fetchone()
                 has_version=db.execute("""SELECT 1 FROM xstage_lyric_versions
@@ -1009,10 +1037,7 @@ def import_folder(workspace,source,progress=None,cancel=None,selected_file=None)
                                 outcome="new-lyrics"
                             else:
                                 outcome="same-lyrics"
-                            if song["title"]==song["original_code"] and meta.get("title"):
-                                db.execute("UPDATE xstage_songs SET title=?,artist=? WHERE id=?",
-                                    (str(meta["title"])[:255],
-                                     str(meta.get("artist") or "")[:255],song_id))
+                            # identity merged by insert_version
                             if comps.get(".lyr") and partial:
                                 # Partial timed lines and untimed remainder
                                 # belong to the SAME song; do not double
@@ -1235,10 +1260,7 @@ def recover_existing_lyrics(workspace,progress=None,cancel=None):
                                     note="อ่าน CUR ได้บางส่วน · คงเนื้อร้องไว้ตรวจเวลา"
                                     if comps.get(".lyr"):
                                         save_draft(db,song,comps[".lyr"],note)
-                                if song["title"]==song["original_code"] and meta.get("title"):
-                                    db.execute("UPDATE xstage_songs SET title=?,artist=? WHERE id=?",
-                                      (str(meta["title"])[:255],
-                                       str(meta.get("artist") or "")[:255],song_id))
+                                # identity merged by insert_version
                                 break
                             if comps.get(".lyr"):
                                 save_draft(db,song,comps[".lyr"],"CUR missing or unrecognized")
@@ -1925,7 +1947,7 @@ def _midi_export_for_build(db,workspace,midi_sha256,song_id,version_id):
     return None
 
 
-def build_song(workspace,song_id):
+def build_song(workspace,song_id, *, repair_metadata=False):
     init(workspace)
     with WRITE_LOCK,connect(workspace) as db:
         pair=db.execute("""SELECT s.*,m.id AS source_media_id,m.sha256,m.extension,m.stored_path,m.bytes
@@ -1937,7 +1959,7 @@ def build_song(workspace,song_id):
         export_code=_assign_xmid_export_code(db,pair) if is_midi else None
         version=db.execute("""SELECT * FROM xstage_lyric_versions
           WHERE song_id=? AND is_current=1""",(song_id,)).fetchone()
-        if is_midi:
+        if is_midi and not repair_metadata:
             existing=_midi_export_for_build(
                 db,workspace,pair["sha256"],song_id,version["id"] if version else None)
             if existing:
@@ -1949,9 +1971,14 @@ def build_song(workspace,song_id):
         meta=metadata_bytes(pair,version,lines,code_text=export_code)
         dest=destination_for(workspace,pair,pair["extension"],export_code=export_code)
         previous=db.execute("SELECT * FROM xstage_exports WHERE song_id=?",(song_id,)).fetchone()
+        if repair_metadata and previous:
+            root=root_folder(workspace).resolve()
+            dest=(root/previous["output_path"]).resolve()
+            if not dest.is_relative_to(root): raise ValueError("Output outside workspace")
         if previous and previous["version_id"]==version["id"] and dest.is_file():
             if digest(dest)==previous["sha256"]:
-                return {"path":str(dest),"skipped":True,"sha256":previous["sha256"]}
+                if not repair_metadata or inspect_xfile(dest)["metadata_sha256"]==hashlib.sha256(meta).hexdigest():
+                    return {"path":str(dest),"skipped":True,"sha256":previous["sha256"]}
         # Check completed exports before reading the source; re-running the
         # entire catalog should skip them even if the original was moved.
         # Unconverted tracks still require the genuine original media bytes.
@@ -2034,7 +2061,7 @@ def inspect_xfile(path,full_verify=False):
                 h.update(block)
             if h.digest()!=media_hash: raise ValueError("SHA-256 สื่อใน XMID ไม่ตรง")
         return {"version":version,"media_sha256":media_hash.hex(),
-                "metadata_bytes":metadata_length,"media_bytes":media_length,
+                "metadata_bytes":metadata_length,"metadata_sha256":meta_hash.hex(),"media_bytes":media_length,
                 "verified_media":bool(full_verify)}
 
 
