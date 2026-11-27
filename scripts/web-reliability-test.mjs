@@ -179,7 +179,11 @@ console.log('PASS: Web reliability, SQLite cursor, Drive root guard, audio meter
 
  // Verify the menu shows the same running release as the existing header.
  {
-   assert.match(index,/<div class="mobile-menu-brand"><img src="assets\/xstage-stage-logo\.png\?v=\d+"[^>]*alt="X-Stage Karaoke Online"/);
+   assert.match(index,/<div class="mobile-menu-brand"[^>]*><img src="assets\/xstage-stage-logo\.png\?v=\d+"[^>]*alt="X-Stage Karaoke Online"/);
+   const menuLogo=index.match(/<div class="mobile-menu-brand"[^>]*>(<img[^>]+>)/)?.[1]||'';
+   assert.match(menuLogo,/\bwidth="128"\s+height="43"/,'Logo intrinsic layout must fit even when old CSS is cached');
+   assert.match(menuLogo,/style="[^"]*max-width:100%[^"]*max-height:43px[^"]*object-fit:contain/,'Logo is bounded before CSS loads');
+   assert.match(index,/href="xstage-ux\.css\?v=[^"]*menu-fit2"/,'Refresh the changed menu stylesheet cache');
    assert.match(index,/id="mobile-menu-release-label"/);
    assert.match(index,/id="mobile-menu-close"/);
    const script=[...index.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
