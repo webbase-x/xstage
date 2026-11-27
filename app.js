@@ -5254,7 +5254,7 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
         const panel=androidTvAuthPanel();panel.hidden=false;
         const qr=$('android-tv-auth-qr');if(qr)qr.hidden=true;
         const wait=$('android-tv-auth-qr-wait');if(wait){wait.hidden=false;wait.textContent='Google เชื่อมต่อแล้ว';}
-        $('android-tv-auth-url').textContent='ไม่ต้องสแกน QR ใหม่';
+        $('android-tv-auth-url').textContent='ไม่ต้องสแกน QR ใหม่ · ตรวจ DB/songs.sqlite3 ในคลังที่เลือก';
         $('android-tv-auth-code').textContent='SQLite';
         $('android-tv-auth-status').textContent='เชื่อมต่อ Google สำเร็จ · '+String(error.message||'เปิดฐานเพลงไม่สำเร็จ');
         const retry=$('android-tv-auth-retry');retry.hidden=false;retry.textContent='ลองโหลดฐานเพลงใหม่';

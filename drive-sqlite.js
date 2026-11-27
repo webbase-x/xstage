@@ -215,6 +215,14 @@ async function read(bytes){
   const SQL=await engine();
   const db=new SQL.Database(bytes);
   try{
+    const table=name=>db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name=?",[name])[0]?.values?.length>0;
+    if(!table('songs'))fail('DB/songs.sqlite3 ไม่ใช่ฐานเพลง Karaoke (ไม่พบตาราง songs)');
+    if(!table('catalog_meta')){
+      const fields=new Set((db.exec('PRAGMA table_info(songs)')[0]?.values||[]).map(row=>String(row[1])));
+      if(['id','path','code','title','artist'].every(c=>fields.has(c))&&!fields.has('web_song_id')&&!fields.has('payload'))
+        fail('ฐาน PC แบบใช้เฉพาะเครื่อง · กรุณาสร้างฐานร่วม PC/Online แล้วคัดลอกไป DB/songs.sqlite3');
+      fail('ฐานเพลงไม่มี catalog_meta · กรุณาสร้างหรือส่งออกฐานร่วม PC/Online ใหม่');
+    }
     const check=db.exec('PRAGMA quick_check(1)');
     if(!check.length||check[0].values[0][0]!=='ok')
       fail('ฐานข้อมูลไม่ผ่านการตรวจความสมบูรณ์');

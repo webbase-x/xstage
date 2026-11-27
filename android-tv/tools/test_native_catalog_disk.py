@@ -86,5 +86,16 @@ class NativeCatalogDiskContract(unittest.TestCase):
             finally:
                 reader.close()
 
+
+
+class CatalogSchemaDiagnosticContract(unittest.TestCase):
+    def test_missing_metadata_detected_before_sqlite_metadata_query(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn('hasTable(db, "catalog_meta")', source)
+        self.assertIn('!songColumns.contains("web_song_id")', source)
+        self.assertIn('verifyCatalogSchema(db);', source)
+        self.assertNotIn("SELECT value FROM catalog_meta WHERE key='format'", source)
+        self.assertIn('meta.get("pathBase")', source)
+
 if __name__ == "__main__":
     unittest.main()
