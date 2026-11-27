@@ -16,3 +16,13 @@ assert.match(app,/function savePersistentQueue\(\)/);
 assert.match(app,/function restorePersistentQueue\(\)/);
 assert.match(app,/next===state\.queuePreload\.song/);
 assert.match(app,/state\.queuePreloadSkipped\.clear\(\);\s*state\.medleyPreloadRetryAt=0/);
+
+assert.match(app,/if\(nativeCatalogBridgeAvailable\(\)\)\{\s*showCatalogLoading/);
+assert.match(app,/state\.nativeCatalog&&songs===state\.songs\)return nativeCatalogPager/);
+assert.match(app,/nativeCatalogQuery\('catalogSearch',term,offset\)/);
+assert.match(app,/state\.nativeCatalog\?null:new Map/);
+const nativeStore=readFileSync(new URL('../android-tv/app/src/main/java/com/webbasex/xstage/NativeCatalogStore.java',import.meta.url),'utf8');
+assert.match(nativeStore,/setRequestProperty\("Range", "bytes=" \+ existing \+ "-"\)/);
+assert.match(nativeStore,/status == 206/);
+assert.match(nativeStore,/getHeaderField\("Content-Range"\)/);
+assert.match(nativeStore,/new FileOutputStream\(target, existing > 0\)/);

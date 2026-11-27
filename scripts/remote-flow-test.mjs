@@ -9,27 +9,28 @@ const last=source.indexOf('\n  function handleControl(',first);
 assert.ok(first>=0&&last>first,'host request handler must exist');
 const implementation=source.slice(first,last);
 
-function harness({active=false,token=true,queueSize=0,playableSong=true}={}){
+function harness({active=false,token=true,queueSize=0,playableSong=true,native=false}={}){
   const messages=[],activity=[],limits=[];
   const state={
     token:token?'test-token':null,
     songs:[{code:'001',title:'ทดสอบคำขอเพลง',artist:'ทดสอบ'}],
     queue:Array.from({length:queueSize},()=>({title:'queued'})),
+    nativeCatalog:native?{capability:'native-active'}:null,
     loading:false,
     current:active?{title:'currently playing'}:null
   };
   const ui={player:{src:active?'blob:active':'',ended:false,paused:!active,currentTime:0}};
   let playCount=0,queueAdds=0;
-  const accept=new Function('state','ui','send','playable','addToQueue','playNext','activity','redrawActivity','broadcastStatus',
+  const accept=new Function('state','ui','send','playable','addToQueue','playNext','activity','redrawActivity','broadcastStatus','catalogSongById',
     'let sequence=0;'+implementation+';return acceptRequest')(
       state,ui,(_conn,message)=>messages.push(message),
       ()=>playableSong,
       song=>{state.queue.push(song);queueAdds++;},
       ()=>{state.queue.shift();playCount++;},
-      activity,()=>{},()=>{}
+      activity,()=>{},()=>{},id=>id==='stable-42'?{webSongId:id,title:'Native song'}:null
     );
   return {
-    request:(message={})=>accept({}, {requestId:42,index:0,singer:'Guest',...message},limits),
+    request:(message={},conn={})=>accept(conn, {requestId:42,index:0,singer:'Guest',...message},limits),
     get messages(){return messages;},
     get queueAdds(){return queueAdds;},
     get playCount(){return playCount;},
@@ -123,3 +124,14 @@ assert.ok(source.includes("type:'playback-status'")&&remote.includes("data.type=
    'mobile remote must suppress overlapping connect attempts and ignore retired peer callbacks');
 
 console.log('X-Stage mobile remote request and reconnect contract passed');
+
+{
+  const t=harness({native:true,active:true});
+  t.request({index:123},{xstageNativeResults:{capability:'native-active',items:new Map([[123,'stable-42']])}});
+  assert.equal(t.messages[0].type,'request-received');
+  assert.equal(t.messages[0].title,'Native song');
+  t.request({index:123},{xstageNativeResults:{capability:'stale',items:new Map([[123,'stable-42']])}});
+  assert.equal(t.messages[1].type,'request-error');
+  t.request({index:999},{xstageNativeResults:{capability:'native-active',items:new Map([[123,'stable-42']])}});
+  assert.equal(t.messages[2].type,'request-error');
+}

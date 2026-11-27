@@ -292,7 +292,7 @@
       const id=saved.items.get(msg.index);
       if(id)song=catalogSongById(id);
     }else song=state.songs[msg.index];
-    if(!playable(song)){reply('request-error','ไม่พบเพลงที่เลือกหรือเพลงยังเล่นไม่ได้ กรุณาค้นหาใหม่');return;}
+    if(!song||!playable(song)){reply('request-error','ไม่พบเพลงที่เลือกหรือเพลงยังเล่นไม่ได้ กรุณาค้นหาใหม่');return;}
     const now=Date.now();while(limits.length&&now-limits[0]>60_000)limits.shift();
     if(limits.length>=8){reply('request-error','ขอเพลงบ่อยเกินไป กรุณารอสักครู่');return;}
     limits.push(now);
