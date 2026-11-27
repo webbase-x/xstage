@@ -279,14 +279,21 @@
   });
   redrawActivity();
 
-  function acceptRequest(conn,msg,limits){
+  async function acceptRequest(conn,msg,limits){
     const requestId=Number.isSafeInteger(msg?.requestId)?msg.requestId:null;
     const reply=(type,message)=>send(conn,{type,requestId,message});
     if(!state.token){reply('request-error','จอ TV ยังไม่เปิดคลังเพลง');return;}
     if(state.queue.length>=150){reply('request-error','คิวเต็มแล้ว กรุณารอ');return;}
     if(!Number.isSafeInteger(msg.index)||msg.index<0){reply('request-error','ไม่พบเพลงที่เลือก กรุณาค้นหาใหม่');return;}
     let song;
-    if(state.nativeCatalog){
+    if(state.webCatalog){
+      const web=state.webCatalog,saved=conn.xstageWebResults;
+      const id=saved?.session===web?saved.items.get(msg.index):null;
+      if(!id){reply('request-error','ฐานเพลงเปลี่ยน กรุณาค้นหาใหม่');return;}
+      try{song=await web.client.lookup(id);}
+      catch(error){reply('request-error','เปิดเพลงจาก SQLite ไม่สำเร็จ');return;}
+      if(state.webCatalog!==web||!state.token||conn.xstageWebResults!==saved||state.queue.length>=150){reply('request-error','คลังหรือคิวเปลี่ยน กรุณาลองใหม่');return;}
+    }else if(state.nativeCatalog){
       const saved=conn.xstageNativeResults;
       if(saved?.capability!==state.nativeCatalog.capability){reply('request-error','ฐานเพลงเปลี่ยน กรุณาค้นหาใหม่');return;}
       const id=saved.items.get(msg.index);
@@ -331,8 +338,9 @@
 
   function clickHost(id){const el=byId(id);if(!el||el.disabled)return false;el.click();return true;}
   function adminResult(entry,action,ok,message,data){send(entry.conn,{type:'admin-result',action,ok,message,data});}
-  function findSongForImport(item){
+  async function findSongForImport(item){
     const code=String(item?.code||'').trim(),title=String(item?.title||'').trim().toLocaleLowerCase('th'),artist=String(item?.artist||'').trim().toLocaleLowerCase('th');
+    if(state.webCatalog){const web=state.webCatalog,song=await web.client.lookup('',code,String(item?.title||'').trim(),String(item?.artist||'').trim());return web===state.webCatalog?song:null;}
     if(state.nativeCatalog)return catalogFindSong('',code,title,artist);
     if(code){const hit=state.songs.find(song=>String(song.code||'').trim()===code&&playable(song));if(hit)return hit;}
     if(title)return state.songs.find(song=>String(song.title||'').trim().toLocaleLowerCase('th')===title&&(!artist||String(song.artist||'').trim().toLocaleLowerCase('th')===artist)&&playable(song))||null;
@@ -395,7 +403,12 @@
         adminResult(entry,action,true,'ส่งออกคิวไปยังมือถือแล้ว',state.queue.slice(0,150).map(songSummary));return;
       }else if(action==='import-queue'){
         const items=Array.isArray(value)?value.slice(0,150):[];let added=0,missing=0;
-        for(const item of items){const song=findSongForImport(item);if(song){addToQueue({...song,queueSinger:'นำเข้าจาก Owner'});added++;}else missing++;}
+        const owner=state.accountSub,root=state.libraryRootId;
+        for(const item of items){
+          const song=await findSongForImport(item);
+          if(entry.role!=='owner'||owner!==state.accountSub||root!==state.libraryRootId)throw Error('คลังเพลงหรือบัญชีเปลี่ยน');
+          if(song&&state.queue.length<150){addToQueue({...song,queueSinger:'นำเข้าจาก Owner'});added++;}else missing++;
+        }
         adminResult(entry,action,true,'นำเข้าคิว '+added+' เพลง'+(missing?' · ไม่พบ '+missing+' เพลง':''));broadcastStatus();return;
       }else if(action==='visual-background'||action==='visual-brand-theme'||action==='visual-lyric-scale'||action==='visual-lyric-color'){
         if(typeof window.XStageRemoteVisualSettings!=='function')throw Error('ระบบตั้งค่าเวทียังไม่พร้อม');
@@ -541,9 +554,30 @@
           if(!entryPermissions(entry).search){send(conn,{type:'results',items:[],query:String(msg.query||'').trim().toLocaleLowerCase('th')});return;}
           const now=Date.now();if(now-entry.lastSearch<150)return;entry.lastSearch=now;
           const term=String(msg.query||'').trim().slice(0,70).toLocaleLowerCase('th'),items=[];
-          conn.xstageNativeResults=null;
+          conn.xstageNativeResults=null;conn.xstageWebResults=null;
+          const queryGeneration=(entry.webQueryGeneration||0)+1;entry.webQueryGeneration=queryGeneration;
           if(term&&state.token){
-            if(state.nativeCatalog){
+            if(state.webCatalog){
+              const web=state.webCatalog;
+              void (async()=>{
+                const pager=webCatalogPager(term),mapping=new Map();
+                while(pager.hasMore&&items.length<30){
+                  const rows=await pager.next();
+                  if(entry.webQueryGeneration!==queryGeneration||state.webCatalog!==web||!state.token)return;
+                  if(!rows.length)break;
+                  for(const song of rows){
+                    const index=(entry.nativeIndexCounter||0)+1;entry.nativeIndexCounter=index;
+                    mapping.set(index,songIdentity(song));
+                    items.push({index,code:String(song.code||''),title:String(song.title||''),artist:String(song.artist||'')});
+                    if(items.length>=30)break;
+                  }
+                }
+                if(entry.webQueryGeneration!==queryGeneration||state.webCatalog!==web||!state.token||!entryPermissions(entry).search)return;
+                conn.xstageWebResults={session:web,items:mapping};
+                send(conn,{type:'results',items,query:term,notReady:false});
+              })().catch(()=>{if(entry.webQueryGeneration===queryGeneration)send(conn,{type:'results',items:[],query:term,notReady:true});});
+              return;
+            }else if(state.nativeCatalog){
               const pager=nativeCatalogPager(term),mapping=new Map();
               while(pager.hasMore&&items.length<30){
                 const page=pager.next();
@@ -562,7 +596,7 @@
             }
           }
           send(conn,{type:'results',items,query:term,notReady:!state.token});
-        }else if(msg.type==='request')acceptRequest(conn,msg,entry.requests);
+        }else if(msg.type==='request')void acceptRequest(conn,msg,entry.requests);
         else if(msg.type==='control')handleControl(conn,msg,entry);
         else if(msg.type==='admin')void handleAdmin(entry,msg);
         else if(msg.type==='refresh')send(conn,snapshot(entry));
