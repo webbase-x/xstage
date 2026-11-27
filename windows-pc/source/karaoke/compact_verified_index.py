@@ -115,7 +115,7 @@ def build(source, compact, original, output, journal, *, cancel=None, progress=N
                     if not no_link(p.parent) or not no_link(p) or not p.is_file():
                         raise ValueError('Original file missing or unsafe')
                     before=stamp(p)
-                    key=json.dumps([str(original),portable,code,title,artist],ensure_ascii=False)
+                    key=json.dumps([FORMAT,str(original),portable,code,title,artist],ensure_ascii=False)
                     saved=cache.execute('SELECT media FROM checked WHERE key=? AND stamp=?',(key,before)).fetchone() if before else None
                     if saved and stamp(p)==before:
                         media=json.loads(saved[0]);reused+=1
@@ -127,7 +127,7 @@ def build(source, compact, original, output, journal, *, cancel=None, progress=N
                     if web_id in seen:
                         raise ValueError('Duplicate package identity; requires review')
                     seen.add(web_id)
-                    song={'webSongId':web_id,'code':code,'sourceCode':code,'title':title,'artist':artist,'sourceFormat':'XMID','pendingDriveLink':True,'xmid':media}
+                    song={'webSongId':web_id,'code':code,'sourceCode':code,'title':title,'artist':artist,'sourceFormat':'XMID','verifiedOriginal':True,'pendingDriveLink':True,'xmid':media}
                     search=unicodedata.normalize('NFC',' '.join([code,title,artist])).lower()
                     out.execute('INSERT INTO songs VALUES(?,?,?,?,?,?,?,?,?)',(ident,checked,web_id,search,1,json.dumps(song,ensure_ascii=False,separators=(',',':')),code,title,artist))
                     checked+=1
