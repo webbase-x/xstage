@@ -88,7 +88,8 @@ def check_and_install():
         env = dict(os.environ, XSTAGE_TARGET=str(target), XSTAGE_NEW=str(staged), XSTAGE_PARENT=str(os.getpid()))
         # Use system PowerShell rather than a PATH-resolved executable.
         shell = Path(os.environ["SystemRoot"]) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
-        subprocess.Popen([str(shell), "-NoProfile", "-NonInteractive", "-Command", SWAP], env=env, close_fds=True)
+        subprocess.Popen([str(shell), "-NoProfile", "-NonInteractive", "-Command", SWAP], env=env, close_fds=True,
+                         creationflags=subprocess.CREATE_NO_WINDOW)
         staged = None
         return True
     except Exception as error:

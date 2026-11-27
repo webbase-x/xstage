@@ -10,6 +10,7 @@ import hmac
 import ctypes
 import os
 from pathlib import Path
+from contextlib import redirect_stdout, redirect_stderr
 import json
 import secrets
 import sys
@@ -205,7 +206,7 @@ def consent():
     if marker.is_file():
         return True
     yes = ctypes.windll.user32.MessageBoxW(None,
-        "Allow X-Stage Karaoke Online (https://webbase-x.github.io) to control Windows master volume on this computer? You can revoke by deleting the approval file or closing the helper.",
+        "Allow X-Stage Karaoke Online (https://webbase-x.github.io) to control Windows master volume on this computer? You can revoke approval from the tray icon menu.",
         "X-Stage Windows Volume Bridge", 0x24 | 0x100)
     if yes != 6:
         return False
@@ -224,7 +225,42 @@ def consent():
     return True
 
 
-def main():
+def run_in_tray(server, icon_factory=None):
+    """Keep the HTTP listener alive until the user exits the tray."""
+    if icon_factory is None:
+        import pystray
+        from PIL import Image, ImageDraw
+        image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(image)
+        draw.rounded_rectangle((2, 2, 61, 61), radius=12, fill="#17233b")
+        draw.line((17, 17, 47, 47), fill="#ffffff", width=8)
+        draw.line((47, 17, 17, 47), fill="#55c7ff", width=8)
+        def exit_bridge(icon, _item):
+            icon.stop()
+        def revoke(icon, _item):
+            marker = Path(os.environ["LOCALAPPDATA"]) / "XStage" / "VolumeBridge" / "approved-v1"
+            try:
+                marker.unlink(missing_ok=True)
+            except OSError as error:
+                ctypes.windll.user32.MessageBoxW(None, str(error), "X-Stage Windows Volume Bridge", 0x10)
+                return
+            icon.stop()
+        icon_factory = lambda: pystray.Icon(
+            "XStageWindowsVolumeBridge", image, "X-Stage Windows Volume Bridge",
+            pystray.Menu(pystray.MenuItem("Exit", exit_bridge),
+                         pystray.MenuItem("Revoke approval and exit", revoke)))
+    icon = icon_factory()
+    worker = threading.Thread(target=server.serve_forever,
+                              kwargs={"poll_interval": .25}, daemon=True)
+    worker.start()
+    try:
+        icon.run()
+    finally:
+        server.shutdown()
+        worker.join()
+
+
+def _run():
     if sys.platform != "win32":
         raise SystemExit("X-Stage Windows Volume Bridge requires Windows 10/11")
     smoke = '--ci-smoke' in sys.argv
@@ -235,13 +271,30 @@ def main():
         return
     with VolumeBridgeServer(approved=approved) as server:
         print('X-Stage Windows Volume Bridge · automatic connection enabled', flush=True)
-        print("Keep this window open while controlling Windows volume from Karaoke Online.", flush=True)
         print("Listening only on http://127.0.0.1:" + str(server.server_port), flush=True)
-        print("Press Ctrl+C to stop and revoke access.", flush=True)
-        try:
+        if smoke:
             server.serve_forever(poll_interval=.25)
-        except KeyboardInterrupt:
-            pass
+        else:
+            run_in_tray(server)
+
+
+def main():
+    if sys.platform != "win32":
+        raise SystemExit("X-Stage Windows Volume Bridge requires Windows 10/11")
+    # PyInstaller windowed builds have no stdout or stderr. Use a local log
+    # for startup/update failures without creating a console window.
+    if sys.stdout is not None and sys.stderr is not None:
+        _run()
+        return
+    try:
+        root = Path(os.environ["LOCALAPPDATA"]) / "XStage" / "VolumeBridge"
+        root.mkdir(parents=True, exist_ok=True)
+        with (root / "bridge.log").open("w", encoding="utf-8", buffering=1) as log:
+            with redirect_stdout(log), redirect_stderr(log):
+                _run()
+    except Exception as error:
+        ctypes.windll.user32.MessageBoxW(None, str(error),
+            "X-Stage Windows Volume Bridge", 0x10)
 
 
 if __name__ == "__main__":

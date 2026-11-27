@@ -5,7 +5,7 @@ import unittest
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from karaoke.web_volume_bridge import ALLOWED_ORIGIN, HOST, VolumeBridgeServer
+from karaoke.web_volume_bridge import ALLOWED_ORIGIN, HOST, VolumeBridgeServer, run_in_tray
 from karaoke.web_volume_update import asset_for_update, EXE, DOWNLOAD
 
 
@@ -126,3 +126,20 @@ class WebVolumeBridgeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TrayLifecycleTests(unittest.TestCase):
+    def test_tray_exit_stops_loopback_worker(self):
+        server = VolumeBridgeServer((HOST, 0), FakeVolume, approved=True)
+        test = self
+        class FakeIcon:
+            def run(self):
+                request = Request("http://127.0.0.1:" + str(server.server_port) + "/v1/health",
+                                  headers={"Origin": ALLOWED_ORIGIN})
+                with urlopen(request, timeout=3) as response:
+                    test.assertTrue(json.load(response)["automatic"])
+        with server:
+            run_in_tray(server, icon_factory=FakeIcon)
+            # The HTTP socket still exists until the context exits, but the
+            # serving loop must have returned and no worker should remain.
+            self.assertTrue(server._BaseServer__is_shut_down.is_set())
