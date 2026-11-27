@@ -655,14 +655,14 @@ assert.ok(app.includes('function normalizeSearchText'),'search text must be norm
 assert.ok(app.includes('function indexedSongs'),'catalog search index must exist for larger libraries');
 assert.ok(app.includes('function searchScore'),'search relevance scoring must exist');
 assert.ok(app.includes('function rankedSearchEntries'),'ranked search helper must exist');
-assert.ok(app.includes("state.shown=ranked.results.map(item=>item.song);"),'live search must show only the five highest-ranked songs');
-assert.ok(app.includes("ranked.total>5?' · 5 ผลลัพธ์ที่ตรงที่สุด':''"),'search summary must describe ranked five-result output');
+assert.ok(app.includes('const SEARCH_PAGE_SIZE=5;')&&app.includes('state.shown.push(...page);'),'live search initially renders five songs and appends pages');
+assert.ok(app.includes('session.pager.loaded')&&app.includes('เลื่อนลงเพื่อดูเพิ่ม'),'search summary must describe progressive results');
 assert.ok(index.includes('id="search-refine-hint"'),'search must offer a refinement hint when many songs match');
 assert.ok(!app.includes("matches.slice(0,120)"),'legacy 120-result live search limit must stay removed');
 assert.ok(css.includes("/* 1.0.44: karaoke-scale search input and five-result presentation. */"),'large karaoke search styling must exist');
 assert.ok(css.includes("font-size:clamp(1.28rem,2.15vw,1.85rem)!important"),'desktop typed search text must remain prominently sized');
 assert.ok(css.includes("font-size:clamp(1.12rem,1.8vw,1.5rem)!important"),'desktop song-title results must remain prominently sized');
-assert.ok(app.includes("renderSongs();\n    updateTransport();\n    if(!state.token)"),'Enter must refresh current search results before choosing a song');
+assert.ok(app.includes('liveSearchPager.term!==normalizeSearchText(ui.search.value))renderSongs();'),'Enter refreshes stale results but preserves selection on loaded pages');
 assert.match(app,/if\(!player\.src\)\s*\{\s*if\(state\.queue\.length\)playNext\(\);\s*else if\(state\.shown\.length\)playSong\(state\.shown\[state\.selectedIndex\]\)/,
   'Play on idle should use queue first, then the selected search result');
 assert.ok(app.includes("ui.elapsed.textContent=hasLoadedSong?timeLabel(player.currentTime):'--:--'"),'idle player must not look stuck at 00:00');
