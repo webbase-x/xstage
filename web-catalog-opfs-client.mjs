@@ -69,5 +69,5 @@ export async function createWebCatalogClient(owner,{disk=globalThis.XStageWebCat
     if(!active)return Promise.reject(Error('No active catalog'));
     return rpc(action,{capability:active.capability,...args});
   }
-  return Object.freeze({stage,activate,search:(term,cursor=null)=>query('search',{term,cursor}),lookup:(songId,code,title,artist)=>query('lookup',{songId,code,title,artist}),random:()=>query('random'),close:async()=>{try{if(!closed)await rpc('close');}finally{dispose(new DOMException('Catalog closed','AbortError'));}},abort:()=>dispose(new DOMException('Catalog closed','AbortError'))});
+  return Object.freeze({stage,activate,search:(term,cursor=null,favoriteIds=null)=>query('search',{term,cursor,favoriteIds}),lookup:(songId,code,title,artist)=>query('lookup',{songId,code,title,artist}),random:()=>query('random'),close:async()=>{try{if(!closed)await rpc('close');}finally{dispose(new DOMException('Catalog closed','AbortError'));}},abort:()=>dispose(new DOMException('Catalog closed','AbortError'))});
 }
