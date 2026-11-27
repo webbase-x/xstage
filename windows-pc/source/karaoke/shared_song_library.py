@@ -19,6 +19,7 @@ REQUIRED = {
     "id", "web_song_id", "path", "kind", "search", "favorite",
     "playable", "format", "code", "title", "artist",
     "duplicate_of", "duplicate_state", "key_signature", "payload",
+    "ordinal", "source_format", "original_relative_path", "midi_md5", "midi_size",
 }
 
 
@@ -31,6 +32,9 @@ def validate_shared(root, database=None):
         if not database.is_file():
             raise ValueError("ยังไม่มีฐานหลัก PC · สร้างฐานก่อน")
     with closing(_open_read_only(root, database)) as db:
+        tables={row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if not {"catalog_meta","songs","removed_songs"} <= tables:
+            raise ValueError("ฐานเพลงไม่ใช่ shared-v1 · กรุณาสร้างและคัดลอกฐานร่วมจาก Karaoke PC")
         metadata = dict(db.execute("SELECT key,value FROM catalog_meta"))
         if (metadata.get("format") != "xstage-sqlite3-v1" or
             metadata.get("schemaVersion") != "1" or

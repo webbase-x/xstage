@@ -234,7 +234,8 @@ final class NativeCatalogStore implements AutoCloseable {
                 "shared-v1".equals(meta.get("pcSchema")) &&
                 "SONGS".equals(meta.get("pathBase")),
                 "ฐาน SQLite ไม่ใช่ shared-v1 snapshot · กรุณาสร้างฐานร่วม PC/Online ใหม่");
-        require(songColumns.containsAll(java.util.Arrays.asList("ordinal","id","web_song_id","payload","code","title","artist","playable","path")),
+        require(hasTable(db, "removed_songs") && columns(db, "removed_songs").contains("web_song_id") &&
+                songColumns.containsAll(java.util.Arrays.asList("ordinal","id","web_song_id","payload","code","title","artist","playable","path","kind","search","duplicate_of","duplicate_state","midi_md5","midi_size")),
                 "ฐาน SQLite ขาดคอลัมน์เพลงร่วม PC/Online · กรุณาส่งออกฐานร่วมใหม่");
     }
 

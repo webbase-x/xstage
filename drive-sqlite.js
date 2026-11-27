@@ -238,7 +238,8 @@ async function read(bytes){
       .map(row=>String(row[1])));
     const indexed=columns.has('midi_md5')&&columns.has('midi_size');
     const shared=metadata.pcSchema==='shared-v1';
-    if(shared&&!['id','ordinal','path','kind','search','duplicate_of','duplicate_state'].every(c=>columns.has(c)))
+    if(shared&&(metadata.pathBase!=='SONGS'||!table('removed_songs')||
+      !['id','ordinal','path','kind','search','duplicate_of','duplicate_state','web_song_id','payload','playable','midi_md5','midi_size'].every(c=>columns.has(c))))
       fail('ฐาน SQLite ไม่ครบโครงสร้าง PC/Online ร่วม');
     const rowsSql=shared
       ?'SELECT web_song_id,payload,midi_md5,midi_size,id,path,kind FROM songs ORDER BY ordinal'

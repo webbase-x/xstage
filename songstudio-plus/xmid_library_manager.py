@@ -60,22 +60,42 @@ def scan(database, songs):
         if not {"id", "path", "code", "title", "artist"} <= cols:
             raise ValueError("Unsupported Karaoke songs schema")
         shared = "web_song_id" in cols or "payload" in cols
+        tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        schema = "legacy-pc"
+        if shared:
+            schema = "legacy-shared"
+            if "catalog_meta" in tables:
+                meta = dict(con.execute("SELECT key,value FROM catalog_meta"))
+                if (meta.get("pcSchema") != "shared-v1" or meta.get("format") != "xstage-sqlite3-v1" or
+                        meta.get("schemaVersion") != "1" or meta.get("kind") != "snapshot" or
+                        meta.get("pathBase") != "SONGS" or "removed_songs" not in tables or
+                        not {"web_song_id","payload","original_relative_path"} <= cols):
+                    raise ValueError("Unsupported shared-v1 Karaoke catalog")
+                schema = "shared-v1"
         optional = [c for c in ("original_relative_path", "source_format", "format",
-                    "midi_md5", "midi_size", "duplicate_of", "playable") if c in cols]
+                    "midi_md5", "midi_size", "duplicate_of", "playable", "web_song_id",
+                    "first_lyric", "rhythm", "key_signature", "bpm") if c in cols]
         result = []
         all_paths = Counter()
         for index, record in enumerate(con.execute("SELECT "+",".join(["id","path","code","title","artist"]+optional)+" FROM songs ORDER BY id")):
             if index >= MAX_ROWS:
                 raise ValueError("Catalog exceeds safe scan limit")
             row = dict(record)
-            source = row.get("original_relative_path") if shared else row["path"]
+            # The canonical shared path works when selecting either
+            # XStageKaraoke or its SONGS folder.
+            source = row["path"] if schema == "shared-v1" else (row.get("original_relative_path") if shared else row["path"])
             if not source:
                 source = row["path"]
             if not str(source).lower().endswith(".xmid"):
                 continue
             item = {"id": int(row["id"]), "code": str(row["code"] or ""),
                     "title": str(row["title"] or ""), "artist": str(row["artist"] or ""),
-                    "path": str(source), "issues": [], "stamp": None}
+                    "path": str(source), "issues": [], "stamp": None,
+                    "webSongId": str(row.get("web_song_id") or ""),
+                    "firstLyric": str(row.get("first_lyric") or ""),
+                    "rhythm": str(row.get("rhythm") or ""),
+                    "keySignature": str(row.get("key_signature") or ""),
+                    "bpm": str(row.get("bpm") or "")}
             title = item["title"].strip()
             if not title or title.casefold() in {item["code"].casefold(), "unknown", "untitled", "ไม่ทราบ", "-"}:
                 item["issues"].append("no_title")
@@ -121,7 +141,7 @@ def scan(database, songs):
         del item["hash"], item["duplicate_of"]
     counts = Counter(issue for item in result for issue in item["issues"])
     return {"token": uuid.uuid4().hex, "database": str(db), "root": str(root),
-            "revision": (initial, wal_stamp), "shared": shared, "rows": result,
+            "revision": (initial, wal_stamp), "shared": shared, "schema": schema, "rows": result,
             "counts": dict(counts)}
 
 

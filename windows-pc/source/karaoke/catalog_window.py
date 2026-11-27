@@ -157,7 +157,7 @@ class CatalogWindow:
         tk.Label(source_card, text='ฐาน PC ปัจจุบัน: '+str(self.app.library.path),
                  bg=PANEL, fg=MUTED, wraplength=720, justify='left',
                  font=('Leelawadee UI', 9)).grid(row=2, column=0, columnspan=3, sticky='w', pady=(8, 0))
-        tk.Label(source_card, text='ใช้คลังตำแหน่งเดิม · ส่งฐานไป Online จากแท็บสร้างฐาน / Sync',
+        tk.Label(source_card, text='สร้างฐานร่วม PC/Web/APK จากปุ่มหลัก · ดัชนี PC เดิมใช้เฉพาะเครื่อง ห้ามคัดลอกขึ้น Cloud',
                  bg=PANEL, fg=MUTED, wraplength=720, justify='left',
                  font=('Leelawadee UI', 9)).grid(row=3, column=0, columnspan=3, sticky='w')
 
@@ -235,7 +235,10 @@ class CatalogWindow:
 
         actions = ActionBar(self.local_footer, padding=(12, 7))
         actions.pack(fill='x')
-        self.update_button = ttk.Button(actions, text='เริ่มสร้างรายการ', style='Accent.TButton',
+        self.shared_build_button = ttk.Button(actions, text='สร้างฐานร่วม PC/Web/APK', style='Accent.TButton',
+                                        command=lambda: self.show_page('build', self.source))
+        self.shared_build_button.pack(side='left')
+        self.update_button = ttk.Button(actions, text='ดัชนี PC เดิม (เฉพาะเครื่อง)',
                                         command=lambda: self._start('run'))
         self.rebuild_button = self.update_button  # Backward-compatible widget reference.
         self.clear_button = ttk.Button(actions, text='ล้างรายการทั้งหมด…', command=lambda: self._start('clear'))
@@ -246,7 +249,7 @@ class CatalogWindow:
         close_button = ttk.Button(actions, text='ปิด', command=self.hide)
         for button in (self.update_button, self.verify_button, self.clear_button, self.report_button, self.repair_reports_button, close_button):
             button.pack(side='left')
-        self.action_buttons = (self.update_button,
+        self.action_buttons = (self.shared_build_button, self.update_button,
                                self.clear_button, self.verify_button, self.mode_select,
                                self.shutdown_check, self.repair_reports_button)
         self._set_button_state()
