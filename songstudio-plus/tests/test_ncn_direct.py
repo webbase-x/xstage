@@ -207,3 +207,57 @@ class DirectCreditTests(unittest.TestCase):
             result=direct.convert_folder(str(root),str(out))
             self.assertEqual(result["converted"],1,result)
             self.assertEqual(result["with_credits"],0)
+
+
+class BufferedDiagnosticsTests(unittest.TestCase):
+    def test_csv_categories_summary_and_unchanged_sources(self):
+        import csv
+        import json
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["ชื่อจริง","ศิลปินจริง","C",""])
+            (root/"00002.mid").write_bytes(midi.read_bytes())
+            before={p.name:p.read_bytes() for p in root.iterdir()}
+            first=direct.convert_folder(str(root),str(out))
+            self.assertEqual((first["converted"],first["rejected"],first["failed"]),(1,1,1))
+            folder=Path(first["log_folder"])
+            def rows(folder,name):
+                raw=(folder/(name+".csv")).read_bytes()
+                self.assertTrue(raw.startswith(b"\xef\xbb\xbf"))
+                with (folder/(name+".csv")).open(encoding="utf-8-sig",newline="") as f:
+                    return list(csv.DictReader(f))
+            self.assertEqual(rows(folder,"converted")[0]["title"],"ชื่อจริง")
+            self.assertEqual(rows(folder,"rejected")[0]["error_code"],"MISSING_LYR_CUR")
+            self.assertEqual(rows(folder,"error"),[])
+            self.assertEqual(json.loads((folder/"summary.json").read_text(encoding="utf-8")),first)
+            second=direct.convert_folder(str(root),str(out))
+            self.assertEqual(second["skipped"],1)
+            self.assertEqual(len(rows(Path(second["log_folder"]),"existing")),1)
+            self.assertNotEqual(first["log_folder"],second["log_folder"])
+            self.assertEqual(before,{p.name:p.read_bytes() for p in root.iterdir()})
+            self.assertFalse(list(Path(d).rglob("*.sqlite*")))
+
+    def test_safe_cancel_flushes_partial_report(self):
+        import csv
+        import json
+        import threading
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            fixture(root,["ชื่อจริง","ศิลปินจริง","C",""])
+            (root/"00002.mid").write_bytes(b"bad")
+            cancel=threading.Event()
+            def progress(stats,message):
+                if stats["done"]:
+                    cancel.set()
+            result=direct.convert_folder(str(root),str(out),progress,cancel)
+            self.assertTrue(result["cancelled"])
+            self.assertEqual(result["done"],1)
+            self.assertEqual(len(Path(result["report"]).read_text(encoding="utf-8").splitlines()),1)
+            folder=Path(result["log_folder"])
+            with (folder/"converted.csv").open(encoding="utf-8-sig",newline="") as stream:
+                self.assertEqual(len(list(csv.DictReader(stream))),1)
+            self.assertTrue(json.loads((folder/"summary.json").read_text(encoding="utf-8"))["cancelled"])
+
+    def test_spreadsheet_formula_escaped(self):
+        self.assertEqual(direct.csv_cell("=1+1"),"'=1+1")
+        self.assertEqual(direct.csv_cell("ชื่อเพลง"),"ชื่อเพลง")
