@@ -127,8 +127,12 @@ class SharedPcBuilderTests(unittest.TestCase):
         self.assertEqual(exported, destination / "DB/songs.sqlite3")
         self.assertEqual(source.read_bytes(), before)
         self.assertEqual(SharedSongLibrary(destination, {}).count(), 1)
-        with self.assertRaises(FileExistsError):
-            export_portable(home, destination)
+        unchanged = []
+        stamp = exported.stat().st_mtime_ns
+        self.assertEqual(export_portable(home, destination, on_unchanged=lambda: unchanged.append(True)), exported)
+        self.assertEqual(unchanged, [True])
+        self.assertEqual(exported.stat().st_mtime_ns, stamp)
+        self.assertEqual(list(exported.parent.glob("*.bak")), [])
         old = exported.read_bytes()
         missing = destination / "SONGS/MIDI/XMID/1/10001.xmid"
         original = missing.read_bytes()
@@ -147,6 +151,18 @@ class SharedPcBuilderTests(unittest.TestCase):
         with self.assertRaises(InterruptedError):
             export_portable(home, destination, overwrite=True, cancel=stop)
         self.assertEqual(exported.read_bytes(), old)
+        # Same content is a no-op even with overwrite consent.
+        export_portable(home, destination, overwrite=True)
+        self.assertEqual(list(exported.parent.glob("*.bak")), [])
+        # A changed valid cloud database still requires explicit consent.
+        with closing(sqlite3.connect(exported)) as db:
+            db.execute("UPDATE catalog_meta SET value='different-cloud-generation' WHERE key='generation'")
+            db.commit()
+        modified = exported.read_bytes()
+        self.assertNotEqual(modified, old)
+        with self.assertRaises(FileExistsError):
+            export_portable(home, destination)
+        self.assertEqual(exported.read_bytes(), modified)
         export_portable(home, destination, overwrite=True)
         self.assertEqual(len(list(exported.parent.glob("*.bak"))), 1)
         self.assertEqual(source.read_bytes(), before)
