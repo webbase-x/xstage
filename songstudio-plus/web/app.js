@@ -160,7 +160,7 @@
     const dot=document.querySelector(".live-dot");
     if(dot)dot.style.background=enabled?"#5edfad":"#e9a465";
     for(const id of ["import-start","recover-lyrics","risk-scan","lyrics-find","media-attach","build-start","build-ready-all","build-everything",
-      "media-source-browse","import-file-start","song-download-start","drive-browse","drive-check","drive-download","source-browse","source-open","workspace-open","lrc-browse","manual-find","db-health-check","db-detail-audit"]){
+      "ncn-start","ncn-source-pick","ncn-dest-pick","media-source-browse","import-file-start","song-download-start","drive-browse","drive-check","drive-download","source-browse","source-open","workspace-open","lrc-browse","manual-find","db-health-check","db-detail-audit"]){
       const control=$(id);
       if(control)control.disabled=!enabled;
     }

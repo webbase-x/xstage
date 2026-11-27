@@ -1,5 +1,9 @@
 """Direct NCN batch export without opening a song database."""
+from contextlib import contextmanager
 import hashlib
+import stat
+import string
+import time
 import json
 import os
 from pathlib import Path
@@ -15,6 +19,9 @@ LABELS = {
     "title":"title","song":"title","song name":"title","ชื่อเพลง":"title",
     "artist":"artist","singer":"artist","ศิลปิน":"artist","นักร้อง":"artist",
     "key":"key","คีย์":"key","tempo":"tempo","bpm":"tempo","จังหวะ":"tempo",
+    "song title":"title","track title":"title","ชื่อ":"title","ชื่อศิลปิน":"artist",
+    "นักร้องนำ":"artist","composer":"composer","ผู้แต่ง":"composer",
+    "arranger":"arranger","ผู้เรียบเรียง":"arranger",
 }
 KEY = re.compile(r"(?:[A-G](?:#|b|♯|♭)?(?:m|maj|min|major|minor)?|[-+]?\d{1,2})",re.I)
 
@@ -27,9 +34,9 @@ def clean(value, code):
         return ""
     return value
 
-def identify_header(lyr,cur,code):
-    raw=Path(lyr).read_bytes().split(b"\x1a",1)[0]
-    cursor=Path(cur).read_bytes()
+def identify_header(lyr,cur,code, *, lyric_data=None,cursor_data=None,midi_tags=None):
+    raw=(bounded_read(Path(lyr),1024*1024)[0] if lyric_data is None else lyric_data).split(b"\x1a",1)[0]
+    cursor=bounded_read(Path(cur),2*1024*1024)[0] if cursor_data is None else cursor_data
     if len(raw)>1024*1024 or len(cursor)>2*1024*1024:
         raise ValueError("NCN component exceeds size limit")
     if len(cursor)%2 and cursor[-1:]!=b"\xff":
@@ -43,7 +50,7 @@ def identify_header(lyr,cur,code):
     rows=decoded.replace("\r\n","\n").replace("\r","\n").split("\n")
     count=len(cursor)//2
     candidates=[]
-    for cut in range(1,min(17,len(rows))):
+    for cut in range(1,min(65,len(rows))):
         body=rows[cut:]
         while body and not body[-1].strip(" \x00\x1a"):
             body.pop()
@@ -72,12 +79,21 @@ def identify_header(lyr,cur,code):
         if not metadata and cut==4 and (KEY.fullmatch(header[2].strip()) or not header[2].strip()):
             metadata={"title":header[0],"artist":header[1],"key":header[2]}
         for key in ("title","artist"):
-            metadata[key]=clean(metadata.get(key,""),code)
+            recorded=clean(metadata.get(key,""),code)
+            tagged=(midi_tags or {}).get(key,"")
+            if recorded and tagged and recorded!=tagged:
+                conflict=True
+            metadata[key]=recorded or tagged
+        if conflict:
+            continue
         if metadata["title"] and metadata["artist"]:
-            candidates.append((cut,metadata,[x for x in body if x.strip()],encoding))
+            # Different cuts across unconsumed blank lines are equivalent.
+            signature=(metadata,body if count!=needed else [x for x in body if x.strip()])
+            if not any(old[0]==signature for old in candidates):
+                candidates.append((signature,(cut,metadata,[x for x in body if x.strip()],encoding)))
     if len(candidates)!=1:
         raise ValueError("Unknown or ambiguous metadata/CUR layout; no guessing")
-    return candidates[0]
+    return candidates[0][1]
 
 def scan(root,cancel):
     index=defaultdict(list)
@@ -113,27 +129,84 @@ def companions(midi,index):
         raise ValueError("Missing exact matching LYR/CUR")
     return {"midi":str(midi),"lyrics":str(lyr),"cursor":str(cur),"code":midi.stem,"missing":[]}
 
+def file_stamp(path):
+    info=path.stat()
+    if path.is_symlink() or not stat.S_ISREG(info.st_mode):
+        raise ValueError("Component must be a regular non-symlink file")
+    return (info.st_dev,info.st_ino,info.st_size,info.st_mtime_ns,info.st_ctime_ns)
+
+def bounded_read(path,limit):
+    before=file_stamp(path)
+    if before[2]>limit:
+        raise ValueError("NCN component exceeds size limit")
+    with path.open("rb") as stream:
+        raw=stream.read(limit+1)
+    if len(raw)>limit or len(raw)!=before[2] or file_stamp(path)!=before:
+        raise ValueError("NCN component changed during read")
+    return raw,before
+
+def explicit_midi_tags(events,code):
+    values=defaultdict(set)
+    for tick,track,order,tag,label in events:
+        # Only explicit labels at tick zero, not generic track names or lyrics.
+        if tick!=0 or tag not in (1,3):
+            continue
+        match=re.fullmatch(r"\s*[@#]?\s*([^:=：]+?)\s*[:=：]\s*(.*?)\s*",label)
+        if match:
+            field=LABELS.get(match[1].strip().casefold())
+            value=clean(match[2],code)
+            if field in ("title","artist") and value:
+                values[field].add(value)
+    if any(len(v)>1 for v in values.values()):
+        raise ValueError("Conflicting explicit MIDI metadata")
+    return {k:next(iter(v)) for k,v in values.items()}
+
+def measured_boundaries(doc,duration):
+    # CUR stores onsets, not line endings. Use the next measured line start
+    # and actual MIDI end, never the legacy guessed four-second final line.
+    for i,line in enumerate(doc["lines"]):
+        cues=line["syllables"]
+        if not cues:
+            raise ValueError("Missing measured CUR onsets")
+        end=doc["lines"][i+1]["startTime"] if i+1<len(doc["lines"]) else duration
+        if end<=line["startTime"] or any(c["start"]>end for c in cues):
+            raise ValueError("CUR lies beyond measured line or MIDI end")
+        line["endTime"]=end
+        line.pop("endTimeEstimated",None)
+        for j,cue in enumerate(cues):
+            next_at=cues[j+1]["start"] if j+1<len(cues) else end
+            cue["duration"]=round(next_at-cue["start"],6)
+
 def convert_one(parts,dest,code,cancel=None):
-    cut,metadata,expected,encoding=identify_header(parts["lyrics"],parts["cursor"],parts["code"])
-    midi=Path(parts["midi"])
-    if midi.stat().st_size>64*1024*1024:
-        raise ValueError("MIDI exceeds 64 MiB safety limit")
-    raw=midi.read_bytes()
-    doc=reader.ncn_document(parts,header_rows=cut,metadata_override=metadata)
+    midi,lyr,cur=(Path(parts[x]) for x in ("midi","lyrics","cursor"))
+    raw,ms=bounded_read(midi,64*1024*1024)
+    lyric,ls=bounded_read(lyr,1024*1024)
+    cursor,cs=bounded_read(cur,2*1024*1024)
+    midi_info=reader.midi_events(midi,include_duration=True,raw_data=raw)
+    tags=explicit_midi_tags(midi_info[2],parts["code"])
+    cut,metadata,expected,encoding=identify_header(lyr,cur,parts["code"],
+        lyric_data=lyric,cursor_data=cursor,midi_tags=tags)
+    doc=reader.ncn_document(parts,header_rows=cut,metadata_override=metadata,
+        lyric_data=lyric,cursor_data=cursor,midi_info=midi_info)
+    def verify_sources():
+        if any(file_stamp(p)!=stamp for p,stamp in ((midi,ms),(lyr,ls),(cur,cs))):
+            raise ValueError("NCN component changed during conversion")
     info=doc["metadata"]
-    if not info.get("timingComplete") or any("ย้อนกลับ" in w or "เกินความยาว" in w for w in info.get("timingWarnings",[])):
+    if not info.get("timingComplete") or info.get("unusedCursorValues") or any("ย้อนกลับ" in w or "เกินความยาว" in w for w in info.get("timingWarnings",[])):
         raise ValueError("Incomplete or inconsistent CUR")
     if [line["text"] for line in doc["lines"]]!=expected:
         raise ValueError("Decoded lyric differs from original")
-    if midi.read_bytes()!=raw:
-        raise ValueError("MIDI changed during conversion")
+    verify_sources()
+    measured_boundaries(doc,midi_info[3])
     validated=core.valid_lines(doc)
     if not validated:
         raise ValueError("No timed lyrics")
     media_hash=hashlib.sha256(raw).digest()
     identity=hashlib.sha256(media_hash+json.dumps(doc,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
     song={"id":uuid.uuid5(uuid.NAMESPACE_URL,"xstage:ncn:"+code+":"+identity).hex,"code":code}
-    status="original" if all(x[4]=="original" for x in validated) else "estimated"
+    if not all(x[4]=="original" for x in validated):
+        raise ValueError("Unmeasured timing is not permitted")
+    status="original"
     version={"id":uuid.uuid5(uuid.NAMESPACE_URL,"xstage:ncn:lyrics:"+identity).hex,
              "title":metadata["title"],"artist":metadata["artist"],"timing_status":status}
     lines=[({"text":text,"start_time":start,"end_time":end,"timing_status":quality},
@@ -143,6 +216,8 @@ def convert_one(parts,dest,code,cancel=None):
     header=core.HEADER.pack(core.MAGIC,core.FORMAT_VERSION,len(meta),len(raw),media_hash,hashlib.sha256(meta).digest())
     result={"title":metadata["title"],"artist":metadata["artist"],"metadata":metadata,
             "header_rows":cut,"encoding":encoding,"timing_status":status}
+    if dest.is_symlink():
+        raise ValueError("Destination symlink is not permitted")
     if dest.exists():
         with dest.open("rb") as existing:
             same=existing.read(len(header))==header
@@ -157,6 +232,7 @@ def convert_one(parts,dest,code,cancel=None):
             stream.write(header);stream.write(meta);stream.write(raw)
             stream.flush();os.fsync(stream.fileno())
         core.read_xfile(stage,verify_media=True)
+        verify_sources()
         if cancel is not None and cancel.is_set():
             return dict(result,status="cancelled")
         if os.name=="nt":
@@ -166,6 +242,89 @@ def convert_one(parts,dest,code,cancel=None):
         return dict(result,status="converted")
     finally:
         stage.unlink(missing_ok=True)
+
+@contextmanager
+def output_lock(out):
+    # OS-owned lock is released on process termination, unlike lock sentinels.
+    path=out/".ncn-conversion.lock"
+    if path.is_symlink():
+        raise ValueError("Conversion lock cannot be a symlink")
+    with path.open("a+b") as lock:
+        lock.seek(0,os.SEEK_END)
+        if lock.tell()==0:
+            lock.write(b"\0")
+            lock.flush()
+        lock.seek(0)
+        if os.name=="nt":
+            import msvcrt
+            msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
+        else:
+            import fcntl
+            fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        try:
+            yield
+        finally:
+            lock.seek(0)
+            if os.name=="nt":
+                msvcrt.locking(lock.fileno(),msvcrt.LK_UNLCK,1)
+            else:
+                fcntl.flock(lock,fcntl.LOCK_UN)
+
+def plan_codes(root,out,mids):
+    # JSON is only a persistent filename reservation ledger, not a song DB.
+    ledger=out/".ncn-code-map.json"
+    if ledger.is_symlink():
+        raise ValueError("Code ledger cannot be a symlink")
+    saved={}
+    if ledger.exists():
+        payload=json.loads(bounded_read(ledger,128*1024*1024)[0].decode("utf-8"))
+        if payload.get("version")!=1 or not isinstance(payload.get("codes"),dict):
+            raise ValueError("Unknown NCN code ledger")
+        saved=payload["codes"]
+    if any(not isinstance(k,str) or not isinstance(v,str) or
+           core.xmid_song_code(v).lower()!=v for k,v in saved.items()):
+        raise ValueError("Invalid code ledger")
+    taken=set(saved.values())
+    if len(taken)!=len(saved):
+        raise ValueError("Duplicate code ledger entries")
+    existing={p.stem.casefold() for p in out.iterdir() if p.suffix.casefold()==".xmid"}
+    keys={m:json.dumps([os.path.normcase(str(root)),os.path.normcase(m.relative_to(root).as_posix())],ensure_ascii=False) for m in mids}
+    plan={m:saved[k] for m,k in keys.items() if k in saved}
+    # Valid original codes get priority. Existing untracked files can only
+    # be verified by content, never overwritten.
+    conflicts=set()
+    for m,k in keys.items():
+        if m in plan:
+            continue
+        try:
+            code=core.xmid_song_code(m.stem).lower()
+        except ValueError:
+            continue
+        if code in taken:
+            conflicts.add(m)
+            continue
+        plan[m]=saved[k]=code
+        taken.add(code)
+    available=(prefix+f"{n:05d}" for prefix in ("",*string.ascii_lowercase) for n in range(1,100000))
+    for m,k in keys.items():
+        if m in plan or m in conflicts:
+            continue
+        code=next((c for c in available if c not in taken and c not in existing),None)
+        if code is None:
+            raise ValueError("XMID filename space exhausted")
+        plan[m]=saved[k]=code
+        taken.add(code)
+    # Persist before publishing songs, so cancel/crash cannot reassign IDs.
+    fd,name=tempfile.mkstemp(prefix=".ncn-map-",suffix=".tmp",dir=out)
+    stage=Path(name)
+    try:
+        with os.fdopen(fd,"w",encoding="utf-8") as stream:
+            json.dump({"version":1,"codes":saved},stream,ensure_ascii=False,separators=(",",":"))
+            stream.flush();os.fsync(stream.fileno())
+        os.replace(stage,ledger)
+    finally:
+        stage.unlink(missing_ok=True)
+    return plan
 
 def convert_folder(source,destination,progress=None,cancel=None):
     if not isinstance(source,str) or not source.strip() or not isinstance(destination,str) or not destination.strip():
@@ -180,17 +339,14 @@ def convert_folder(source,destination,progress=None,cancel=None):
     if cancel is not None and cancel.is_set():
         return {"cancelled":True,"done":0}
     out.mkdir(parents=True,exist_ok=True)
+    with output_lock(out):
+        return _convert_locked(root,out,mids,index,progress,cancel)
+
+def _convert_locked(root,out,mids,index,progress,cancel):
     report=out/("ncn-conversion-"+uuid.uuid4().hex+".jsonl")
     stats={"done":0,"total":len(mids),"converted":0,"skipped":0,"failed":0,"report":str(report)}
-    codes={}
-    for midi in mids:
-        try:
-            codes[midi]=core.xmid_song_code(midi.stem).lower()
-        except ValueError:
-            pass
-    reserved=set(codes.values())
-    assigned=set()
-    next_code=1
+    codes=plan_codes(root,out,mids)
+    last_progress=0.0
     with report.open("x",encoding="utf-8") as log:
         for midi in mids:
             if cancel is not None and cancel.is_set():
@@ -199,13 +355,7 @@ def convert_folder(source,destination,progress=None,cancel=None):
             try:
                 code=codes.get(midi)
                 if code is None:
-                    while f"{next_code:05d}" in reserved or f"{next_code:05d}" in assigned:
-                        next_code+=1
-                    code=core.xmid_song_code(next_code)
-                    next_code+=1
-                if code in assigned:
                     raise ValueError("Duplicate NCN code; not overwritten")
-                assigned.add(code)
                 row["code"]=code
                 dest=out/(code+".xmid")
                 row["destination"]=str(dest)
@@ -219,6 +369,8 @@ def convert_folder(source,destination,progress=None,cancel=None):
             log.write(json.dumps(row,ensure_ascii=False)+"\n")
             log.flush()
             stats["done"]+=1
-            if progress:
+            now=time.monotonic()
+            if progress and (now-last_progress>=.2 or stats["done"]==stats["total"]):
                 progress(stats,midi.name)
+                last_progress=now
     return dict(stats,cancelled=bool(cancel and cancel.is_set()))

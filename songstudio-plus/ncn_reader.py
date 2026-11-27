@@ -406,7 +406,8 @@ def to_lrc(lines):
     return "\n".join(rows) + ("\n" if rows else "")
 
 
-def ncn_document(companions, *, header_rows=4, metadata_override=None):
+def ncn_document(companions, *, header_rows=4, metadata_override=None,
+                 lyric_data=None, cursor_data=None, midi_info=None):
     """NCN24 MIDI/LYR/CUR synchronisation, adapted from X-Stage Karaoke PC.
 
     A CUR entry represents one *CP874 source byte*, not a Unicode grapheme.
@@ -420,7 +421,7 @@ def ncn_document(companions, *, header_rows=4, metadata_override=None):
                          " · ต้องมี .MID + .LYR + .CUR รหัสเดียวกัน")
     lyric_file = Path(companions["lyrics"])
     cursor_file = Path(companions["cursor"])
-    source_bytes = lyric_file.read_bytes().split(b"\x1a", 1)[0]
+    source_bytes = (lyric_file.read_bytes() if lyric_data is None else lyric_data).split(b"\x1a", 1)[0]
     if len(source_bytes) > 1024 * 1024:
         raise ValueError("ไฟล์ NCN .LYR ใหญ่เกิน 1 MB")
     # Legacy NCN is CP874. Normalize line endings in bytes before consuming
@@ -433,7 +434,7 @@ def ncn_document(companions, *, header_rows=4, metadata_override=None):
         "artist": _decode_text(rows[1]).strip(),
         "key": _decode_text(rows[2]).strip(),
     }
-    raw_cursor = cursor_file.read_bytes()
+    raw_cursor = cursor_file.read_bytes() if cursor_data is None else cursor_data
     if len(raw_cursor) > 2 * 1024 * 1024:
         raise ValueError("ไฟล์ NCN .CUR ใหญ่เกิน 2 MB")
     warnings = []
@@ -497,8 +498,8 @@ def ncn_document(companions, *, header_rows=4, metadata_override=None):
     blank_markers=(blanks>0 and len(positions)==needed(body)+blanks)
     if blank_markers:
         warnings.append("CUR มีตำแหน่งบรรทัดว่างตามต้นฉบับ")
-    division, tempo_map, _, midi_duration = midi_events(
-        Path(companions["midi"]), include_duration=True)
+    division, tempo_map, _, midi_duration = (midi_info if midi_info is not None else midi_events(
+        Path(companions["midi"]), include_duration=True))
     rendered = []
     previous_pos = 0
     cursor_index = 0
