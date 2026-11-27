@@ -1292,3 +1292,8 @@ dialog[open]{opacity:1!important;filter:none!important}
 .diagnostic-panel{padding:18px;margin-top:16px}
 .diagnostic-panel-head{margin-bottom:10px}
 .diagnostic-toolbar{margin:0}
+
+/* XMID manager and NCN report: CSP-safe external layout. */
+#view-xmid-manager .xm-table-scroll{overflow:auto;max-width:100%}
+#view-xmid-manager #xm-rows td,#xm-result{overflow-wrap:anywhere}
+#ncn-report{white-space:pre-wrap;overflow-wrap:anywhere}
