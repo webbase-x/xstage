@@ -11,11 +11,12 @@ def lyric_top(height, band_height, line_height, gap, reserved_top, reserved_bott
 def overlay_layout(width, height):
     width, height = max(360, int(width)), max(400, int(height))
     margin = 12 if width < 1000 else 24
-    rows = 1 if height < 650 else 3 if height < 900 else 4
+    rows = 5
     top = 132 if height < 650 else 174
     search_height = 166 + rows * 32
+    search_top = max(0, min(top, height-search_height-8))
     return {
-        'search': (margin, top, width-2*margin, search_height),
+        'search': (margin, search_top, width-2*margin, search_height),
         'queue': (margin, top, width-2*margin, 218),
         'rows': rows,
         'query_width': max(220, min(480, round(width*.40))),

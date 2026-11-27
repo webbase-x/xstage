@@ -15,6 +15,7 @@ from .playback import MidiPlayer
 from .library import QueueItem, SearchCancelled
 from .lyrics import Lyrics
 from .keyboard_input import control_or_alt, editing_modifier
+from .search_paging import SearchPaging
 
 
 from .performance_features import PerformanceFeatures
@@ -36,6 +37,7 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
         self._pointer_on_transport = False
         self._search_condition = threading.Condition()
         self._search_request = None
+        self._search_paging = SearchPaging()
         self._search_thread = None
         self._search_stopping = False
         self._active_reader = None
@@ -160,15 +162,15 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
         table = ttk.Frame(self.search_overlay)
         table.pack(fill='both', expand=True)
         self.songs = ttk.Treeview(table, columns=('code', 'title', 'artist', 'kind'),
-                                 show='headings', selectmode='browse', height=4, style='Search.Treeview')
+                                 show='headings', selectmode='browse', height=5, style='Search.Treeview')
         for name, label, width in [('code', 'รหัส', 90), ('title', 'ชื่อเพลง', 320),
                                    ('artist', 'ศิลปิน', 190), ('kind', 'ชนิด', 75)]:
             self.songs.heading(name, text=label)
             self.songs.column(name, width=width, minwidth=45, stretch=name in ('title', 'artist'))
-        scroll = ttk.Scrollbar(table, orient='vertical', command=self.songs.yview)
-        self.songs.configure(yscrollcommand=scroll.set)
-        scroll.pack(side='right', fill='y')
-        self.songs.pack(fill='both', expand=True)
+        self.songs.pack(fill='x')
+        # No visible scrollbar. Wheel/trackpad and keyboard remain available.
+        for sequence in ('<MouseWheel>', '<Button-4>', '<Button-5>'):
+            self.songs.bind(sequence, self.scroll_search)
         self.songs.tag_configure('unsupported', foreground='#8c9ab6')
         footer = ttk.Frame(self.search_overlay)
         footer.pack(fill='x', pady=(5, 0))
@@ -394,7 +396,9 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
         layout = overlay_layout(width, height)
         if self.search_visible:
             x, y, w, h = layout['search']
-            self.search_overlay.place(x=x, y=y, width=w, height=h)
+            # Account for the actual Thai-font row height and DPI scaling.
+            h = max(h, self.search_overlay.winfo_reqheight())
+            self.search_overlay.place(x=x, y=max(0, min(y, height-h-8)), width=w, height=min(h, height))
         if self.queue_browser_visible:
             x, y, w, h = layout['queue']
             self.queue_browser.place(x=x, y=y, width=w, height=h)
@@ -995,6 +999,7 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
             except Exception:
                 pass
         self.search_pending = True
+        self._search_paging.reset(self.search_revision)
         self.songs.selection_remove(self.songs.selection())
         self.song_count.set('กำลังค้นหา…' if self.database_ready else 'กำลังเตรียมค้นหา • รับคำค้นแล้ว…')
         self.search_selected_title.set('กำลังค้นหา…')
@@ -1008,7 +1013,8 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
         self.search_after = None
         self.search_revision += 1
         self.search_pending = True
-        request = self.search_revision, self.search_var.get(), self.favorite_var.get(), self.playable_var.get()
+        self._search_paging.reset(self.search_revision)
+        request = self.search_revision, self.search_var.get(), self.favorite_var.get(), self.playable_var.get(), 0
         with self._search_condition:
             self._search_request = request
             self._search_condition.notify()
@@ -1040,26 +1046,29 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
                         continue
                     preload_revision = self.search_revision
                     try:
-                        reader.search(query, limit=200, playable_only=True,
+                        reader.search(query, limit=SearchPaging.SIZE+1, playable_only=True, offset=0,
                             cancelled=lambda: self._search_stopping or self._search_request is not None or
                                               preload_revision != self.search_revision)
                     except Exception:
                         # Preload is best effort; interactive search stays alive.
                         pass
                     continue
-                revision, query, favorite, playable = request
+                revision, query, favorite, playable, offset = request
                 cancelled = lambda: self._search_stopping or revision != self.search_revision
                 try:
-                    rows = reader.search(query, favorite, limit=200, playable_only=playable, cancelled=cancelled)
+                    rows = reader.search(query, favorite, limit=SearchPaging.SIZE+1,
+                                         playable_only=playable, cancelled=cancelled, offset=offset)
+                    more = len(rows) > SearchPaging.SIZE
+                    rows = rows[:SearchPaging.SIZE]
                     if hasattr(reader,'db'):
                         names.refresh(reader.db,cancelled);names.annotate(rows)
                     if not cancelled():
-                        self.messages.put(('search_results', (revision, rows, reader.count())))
+                        self.messages.put(('search_page', (revision, offset, rows, more, reader.count())))
                 except SearchCancelled:
                     continue
                 except Exception as error:
                     if not cancelled():
-                        self.messages.put(('search_error', str(error)))
+                        self.messages.put(('search_page_error', (revision, offset, str(error))))
         except Exception as error:
             if not self._search_stopping:
                 self.messages.put(('search_error', str(error)))
@@ -1068,6 +1077,76 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
             self._active_reader = None
             if reader:
                 reader.close()
+
+    def request_search_page(self, *, advance=False):
+        if not self.search_visible or self.search_pending or self.search_result_revision != self.search_revision:
+            return
+        paging = self._search_paging
+        offset = paging.request(self.search_revision)
+        if offset is None:
+            return
+        paging.advance = self.songs.selection()[0] if advance and self.songs.selection() else None
+        request = self.search_revision, self.search_var.get(), self.favorite_var.get(), self.playable_var.get(), offset
+        with self._search_condition:
+            self._search_request = request
+            self._search_condition.notify()
+
+    def scroll_search(self, event):
+        if self.search_pending:
+            return 'break'
+        delta = getattr(event, 'delta', 0)
+        num = getattr(event, 'num', None)
+        if num == 4 or delta > 0:
+            step = -1
+        elif num == 5 or delta < 0:
+            step = 1
+        else:
+            return 'break'
+        self.songs.yview_scroll(step, 'units')
+        if step > 0 and self.songs.yview()[1] >= 1 - 1/max(1, len(self.songs.get_children())):
+            self.request_search_page()
+        return 'break'
+
+    def apply_search_page(self, revision, offset, rows, more, count):
+        if revision != self.search_revision or not self._search_paging.accept(revision, offset, len(rows), more):
+            return
+        paging = self._search_paging
+        if offset == 0:
+            self._search_rows = {}
+            self.songs.delete(*self.songs.get_children())
+        first_new = None
+        for song in rows:
+            iid = str(song['id'])
+            if iid in self._search_rows:
+                continue
+            self._search_rows[iid] = song
+            self.songs.insert('', 'end', iid=iid, values=(song['code'],
+                ('★ ' if song['favorite'] else '') + song['title'] + (' • ซ้ำ' if song.get('name_duplicate_count', 0)>1 else ''),
+                song['artist'], song['format'] or song['kind']), tags=() if song['playable'] else ('unsupported',))
+            if first_new is None:
+                first_new = iid
+        self.song_count.set(f'{count:,} เพลง · โหลด {len(self._search_rows):,}' + (' · เลื่อนเพื่อดูเพิ่ม' if more else ''))
+        if offset == 0:
+            self.songs.yview_moveto(0)
+            self.search_results_ready()
+        elif self.search_visible and paging.advance and self.songs.selection() == (paging.advance,) and first_new:
+            self.songs.selection_set(first_new)
+            self.songs.focus(first_new)
+            self.songs.see(first_new)
+            self.update_search_detail()
+        paging.advance = None
+
+    def search_page_error(self, revision, offset, message):
+        if revision != self.search_revision:
+            return
+        self._search_paging.failed(revision, offset)
+        self.status_var.set(message)
+        if offset:
+            self.song_count.set('โหลดเพิ่มไม่สำเร็จ · เลื่อนลงเพื่อลองใหม่')
+        else:
+            self.search_pending = False
+            self.search_result_revision = -1
+            self.song_count.set('ค้นหาไม่สำเร็จ · ลองเปลี่ยนคำค้น')
 
     def on_search_ready(self, count):
         self.database_ready = True
@@ -1181,11 +1260,15 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
         if rows:
             selected = self.songs.selection()
             index = rows.index(selected[0]) if selected and selected[0] in rows else 0
+            if step > 0 and index >= len(rows)-1:
+                self.request_search_page(advance=True)
             index = max(0, min(len(rows)-1, index + step))
             self.songs.selection_set(rows[index])
             self.songs.focus(rows[index])
             self.songs.see(rows[index])
             self.update_search_detail()
+            if step > 0 and index >= len(rows)-2:
+                self.request_search_page()
         self.search_entry.selection_clear()
         self.search_entry.icursor('end')
         self.search_entry.xview_moveto(1)
