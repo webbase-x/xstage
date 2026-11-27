@@ -1,0 +1,28 @@
+name: Verified original XMID sidecar
+on:
+  pull_request:
+    paths:
+      - 'windows-pc/source/karaoke/compact_verified_index.py'
+      - 'windows-pc/source/tests/test_compact_verified_index.py'
+      - '.github/workflows/test-verified-xmid-index.yml'
+      - 'web-catalog-opfs-core.mjs'
+      - 'web-catalog-opfs-worker.mjs'
+      - 'web-catalog-opfs-client.mjs'
+      - 'app.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify original hashes and resumability without importing songs
+        working-directory: windows-pc/source
+        run: python -m unittest discover -s tests -p test_compact_verified_index.py -v

@@ -55,3 +55,21 @@ broken[100]^=0x01;
 await assert.rejects(context.XStageXmid.openPackage(new Blob([broken])),
   /SHA-256/, 'Corrupt metadata must still be rejected');
 console.log('PASS: Valid playable XMID imports with explicitly incomplete metadata; corrupt files stay blocked');
+
+const verifiedBlob=packageFile('Original Artist','Lyrics line');
+const bytes=Buffer.from(await verifiedBlob.arrayBuffer());
+const proof={verifiedOriginal:true,code:'360',title:'00363',artist:'Original Artist',
+  xmid:{size:bytes.length,md5Checksum:createHash('md5').update(bytes).digest('hex'),
+  sha256:createHash('sha256').update(bytes).digest('hex')}};
+const verified=await context.XStageXmid.openVerifiedPackage(verifiedBlob,proof);
+assert.equal(verified.code,'360');
+assert.equal(verified.midi.size,midi.length);
+await assert.rejects(context.XStageXmid.openVerifiedPackage(verifiedBlob,{...proof,verifiedOriginal:false}),/หลักฐาน/);
+await assert.rejects(context.XStageXmid.openVerifiedPackage(verifiedBlob,{...proof,xmid:{...proof.xmid,md5Checksum:'0'.repeat(32)}}),/MD5/);
+await assert.rejects(context.XStageXmid.openVerifiedPackage(verifiedBlob,{...proof,xmid:{...proof.xmid,sha256:'0'.repeat(64)}}),/SHA-256/);
+await assert.rejects(context.XStageXmid.openVerifiedPackage(verifiedBlob,{...proof,title:'wrong title'}),/DB/);
+const altered=Buffer.from(bytes);altered[altered.length-1]^=1;
+await assert.rejects(context.XStageXmid.openVerifiedPackage(new Blob([altered]),proof),/MD5/);
+const forged={...proof,xmid:{...proof.xmid,md5Checksum:createHash('md5').update(altered).digest('hex'),sha256:createHash('sha256').update(altered).digest('hex')}};
+await assert.rejects(context.XStageXmid.openVerifiedPackage(new Blob([altered]),forged),/SHA-256/);
+console.log('PASS: verified original XMID bytes and package metadata; wrong digest, altered payload and wrong identity rejected');

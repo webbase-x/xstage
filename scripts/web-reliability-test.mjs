@@ -31,8 +31,25 @@ for(const [name,source] of [['app',app],['midi',midi],['importer',importer],['me
   assert.doesNotThrow(()=>new Function(source),name+' JavaScript must parse');
 }
 assert.match(app,/controller\?\.abort\(\);\s*\},seconds\*1000/,'Media timeout must abort work');
-assert.match(app,/if \(reuseExistingSession && state\.token && state\.accountSub===account\.sub && state\.libraryRootId && !isRetiredDriveRoot\(state\.libraryRootId\)\)/,
-  'Same-account refresh must bypass catalog and playback reset');
+// Execute the real session-reuse predicate, rather than require an exact
+// textual form which fails when catalog readiness is added.
+{
+  const match=app.match(/if \((reuseExistingSession && [^\n]+)\) \{/);
+  assert.ok(match,'Same-account session reuse guard must exist');
+  const canReuse=new Function('reuseExistingSession','state','account','isRetiredDriveRoot','return Boolean('+match[1]+');');
+  const account={sub:'verified-owner'};
+  const base={token:'old-token',accountSub:account.sub,libraryRootId:'active-root',webCatalog:{count:0},nativeCatalog:null,catalogGeneration:''};
+  const retired=root=>root==='retired-root';
+  assert.equal(canReuse(true,base,account,retired),true,'Verified healthy Web session can refresh credentials without interrupting playback');
+  assert.equal(canReuse(true,{...base,webCatalog:null,nativeCatalog:{count:1}},account,retired),true,'Verified native session can refresh');
+  assert.equal(canReuse(true,{...base,webCatalog:null,catalogGeneration:'revision'},account,retired),true,'Verified legacy session can refresh');
+  assert.equal(canReuse(true,{...base,webCatalog:null},account,retired),false,'Token alone cannot skip retry of a catalog that failed to open');
+  assert.equal(canReuse(true,{...base,accountSub:'other-owner'},account,retired),false,'Never reuse another account');
+  assert.equal(canReuse(true,{...base,libraryRootId:'retired-root'},account,retired),false,'Never reuse retired root');
+  assert.equal(canReuse(true,{...base,libraryRootId:''},account,retired),false,'Require verified root');
+  assert.equal(canReuse(true,{...base,token:''},account,retired),false,'Require active credentials');
+  assert.equal(canReuse(false,base,account,retired),false,'Explicit reload must not bypass catalog verification');
+}
 assert.match(app,/openDrive\(result\.access_token,authId,expiresAt,known\?\.sub\|\|'',true,fullReadGranted\)/,
   'OAuth renewal must reuse the session only for the verified same Google account');
 assert.match(app,/await openDrive\(token,id,state\.tokenExpiresAt\);/,'Importer must force catalog reload after publishing');
@@ -175,7 +192,6 @@ console.log('PASS: Web reliability, SQLite cursor, Drive root guard, audio meter
    opener.closed=true;now+=5000;sync.checkStageConnection();assert.match(status.textContent,/จอหลักปิด/);
    assert.equal(requests.length,2);
  }
-
 
  // Verify the menu shows the same running release as the existing header.
  {
