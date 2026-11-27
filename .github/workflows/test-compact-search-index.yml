@@ -1,0 +1,31 @@
+name: Compact SQLite Search Index
+on:
+  pull_request:
+    paths:
+      - 'experiments/compact-search-index/**'
+      - '.github/workflows/test-compact-search-index.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compact-index:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Verify index builder against SQLite fixture
+        run: python3 -m unittest discover -s experiments/compact-search-index -p 'test_*.py' -v
+      - name: Verify five-row reader syntax
+        run: node --check experiments/compact-search-index/compact-query.mjs
+      - name: Verify browser and worker syntax
+        run: |
+          node --check experiments/compact-search-index/compact-preview.mjs
+          node --check experiments/compact-search-index/compact-worker.mjs
+      - name: Install Chromium test runner
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.0
+          npx playwright install --with-deps chromium
+      - name: Verify compact index UI and actual OPFS search
+        run: node experiments/compact-search-index/browser-e2e.mjs
