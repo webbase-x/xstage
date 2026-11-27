@@ -1,4 +1,11 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.46
+# X-Stage Song Studio Pro — Technical Preview v0.1.47
+
+## v0.1.47 — Legacy NCN and XMID catalog review
+
+- Legacy NCN layout recovery with measured timing, fast resume and retry-failed mode.
+- Buffered JSONL and UTF-8 BOM CSV reports; original NCN files remain unchanged.
+- Separate Karaoke catalog audit, paginated selection and reversible same-filesystem XMID relocation. Shared Online databases are audit-only; reindex local Karaoke after moving files.
+- CSP-safe native Qt WebView and report layout.
 
 ## v0.1.46 — Direct NCN to XMID
 
