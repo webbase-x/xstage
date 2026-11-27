@@ -2065,7 +2065,7 @@ async function readCatalogBytes(response,maxBytes=192*1048576,idleMs=30000){
   const length=Number(response.headers?.get?.('Content-Length')||0);
   if(length>maxBytes){
     try{void response.body?.cancel?.().catch(()=>{});}catch{}
-    throw Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด');
+    throw Object.assign(Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด'),{code:'CATALOG_TOO_LARGE'});
   }
   let timer;
   const bounded=task=>Promise.race([task,new Promise((_,reject)=>{
@@ -2073,7 +2073,7 @@ async function readCatalogBytes(response,maxBytes=192*1048576,idleMs=30000){
   })]).finally(()=>clearTimeout(timer));
   if(!response.body?.getReader){
     const buffer=await bounded(response.arrayBuffer());
-    if(buffer.byteLength>maxBytes)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด');
+    if(buffer.byteLength>maxBytes)throw Object.assign(Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด'),{code:'CATALOG_TOO_LARGE'});
     return new Uint8Array(buffer);
   }
   const reader=response.body.getReader(),chunks=[];
@@ -2083,7 +2083,7 @@ async function readCatalogBytes(response,maxBytes=192*1048576,idleMs=30000){
       const {done,value}=await bounded(reader.read());
       if(done){complete=true;break;}
       total+=value.byteLength;
-      if(total>maxBytes)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด');
+      if(total>maxBytes)throw Object.assign(Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด'),{code:'CATALOG_TOO_LARGE'});
       chunks.push(value);
     }
     const bytes=new Uint8Array(total);
@@ -2234,7 +2234,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
 
   // A new short-lived token for the SAME account must not reset the player,
   // downloaded audio, search results or queue. Only the credential changes.
-  if (reuseExistingSession && state.token && state.accountSub===account.sub && state.libraryRootId && !isRetiredDriveRoot(state.libraryRootId)) {
+  if (reuseExistingSession && !androidTvCatalogRetryPending && state.token && state.accountSub===account.sub && state.libraryRootId && !isRetiredDriveRoot(state.libraryRootId)) {
     if(fullReadGranted){fullDriveReadToken=token;rememberFullDriveRead(account.sub);}
     state.token=token;
     state.tokenExpiresAt=tokenExpiresAt;
@@ -4714,6 +4714,7 @@ function notifyAndroidTvLoginReady(){
 // previously threw ReferenceError before the QR callback could render.
 let androidTvLoginWatchdog=0;
 let androidTvLoginInProgress=false;
+let androidTvCatalogRetryPending=false;
 function clearAndroidTvLoginWatchdog(){
   if(androidTvLoginWatchdog){clearTimeout(androidTvLoginWatchdog);androidTvLoginWatchdog=0;}
 }
@@ -4768,6 +4769,12 @@ function androidTvAuthPanel(){
   }
   $('android-tv-auth-retry')?.addEventListener('click',()=>{
     $('android-tv-auth-retry').hidden=true;
+    if(androidTvCatalogRetryPending && state.token && state.accountSub){
+      if(state.tokenExpiresAt>Date.now()+30000)
+        void window.XStageReceiveAndroidToken(state.token,Math.floor((state.tokenExpiresAt-Date.now())/1000));
+      else restoreAndroidTvGoogleSession();
+      return;
+    }
     startAndroidTvDeviceLogin(true);
   });
   $('android-tv-auth-cancel')?.addEventListener('click',()=>{
@@ -4843,6 +4850,7 @@ function showAndroidTvAuthPanel(){
   $('android-tv-auth-code').textContent='----';
   $('android-tv-auth-status').textContent='กำลังเตรียมรหัส…';
   $('android-tv-auth-retry').hidden=true;
+  $('android-tv-auth-retry').textContent='ลองใหม่';
   const qr=$('android-tv-auth-qr');if(qr)qr.hidden=true;
   const qrWait=$('android-tv-auth-qr-wait');if(qrWait){qrWait.hidden=false;qrWait.textContent='กำลังขอรหัสจาก Google…';}
   setTimeout(()=>$('android-tv-auth-cancel')?.focus?.(),20);
@@ -4914,11 +4922,26 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
   try{
     await openDrive(token,authId,expiresAt,existingSub);
     if(authId===state.authId&&state.token){
+      androidTvCatalogRetryPending=false;
       if(!document.documentElement.classList.contains('xstage-native-auth-pending'))hideAndroidTvAuthPanel();
       androidTvRefreshingSession=false;
     }
   }catch(error){
     if(authId===state.authId){
+      if(error?.code==='CATALOG_TOO_LARGE'&&state.token&&state.accountSub&&state.libraryRootId){
+        androidTvCatalogRetryPending=true;
+        androidTvRefreshingSession=false;
+        clearPendingAuth();
+        const panel=androidTvAuthPanel();panel.hidden=false;
+        const qr=$('android-tv-auth-qr');if(qr)qr.hidden=true;
+        const wait=$('android-tv-auth-qr-wait');if(wait){wait.hidden=false;wait.textContent='Google เชื่อมต่อแล้ว';}
+        $('android-tv-auth-url').textContent='ไม่ต้องสแกน QR ใหม่';
+        $('android-tv-auth-code').textContent='SQLite';
+        $('android-tv-auth-status').textContent='เชื่อมต่อ Google สำเร็จ · ฐานเพลงเกินขีดจำกัดตัวอ่านปัจจุบัน (192 MiB)';
+        const retry=$('android-tv-auth-retry');retry.hidden=false;retry.textContent='ลองโหลดฐานเพลงใหม่';
+        setStatus('เชื่อมต่อ Google สำเร็จ · ฐานเพลงใหญ่เกินกำหนด','error');
+        return;
+      }
       if(existingSub&&state.token){
         // Renewal may fail while Google is briefly offline. Keep the existing
         // audio and queue; retry via the native refresh-token watchdog.
@@ -4942,6 +4965,7 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
 window.XStageAndroidSignedOut=()=>{
   clearAndroidTvLoginWatchdog();
   androidTvVerifiedConnectionSub='';
+  androidTvCatalogRetryPending=false;
   setAndroidTvStageAccess(false);
   if(state.token)resetPrivate({keepAuth:false});
   if(androidTvNativeBridgeReady())startAndroidTvDeviceLogin(true);
