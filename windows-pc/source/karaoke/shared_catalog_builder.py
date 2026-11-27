@@ -211,7 +211,7 @@ def _catalog_metadata(doc, midi):
         if not lyric:
             lyric = " ".join(line.text for line in song.lyrics.lines[:8])[:512].strip()
         key = key or song.key_signature
-        bpm = bpm or str(round(song.initial_bpm, 2))
+        bpm = bpm or format(round(song.initial_bpm, 2), "g")
     except (ValueError, ReviewRequired, EOFError, struct.error):
         # Old packages may still be indexed; unknown metadata stays empty.
         pass
@@ -329,6 +329,9 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
     original_signature = _hash(old_file) if old_file.exists() else None
     references = {} if local_only else _old_refs(old_file)
     old_ids = _old_ids(old_file)
+    if local_only:
+        old_ids = {**_old_ids(root / "DB/songs.sqlite3"), **old_ids}
+    old_id_owners = {value: key for key, value in old_ids.items()}
     seen_web_ids = set()
     rows, midi_hashes, paths, codes, ids = [], set(), set(), set(), set()
     duplicates = reused = 0
@@ -351,7 +354,8 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         # Preserve existing IDs; fresh unique packages match the Web importer.
         # Identical packages at distinct paths remain addressable in PC-only mode.
         row["webSongId"] = old_ids.get(key) or row["webSongId"]
-        if row["webSongId"] in seen_web_ids:
+        if (row["webSongId"] in seen_web_ids or
+                (row["webSongId"] in old_id_owners and old_id_owners[row["webSongId"]] != key)):
             if deduplicate or key in old_ids:
                 raise ValueError("รหัสอ้างอิงเพลงซ้ำ: " + row["webSongId"])
             row["webSongId"] = "browser/" + file_kind(row) + "/" + hashlib.sha256(
