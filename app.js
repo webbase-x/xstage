@@ -56,6 +56,7 @@ const state = {
   userStopped: false, userPaused:false, resumeAfterInterruption:false, visualScale: 1,
   catalogPointerId:'',catalogGeneration:'',catalogPolling:false,catalogCache:new Map(),
   nativeCatalog:null,nativeCatalogDeferred:null,
+  webCatalog:null,webCatalogClient:null,webCatalogDeferred:null,webMedleyRequest:null,webNextPending:null,
   diskQueueTimer:null,diskQueueTask:null,diskQueueReady:new Set(),diskQueueFailed:new Set(),
   libraryRootId:'',libraryRootCanShare:false,libraryRootOwnedByMe:false,libraryRootOwnerEmail:'',availableLibraries:[],
   queuePreload:null,queuePrepared:null,queuePreloadTimer:null,queuePreloadVersion:0,
@@ -474,7 +475,7 @@ function xstageTvRenderSearch(panel){
   if(!state.token){status.textContent='กรุณาเข้าสู่ Google Drive ก่อนค้นหาเพลง';return;}
   if(!term){status.textContent='พิมพ์ชื่อเพลง ศิลปิน หรือรหัสเพลง';return;}
   panel.searchPager={pager:createSearchPager(state.songs,term),source:state.songs,authId:state.authId,term};
-  if(!panel.searchPager.pager.total){status.textContent='ไม่พบเพลงที่ตรงกับคำค้น';return;}
+  if(!panel.searchPager.pager.web&&!panel.searchPager.pager.total){status.textContent='ไม่พบเพลงที่ตรงกับคำค้น';return;}
   xstageTvAppendSearchPage(panel);
 }
 function xstageTvAppendSearchPage(panel){
@@ -484,7 +485,18 @@ function xstageTvAppendSearchPage(panel){
   const status=panel.querySelector('#xstage-tv-search-status');
   if(!session||!state.token||session.authId!==state.authId||session.source!==state.songs||
      session.term!==normalizeSearchText(input.value)||!session.pager.hasMore)return false;
-  const page=session.pager.next();
+  if(session.pager.web){
+    if(session.pager.busy)return false;
+    status.textContent='กำลังค้นหา SQLite…';
+    void session.pager.next().then(page=>{
+      if(panel.searchPager!==session||session.authId!==state.authId||session.source!==state.songs||session.term!==normalizeSearchText(input.value))return;
+      renderTvCatalogPage(session,panel,results,status,page);
+    }).catch(error=>{if(panel.searchPager===session)status.textContent=error.message;});
+    return true;
+  }
+  return renderTvCatalogPage(session,panel,results,status,session.pager.next());
+}
+function renderTvCatalogPage(session,panel,results,status,page){
   for(const song of page){
     const button=document.createElement('button');
     button.type='button';button.className='xstage-tv-search-song';
@@ -2241,7 +2253,98 @@ function stageNativeCatalog(pointer,sub,root,dbId,progress){
     return data;
   });
 }
+// Web uses an asynchronous, disk-backed SQL session. Never fall back to
+// materializing the private catalog in JS when OPFS is unavailable.
+function resetWebCatalogClient(){
+  const holder=state.webCatalogClient;
+  state.webCatalog=null;state.webCatalogClient=null;state.webCatalogDeferred=null;
+  state.webMedleyRequest=null;state.webNextPending=null;
+  holder?.client?.abort();
+}
+async function stageWebCatalog(pointer,sub,root,token,current,onProgress){
+  const owner=libraryCacheOwner(sub,root);
+  if(!current())throw new DOMException('Catalog changed','AbortError');
+  let holder=state.webCatalogClient;
+  if(holder?.owner!==owner){
+    resetWebCatalogClient();
+    const {createWebCatalogClient}=await import('./web-catalog-opfs-client.mjs');
+    const client=await createWebCatalogClient(owner);
+    if(!current()){client.abort();throw new DOMException('Catalog changed','AbortError');}
+    holder={owner,client};
+    state.webCatalogClient=holder;
+  }
+  const same=()=>current()&&state.webCatalogClient===holder;
+  const candidate=await holder.client.stage({pointer,fetcher:()=>privateFile(pointer.catalogFileId,token),current:same,onProgress});
+  if(!same())throw new DOMException('Catalog changed','AbortError');
+  return {holder,candidate,pointer};
+}
+async function activateWebCatalog(staged,dbId,current){
+  if(!current()||state.webCatalogClient!==staged.holder)throw new DOMException('Catalog changed','AbortError');
+  await staged.holder.client.activate(staged.candidate);
+  if(!current()||state.webCatalogClient!==staged.holder)throw new DOMException('Catalog changed','AbortError');
+  state.webCatalog={client:staged.holder.client,owner:staged.holder.owner,count:staged.candidate.count};
+  state.webCatalogDeferred=null;state.webMedleyRequest=null;state.webNextPending=null;
+  state.catalogGeneration=String(staged.pointer.generation||'');state.catalogDbDirId=dbId;
+  state.manifest=null;state.songs=[];state.shown=[];state.catalogCache.clear();
+  state.medleyPoolSource=null;state.medleyUpcoming=null;
+  ui.songTotal.textContent=num(staged.candidate.count)+' เพลง';
+  setSearchAvailability(true);
+}
+async function restoreWebQueue(){
+  const session=state.webCatalog,owner=currentQueueOwner();
+  if(!session||!owner||owner!==session.owner||queueDiskOwner===owner)return false;
+  let saved;
+  try{saved=JSON.parse(localStorage.getItem(QUEUE_DISK_PREFIX+owner)||'null');}catch{}
+  if(saved?.version!==1||!Array.isArray(saved.items)){queueDiskOwner=owner;return false;}
+  const queue=[];
+  for(const item of saved.items.slice(0,10000)){
+    if(session!==state.webCatalog||owner!==currentQueueOwner())return false;
+    const song=await session.client.lookup(String(item?.id||''));
+    if(song&&playable(song))queue.push({...song,queueSinger:String(item.singer||'').slice(0,80),queueSpeed:[.75,.9,1,1.1,1.25,1.5].includes(Number(item.speed))?Number(item.speed):1});
+  }
+  if(session!==state.webCatalog||owner!==currentQueueOwner())return false;
+  if(!state.queue.length)state.queue.splice(0,state.queue.length,...queue);
+  queueDiskOwner=owner;
+  return true;
+}
+function webCatalogPager(rawTerm){
+  const session=state.webCatalog,term=normalizeSearchText(rawTerm);
+  let cursor=null,total=0,loaded=0,more=!!term,busy=false;
+  return {web:true,get total(){return total;},get loaded(){return loaded;},get hasMore(){return more;},get busy(){return busy;},
+    async next(){
+      if(busy||!more||session!==state.webCatalog)return [];
+      busy=true;
+      try{
+        const page=await session.client.search(term,cursor);
+        if(session!==state.webCatalog)return [];
+        total=page.total;cursor=page.cursor;more=page.hasMore;
+        const songs=page.songs.filter(playable);loaded+=songs.length;return songs;
+      }finally{busy=false;}
+    }};
+}
+function requestWebMedley(){
+  const session=state.webCatalog;
+  if(!session||!state.medley||state.queue.length)return Promise.resolve(null);
+  if(state.medleyUpcoming)return Promise.resolve(state.medleyUpcoming);
+  if(state.webMedleyRequest)return state.webMedleyRequest;
+  const recent=new Set([state.current,...(state.medleyRecent||[])].filter(Boolean).map(songIdentity));
+  const request=(async()=>{
+    let song=null;
+    for(let i=0;i<4;i++){
+      song=await session.client.random();
+      if(!song||!recent.has(songIdentity(song)))break;
+    }
+    if(session!==state.webCatalog||!state.medley||state.queue.length||state.userStopped)return null;
+    state.medleyUpcoming=song&&playable(song)?song:null;
+    return state.medleyUpcoming;
+  })().catch(error=>{console.warn('Web SQLite medley:',error.message);return null;}).finally(()=>{
+    if(state.webMedleyRequest===request)state.webMedleyRequest=null;
+  });
+  state.webMedleyRequest=request;
+  return request;
+}
 function resetNativeCatalogClient(){
+  resetWebCatalogClient();
   state.nativeCatalog=null;state.nativeCatalogDeferred=null;
   for(const pending of nativeCatalogRequests.values()){
     clearTimeout(pending.timer);pending.reject(new DOMException('เปลี่ยนคลังหรือบัญชี','AbortError'));
@@ -2349,35 +2452,22 @@ async function pollPublishedCatalog(){
       setStatus('ฐานเพลงพร้อมใช้ · '+num(staged.result.count)+' เพลง','success');
       return;
     }
-    // The legacy reader materializes a whole catalog in RAM. Do not start
-    // that work during playback/queue preload; the native disk reader can
-    // stage a download separately in a later integration.
-    if(state.queue.length||state.loading||state.current&&state.currentlyCatalogBusy!==false){
-      // An ended/paused track may still be the history/current selection.
-      // Use transport intent where available, not just a stale song object.
-      if(state.queue.length||state.loading||
-         (typeof playbackHasActiveIntent==='function'&&playbackHasActiveIntent()))return;
+    const busy=()=>state.queue.length||state.loading||state.queuePreload||state.medleyPrefetch||playbackHasActiveIntent();
+    if(busy())return;
+    let staged=state.webCatalogDeferred;
+    if(!staged||staged.pointer.generation!==pointer.generation){
+      staged=await stageWebCatalog(pointer,sub,rootId,token,sameLibrary,progress=>{
+        if(sameLibrary()&&!busy())ui.libraryState.textContent='กำลังซิงก์ SQLite · '+Math.round(progress.received/Math.max(1,progress.total)*100)+'%';
+      });
+      if(!sameLibrary())return;
+      state.webCatalogDeferred=staged;
     }
-    const cacheOwner=libraryCacheOwner(sub,rootId);
-    const catalog=await readPublishedCatalog(pointer,token,{sub:cacheOwner});
-    if(!sameLibrary())return;
-    if(state.queue.length||state.loading||
-       (typeof playbackHasActiveIntent==='function'&&playbackHasActiveIntent())){
-      // The user started a song during the network read. Keep the old
-      // active generation and retry later; readPublishedCatalog caches it.
-      return;
-    }
-    const countBefore=state.songs.length;
-    state.manifest=catalog;
-    state.songs=catalog.songs.filter(playable);
-    state.catalogGeneration=pointer.generation;
-    state.catalogPointerId='';
-    void saveCachedCatalog(cacheOwner,pointer,catalog);
-    state.medleyPoolSource=null;
-    ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
+    if(busy())return;
+    await activateWebCatalog(staged,dbId,sameLibrary);
+    await restoreWebQueue();
     renderSongs();renderQueue();
-    ui.libraryState.textContent='Google Drive · '+(state.libraryRootOwnedByMe?'คลังของฉัน':state.libraryRootOwnerEmail?'แชร์โดย '+state.libraryRootOwnerEmail:'คลังที่แชร์ให้ฉัน')+' · อัปเดตแล้ว';
-    setStatus(`ฐานเพลงอัปเดต: ${num(countBefore)} → ${num(state.songs.length)} เพลง`,'success');
+    ui.libraryState.textContent='SQLite บนเครื่อง · อัปเดตแล้ว';
+    setStatus('ฐานเพลงพร้อมใช้ · '+num(staged.candidate.count)+' เพลง','success');
   }catch(error){
     if(sameLibrary())console.warn('X-Stage catalog refresh:',error?.message||error);
   }finally{state.catalogPolling=false;}
@@ -2414,7 +2504,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
   // A new short-lived token for the SAME account must not reset the player,
   // downloaded audio, search results or queue. Only the credential changes.
   if (androidTvCatalogRetryPending) reuseExistingSession=false;
-  if (reuseExistingSession && state.token && state.accountSub===account.sub && state.libraryRootId && !isRetiredDriveRoot(state.libraryRootId)) {
+  if (reuseExistingSession && state.token && state.accountSub===account.sub && state.libraryRootId && !isRetiredDriveRoot(state.libraryRootId) && (state.webCatalog||state.nativeCatalog||state.catalogGeneration)) {
     if(fullReadGranted){fullDriveReadToken=token;rememberFullDriveRead(account.sub);}
     state.token=token;
     state.tokenExpiresAt=tokenExpiresAt;
@@ -2544,10 +2634,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       accountSub:account.sub,rootId:String(root.id),label:libraryLabel(root),ownedByMe:!!root.ownedByMe
     }}));
     const cacheOwner=libraryCacheOwner(account.sub,root.id);
-    if(!instant&&!nativeCatalogBridgeAvailable()){
-      const rootCached=await loadLatestCachedCatalog(account.sub,root.id);
-      if(rootCached){instant=rootCached;applyInstantCatalog(instant);}
-    }
+    // The disk-backed reader does not hydrate the legacy whole-song cache.
     // DB/songs.sqlite3 is the only permitted catalog; never query JSON pointers.
     const dbDirs=await driveList(`'${root.id}' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
     if(dbDirs.length>1)throw Error('พบ DB ซ้ำใน '+String(root.name||'คลังเพลง'));
@@ -2607,59 +2694,26 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       if(!readPlaybackResumeState())ui.search.focus();
       return;
     }
-    if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังดาวน์โหลดเฉพาะฐานรายชื่อเพลง…',42);
-    if(authId!==state.authId)return;
-
-    const sameAsInstant=!!instant&&
-      instant.generation===String(pointer.generation||'')&&
-      instant.catalogFileId===pointer.catalogFileId&&
-      JSON.stringify(instant.deltaFileIds||[])===JSON.stringify(pointer.deltaFileIds||[]);
-
-    let catalog=instant?.catalog||null;
-    let downloaded=false;
-    if(!sameAsInstant){
-      if(!instant)showCatalogLoading('กำลังเตรียมฐานเพลงครั้งแรก','ดาวน์โหลดเฉพาะข้อมูลค้นหาเพลง · ยังไม่โหลดไฟล์ M4A',42);
-      else setStatus(`กำลังอัปเดตฐานเพลงเบื้องหลัง · ยังใช้ ${num(state.songs.length)} เพลงเดิมได้ตามปกติ`);
-      catalog=await readPublishedCatalog(pointer,token,{
-        sub:cacheOwner,
-        onProgress:info=>{
-          if(instant)return;
-          showCatalogLoading('กำลังเตรียมฐานเพลงครั้งแรก',
-            info.message+' · '+info.completed+'/'+info.total+' ส่วน',
-            info.percent);
-        }
+    const current=()=>authId===state.authId&&state.libraryRootId===root.id&&state.accountSub===account.sub;
+    showCatalogLoading('กำลังตรวจ SQLite ในเครื่อง','ดาวน์โหลดลงพื้นที่จัดเก็บโดยตรง ไม่โหลดฐานทั้งหมดเข้า RAM',35);
+    let staged;
+    try{
+      staged=await stageWebCatalog(pointer,account.sub,root.id,token,current,progress=>{
+        if(current())showCatalogLoading('กำลังเปิดฐาน SQLite ในเครื่อง',num(progress.received)+' / '+num(progress.total)+' ไบต์',Math.min(95,35+Math.floor(progress.received/Math.max(1,progress.total)*60)));
       });
-      downloaded=true;
-      if(authId!==state.authId)return;
-      if(!instant){
-        showCatalogLoading('กำลังบันทึกฐานเพลง','จัดเก็บฐานไว้ในเครื่องสำหรับเปิดครั้งต่อไป…',96);
-        await saveCachedCatalog(cacheOwner,pointer,catalog);
-      }else{
-        void saveCachedCatalog(cacheOwner,pointer,catalog);
-      }
+      if(!current())return;
+      await activateWebCatalog(staged,dbId,current);
+    }catch(error){
+      if(error?.name==='AbortError')throw error;
+      throw Object.assign(error,{code:'CATALOG_LOAD_FAILED'});
     }
-
-    state.manifest=catalog;
-    state.catalogPointerId='';
-    state.catalogDbDirId=dbId;
-    state.catalogGeneration=String(pointer.generation||'');
-    if(downloaded||!instant){
-      state.songs=catalog.songs.filter(playable);
-      state.selectedIndex=0;
-      ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
-      renderSongs();
-    }
-    // Only restore persisted private IDs after the library was verified.
-    restorePersistentQueue();renderQueue();
-    setSearchAvailability(true);
-    ui.libraryState.textContent='Google Drive · '+libraryLabel(root)+' · พร้อมใช้งาน';
-    ui.resultCount.textContent=ui.search.value.trim() ? ui.resultCount.textContent : 'พิมพ์เพื่อค้นหาเพลง';
-    if(!instant)showCatalogLoading('พร้อมใช้งาน','ฐานเพลงครั้งแรกพร้อมแล้ว',100);
+    await restoreWebQueue();
+    if(!current())return;
+    renderSongs();renderQueue();
+    ui.libraryState.textContent='SQLite ในเครื่อง · '+libraryLabel(root);
     hideCatalogLoading();
-    void saveCachedCatalog(cacheOwner,pointer,catalog);
-    const duplicateRoots=roots.filter(x=>x.name===root.name).length;
-    setStatus(`เชื่อมต่อแล้ว · ${num(state.songs.length)} เพลง · ${libraryLabel(root)}${duplicateRoots>1?' · พบ XStageKaraoke ชื่อซ้ำ '+duplicateRoots+' โฟลเดอร์ · เปลี่ยนได้ที่เมนูเลือกคลัง':''}${downloaded?' (อัปเดตฐานล่าสุดแล้ว)':sameAsInstant?' (ฐานในเครื่องเป็นรุ่นล่าสุด)':''}`,'success');
     setAndroidTvStageAccess(true,account.sub);
+    setStatus('พร้อมใช้ · '+num(staged.candidate.count)+' เพลง · อ่าน SQLite จากดิสก์โดยตรง','success');
     void restorePlaybackAfterReload();
     if(!readPlaybackResumeState())ui.search.focus();
   }catch(error){
@@ -3071,18 +3125,23 @@ function findResumeSong(key,code,title){
   return catalogFindSong(key,code,title);
 }
 async function restorePlaybackAfterReload(){
-  if(state.playbackRestoreAttempted||!(state.nativeCatalog?.count||state.songs.length))return false;
+  if(state.playbackRestoreAttempted||!(state.webCatalog?.count||state.nativeCatalog?.count||state.songs.length))return false;
   const saved=readPlaybackResumeState();
   if(!saved)return false;
   state.playbackRestoreAttempted=true;
-  const song=findResumeSong(saved.songKey,saved.songCode,saved.songTitle);
+  const web=state.webCatalog;
+  const song=web?await web.client.lookup(saved.songKey,saved.songCode,saved.songTitle):findResumeSong(saved.songKey,saved.songCode,saved.songTitle);
+  if(web&&web!==state.webCatalog)return false;
   if(!song){clearPlaybackResumeState();return false;}
   // Durable queue carries singer/speed and the latest ordering. An explicit
   // update handoff uses its session snapshot (which already removed the next song).
   if(!queueDiskOwner||saved.songKey===songIdentity(state.queue[0])){
-    const restoredQueue=(Array.isArray(saved.queueKeys)?saved.queueKeys:[])
-      .map(key=>catalogSongById(key))
-      .filter(Boolean);
+    const restoredQueue=[];
+    for(const key of (Array.isArray(saved.queueKeys)?saved.queueKeys:[])){
+      const item=web?await web.client.lookup(key):catalogSongById(key);
+      if(web&&web!==state.webCatalog)return false;
+      if(item)restoredQueue.push(item);
+    }
     state.queue.splice(0,state.queue.length,...restoredQueue);
   }
   renderQueue();
@@ -3205,6 +3264,7 @@ window.XStageRankSearch=(songs,rawTerm,limit=5)=>
 // are retained in score buckets; song rows are constructed five at a time.
 const SEARCH_PAGE_SIZE=5;
 function createSearchPager(songs,rawTerm){
+  if(typeof state!=='undefined'&&state.webCatalog&&songs===state.songs)return webCatalogPager(rawTerm);
   if(typeof state!=='undefined'&&state.nativeCatalog&&songs===state.songs)return nativeCatalogPager(rawTerm);
   const term=normalizeSearchText(rawTerm),words=term.split(' ').filter(Boolean);
   const index=indexedSongs(songs),buckets=Array.from({length:11},()=>[]);
@@ -3311,7 +3371,7 @@ function renderSongs(songs=state.songs) {
   setLiveSearchExpanded(true);
   liveSearchPager={pager:createSearchPager(songs,term),term,highlightTerm,source:state.songs,authId:state.authId};
   state.shown=[];state.selectedIndex=0;
-  if(!liveSearchPager.pager.total){
+  if(!liveSearchPager.pager.web&&!liveSearchPager.pager.total){
     ui.resultCount.textContent='พบ 0 เพลง';
     if(ui.searchRefine)ui.searchRefine.hidden=true;
     ui.search.removeAttribute('aria-activedescendant');
@@ -3325,7 +3385,20 @@ function appendLiveSearchPage(){
   if(!session||!state.token||session.authId!==state.authId||
      session.source!==state.songs||session.term!==normalizeSearchText(ui.search.value)||
      !session.pager.hasMore)return false;
-  const page=session.pager.next(),first=state.shown.length;
+  if(session.pager.web){
+    if(session.pager.busy)return false;
+    ui.resultCount.textContent='กำลังค้นหา SQLite…';
+    void session.pager.next().then(page=>{
+      if(liveSearchPager!==session||session.authId!==state.authId||session.source!==state.songs||session.term!==normalizeSearchText(ui.search.value))return;
+      renderLiveCatalogPage(session,page);
+      if(!session.pager.total)ui.songs.append(element('div','empty-state','ไม่พบเพลงที่ค้นหา'));
+    }).catch(error=>{if(liveSearchPager===session)ui.resultCount.textContent=error.message;});
+    return true;
+  }
+  return renderLiveCatalogPage(session,session.pager.next());
+}
+function renderLiveCatalogPage(session,page){
+  const first=state.shown.length;
   state.shown.push(...page);
   const fragment=document.createDocumentFragment();
   page.forEach((song,offset)=>{
@@ -3427,6 +3500,12 @@ function randomMedleySong(){
 function nextMedleyCandidate(){
   if(state.queue.length)return state.queue[0];
   if(!state.medley)return null;
+  if(state.webCatalog){
+    if(!state.medleyUpcoming&&!state.webMedleyRequest){
+      void requestWebMedley().then(song=>{if(song&&state.current&&!player.paused)prefetchMedleyNext();});
+    }
+    return state.medleyUpcoming;
+  }
   if(!state.medleyUpcoming||state.medleyUpcoming===state.current)
     state.medleyUpcoming=randomMedleySong();
   return state.medleyUpcoming;
@@ -3458,6 +3537,7 @@ function setMedleyMode(enabled){
       playNext();
     }else{
       state.userStopped=false;
+      if(state.webCatalog){playNext();return state.medley;}
       const song=randomMedleySong();
       if(song){state.medleyUpcoming=null;playSong(song);}
       else setPlayStatus('ไม่มีเพลงที่พร้อมเล่นในคลัง');
@@ -4132,7 +4212,18 @@ function releaseFinishedMedia(){
   state.activeBlobBytes=0;state.activeVideoBytes=0;
   trimQueueCache();
 }
-function playNext(){
+function playNext(skipWebWait=false){
+  if(skipWebWait!==true&&state.webCatalog&&state.medley&&!state.queue.length&&!state.medleyUpcoming){
+    if(state.webNextPending)return;
+    const session=state.webCatalog,requestId=state.requestId;
+    const waiting=requestWebMedley().then(()=>{
+      if(state.webNextPending!==waiting)return;
+      state.webNextPending=null;
+      if(session===state.webCatalog&&requestId===state.requestId&&state.medley&&!state.userStopped)playNext(true);
+    });
+    state.webNextPending=waiting;
+    return;
+  }
   if(state.updateAfterTrack&&state.updateAvailable&&!webGoogleAuthFlow&&!state.authRecovering){
     // The outgoing song has ended or the owner skipped to the next one.
     // Preserve the requested next song instead of reloading into the
