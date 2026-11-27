@@ -22,6 +22,7 @@ from pathlib import Path
 
 import plus_core as core
 import ncn_direct
+import xmid_library_manager as xmid_manager
 import db_maintenance as dbmaint
 import risk_audit as risks
 import preview_player as preview
@@ -42,6 +43,8 @@ class State:
         self.lock=threading.RLock()
         self.token=secrets.token_urlsafe(30)
         self.native_picker=None
+        self.xmid_manager_lock=threading.Lock()
+        self.xmid_manager_plan=None
         self.drive_push_plan=None  # verified, in-memory preview; never persisted to Drive
         # A successful update check must be the single verified snapshot used
         # by the subsequent download. Do not query CDN/Pages a SECOND time
@@ -519,6 +522,29 @@ class Handler(BaseHTTPRequestHandler):
                     return drivesync.publish(snapshot["source"],snapshot["root"],
                         snapshot["area"],progress,cancel,plan=snapshot)
                 result=self.state.start_job("drive-push",push_drive)
+            elif path=="/api/xmid-manager/scan":
+                with self.state.xmid_manager_lock:
+                    self.state.xmid_manager_plan=None
+                    plan=xmid_manager.scan(body.get("database",""),body.get("songs",""))
+                    self.state.xmid_manager_plan=plan
+                    result=xmid_manager.page(plan,"all")
+            elif path in ("/api/xmid-manager/page","/api/xmid-manager/relocate"):
+                with self.state.xmid_manager_lock:
+                    plan=self.state.xmid_manager_plan
+                    if not plan or body.get("token")!=plan["token"]:
+                        raise ValueError("กรุณาตรวจสอบคลังเพลงใหม่")
+                    category=body.get("category","all")
+                    if path.endswith("/page"):
+                        result=xmid_manager.page(plan,category,body.get("offset",0))
+                    else:
+                        if body.get("confirmed") is not True:
+                            raise ValueError("ต้องยืนยันการย้ายไฟล์และการอัปเดตฐานภายหลัง")
+                        try:
+                            result=xmid_manager.relocate(plan,category,body.get("ids",[]),
+                                body.get("all_selected") is True,body.get("excluded",[]),
+                                body.get("destination",""),body.get("action",""))
+                        finally:
+                            self.state.xmid_manager_plan=None
             elif path=="/api/ncn-direct":
                 source=body.get("source","")
                 destination=body.get("destination","")
@@ -620,7 +646,7 @@ class Handler(BaseHTTPRequestHandler):
                 result=core.undo_edit(self.state.workspace,body.get("batch",""))
             elif path=="/api/pick":
                 kind=body.get("kind")
-                if kind not in ("folder","lrc","media"):
+                if kind not in ("folder","lrc","media","database"):
                     raise ValueError("ประเภทการเลือกไม่ถูกต้อง")
                 if not self.state.native_picker:
                     self.state.diagnostic("picker.unavailable",kind=kind)
