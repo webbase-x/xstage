@@ -210,12 +210,13 @@ const tvSearchSource=segment(app,'function xstageTvRenderSearch(panel){','functi
   })[id];}};
   const state={token:'private-user',songs:[song]};
   const render=new Function('state','document','normalizeSearchText',
-    'rankedSearchEntries','num','playable','chooseSearchSong','xstageTvCloseSearch',
+    'createSearchPager','num','playable','chooseSearchSong','xstageTvCloseSearch',
     tvSearchSource+'\nreturn xstageTvRenderSearch;')(
     state,{createElement:makeNode},s=>s.trim().toLowerCase(),
-    (songs,term,limit)=>{
-      called.push({songs,term,limit});
-      return {total:1,results:[{song}]};
+    (songs,term)=>{
+      called.push({songs,term});
+      let loaded=0;
+      return {total:1,get loaded(){return loaded;},get hasMore(){return loaded<1;},next(){loaded++;return [song];}};
     },String,()=>true,s=>selected.push(s),v=>closed.push(v));
   render(panel);
   assert.equal(results.children.length,0,'no blank-search catalog exposure');
@@ -223,7 +224,7 @@ const tvSearchSource=segment(app,'function xstageTvRenderSearch(panel){','functi
   input.value='เพลง';
   render(panel);
   assert.equal(called[0].songs,state.songs,'uses exactly Online catalog');
-  assert.equal(called[0].limit,8,'bounded TV results');
+  assert.equal(results.children.length,1,'bounded first TV page');
   assert.equal(results.children[0].children[0].textContent,song.title);
   results.children[0].click();
   assert.deepEqual(selected,[song],'TV songs invoke Online playback/queue');
