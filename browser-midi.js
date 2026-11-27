@@ -130,7 +130,9 @@ function parseMidi(source){
   if(!notes.length)fail('MIDI ไม่มีโน้ตที่เล่นได้');
   const duration=Math.max(clock,...notes.map(x=>x.end))+1;
   if(duration>MAX_SECONDS)fail('MIDI ยาวเกิน 15 นาทีสำหรับตัวเรนเดอร์บนเว็บ');
-  return {notes,duration,lyricEvents,division,tempoMap,keySignature};
+  const firstTempo=events.find(e=>e.kind==='tempo');
+  const initialBpm=60000000/(firstTempo?.value||500000);
+  return {notes,duration,lyricEvents,division,tempoMap,keySignature,initialBpm};
 }
 function midiLyrics(parsed,code){
   let title='',artist='';const pieces=[];

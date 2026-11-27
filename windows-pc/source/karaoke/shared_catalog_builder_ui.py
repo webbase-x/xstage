@@ -213,8 +213,11 @@ def open_builder(app, initial_root=None, *, parent=None):
         def worker():
             from .local_master import export_portable
             try:
-                result = export_portable(app.home, root, overwrite=overwrite, cancel=stop)
-                message = "คัดลอกฐานสำเร็จ · รอ Google Drive ซิงก์: " + str(result)
+                unchanged = []
+                result = export_portable(app.home, root, overwrite=overwrite, cancel=stop,
+                                         on_unchanged=lambda: unchanged.append(True))
+                message = ("ฐาน SQLite เหมือนเดิม · ไม่ส่งซ้ำ: " if unchanged else
+                           "คัดลอกฐานสำเร็จ · รอ Google Drive ซิงก์: ") + str(result)
             except Exception as exc:
                 message = "ไม่สำเร็จ · " + str(exc)
             def done():

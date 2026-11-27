@@ -1572,6 +1572,7 @@ class Importer {
           // lyrics without inventing an artist or timed karaoke text.
           const xmidHash=await core.hashBlob(item.file,()=>this.check());
           return {item,sourceCode,rawMidiSize,rawMidiHash,identity,xmidHash,
+            catalogMetadata:await core.catalogMetadata?.(opened)||{},
             identityComplete:Boolean(identity.identityComplete),
             metadataIssues:Array.isArray(opened.document.metadataIssues)?opened.document.metadataIssues.slice(0,8):[],
             lyricsAvailable:Boolean(opened.lyricsAvailable),
@@ -1623,7 +1624,7 @@ class Importer {
             sourceFormat:'XMID',
             lyricsMode:entry.lyricsAvailable?'timed':'unavailable',
             metadataComplete:entry.identityComplete&&!entry.metadataIssues.includes('suspect-text-encoding'),
-            metadataIssues:entry.metadataIssues,xmid:outcome.value};
+            metadataIssues:entry.metadataIssues,...entry.catalogMetadata,xmid:outcome.value};
           rows.set(entry.ident,record);addMaps(record);
           byMidi.set(entry.rawMidiHash,record);
           revisions.push(record);this.stats.newSongs++;finished++;
@@ -1704,7 +1705,8 @@ class Importer {
               originalRelativePath:item.relative||item.file.name,
               originalFileSize:item.file.size,
               title:identity.title,artist:identity.artist,
-              sourceFormat:isXmid?'XMID':'XSK',lyricsMode:'timed',
+              sourceFormat:isXmid?'XMID':'XSK',lyricsMode:opened.document.lyricsMode||'timed',
+              ...(await core.catalogMetadata?.(opened)||{}),
               ...(isXmid?{xmid:packed}:{xsk:packed})};
             rows.set(ident,record);addMaps(record);byMidi.set(rawMidiHash,record);
             revisions.push(record);this.stats.newSongs++;

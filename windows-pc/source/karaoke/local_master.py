@@ -2,6 +2,7 @@
 from contextlib import closing
 from pathlib import Path
 import os
+import hashlib
 import secrets
 import sqlite3
 from .restore import copy_database, validate_sqlite_sidecars
@@ -148,7 +149,29 @@ def activate(home, data, settings, *, installed=False):
             snapshot(data / "songs.sqlite3", target)
     return target
 
-def export_portable(home, drive_root, *, overwrite=False, cancel=None):
+def _catalog_fingerprint(path, cancel=None):
+    """Read the completed snapshot in bounded chunks, not a whole-file buffer."""
+    path = Path(path)
+    _safe(path)
+    if not path.is_file():
+        return None
+    before = path.stat()
+    digest = hashlib.md5(usedforsecurity=False)
+    with path.open("rb") as stream:
+        while True:
+            if cancel is not None and cancel.is_set():
+                raise InterruptedError("ยกเลิกการตรวจฐานข้อมูล")
+            chunk = stream.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    after = path.stat()
+    if (before.st_size, before.st_mtime_ns, before.st_ino) != (after.st_size, after.st_mtime_ns, after.st_ino):
+        raise ValueError("ฐานข้อมูลเปลี่ยนระหว่างตรวจสอบ · ลองซิงก์ใหม่")
+    return before.st_size, digest.hexdigest()
+
+
+def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchanged=None):
     """Publish a completed PC snapshot independently of catalog scanning.
 
     The destination must be the selected library root. Do not modify songs
@@ -175,7 +198,17 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None):
             raise InterruptedError("ยกเลิกก่อนเผยแพร่ฐานข้อมูล")
     stopped()
     target.parent.mkdir(parents=True, exist_ok=True)
-    stage = target.with_name(".export-" + secrets.token_hex(16) + ".sqlite3")
+    # Never compare a live base file as if it were a complete SQLite snapshot.
+    if target.exists():
+        validate_sqlite_sidecars(target.parent, (target.name,))
+        if any(target.with_name(target.name + suffix).exists() for suffix in ("-wal", "-shm", "-journal")):
+            raise ValueError("ฐานปลายทางมี journal ค้าง · ไม่ซิงก์จนกว่าจะปิดฐานอย่างปลอดภัย")
+    original = _catalog_fingerprint(target, cancel)
+    cache = home / "CACHE"
+    _safe(cache)
+    cache.mkdir(parents=True, exist_ok=True)
+    stage = cache / (".export-" + secrets.token_hex(16) + ".sqlite3")
+    upload = None
     try:
         snapshot(source, stage)
         validate_shared(root, stage)
@@ -219,17 +252,45 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None):
             db.commit()
         validate_shared(root, stage)
         stopped()
+        staged_fingerprint = _catalog_fingerprint(stage, cancel)
+        if _catalog_fingerprint(target, cancel) != original:
+            raise ValueError("ฐาน Cloud เปลี่ยนระหว่างเตรียมส่ง · ไม่เขียนทับ")
+        if original is not None and original == staged_fingerprint:
+            # Identical bytes: do not alter mtime, create a backup, or upload.
+            if on_unchanged is not None:
+                on_unchanged()
+            return target
         if target.exists():
             if not overwrite:
                 raise FileExistsError("มีฐานปลายทางแล้ว · ต้องยืนยันก่อนเขียนทับ")
             _prepare_replacement(target)
             backup = target.with_name("songs-" + secrets.token_hex(8) + ".sqlite3.bak")
             snapshot(target, backup)
+        # Copy only the changed, complete snapshot to the destination volume.
+        # Keep the final atomic rename on that volume; a local staging file
+        # must never be renamed directly across filesystems.
+        upload = target.with_name(".export-" + secrets.token_hex(16) + ".sqlite3")
+        with stage.open("rb") as incoming, upload.open("xb") as outgoing:
+            while True:
+                stopped()
+                chunk = incoming.read(1024 * 1024)
+                if not chunk:
+                    break
+                outgoing.write(chunk)
+            outgoing.flush()
+            os.fsync(outgoing.fileno())
+        if _catalog_fingerprint(upload, cancel) != staged_fingerprint:
+            raise ValueError("ไฟล์ฐานปลายทางไม่ตรงกับสำเนาที่ตรวจแล้ว")
         stopped()
         _prepare_replacement(target)
         if not overwrite and target.exists():
             raise FileExistsError("พบฐานปลายทางใหม่ · ไม่เขียนทับ")
-        os.replace(stage, target)
+        if _catalog_fingerprint(target, cancel) != original:
+            raise ValueError("ฐาน Cloud เปลี่ยนก่อนแทนที่ · ไม่เขียนทับ")
+        stopped()
+        os.replace(upload, target)
         return target
     finally:
         stage.unlink(missing_ok=True)
+        if upload is not None:
+            upload.unlink(missing_ok=True)

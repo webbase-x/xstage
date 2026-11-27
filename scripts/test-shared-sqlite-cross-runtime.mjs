@@ -23,6 +23,7 @@ try{
   vm.runInNewContext(js,scope,{filename:'drive-sqlite.js'});
   const songs=[
     {webSongId:'browser/xmid/abc01',code:'10001',title:'เพลงตัวอย่าง',artist:'นักร้อง ก',
+      firstLyric:'เนื้อร้องตัวอย่าง',rhythm:'ลูกทุ่ง',keySignature:'G',bpm:100,
       sourceFormat:'XMID',originalRelativePath:'MIDI/XMID/1/10001.xmid',
       originalFilename:'10001.xmid',midiHash:'a'.repeat(32),midiSize:218,
       xmid:{fileId:'drive-file-xmid-1',path:'SONGS/MIDI/XMID/1/10001.xmid'}},
@@ -39,6 +40,7 @@ try{
   const ids=records.map(([id])=>id);
   assert.equal(new Set(ids).size,2);
   assert.ok(ids.every(id=>Number.isSafeInteger(id)&&id>0));
+  assert.deepEqual(database.exec("SELECT first_lyric,rhythm,key_signature,bpm FROM songs WHERE code='10001'")[0].values[0],['เนื้อร้องตัวอย่าง','ลูกทุ่ง','G','100']);
   database.close();
   const python=`
 import hashlib, json, os, sys
@@ -53,6 +55,11 @@ rows=lib.search('',limit=20)
 assert sorted(x['id'] for x in rows)==sorted(expected)
 assert {r['code'] for r in rows}=={'10001','20001'}
 assert {r['kind'] for r in rows}=={'MIDI','AUDIO'}
+metadata=next(r for r in rows if r['code']=='10001')
+assert metadata['first_lyric']=='เนื้อร้องตัวอย่าง'
+assert metadata['rhythm']=='ลูกทุ่ง'
+assert metadata['key_signature']=='G'
+assert float(metadata['bpm'])==100
 for row in rows:
     found=lib.get(row['id'])
     assert found is not None and os.path.isfile(found['path'])
@@ -78,6 +85,8 @@ print('PASS: PC sees exactly the same 2 songs/IDs/paths as Online with no DB wri
   process.stdout.write(result.stdout);
   const read=await scope.XStageDriveSQLite.read(bytes);
   assert.equal(read.songs.length,2);
+  assert.equal(read.songs[0].firstLyric,'เนื้อร้องตัวอย่าง');
+  assert.equal(read.songs[0].keySignature,'G');
   console.log('PASS: shared SQL.js/Python SQLite, stable song IDs, identical metadata and no extra PC database');
 }finally{
   fs.rmSync(rootDir,{recursive:true,force:true});

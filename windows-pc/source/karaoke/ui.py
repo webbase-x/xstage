@@ -171,6 +171,11 @@ class KaraokeApp(tk.Tk):
         # Separate queues preserve identifiers from the native and portable schemas.
         self.song_queue = SongQueue(self.data_dir / ("drive-queue.json" if self.shared_drive_mode else "queue.json"))
         self.queue_warmup = QueueWarmup()
+        self.streamed_song_cache = None
+        if self.shared_drive_mode:
+            from .streamed_song_cache import StreamedSongCache
+            self.streamed_song_cache = StreamedSongCache(self.data_dir / "CACHE" / "streamed-songs")
+            self.library.streamed_song_cache = self.streamed_song_cache
         self._last_memory_report = 0
         self.engine = None
         self.current_song = None
@@ -411,10 +416,12 @@ class KaraokeApp(tk.Tk):
         select = min(select, len(self.song_queue.items)-1) if self.song_queue.items else None
         self.queues.delete(*self.queues.get_children())
         warm_paths = []
+        disk_songs = []
         for index, item in enumerate(self.song_queue.items):
             song = self.library.get(item.song_id)
             if song and song.get("path"):
                 warm_paths.append(song["path"])
+                disk_songs.append(song)
             self.queues.insert("", "end", iid=str(index), values=(index + 1, song["title"] if song else "ไม่พบเพลง",
                                   item.singer, f"{item.key:+} / {item.speed}%"))
         self.queue_title.set(f"คิวเพลง  ·  {len(self.song_queue.items)}")
@@ -424,6 +431,9 @@ class KaraokeApp(tk.Tk):
         if warmup:
             warmup.request(warm_paths)
             KaraokeApp._update_memory_banner(self)
+        disk_cache = self.__dict__.get("streamed_song_cache")
+        if disk_cache:
+            disk_cache.request(disk_songs)
         if select is not None and self.queues.exists(str(select)):
             self.queues.selection_set(str(select))
             self.queues.focus(str(select))
@@ -1041,7 +1051,9 @@ class KaraokeApp(tk.Tk):
         # PC song index merely to play it once.
         song = (getattr(self, '_shared_drive_playback_song', None)
                 if item.song_id == -1 else self.library.get(item.song_id))
-        if not song or not Path(song["path"]).is_file():
+        disk_cache = self.__dict__.get("streamed_song_cache")
+        cached_path = disk_cache.lookup(song) if disk_cache and song else None
+        if not song or (cached_path is None and not Path(song["path"]).is_file()):
             self.report_load_error("ไม่พบไฟล์เพลง อาจถูกย้ายหรือถอดไดรฟ์ออก", quiet, kind='file')
             return False
         prepared=None;old_overlap=None;rhythm=None
@@ -1061,7 +1073,7 @@ class KaraokeApp(tk.Tk):
             self.current_item = None
             self.lyrics = Lyrics()
             self.show_main_media(False)
-            path = Path(song["path"])
+            path = cached_path or Path(song["path"])
             video = path.suffix.lower() in VIDEO_EXT
             if path.suffix.lower() in MIDI_EXT:
                 output = None
@@ -1671,6 +1683,9 @@ class KaraokeApp(tk.Tk):
         warmup=self.__dict__.get('queue_warmup')
         if warmup:
             step(self,'คืนแคชเพลงรอ',warmup.close)
+        disk_cache=self.__dict__.get('streamed_song_cache')
+        if disk_cache:
+            step(self,'หยุดโหลดเพลงลงดิสก์',disk_cache.close)
         step(self,'ปิดตัวถอดรหัส Chromakey',lambda: KaraokeApp._stop_chroma_video(self))
         if self.engine:step(self,'ปิดระบบเล่นเสียง',self.engine.close)
         finish(self)
