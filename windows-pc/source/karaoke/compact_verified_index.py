@@ -98,7 +98,7 @@ def build(source, compact, original, output, journal, *, cancel=None, progress=N
             cache.execute('CREATE TABLE IF NOT EXISTS checked (key TEXT PRIMARY KEY, stamp TEXT NOT NULL, media TEXT NOT NULL)')
             out.executescript('''PRAGMA journal_mode=DELETE;
                 CREATE TABLE catalog_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-                CREATE TABLE songs(id INTEGER PRIMARY KEY,web_song_id TEXT UNIQUE NOT NULL,search TEXT NOT NULL,playable INTEGER NOT NULL,payload TEXT NOT NULL,code TEXT NOT NULL,title TEXT NOT NULL,artist TEXT NOT NULL);
+                CREATE TABLE songs(id INTEGER PRIMARY KEY,ordinal INTEGER NOT NULL,web_song_id TEXT UNIQUE NOT NULL,search TEXT NOT NULL,playable INTEGER NOT NULL,payload TEXT NOT NULL,code TEXT NOT NULL,title TEXT NOT NULL,artist TEXT NOT NULL);
                 CREATE TABLE verification_errors(id INTEGER PRIMARY KEY,reason TEXT NOT NULL);
                 CREATE INDEX songs_code ON songs(code,id);
                 CREATE INDEX songs_title ON songs(title COLLATE NOCASE,id);''')
@@ -129,7 +129,7 @@ def build(source, compact, original, output, journal, *, cancel=None, progress=N
                     seen.add(web_id)
                     song={'webSongId':web_id,'code':code,'sourceCode':code,'title':title,'artist':artist,'sourceFormat':'XMID','pendingDriveLink':True,'xmid':media}
                     search=unicodedata.normalize('NFC',' '.join([code,title,artist])).lower()
-                    out.execute('INSERT INTO songs VALUES(?,?,?,?,?,?,?,?)',(ident,web_id,search,1,json.dumps(song,ensure_ascii=False,separators=(',',':')),code,title,artist))
+                    out.execute('INSERT INTO songs VALUES(?,?,?,?,?,?,?,?,?)',(ident,checked,web_id,search,1,json.dumps(song,ensure_ascii=False,separators=(',',':')),code,title,artist))
                     checked+=1
                 except (ValueError,OSError,UnicodeError) as e:
                     rejected+=1
@@ -138,7 +138,7 @@ def build(source, compact, original, output, journal, *, cancel=None, progress=N
             if checked+rejected!=total:
                 raise ValueError('Compact count mismatch')
             stop(cancel)
-            out.executemany('INSERT INTO catalog_meta VALUES(?,?)',{'format':'xstage-sqlite3-v1','schemaVersion':'1','kind':'snapshot','generation':source_sha,'pcSchema':'verified-compact-v1','mediaIdentity':FORMAT,'sourceMD5':source_md5,'sourceBytes':str(source_size),'sourceSHA256':source_sha,'compactMD5':compact_fingerprint[1],'verifiedCount':str(checked),'rejectedCount':str(rejected)}.items())
+            out.executemany('INSERT INTO catalog_meta VALUES(?,?)',{'format':'xstage-sqlite3-v1','schemaVersion':'1','kind':'snapshot','generation':source_sha,'pcSchema':'verified-compact-v1','mediaIdentity':FORMAT,'sourceMD5':source_md5,'sourceBytes':str(source_size),'sourceSHA256':source_sha,'compactMD5':compact_fingerprint[1],'verifiedCount':str(checked),'rejectedCount':str(rejected),'expectedCount':str(total)}.items())
             out.commit()
             if out.execute('PRAGMA quick_check').fetchone()!=('ok',):
                 raise ValueError('Verified sidecar integrity check failed')
