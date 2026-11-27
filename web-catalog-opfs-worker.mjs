@@ -18,7 +18,7 @@ function discard(entry){
   entry.db.close();
   pool.unlink(entry.name);
 }
-async function dispatch({id,action,owner,file,md5,size,capability,term,cursor,code,title,artist,songId}){
+async function dispatch({id,action,owner,file,md5,size,capability,term,cursor,code,title,artist,songId,favoriteIds}){
   if(action==='stage'){
     const p=await getPool(owner);
     if(staged&&staged!==active){discard(staged);staged=null;}
@@ -45,7 +45,7 @@ async function dispatch({id,action,owner,file,md5,size,capability,term,cursor,co
     return true;
   }
   if(!active||active.capability!==capability)fail('Catalog revision changed');
-  if(action==='search')return searchPage(active.db,term,cursor??null);
+  if(action==='search')return searchPage(active.db,term,cursor??null,favoriteIds);
   if(action==='lookup')return lookupSong(active.db,songId,code,title,artist);
   if(action==='random')return randomSong(active.db);
   fail('Unsupported catalog operation');
