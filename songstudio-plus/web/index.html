@@ -153,12 +153,12 @@
           <div class="input-wrap"><input id="ncn-source" type="text" spellcheck="false"><button id="ncn-source-pick" class="browse-btn" type="button">เลือกโฟลเดอร์</button></div>
           <label class="field-label" for="ncn-dest">โฟลเดอร์ XMID ปลายทาง</label>
           <div class="input-wrap"><input id="ncn-dest" type="text" spellcheck="false"><button id="ncn-dest-pick" class="browse-btn" type="button">เลือกโฟลเดอร์</button></div>
-          <p class="field-hint">ค้นหาทุกโฟลเดอร์ย่อย · ตรวจหัวข้อมูลและ CUR · ข้ามรูปแบบที่ไม่แน่ชัด · เก็บรายงาน JSONL</p>
+          <p class="field-hint">ค้นหาทุกโฟลเดอร์ย่อย · ตรวจหัวข้อมูลและ CUR · ข้ามรูปแบบที่ไม่แน่ชัด · เก็บรายงาน JSONL และ CSV แยกสถานะใน LOGS</p>
           <button class="primary-btn full" id="ncn-start" type="button" disabled>เริ่มแปลง NCN to XMID</button>
           <button class="quiet-btn" id="ncn-stop" type="button" disabled>หยุดอย่างปลอดภัย</button>
           <p id="ncn-progress" role="status" aria-live="polite">ยังไม่ได้เริ่ม</p>
           <progress id="ncn-progress-bar" value="0" max="1" style="width:100%"></progress>
-          <p id="ncn-report" class="field-hint"></p>
+          <p id="ncn-report" class="field-hint" style="white-space:pre-wrap;overflow-wrap:anywhere"></p>
           <p id="ncn-errors" class="field-hint" style="white-space:pre-wrap;overflow-wrap:anywhere" aria-live="polite"></p>
         </article>
       </section>
