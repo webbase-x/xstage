@@ -1503,6 +1503,7 @@ async function clearPerformanceCache(){
   state.medleyCache=null;state.medleyPrefetch=null;state.medleyUpcoming=null;
   resetDiskQueuePreload();
   await clearCatalogStorage();
+  await window.XStageWebCatalogDisk?.clear?.();
   if('caches' in window){
     try{
       const keys=await caches.keys();
@@ -2157,8 +2158,25 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
     }
     const codec=window.XStageDriveSQLite;
     if(!codec)throw Error('ไม่พบตัวอ่าน SQLite3 กรุณาโหลดหน้าเว็บใหม่');
-    const response=await privateFile(id,token);
-    const bytes=await readCatalogBytes(response);
+    // Persist the exact verified SQLite bytes on capable Web browsers.
+    // sql.js remains a bounded legacy parser until the OPFS SQL worker is wired.
+    // Do not start an oversized transfer solely to fail the current parser.
+    const disk=window.XStageWebCatalogDisk;
+    let bytes;
+    if(disk?.available()&&sub&&Number(pointer.contentBytes)<=192*1048576){
+      try{
+        const saved=await disk.getOrFetch({owner:sub,pointer,fetcher:()=>privateFile(id,token),
+          current:()=>state.authId===authGeneration});
+        if(saved){assertCurrent();bytes=await readCatalogBytes(new Response(saved.file));}
+      }catch(error){
+        if(error?.name==='AbortError')throw error;
+        console.warn('X-Stage persistent SQLite storage:',error?.message||error);
+      }
+    }
+    if(!bytes){
+      const response=await privateFile(id,token);
+      bytes=await readCatalogBytes(response);
+    }
     assertCurrent();
     const data=await codec.read(bytes);
     assertCurrent();

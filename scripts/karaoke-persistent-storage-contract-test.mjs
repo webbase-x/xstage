@@ -15,7 +15,7 @@ console.log('One-bank persistence and catalog retry source contracts passed');
 assert.match(app,/function savePersistentQueue\(\)/);
 assert.match(app,/function restorePersistentQueue\(\)/);
 assert.match(app,/next===state\.queuePreload\.song/);
-assert.match(app,/state\.queuePreloadSkipped\.clear\(\);\s*state\.medleyPreloadRetryAt=0/);
+assert.match(app,/state\.queuePreloadSkipped\.clear\(\);\s*state\.diskQueueFailed\.clear\(\);\s*state\.medleyPreloadRetryAt=0/);
 
 assert.match(app,/if\(nativeCatalogBridgeAvailable\(\)\)\{\s*showCatalogLoading/);
 assert.match(app,/state\.nativeCatalog&&songs===state\.songs\)return nativeCatalogPager/);
