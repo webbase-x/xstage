@@ -184,6 +184,10 @@ final class NativeCatalogStore implements AutoCloseable {
         } finally { if (!valid) db.close(); }
     }
 
+    private static String contentRevision(String md5, long size) {
+        return md5 + "-" + size;
+    }
+
     /**
      * Reuse unchanged revision on disk; never replace an active DB before a complete
      * download, digest check and SQLite validation. One canonical DB per account/root.
@@ -196,8 +200,12 @@ final class NativeCatalogStore implements AutoCloseable {
         long size = Long.parseLong(info.optString("size", "0"));
         String md5 = info.optString("md5Checksum", "").toLowerCase(Locale.ROOT);
         require(size >= 100 && md5.matches("[a-f0-9]{32}"), "Missing catalog size/checksum");
-        String revision = fileId + "-" + md5;
-        if (database != null && database.isOpen() && owner.equals(activeScope) && revision.equals(activeRevision)) {
+        // File ID authorizes the source; bytes, not file ID or modifiedTime, identify
+        // the local revision. Re-uploading identical bytes must not cause a download.
+        String revision = contentRevision(md5, size);
+        if (database != null && database.isOpen() && owner.equals(activeScope) &&
+                revision.equals(activeRevision) && activeFile != null &&
+                activeFile.isFile() && activeFile.length() == size) {
             return summary(true);
         }
         File folder = new File(directory, owner);
@@ -229,13 +237,18 @@ final class NativeCatalogStore implements AutoCloseable {
                 try (SQLiteDatabase checked = openVerified(temp, true)) {
                     scalar(checked, "SELECT COUNT(*) FROM songs WHERE playable=1", null);
                 }
+                // Metadata may have changed during download. Keep the previous local
+                // catalog if Drive now reports a different revision or moved the file.
+                JSONObject latest = verifySource(token, sub, root, dbId, fileId);
+                require(size == Long.parseLong(latest.optString("size", "0")) &&
+                        md5.equalsIgnoreCase(latest.optString("md5Checksum", "")),
+                        "Cloud catalog changed during download; retry synchronization");
                 // Atomic same-filesystem rename. Old revision is not removed here.
                 Os.rename(temp.getAbsolutePath(), target.getAbsolutePath());
                 candidate = openVerified(target, false);
             }
             long count = Long.parseLong(scalar(candidate, "SELECT COUNT(*) FROM songs WHERE playable=1", null));
             SQLiteDatabase previous = database;
-            File previousFile = activeFile;
             database = candidate;
             candidate = null;
             activeScope = owner;
