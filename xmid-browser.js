@@ -88,5 +88,28 @@ async function openPackage(file,{metadataOnly=false}={}){
   if(mediaMagic!=='MThd' && mediaMagic!=='NCN1')fail('สื่อใน XMID ไม่ใช่ MIDI');
   return {...result,midi:new Blob([midi],{type:'audio/midi'})};
 }
-scope.XStageXmid={inspectMetadata:file=>openPackage(file,{metadataOnly:true}),openPackage};
+// A verified original must match the PC-produced evidence before parsing.
+async function openVerifiedPackage(file,song,signal){
+  const media=song?.xmid;
+  const check=()=>{if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');};
+  check();
+  if(!(file instanceof Blob)||song?.verifiedOriginal!==true||!media||
+     !/^[a-f0-9]{32}$/.test(media.md5Checksum||'')||!/^[a-f0-9]{64}$/.test(media.sha256||'')||
+     !Number.isSafeInteger(media.size)||media.size!==file.size||file.size<HEADER||file.size>HEADER+MAX_META+MAX_MIDI)
+    fail('หลักฐานต้นฉบับหรือขนาดไม่ถูกต้อง');
+  if(typeof scope.XStageImportCore?.hashBlob!=='function'||!scope.crypto?.subtle)fail('ระบบตรวจแฮชไม่พร้อม');
+  if(await scope.XStageImportCore.hashBlob(file,check)!==media.md5Checksum)fail('MD5 ไม่ตรงไฟล์ต้นฉบับ');
+  check();
+  const sha=toHex(await scope.crypto.subtle.digest('SHA-256',await file.arrayBuffer()));
+  if(sha!==media.sha256)fail('SHA-256 ไม่ตรงไฟล์ต้นฉบับ');
+  check();
+  const result=await openPackage(file);
+  check();
+  if(String(song.sourceCode||song.code||'')!==result.code||
+     String(song.title||'')!==String(result.document.title||'')||
+     String(song.artist||'')!==String(result.document.artist||''))
+    fail('ข้อมูลเพลงไม่ตรงกับ DB');
+  return result;
+}
+scope.XStageXmid={inspectMetadata:file=>openPackage(file,{metadataOnly:true}),openPackage,openVerifiedPackage};
 })(typeof window!=='undefined'?window:globalThis);
