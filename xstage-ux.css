@@ -5510,3 +5510,44 @@ html body.xstage-ui-v2 .stage .mobile-stage-menu .xstage-menu-category>summary{d
 html body.xstage-ui-v2 .stage .app-update-notice{z-index:145;pointer-events:auto}
 .app-update-notice #app-update-direct{font-size:inherit;color:#a9ecff;text-decoration:underline;padding:7px 6px;touch-action:manipulation;pointer-events:auto}
 .app-update-notice #app-update-direct[hidden]{display:none!important}
+
+/* Progressive song search: a five-row window; native scroll remains enabled. */
+html body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded #songs,
+html body.xstage-ui-v2.xstage-mobile-search-bottom:not(.xstage-native-tv) .stage .stage-search-slot .search-dock.pc-expanded #songs{
+  --xs-search-row:68px;
+  max-height:calc(5 * var(--xs-search-row) + 15px)!important;
+  min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;
+  scrollbar-width:none!important;-ms-overflow-style:none;
+  overscroll-behavior-y:contain;touch-action:pan-y;
+}
+html body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded #songs .song-item{
+  box-sizing:border-box!important;height:var(--xs-search-row)!important;
+  min-height:var(--xs-search-row)!important;max-height:var(--xs-search-row)!important;
+  margin:0!important;overflow:hidden;touch-action:pan-y;
+}
+#xstage-tv-search-results{
+  --xs-tv-search-row:64px;--xs-tv-search-gap:9px;
+  max-height:min(45dvh,calc(5 * var(--xs-tv-search-row) + 4 * var(--xs-tv-search-gap) + 10px))!important;
+  grid-auto-rows:var(--xs-tv-search-row);overflow-y:auto!important;overflow-x:hidden;
+  scrollbar-width:none!important;-ms-overflow-style:none;overscroll-behavior-y:contain;
+  touch-action:pan-y;
+}
+#xstage-tv-search-results .xstage-tv-search-song{
+  min-height:0!important;max-height:var(--xs-tv-search-row);box-sizing:border-box;
+  overflow:hidden;
+}
+#xstage-tv-search-results .xstage-tv-search-song :is(strong,span){
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;
+}
+html body.xstage-ui-v2 .stage .stage-search-slot #songs::-webkit-scrollbar,
+#xstage-tv-search-results::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
+@media(max-width:820px),(max-height:540px) and (pointer:coarse){
+  html body.xstage-ui-v2 .stage .stage-search-slot .search-dock.pc-expanded #songs,
+  html body.xstage-ui-v2.xstage-mobile-search-bottom:not(.xstage-native-tv) .stage .stage-search-slot .search-dock.pc-expanded #songs{
+    --xs-search-row:62px;
+    max-height:min(calc(5 * var(--xs-search-row) + 15px),47dvh)!important;
+  }
+}
+@media(max-height:700px){
+  #xstage-tv-search-results{--xs-tv-search-row:54px;--xs-tv-search-gap:6px;max-height:min(38dvh,calc(5 * var(--xs-tv-search-row) + 4 * var(--xs-tv-search-gap) + 10px))!important}
+}
