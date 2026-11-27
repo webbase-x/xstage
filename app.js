@@ -54,7 +54,7 @@ const state = {
   medley: false, medleyCache: null, medleyPrefetch: null,
   medleyUpcoming: null, medleyPoolSource: null, medleyPool: [], medleyRecent: [],
   userStopped: false, userPaused:false, resumeAfterInterruption:false, visualScale: 1,
-  catalogPointerId:'',catalogGeneration:'',catalogPolling:false,catalogCache:new Map(),
+  catalogPointerId:'',catalogGeneration:'',catalogPolling:false,androidTvCatalogRetryPending:false,catalogCache:new Map(),
   nativeCatalog:null,nativeCatalogDeferred:null,
   webCatalog:null,webCatalogClient:null,webCatalogDeferred:null,webMedleyRequest:null,webNextPending:null,
   diskQueueTimer:null,diskQueueTask:null,diskQueueReady:new Set(),diskQueueFailed:new Set(),
@@ -2485,7 +2485,7 @@ async function activeDriveCatalog(dbId,token){
   return direct.length?{pointer:await selectVerifiedCatalog(direct[0],dbId,token)}:null;
 }
 async function pollPublishedCatalog(){
-  if(!state.token||!state.libraryRootId||isRetiredDriveRoot(state.libraryRootId)||state.catalogPolling||androidTvCatalogRetryPending)return;
+  if(!state.token||!state.libraryRootId||isRetiredDriveRoot(state.libraryRootId)||state.catalogPolling||state.androidTvCatalogRetryPending)return;
   const authId=state.authId,token=state.token,rootId=state.libraryRootId,sub=state.accountSub;
   const sameLibrary=()=>authId===state.authId&&state.token===token&&
     state.libraryRootId===rootId&&state.accountSub===sub;
@@ -2572,7 +2572,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
 
   // A new short-lived token for the SAME account must not reset the player,
   // downloaded audio, search results or queue. Only the credential changes.
-  if (androidTvCatalogRetryPending) reuseExistingSession=false;
+  if (state.androidTvCatalogRetryPending) reuseExistingSession=false;
   if (reuseExistingSession && state.token && state.accountSub===account.sub && state.libraryRootId && !isRetiredDriveRoot(state.libraryRootId) && (state.webCatalog||state.nativeCatalog||state.catalogGeneration)) {
     if(fullReadGranted){fullDriveReadToken=token;rememberFullDriveRead(account.sub);}
     state.token=token;
@@ -3004,6 +3004,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   if (!keepAuth){state.authId++;webGoogleAuthFlow=null;}
   const pendingSearch=keepAuth?String(ui.search?.value||''):'';
   const oldToken = state.token;
+  state.androidTvCatalogRetryPending=false;
   resetNativeCatalogClient();
   resetDiskQueuePreload();
   state.requestId++;
@@ -5215,7 +5216,6 @@ function notifyAndroidTvLoginReady(){
 // previously threw ReferenceError before the QR callback could render.
 let androidTvLoginWatchdog=0;
 let androidTvLoginInProgress=false;
-let androidTvCatalogRetryPending=false;
 function clearAndroidTvLoginWatchdog(){
   if(androidTvLoginWatchdog){clearTimeout(androidTvLoginWatchdog);androidTvLoginWatchdog=0;}
 }
@@ -5270,7 +5270,7 @@ function androidTvAuthPanel(){
   }
   $('android-tv-auth-retry')?.addEventListener('click',()=>{
     $('android-tv-auth-retry').hidden=true;
-    if(androidTvCatalogRetryPending && state.token && state.accountSub){
+    if(state.androidTvCatalogRetryPending && state.token && state.accountSub){
       if(state.tokenExpiresAt>Date.now()+30000)
         void window.XStageReceiveAndroidToken(state.token,Math.floor((state.tokenExpiresAt-Date.now())/1000));
       else restoreAndroidTvGoogleSession();
@@ -5453,14 +5453,14 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
   try{
     await openDrive(token,authId,expiresAt,existingSub);
     if(authId===state.authId&&state.token){
-      androidTvCatalogRetryPending=false;
+      state.androidTvCatalogRetryPending=false;
       if(!document.documentElement.classList.contains('xstage-native-auth-pending'))hideAndroidTvAuthPanel();
       androidTvRefreshingSession=false;
     }
   }catch(error){
     if(authId===state.authId){
       if(['CATALOG_TOO_LARGE','CATALOG_LOAD_FAILED'].includes(error?.code)&&state.token&&state.accountSub&&state.libraryRootId){
-        androidTvCatalogRetryPending=true;
+        state.androidTvCatalogRetryPending=true;
         androidTvRefreshingSession=false;
         clearPendingAuth();
         const panel=androidTvAuthPanel();panel.hidden=false;
@@ -5497,7 +5497,7 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
 window.XStageAndroidSignedOut=()=>{
   clearAndroidTvLoginWatchdog();
   androidTvVerifiedConnectionSub='';
-  androidTvCatalogRetryPending=false;
+  state.androidTvCatalogRetryPending=false;
   setAndroidTvStageAccess(false);
   if(state.token)resetPrivate({keepAuth:false});
   if(androidTvNativeBridgeReady())startAndroidTvDeviceLogin(true);
