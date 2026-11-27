@@ -143,7 +143,14 @@ class SharedSongLibrary:
         elif verify:
             absolute = _local_media(self.root, raw, source_songs=self.source_songs)
             row["path"] = absolute or ""
-            row["playable"] = int(bool(row.get("playable")) and bool(absolute))
+            disk_cache = getattr(self, "streamed_song_cache", None)
+            if not absolute and disk_cache:
+                # Keep the canonical path for settings/history; the player
+                # separately resolves the verified local packed-file copy.
+                row["path"] = str(self.source_songs.joinpath(*parts[1:]))
+                if disk_cache.lookup(row) is None:
+                    row["path"] = ""
+            row["playable"] = int(bool(row.get("playable")) and bool(row["path"]))
         else:
             row["path"] = str(self.source_songs.joinpath(*parts[1:]))
             row["playable"] = int(bool(row.get("playable")))
