@@ -25,3 +25,14 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Test SQLite WASM against strict HTTP 206
         run: node scripts/hybrid-sqlite-browser-e2e.mjs
+      - name: Package same-origin WASM diagnostic preview
+        run: |
+          mkdir -p experiments/hybrid-sqlite/vendor
+          cp -R node_modules/@journeyapps/wa-sqlite/dist node_modules/@journeyapps/wa-sqlite/src experiments/hybrid-sqlite/vendor/
+          cp node_modules/@journeyapps/wa-sqlite/package.json experiments/hybrid-sqlite/vendor/
+          if [ -f node_modules/@journeyapps/wa-sqlite/LICENSE ]; then cp node_modules/@journeyapps/wa-sqlite/LICENSE experiments/hybrid-sqlite/vendor/; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hybrid-sqlite-same-origin-wasm-preview
+          path: experiments/hybrid-sqlite/vendor/
+          if-no-files-found: error
