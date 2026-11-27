@@ -232,6 +232,19 @@ final class NativeCatalogStore implements AutoCloseable {
         String count = scalar(db, "SELECT COUNT(*) FROM songs WHERE playable=1", null);
         require(!"0".equals(count) && count.equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='verifiedCount'", null)) &&
                 count.equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='expectedCount'", null)), "Verified count mismatch");
+        // Stream rows through Cursor rather than requiring JSON1 on older Android SQLite builds.
+        try (Cursor rows = db.rawQuery("SELECT web_song_id,payload FROM songs WHERE playable=1", null)) {
+            while (rows.moveToNext()) {
+                if (Thread.currentThread().isInterrupted()) throw new IOException("Catalog validation cancelled");
+                JSONObject song = new JSONObject(rows.getString(1));
+                JSONObject media = song.optJSONObject("xmid");
+                require(rows.getString(0).equals(song.optString("webSongId")) &&
+                        song.optBoolean("verifiedOriginal") && media != null &&
+                        media.optString("sha256").matches("[a-f0-9]{64}") &&
+                        media.optString("md5Checksum").matches("[a-f0-9]{32}") &&
+                        media.optLong("size", 0) > 0, "Unverified media in playable catalog");
+            }
+        }
     }
     private static String contentRevision(String md5, long size) {
         return md5 + "-" + size;
