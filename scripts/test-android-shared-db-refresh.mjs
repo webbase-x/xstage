@@ -30,15 +30,21 @@ function fixture(){
   await f.poll();assert.equal(f.readCount,0);
   f.folders=[{id:'db1'}];f.pointer={generation:'pc-v1'};
   await f.poll();
+  assert.equal(f.readCount,0,'queued tracks take priority over legacy full-catalog download');
+  f.state.queue=[];
+  await f.poll();
   assert.equal(f.state.catalogDbDirId,'db1');
   assert.equal(f.state.songs[0].code,'pc-v1');
   assert.equal(f.state.catalogGeneration,'pc-v1');
   assert.equal(f.ui.songTotal.textContent,'1 เพลง');
   assert.equal(f.saved[0][0],'account:root1');
   await f.poll();assert.equal(f.readCount,1);
+  f.state.queue=[{code:'Q'}];
   f.pointer={generation:'web-v2'};await f.poll();
-  assert.equal(f.state.songs[0].code,'web-v2');
+  assert.equal(f.state.songs[0].code,'pc-v1');
   assert.deepEqual(f.state.queue,[{code:'Q'}]);
+  f.state.queue=[];await f.poll();
+  assert.equal(f.state.songs[0].code,'web-v2');
   assert.deepEqual(f.state.current,{code:'NOW'});
   f.folders=[];await f.poll();assert.equal(f.state.songs[0].code,'web-v2');
 }
@@ -47,7 +53,7 @@ function fixture(){
   assert.equal(f.readCount,0);assert.equal(f.warnings.length,1);
 }
 {
-  const f=fixture();f.folders=[{id:'db1'}];f.pointer={generation:'pc-v1'};
+  const f=fixture();f.folders=[{id:'db1'}];f.pointer={generation:'pc-v1'};f.state.queue=[];
   f.beforeRead=()=>{f.state.libraryRootId='root2';};
   await f.poll();assert.equal(f.state.songs.length,0);assert.equal(f.saved.length,0);
   assert.equal(f.state.catalogPolling,false);

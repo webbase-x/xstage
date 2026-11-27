@@ -2185,9 +2185,24 @@ async function pollPublishedCatalog(){
     state.catalogDbDirId=dbId;
     const pointer=published?.pointer;
     if(!pointer||!pointer.generation||pointer.generation===state.catalogGeneration)return;
+    // The legacy reader materializes a whole catalog in RAM. Do not start
+    // that work during playback/queue preload; the native disk reader can
+    // stage a download separately in a later integration.
+    if(state.queue.length||state.loading||state.current&&state.currentlyCatalogBusy!==false){
+      // An ended/paused track may still be the history/current selection.
+      // Use transport intent where available, not just a stale song object.
+      if(state.queue.length||state.loading||
+         (typeof playbackHasActiveIntent==='function'&&playbackHasActiveIntent()))return;
+    }
     const cacheOwner=libraryCacheOwner(sub,rootId);
     const catalog=await readPublishedCatalog(pointer,token,{sub:cacheOwner});
     if(!sameLibrary())return;
+    if(state.queue.length||state.loading||
+       (typeof playbackHasActiveIntent==='function'&&playbackHasActiveIntent())){
+      // The user started a song during the network read. Keep the old
+      // active generation and retry later; readPublishedCatalog caches it.
+      return;
+    }
     const countBefore=state.songs.length;
     state.manifest=catalog;
     state.songs=catalog.songs.filter(playable);
@@ -2218,7 +2233,7 @@ function applyInstantCatalog(instant){
   hideCatalogLoading();
   renderSongs();renderQueue();
   setStatus(`พร้อมใช้งานทันที · ${num(state.songs.length)} เพลงจากฐานในเครื่อง · กำลังตรวจอัปเดตเบื้องหลัง`,'success');
-  void restorePlaybackAfterReload();
+  // Wait for the verified canonical library before restoring the saved queue.
   if(!readPlaybackResumeState())ui.search.focus();
   return true;
 }
@@ -2446,8 +2461,10 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       state.songs=catalog.songs.filter(playable);
       state.selectedIndex=0;
       ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
-      renderSongs();renderQueue();
+      renderSongs();
     }
+    // Only restore persisted private IDs after the library was verified.
+    restorePersistentQueue();renderQueue();
     setSearchAvailability(true);
     ui.libraryState.textContent='Google Drive · '+libraryLabel(root)+' · พร้อมใช้งาน';
     ui.resultCount.textContent=ui.search.value.trim() ? ui.resultCount.textContent : 'พิมพ์เพื่อค้นหาเพลง';
@@ -2677,6 +2694,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   resetSongVideo();
   if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
   state.objectUrl = ''; state.token = '';fullDriveReadToken='';state.tokenExpiresAt=0; state.accountSub = ''; state.manifest = null;
+  queueDiskOwner='';
   state.songs = [];state.shown = [];state.queue = [];state.history = [];
   state.catalogPointerId='';state.catalogDbDirId='';state.catalogGeneration='';state.catalogCache.clear();
   state.libraryRootId='';state.libraryRootCanShare=false;state.libraryRootOwnedByMe=false;state.libraryRootOwnerEmail='';state.availableLibraries=[];
@@ -2793,6 +2811,43 @@ setupLibrarySharing();
 
 
 const PLAYBACK_RESUME_KEY='xstage-playback-resume-v1';
+const QUEUE_DISK_PREFIX='xstage-queue-v1:';
+let queueDiskOwner='';
+function currentQueueOwner(){
+  return state.token&&state.accountSub&&state.libraryRootId&&!isRetiredDriveRoot(state.libraryRootId)
+    ?libraryCacheOwner(state.accountSub,state.libraryRootId):'';
+}
+function savePersistentQueue(){
+  const owner=currentQueueOwner();
+  if(!owner||queueDiskOwner!==owner)return;
+  try{
+    const items=state.queue.map(song=>({
+      id:String(song.webSongId||''),singer:String(song.queueSinger||'').slice(0,80),
+      speed:Number(song.queueSpeed)||1
+    })).filter(item=>item.id);
+    localStorage.setItem(QUEUE_DISK_PREFIX+owner,JSON.stringify({version:1,items}));
+  }catch(error){console.warn('X-Stage queue storage:',error.message);}
+}
+function restorePersistentQueue(){
+  const owner=currentQueueOwner();
+  if(!owner||queueDiskOwner===owner)return false;
+  queueDiskOwner=owner;
+  let saved;
+  try{saved=JSON.parse(localStorage.getItem(QUEUE_DISK_PREFIX+owner)||'null');}
+  catch{return false;}
+  if(saved?.version!==1||!Array.isArray(saved.items))return false;
+  const byId=new Map(state.songs.map(song=>[String(song.webSongId||''),song]));
+  const queue=[];
+  for(const item of saved.items.slice(0,10000)){
+    const song=byId.get(String(item?.id||''));
+    if(!song||!playable(song))continue;
+    queue.push({...song,queueSinger:String(item.singer||'').slice(0,80),
+      queueSpeed:[.75,.9,1,1.1,1.25,1.5].includes(Number(item.speed))?Number(item.speed):1});
+  }
+  state.queue.splice(0,state.queue.length,...queue);
+  if(queue.length!==saved.items.length)setStatus('กู้คืนคิวแล้ว · ข้ามเพลงที่ไม่พบในคลัง','error');
+  return true;
+}
 function clearPlaybackResumeState(){
   try{sessionStorage.removeItem(PLAYBACK_RESUME_KEY);}catch{}
 }
@@ -2836,10 +2891,14 @@ async function restorePlaybackAfterReload(){
   state.playbackRestoreAttempted=true;
   const song=findResumeSong(saved.songKey,saved.songCode,saved.songTitle);
   if(!song){clearPlaybackResumeState();return false;}
-  const restoredQueue=(Array.isArray(saved.queueKeys)?saved.queueKeys:[])
-    .map(key=>state.songs.find(item=>songIdentity(item)===String(key)))
-    .filter(Boolean);
-  state.queue.splice(0,state.queue.length,...restoredQueue);
+  // Durable queue carries singer/speed and the latest ordering. An explicit
+  // update handoff uses its session snapshot (which already removed the next song).
+  if(!queueDiskOwner||saved.songKey===songIdentity(state.queue[0])){
+    const restoredQueue=(Array.isArray(saved.queueKeys)?saved.queueKeys:[])
+      .map(key=>state.songs.find(item=>songIdentity(item)===String(key)))
+      .filter(Boolean);
+    state.queue.splice(0,state.queue.length,...restoredQueue);
+  }
   renderQueue();
   await playSong(song,{remember:false,resumeAt:Number(saved.currentTime)||0,autoplay:!!saved.wasPlaying});
   return true;
@@ -3574,15 +3633,15 @@ function scheduleQueuePreload(){
   if(!monitor)return;
   const pressure=monitor.plan(memoryResources());
   if(pressure.heapPressure||pressure.nativePressure)return;
-  if(state.queuePreload){
-    if(state.token===state.queuePreload.token&&
-       state.queue.includes(state.queuePreload.song))return;
-    state.queuePreload.controller.abort();state.queuePreload=null;
-  }
   const quota=monitor.plan(memoryResources()).queueLimit;
   const windowSongs=state.queue.slice(0,quota);
   const next=windowSongs.find(song=>!state.queuePreparedCache.has(song)&&
     !state.queuePreloadSkipped.has(song));
+  if(state.queuePreload){
+    if(state.token===state.queuePreload.token&&next===state.queuePreload.song)return;
+    state.queuePreloadVersion++;
+    state.queuePreload.controller.abort();state.queuePreload=null;
+  }
   if(!next)return;
   if(state.queuePreparedCache.size>=quota)return;
   // Start the next requested track's download on the next event-loop turn.
@@ -3763,6 +3822,7 @@ function addToQueue(song) {
   setPlayStatus(`เพิ่มเข้าคิว: ${song.title||song.code}`);
 }
 function renderQueue() {
+  savePersistentQueue();
   scheduleQueuePreload();
   ui.queue.replaceChildren();ui.queueCount.textContent=String(state.queue.length);
   ui.clearQueue.disabled=!state.queue.length;
@@ -5764,7 +5824,13 @@ async function recoverPendingGoogleAuth(reason='กำลังกู้คื�
 })();
 window.addEventListener('offline',()=>setStatus('อุปกรณ์ออฟไลน์ · เพลงที่โหลดไว้แล้วอาจเล่นต่อได้ แต่ค้น/โหลดเพลงใหม่ไม่ได้','error'));
 window.addEventListener('online',()=>{
-  if(state.token)return;
+  if(state.token){
+    state.queuePreloadSkipped.clear();
+    state.medleyPreloadRetryAt=0;
+    scheduleQueuePreload();
+    void pollPublishedCatalog();
+    return;
+  }
   if(readPendingAuth()){void recoverPendingGoogleAuth('กลับมาออนไลน์แล้ว · กำลังกู้คืนการเข้าสู่ระบบ Google…');return;}
   const saved=readActiveAuth();
   if(!saved){if(rememberedGoogleAccount())setStatus('กลับมาออนไลน์แล้ว · แตะเชื่อมต่อ Google เดิมเพื่อรับสิทธิ์ใหม่');return;}
