@@ -79,4 +79,38 @@ class LegacyMigrationTests(unittest.TestCase):
         with closing(sqlite3.connect(cloud)) as db:
             self.assertEqual(db.execute("SELECT value FROM catalog_meta WHERE key='pcSchema'").fetchone()[0],"shared-v1")
             self.assertEqual(db.execute("SELECT COUNT(*) FROM songs").fetchone()[0],2)
-        self.assertEqual(len(list(cloud.parent.glob("*.bak"))),1)
+        self.assertEqual(list(cloud.parent.glob("*.bak")),[])
+        self.assertEqual(len(list((drive/"BACKUP").glob("*.bak"))),1)
+
+
+    def test_export_recovers_closed_wal_without_discarding_committed_rows(self):
+        from karaoke.local_master import prepare_legacy_export, export_portable
+        import shutil
+        import subprocess
+        import sys
+        drive=self.root/"XStageKaraoke"
+        shutil.copytree(self.songs,drive/"SONGS")
+        (drive/"SOUNDFONT").mkdir()
+        (drive/"FX").mkdir()
+        (drive/"DB").mkdir()
+        cloud=drive/"DB"/"songs.sqlite3"
+        script=("import os,sqlite3,sys\n"
+                "db=sqlite3.connect(sys.argv[1])\n"
+                "db.execute('PRAGMA journal_mode=WAL')\n"
+                "db.execute('PRAGMA wal_autocheckpoint=0')\n"
+                "db.execute('CREATE TABLE songs(id INTEGER PRIMARY KEY,title TEXT)')\n"
+                "db.execute(\"INSERT INTO songs VALUES(1,'committed old song')\")\n"
+                "db.commit()\nos._exit(0)\n")
+        subprocess.run([sys.executable,"-c",script,str(cloud)],check=True)
+        self.assertTrue(cloud.with_name("songs.sqlite3-wal").exists())
+        prepare_legacy_export(self.home,self.source,drive)
+        with self.assertRaises(FileExistsError):
+            export_portable(self.home,drive,pending=True)
+        export_portable(self.home,drive,pending=True,overwrite=True)
+        backup=list((drive/"BACKUP").glob("*.bak"))[0]
+        with closing(sqlite3.connect(backup)) as db:
+            self.assertEqual(db.execute("SELECT title FROM songs").fetchone()[0],"committed old song")
+        with closing(sqlite3.connect(cloud)) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM songs").fetchone()[0],2)
+            self.assertEqual(db.execute("PRAGMA journal_mode").fetchone()[0],"delete")
+        self.assertEqual([p.name for p in cloud.parent.iterdir()],["songs.sqlite3"])

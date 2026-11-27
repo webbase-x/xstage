@@ -233,7 +233,8 @@ def open_builder(app, initial_root=None, *, parent=None):
             if not messagebox.askyesno("คัดลอกฐาน PC ไป Online",
                     ("แปลงฐาน PC เดิมเป็นฐานร่วมโดยตรวจไฟล์ใน SONGS ก่อนส่ง\n" if selected_legacy else
                      "ตรวจสอบเพลงใน SONGS แล้วคัดลอกฐาน PC ไปยังคลังที่เลือก\n")+
-                    "หากมีฐานเดิม ระบบจะสำรองก่อนแทนที่\n" + str(destination),
+                    "ปิดโปรแกรมที่ใช้ฐานบน Drive ทุกเครื่อง และรอ Drive ซิงก์ก่อน\n"
+                    "ระบบสำรองฐานเดิมไป BACKUP ก่อนแทนที่ · ไม่ลบ WAL/SHM โดยตรง\n" + str(destination),
                     parent=panel, default="no"):
                 return
         except (ValueError, OSError) as exc:

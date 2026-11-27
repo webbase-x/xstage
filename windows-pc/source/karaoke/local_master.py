@@ -75,7 +75,8 @@ def snapshot(source, target):
         with closing(sqlite3.connect(stage)) as db:
             if db.execute("PRAGMA quick_check(1)").fetchone()[0] != "ok":
                 raise ValueError("สำเนาฐานเพลงไม่สมบูรณ์")
-            db.execute("PRAGMA journal_mode=DELETE")
+            if db.execute("PRAGMA journal_mode=DELETE").fetchone()[0].lower() != "delete":
+                raise ValueError("สำเนาฐานยังไม่เป็น SQLite แบบไฟล์เดียว")
         _prepare_replacement(target)
         _safe(target)
         os.replace(stage, target)
@@ -191,6 +192,8 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
     _safe(source.parent)
     _safe(source)
     validate_sqlite_sidecars(source.parent, (source.name,))
+    if any(source.with_name(source.name + suffix).exists() for suffix in ("-wal","-shm","-journal")):
+        raise ValueError("ฐานร่วม PC มี journal ค้าง · ปิดฐานก่อนสร้างสำเนา Cloud")
     validate_shared(home, source)
     target = root / "DB" / "songs.sqlite3"
     _safe(target.parent)
@@ -206,7 +209,13 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
     if target.exists():
         validate_sqlite_sidecars(target.parent, (target.name,))
         if any(target.with_name(target.name + suffix).exists() for suffix in ("-wal", "-shm", "-journal")):
-            raise ValueError("ฐานปลายทางมี journal ค้าง · ไม่ซิงก์จนกว่าจะปิดฐานอย่างปลอดภัย")
+            if not overwrite:
+                raise FileExistsError("ฐานปลายทางมี WAL/SHM · ต้องยืนยันสำรองและปิดฐานก่อนแทนที่")
+            # Only SQLite may checkpoint a local destination. Never delete a
+            # WAL/SHM by filename: it may contain committed songs. A busy
+            # reader/writer or invalid journal stops publication.
+            stopped()
+            _prepare_replacement(target)
     original = _catalog_fingerprint(target, cancel)
     cache = home / "CACHE"
     _safe(cache)
@@ -272,7 +281,10 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
             if not overwrite:
                 raise FileExistsError("มีฐานปลายทางแล้ว · ต้องยืนยันก่อนเขียนทับ")
             _prepare_replacement(target)
-            backup = target.with_name("songs-" + secrets.token_hex(8) + ".sqlite3.bak")
+            backup_dir = root / "BACKUP"
+            _safe(backup_dir)
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            backup = backup_dir / ("songs-" + secrets.token_hex(8) + ".sqlite3.bak")
             snapshot(target, backup)
         # Copy only the changed, complete snapshot to the destination volume.
         # Keep the final atomic rename on that volume; a local staging file
@@ -297,6 +309,9 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
             raise ValueError("ฐาน Cloud เปลี่ยนก่อนแทนที่ · ไม่เขียนทับ")
         stopped()
         os.replace(upload, target)
+        # Final check: never advertise a WAL-dependent published database.
+        if any(target.with_name(target.name + suffix).exists() for suffix in ("-wal","-shm","-journal")):
+            raise ValueError("มี journal ใหม่หลังคัดลอก · หยุดและตรวจฐานก่อนซิงก์")
         return target
     finally:
         stage.unlink(missing_ok=True)

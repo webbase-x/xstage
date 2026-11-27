@@ -281,5 +281,5 @@ def publish(source, drive_root, area, progress=None, cancel=None, plan=None):
             break
     outcome["phase"] = "cancelled" if outcome["cancelled"] else "completed"
     outcome["next_step"] = ("รอ Google Drive for desktop ซิงก์ไฟล์ขึ้นคลาวด์จนเสร็จ "
-                            "แล้วเปิด Karaoke Online > จัดการคลัง > ตรวจไฟล์และอัปเดตฐาน DB/songs.sqlite3")
+                            "แล้วใช้ Karaoke PC > สร้างฐานใหม่สำหรับ PC / Online > คัดลอกฐานไป Google Drive · Web/APK อ่านอย่างเดียว")
     return outcome

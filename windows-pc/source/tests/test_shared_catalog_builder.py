@@ -164,7 +164,8 @@ class SharedPcBuilderTests(unittest.TestCase):
             export_portable(home, destination)
         self.assertEqual(exported.read_bytes(), modified)
         export_portable(home, destination, overwrite=True)
-        self.assertEqual(len(list(exported.parent.glob("*.bak"))), 1)
+        self.assertEqual(list(exported.parent.glob("*.bak")), [])
+        self.assertEqual(len(list((destination/"BACKUP").glob("*.bak"))), 1)
         self.assertEqual(source.read_bytes(), before)
 
     def test_preview_and_publish_compatible_sqlite(self):

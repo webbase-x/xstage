@@ -129,7 +129,7 @@ def open_drive_push(app, *, parent=None):
                     buttons["push"].configure(state="disabled")
                     status.set("ส่งสำเร็จ " + str(output["published"]) +
                                " ไฟล์ · " + ("หยุดแล้ว ไฟล์ที่ส่งแล้วคงอยู่" if output["cancelled"] else
-                               "รอ Drive ซิงก์ แล้วตรวจ DB จาก Karaoke Online"))
+                               "รอ Drive ซิงก์ แล้วกดส่งออกฐานจาก Karaoke PC"))
             try:
                 app.after(0, done)
             except RuntimeError:
@@ -183,7 +183,13 @@ def open_drive_push(app, *, parent=None):
     buttons["push"].pack(side="left",padx=(0,8))
     buttons["stop"] = ttk.Button(bar,text="หยุดอย่างปลอดภัย",command=cancel.set,state="disabled")
     buttons["stop"].pack(side="left")
-    ttk.Label(frame, text="Google Drive for desktop เป็นผู้ส่งไฟล์ขึ้นคลาวด์ต่อ · เมื่อซิงก์เสร็จต้องอัปเดตฐานเพลงใน Karaoke Online · ซ้ำ MIDI ภายใน XMID/XSK ตรวจอีกชั้นตอนสร้างฐาน",
+    def open_export():
+        if is_running() or getattr(app,"_shared_build_busy",False):
+            return
+        from .catalog_window import open_song_management
+        open_song_management(app,"build")
+    ttk.Button(bar,text="สร้าง/คัดลอกฐาน PC ไป Drive…",command=open_export).pack(side="left",padx=8)
+    ttk.Label(frame, text="ส่ง SONGS ก่อน แล้วสร้าง/คัดลอกฐานร่วมจาก Karaoke PC · Google Drive for desktop ซิงก์ขึ้น Cloud · Web/APK ไม่ต้องสร้างฐานเอง",
               style="Muted.TLabel",wraplength=800).pack(anchor="w",pady=10)
 
     def close(event):
