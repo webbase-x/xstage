@@ -17,19 +17,29 @@ export function planSearch(schema,raw,{mode='auto',cursor=null}={}){
   if(!['auto','code','title','contains'].includes(mode))throw Error('Invalid search mode');
   if(mode==='auto')mode=/^[0-9]+$/.test(term)?'code':schema.fts&&[...term].length>=3?'contains':'title';
   const fields='id,code,title,artist'+(schema.kind==='shared-v1'?',web_song_id':',path');
+  // PC databases can contain the same XMID on a local and mirrored drive.
+  // Only collapse matching code, metadata and portable path, never code alone.
+  // The indexed equality on d.code keeps this a bounded per-candidate lookup.
+  const pathKey=alias=>{
+    const p="'/'||replace(lower("+alias+".path),char(92),'/')";
+    return "substr("+p+",instr("+p+",'/xmid/'))";
+  };
+  const dedup=schema.kind==='pc-local'?
+    " AND NOT EXISTS (SELECT 1 FROM songs d WHERE d.code=s.code AND d.id<s.id AND d.playable=1 AND d.title=s.title AND d.artist=s.artist AND instr('/'||replace(lower(s.path),char(92),'/'),'/xmid/')>0 AND "+pathKey('d')+"="+pathKey('s')+")":"";
+
   if(mode==='code'){
     if(cursor!==null&&(!Number.isSafeInteger(cursor.id)||cursor.id<0))throw Error('Invalid cursor');
-    return {mode,sql:'SELECT '+fields+' FROM songs WHERE playable=1 AND code=?'+(cursor?' AND id>?':'')+' ORDER BY id LIMIT 6',bind:cursor?[term,cursor.id]:[term]};
+    return {mode,sql:'SELECT '+fields+' FROM songs s WHERE playable=1 AND code=?'+dedup+(cursor?' AND id>?':'')+' ORDER BY id LIMIT 6',bind:cursor?[term,cursor.id]:[term]};
   }
   if(mode==='contains'){
     if(!schema.fts||[...term].length<3)throw Error('Substring search requires FTS5 and at least 3 characters');
     if(cursor!==null&&(!Number.isSafeInteger(cursor.id)||cursor.id<0))throw Error('Invalid cursor');
     // Quoted FTS literal prevents query syntax injection.
     const literal='"'+term.replace(/"/g,'""')+'"';
-    return {mode,sql:'SELECT '+fields+' FROM songs WHERE id IN (SELECT rowid FROM song_fts WHERE song_fts MATCH ?) AND playable=1'+(cursor?' AND id>?':'')+' ORDER BY id LIMIT 6',bind:cursor?[literal,cursor.id]:[literal]};
+    return {mode,sql:'SELECT '+fields+' FROM songs s WHERE id IN (SELECT rowid FROM song_fts WHERE song_fts MATCH ?) AND playable=1'+dedup+(cursor?' AND id>?':'')+' ORDER BY id LIMIT 6',bind:cursor?[literal,cursor.id]:[literal]};
   }
   if(cursor!==null&&(!Number.isSafeInteger(cursor.id)||typeof cursor.title!=='string'))throw Error('Invalid cursor');
-  return {mode:'title',sql:'SELECT '+fields+" FROM songs WHERE playable=1 AND title LIKE ? ESCAPE '\\'"+(cursor?' AND (title COLLATE NOCASE,id)>(?,?)':'')+' ORDER BY title COLLATE NOCASE,id LIMIT 6',bind:cursor?[escapeLike(term),cursor.title,cursor.id]:[escapeLike(term)]};
+  return {mode:'title',sql:'SELECT '+fields+" FROM songs s WHERE playable=1 AND title LIKE ? ESCAPE '\\'"+dedup+(cursor?' AND (title COLLATE NOCASE,id)>(?,?)':'')+' ORDER BY title COLLATE NOCASE,id LIMIT 6',bind:cursor?[escapeLike(term),cursor.title,cursor.id]:[escapeLike(term)]};
 }
 export function pageResult(schema,plan,rows){
   const page=rows.slice(0,PAGE_SIZE).map(r=>({id:r[0],code:r[1],title:r[2],artist:r[3],...(schema.kind==='shared-v1'?{webSongId:r[4]}:{sourcePath:r[4],previewOnly:true})}));
