@@ -85,10 +85,14 @@ elseif ($kind -eq 'media') {
     }
     $dlg.Dispose()
 }
-elseif ($kind -eq 'lrc') {
+elseif ($kind -eq 'lrc' -or $kind -eq 'database') {
     $dlg=New-Object System.Windows.Forms.OpenFileDialog
     $dlg.Title='เลือกไฟล์เนื้อร้อง .LRC'
     $dlg.Filter='ไฟล์เนื้อร้อง LRC (*.lrc)|*.lrc|ไฟล์ทั้งหมด (*.*)|*.*'
+    if ($kind -eq 'database') {
+        $dlg.Title='เลือกฐานเพลง songs.sqlite3'
+        $dlg.Filter='ฐานเพลง songs.sqlite3|songs.sqlite3'
+    }
     $dlg.CheckFileExists=$true
     if ($current) {
         if (Test-Path -LiteralPath $current -PathType Container) {
@@ -116,7 +120,7 @@ else {
 def pick(kind,current="",log=None):
     if sys.platform!="win32":
         raise RuntimeError("หน้าต่างเลือกโฟลเดอร์ Windows ใช้ได้เฉพาะ Windows")
-    if kind not in ("folder","lrc","media"):
+    if kind not in ("folder","lrc","media","database"):
         raise ValueError("ประเภทการเลือกไม่ถูกต้อง")
     current=str(current or "").strip().strip('"')
     env=os.environ.copy()
@@ -153,7 +157,7 @@ def pick(kind,current="",log=None):
         if kind=="folder" and not p.is_dir():
             if log: log("picker.invalid_result",kind=kind,path=chosen)
             raise RuntimeError("Windows ส่งพาธโฟลเดอร์ที่ไม่พบกลับมา")
-        if kind in ("lrc","media") and not p.is_file():
+        if kind in ("lrc","media","database") and not p.is_file():
             if log: log("picker.invalid_result",kind=kind,path=chosen)
             raise RuntimeError("Windows ส่งพาธไฟล์ที่ไม่พบกลับมา")
     if log: log("picker.result",kind=kind,cancelled=not bool(chosen),path=chosen,
