@@ -182,7 +182,8 @@ console.log('PASS: Web reliability, SQLite cursor, Drive root guard, audio meter
    assert.match(index,/<div class="mobile-menu-brand"><img src="assets\/xstage-stage-logo\.png\?v=\d+"[^>]*alt="X-Stage Karaoke Online"/);
    assert.match(index,/id="mobile-menu-release-label"/);
    assert.match(index,/id="mobile-menu-close"/);
-   const script=index.match(/<script>\s*(window\.XSTAGE_RELEASE=\{[^]*?\});\s*<\/script>/);
+   const script=[...index.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
+     .find(match=>/\bwindow\.XSTAGE_RELEASE\s*=/.test(match[1])&&match[1].includes('mobile-menu-release-label'));
    assert.ok(script,'Release initializer exists');
    for(const native of [undefined,{getAppVersion:()=> '1.0.111',getAppBuild:()=>1111}]){
      const labels={'karaoke-release-label':{},'mobile-menu-release-label':{}};
