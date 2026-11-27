@@ -52,6 +52,25 @@ def open_builder(app, initial_root=None, *, parent=None):
     ttk.Button(target_row, text="เปลี่ยนคลัง…", command=change_target).pack(side="left", padx=(8, 0))
 
     ttk.Label(frame, text="ฐานหลัก PC: " + str(Path(getattr(app, "home", app.data_dir)) / "DB" / "songs.sqlite3"), style="Muted.TLabel", wraplength=640).pack(anchor="w", pady=5)
+    from .local_master import kind
+    legacy_db = tk.StringVar(value="")
+    for candidate in (Path(app.home)/"DB"/"songs.sqlite3", Path(app.data_dir)/"songs.sqlite3"):
+        try:
+            if kind(candidate) == "pc":
+                legacy_db.set(str(candidate))
+                break
+        except (OSError,ValueError):
+            pass
+    legacy_row = ttk.Frame(frame)
+    legacy_row.pack(fill="x", pady=(0,8))
+    ttk.Label(legacy_row,text="ฐาน PC เดิม (ถ้ามี)").pack(side="left",padx=(0,8))
+    ttk.Entry(legacy_row,textvariable=legacy_db,state="readonly").pack(side="left",fill="x",expand=True)
+    def choose_legacy():
+        if state["busy"]: return
+        chosen=filedialog.askopenfilename(parent=panel,title="เลือกฐาน SQLite ของ PC เดิม",filetypes=[("SQLite","*.sqlite3 *.sqlite *.db"),("All files","*.*")])
+        if chosen: legacy_db.set(chosen)
+    ttk.Button(legacy_row,text="เลือกฐาน…",command=choose_legacy).pack(side="left",padx=4)
+    ttk.Button(legacy_row,text="ไม่ใช้ฐานเดิม",command=lambda:legacy_db.set("") if not state["busy"] else None).pack(side="left")
     full_verify = tk.BooleanVar(value=False)
     ttk.Checkbutton(frame, text="ตรวจแพ็กเกจใหม่ทั้งหมด (ช้ากว่า)", variable=full_verify).pack(anchor="w")
     status = tk.StringVar(value="เลือกต้นทางเพลง แล้วสร้างฐาน PC · คัดลอกฐานไป Drive ได้ภายหลัง")
@@ -101,9 +120,11 @@ def open_builder(app, initial_root=None, *, parent=None):
         except (ValueError, OSError) as exc:
             status.set(str(exc))
             return
+        selected_legacy=legacy_db.get().strip()
         if publish and not messagebox.askyesno(
                 "สร้างฐาน SQLite สำหรับ PC / Web / APK",
-                "สร้างฐานร่วมจากเพลงที่เลือกใน App/DB เท่านั้น\n"
+                ("ย้ายข้อมูลจากฐาน PC เดิม รักษารหัสเพลงและจำนวนรายการ ตรวจไฟล์จริง\n" if selected_legacy else
+                 "สร้างฐานร่วมจากเพลงที่เลือกใน App/DB เท่านั้น\n")+
                 "ไม่คัดลอกเพลงหรือเชื่อม Google Drive\nเปิดโปรแกรมใหม่เพื่อใช้ฐานที่สร้าง",
                 parent=panel, default="no"):
             return
@@ -120,10 +141,16 @@ def open_builder(app, initial_root=None, *, parent=None):
         def work():
             error = None
             try:
-                result = builder.build(selected_library, progress=update, cancel=stop,
-                                       publish=publish, cache_dir=Path(app.data_dir) / "index-cache",
-                                       full_verify=verify_all, deduplicate=not publish,
-                                       source_songs=selected_source, local_only=True)
+                if selected_legacy:
+                    from .legacy_catalog_migration import migrate
+                    result=migrate(selected_legacy,selected_source,selected_library,
+                        progress=update,cancel=stop,publish=publish,
+                        cache_dir=Path(app.data_dir)/"index-cache",full_verify=verify_all)
+                else:
+                    result = builder.build(selected_library, progress=update, cancel=stop,
+                                           publish=publish, cache_dir=Path(app.data_dir) / "index-cache",
+                                           full_verify=verify_all, deduplicate=not publish,
+                                           source_songs=selected_source, local_only=True)
                 result["root"] = str(selected_library)
             except Exception as exc:
                 result, error = None, str(exc)
@@ -149,7 +176,9 @@ def open_builder(app, initial_root=None, *, parent=None):
                     state["approved"] = None
                     app.settings["pending_online_master"] = {
                         "root": result["root"], "generation": result["generation"],
-                        "source_songs": str(selected_source), "local_only": True}
+                        "source_songs": str(selected_source), "local_only": True,
+                        "legacy_migration": bool(result.get("legacy_migration") and
+                            Path(selected_legacy).resolve() == Path(getattr(app.library,"path",Path(app.home)/"DB"/"songs.sqlite3")).resolve())}
                     app.settings.pop("pending_pc_only", None)
                     app.save_settings()
                     app.settings["catalog_source"] = requested

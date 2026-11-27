@@ -433,8 +433,9 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
                 raise ValueError("SQLite ที่สร้างไม่ผ่าน integrity_check")
             if db.execute("SELECT COUNT(*) FROM songs").fetchone()[0] != len(rows):
                 raise ValueError("จำนวนเพลงในฐานไม่ตรงกับที่ตรวจ")
-        if stage.stat().st_size > MAX_SQLITE_BYTES:
-            raise ValueError("ฐาน SQLite ใหญ่เกิน 192 MiB ที่ Online รองรับ")
+        # Native APK and PC query SQLite from disk. Web's legacy in-memory
+        # reader still has its own 192 MiB limit; do not block a valid shared
+        # snapshot solely because that browser path is not yet disk-backed.
         _stop(cancel)
         if (_hash(old_file) if old_file.exists() else None) != original_signature:
             raise ValueError("ฐานบน Google Drive เปลี่ยนระหว่างทำงาน กรุณาสร้างใหม่")

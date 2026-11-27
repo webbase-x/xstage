@@ -109,6 +109,9 @@ def activate(home, data, settings, *, installed=False):
             snapshot(local, backup)
             if current == "pc":
                 settings["pc_only_backup"] = backup.name
+        if pending.get("legacy_migration"):
+            from .legacy_catalog_migration import migrate_queue
+            migrate_queue(data, staged, settings)
         snapshot(staged, local)
         if not pending.get("local_only"):
             if settings.get("shared_drive_root") != pending["root"]:
