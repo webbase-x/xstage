@@ -22,7 +22,9 @@ function pcKind(row){
   if(/mp3|m4a|wav|aac|flac|ogg|audio/.test(fmt))return 'AUDIO';
   return 'MIDI';
 }
-function pcSearch(row){return [row.code,row.title,row.artist].map(x=>String(x||'')).join(' ').normalize('NFC').toLowerCase();}
+function catalogText(value,max){return typeof value==='string'||typeof value==='number'?String(value).trim().slice(0,max):'';}
+function catalogFields(row){return [catalogText(row.firstLyric??row.first_lyric,512),catalogText(row.rhythm,80),catalogText(row.keySignature??row.key_signature,40),catalogText(row.bpm,32)];}
+function pcSearch(row){return [row.code,row.title,row.artist,...catalogFields(row).slice(0,2)].map(x=>String(x||'')).join(' ').normalize('NFC').toLowerCase();}
 const CDN='https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/';
 const CDN_FALLBACK='https://cdn.jsdelivr.net/npm/sql.js@1.13.0/dist/';
 const MAX_BYTES=192*1048576;
@@ -122,7 +124,7 @@ async function create(kind,songs,removes=[],generation=''){
     createSchema(db,kind,generation);
     db.run('BEGIN TRANSACTION');
     const upsert=db.prepare(
-      'INSERT INTO songs(id,ordinal,web_song_id,path,kind,search,format,code,title,artist,source_format,original_filename,original_relative_path,original_file_size,source_code,midi_size,midi_md5,payload) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+      'INSERT INTO songs(id,ordinal,web_song_id,path,kind,search,format,code,title,artist,source_format,original_filename,original_relative_path,original_file_size,source_code,midi_size,midi_md5,payload,first_lyric,rhythm,key_signature,bpm) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
     const seen=new Set(),midiHashes=new Map(),pcIds=new Map(),pcPaths=new Set();
     let ordinal=0;
     try{
@@ -188,7 +190,7 @@ async function create(kind,songs,removes=[],generation=''){
           originalFilename,originalPath,originalFileSize||null,
           sourceCode,midiSize>0?midiSize:null,validHash,
           JSON.stringify(row.originalRelativePath===originalPath?row:
-            {...row,originalRelativePath:originalPath})]);
+            {...row,originalRelativePath:originalPath}),...catalogFields(row)]);
         upsert.reset();
       }
     }finally{upsert.free();}
