@@ -1685,14 +1685,15 @@ function diskPreloadCount(){
 }
 function privateMediaFile(media,token,opts={}){
   const id=getFileId(media),cache=window.XStagePrivateMediaCache;
-  const fetcher=(offset=0)=>privateFile(id,token,{...opts,range:offset>0?'bytes='+offset+'-':undefined});
+  const fetcher=()=>privateFile(id,token,opts);
+  const rangeFetcher=offset=>offset>0?privateFile(id,token,{...opts,range:'bytes='+offset+'-'}):fetcher();
   if(!cache?.available()||!state.accountSub||!state.libraryRootId||isRetiredDriveRoot(state.libraryRootId))
     return opts.cacheOnly?Promise.resolve(null):fetcher();
   const sub=state.accountSub,root=state.libraryRootId;
   const owner=libraryCacheOwner(sub,root);
   const current=()=>state.token===token&&state.accountSub===sub&&state.libraryRootId===root&&!isRetiredDriveRoot(root);
   const pinned=[state.current,...state.queue.slice(0,diskPreloadCount())].flatMap(queuedMediaParts);
-  return cache.getOrFetch({owner,media,fetcher,rangeFetcher:fetcher,signal:opts.signal,current,pinned,cacheOnly:!!opts.cacheOnly});
+  return cache.getOrFetch({owner,media,fetcher,rangeFetcher,signal:opts.signal,current,pinned,cacheOnly:!!opts.cacheOnly});
 }
 // High-throughput private Drive reads for bounded media files. Parallel
 // requests are permitted only when Google returns *exact* 206 byte ranges.
