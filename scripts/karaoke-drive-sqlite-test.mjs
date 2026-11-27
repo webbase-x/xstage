@@ -11,7 +11,36 @@ assert.ok(version.build>=1144,'revision must not regress');
 assert.ok(page.indexOf('drive-sqlite.js?v=')>0&&
   page.indexOf('drive-sqlite.js?v=')<page.indexOf('cloud-import.js?v='),
   'Shared SQLite codec must load before importer');
-assert.ok(app.includes('codec.read(new Uint8Array(buffer))'));
+assert.match(app,/const bytes=await readCatalogBytes\(response\);\s*assertCurrent\(\);\s*const data=await codec\.read\(bytes\);/,
+  'Drive SQLite must pass bounded bytes to the codec after checking the active session');
+const readerStart=app.indexOf('async function readCatalogBytes(');
+const readerEnd=app.indexOf('\n}',readerStart)+2;
+assert.ok(readerStart>=0&&readerEnd>readerStart);
+const readBytes=vm.runInNewContext('('+app.slice(readerStart,readerEnd)+')',
+  {Uint8Array,Promise,Error,Number,setTimeout,clearTimeout});
+const raw=Uint8Array.of(1,2,3,4);
+const fallback={headers:{get:()=>null},arrayBuffer:async()=>raw.buffer};
+assert.deepEqual(await readBytes(fallback,4,100),raw);
+await assert.rejects(readBytes(fallback,3,100),/ใหญ่เกินกำหนด/);
+let cancelled=0,released=0;
+function streaming(chunks){
+  let i=0;
+  return {headers:{get:()=>null},body:{getReader:()=>({
+    read:async()=>i<chunks.length?{done:false,value:chunks[i++]}:{done:true},
+    cancel:async()=>{cancelled++;},releaseLock:()=>{released++;}
+  })}};
+}
+assert.deepEqual(await readBytes(streaming([raw.slice(0,2),raw.slice(2)]),4,100),raw);
+assert.equal(cancelled,0);
+await assert.rejects(readBytes(streaming([raw]),3,100),/ใหญ่เกินกำหนด/);
+assert.equal(cancelled,1);
+assert.equal(released,2);
+const stalled={body:{getReader:()=>({
+  read:()=>new Promise(()=>{}),cancel:async()=>{cancelled++;},releaseLock:()=>{released++;}
+})}};
+await assert.rejects(readBytes(stalled,4,10),/หยุดตอบสนอง/);
+assert.equal(cancelled,2);
+assert.equal(released,3);
 assert.ok(importer.includes("application/vnd.sqlite3"));
 assert.ok(!importer.includes("catalog-delta-'+generation+'.sqlite3"));
 assert.ok(importer.includes("'songs.sqlite3'"));
