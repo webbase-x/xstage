@@ -2440,6 +2440,7 @@ async function activeDriveCatalog(dbId,token){
   return direct.length?{pointer:directCatalogPointer(direct[0])}:null;
 }
 async function pollPublishedCatalog(){
+  if(new URLSearchParams(location.search).get('hybrid')==='1')return;
   if(!state.token||!state.libraryRootId||isRetiredDriveRoot(state.libraryRootId)||state.catalogPolling)return;
   const authId=state.authId,token=state.token,rootId=state.libraryRootId,sub=state.accountSub;
   const sameLibrary=()=>authId===state.authId&&state.token===token&&
@@ -2700,6 +2701,21 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       return;
     }
     const pointer=directCatalogPointer(canonical[0]);
+    // Explicit experimental diagnostic mode only. Do not start the OPFS
+    // download or change the active queue when testing the remote reader.
+    if(new URLSearchParams(location.search).get('hybrid')==='1'){
+      const current=()=>authId===state.authId&&state.libraryRootId===root.id&&state.accountSub===account.sub&&state.token===token;
+      hideCatalogLoading();setSearchAvailability(false);
+      state.catalogDbDirId=dbId;state.catalogGeneration='';
+      ui.libraryState.textContent='Hybrid SQLite · โหมดทดสอบแบบอ่านอย่างเดียว';
+      ui.songTotal.textContent='Range ทดลอง';
+      ui.resultCount.textContent='ใช้หน้าต่างทดสอบ Hybrid SQLite';
+      setStatus('ทดสอบ HTTP Range · ไม่ดาวน์โหลดฐานเต็ม','success');
+      const {showHybridExperiment}=await import('./experiments/hybrid-sqlite/diagnostic-ui.mjs');
+      if(!current())return;
+      await showHybridExperiment({pointer,token,rootId:root.id,current,list:q=>driveList(q,token),retiredRoots:window.XSTAGE_RETIRED_DRIVE_ROOT_IDS||[]});
+      return;
+    }
     if(nativeCatalogBridgeAvailable()){
       showCatalogLoading('กำลังตรวจฐานเพลงในเครื่อง','ตรวจขนาดและ MD5 ก่อนดาวน์โหลด',35);
       const data=await stageNativeCatalog(pointer,account.sub,root.id,dbId,progress=>{
