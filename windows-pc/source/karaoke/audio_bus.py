@@ -55,7 +55,7 @@ def plan_from_mapping(bus_count: int, mapping) -> AudioBusPlan:
     """Build a routing plan from channel->bus pairs without touching audio hardware."""
     if not isinstance(mapping, dict):
         raise ValueError("การกำหนดเส้นทางต้องเป็น dictionary")
-    if set(mapping) != set(range(16)):
+    if any(type(channel) is not int for channel in mapping) or set(mapping) != set(range(16)):
         raise ValueError("ต้องกำหนดเส้นทาง MIDI ครบ 16 ช่อง")
     return AudioBusPlan(bus_count, tuple(AudioBusRoute(ch, mapping[ch]) for ch in range(16)))
 
