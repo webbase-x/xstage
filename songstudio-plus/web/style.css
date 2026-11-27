@@ -1284,3 +1284,11 @@ dialog[open]{opacity:1!important;filter:none!important}
   #view-drive .drive-push-panel{padding:13px}
   #view-drive .drive-push-panel .drive-commands>*{width:100%;flex:1 1 100%}
 }
+
+/* CSP-safe static layout: no inline style attributes. */
+#db-audit-detail{white-space:pre-wrap;overflow-wrap:anywhere;max-height:330px;overflow:auto}
+#ncn-progress-bar{width:100%}
+#ncn-errors{white-space:pre-wrap;overflow-wrap:anywhere}
+.diagnostic-panel{padding:18px;margin-top:16px}
+.diagnostic-panel-head{margin-bottom:10px}
+.diagnostic-toolbar{margin:0}
