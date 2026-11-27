@@ -66,17 +66,16 @@ document.addEventListener('keydown',e=>{
 },true);
 const baseRender=renderSongs;
 renderSongs=function(){
- if(!state.token){baseRender();return;}
- const saved=state.songs,filtered=$pc('pc-favorites-only').checked;
- if(filtered)state.songs=saved.filter(s=>favorites.has(songIdentity(s)));
- try{baseRender();}finally{state.songs=saved;}
- [...ui.songs.querySelectorAll('.song-item')].forEach((row,i)=>{
-  const song=state.shown[i];if(!song)return;
-  const star=document.createElement('button');star.type='button';star.className='pc-star';star.style.cssText='border:0;background:transparent;color:#ffd46a;font-size:20px;padding:3px 7px';star.textContent=favorites.has(songIdentity(song))?'★':'☆';star.title='เพิ่ม/นำออกจากเพลงโปรด · บันทึกในเบราว์เซอร์นี้';
-  star.onclick=e=>{e.stopPropagation();const id=songIdentity(song);if(favorites.has(id))favorites.delete(id);else favorites.add(id);saveFavorites();renderSongs();};
-  row.insertBefore(star,row.lastElementChild);
-  row.addEventListener('contextmenu',e=>{e.preventDefault();showSong(song);});
- });
+ const songs=$pc('pc-favorites-only').checked&&state.token
+   ?state.songs.filter(s=>favorites.has(songIdentity(s))):state.songs;
+ baseRender(songs);
+};
+// Decorate every new page, without rebuilding previously displayed rows.
+window.XStageDecorateSearchRow=(row,song)=>{
+ const star=document.createElement('button');star.type='button';star.className='pc-star';star.style.cssText='border:0;background:transparent;color:#ffd46a;font-size:20px;padding:3px 7px';star.textContent=favorites.has(songIdentity(song))?'★':'☆';star.title='เพิ่ม/นำออกจากเพลงโปรด · บันทึกในเบราว์เซอร์นี้';
+ star.onclick=e=>{e.stopPropagation();const id=songIdentity(song);if(favorites.has(id))favorites.delete(id);else favorites.add(id);saveFavorites();if($pc('pc-favorites-only').checked)renderSongs();else star.textContent=favorites.has(id)?'★':'☆';};
+ row.insertBefore(star,row.lastElementChild);
+ row.addEventListener('contextmenu',e=>{e.preventDefault();showSong(song);});
 };
 $pc('pc-favorites-only').onchange=()=>{state.selectedIndex=0;renderSongs();};
 const loginObserver=new MutationObserver(()=>{
