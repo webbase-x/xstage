@@ -940,7 +940,9 @@ assert.ok(app.includes("renderWithSoundFontRecovery(midiBytes,verifiedBank,token
 assert.ok(index.includes('id="karaoke-video"') &&
           index.includes('playsinline muted preload="metadata"'),
           'WEB and Android stage must have a safe muted video layer');
-assert.ok(app.includes('await privateFile(song.video.fileId,token,{signal})') &&
+assert.ok(app.includes('const media=useOriginal?song.originalVideo:song.video;') &&
+          app.includes('await privateMediaFile(media,token,{signal})') &&
+          app.includes('const fetcher=()=>privateFile(id,token,opts);') &&
           app.includes('signal?.aborted') &&
           app.includes('function syncSongVideo()') &&
           app.includes('karaokeVideo.playbackRate=player.playbackRate'),

@@ -3831,10 +3831,11 @@ function scheduleQueuePreload(){
 function resetDiskQueuePreload(){
   clearTimeout(state.diskQueueTimer);state.diskQueueTimer=null;
   state.diskQueueTask?.controller.abort();state.diskQueueTask=null;
-  state.diskQueueReady.clear();state.diskQueueFailed.clear();
+  state.diskQueueReady?.clear();state.diskQueueFailed?.clear();
 }
 function scheduleDiskQueuePreload(){
   clearTimeout(state.diskQueueTimer);
+  if(!state.diskQueueReady||!state.diskQueueFailed)return;
   if(!state.token||!window.XStagePrivateMediaCache?.available()||!diskPreloadCount()){
     resetDiskQueuePreload();return;
   }
