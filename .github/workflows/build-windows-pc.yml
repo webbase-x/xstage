@@ -7,6 +7,13 @@ on:
       - 'Import X-Stage Windows PC v1.0.80 continuous medley source'
     types:
       - completed
+  pull_request:
+    paths:
+      - 'windows-pc/source/**'
+      - 'windows-pc/installer/**'
+      - 'scripts/build_karaoke_pc_icon.py'
+      - 'scripts/verify_songstudio_exe_icon.py'
+      - '.github/workflows/build-windows-pc.yml'
   push:
     paths:
       - 'windows-pc/source/**'
