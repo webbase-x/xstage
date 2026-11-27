@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>X-Stage Hybrid SQLite · Google Range Preview</title>
+<style>body{font:16px system-ui,sans-serif;background:#101d2b;color:#e6eef5;max-width:760px;margin:24px auto;padding:0 18px}h1{font-size:26px}button,select{font:inherit;padding:10px 14px;margin:8px 0;border-radius:8px}button{cursor:pointer}button:disabled{opacity:.5}select{max-width:100%}section{border:1px solid #476079;padding:16px;border-radius:12px;margin:16px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#9bd9ff}small{color:#bbcede}</style>
+<script src="../config.js"></script><script src="https://accounts.google.com/gsi/client" async></script>
+</head><body>
+<h1>X-Stage Hybrid SQLite</h1><p>Google Drive Range Preview · อ่านอย่างเดียว</p>
+<section><p>ตรวจสอบไฟล์ <code>XStageKaraoke/DB/songs.sqlite3</code> ผ่าน Google OAuth จริง โดยอ่านไม่เกิน 128 KiB ต่อรอบ ไม่ดาวน์โหลดฐานเต็ม ไม่แก้ไขไฟล์ ไม่แก้คิวเพลง และไม่เก็บ access token</p>
+<button id="connect">อนุญาต Google Drive แบบอ่านอย่างเดียว</button>
+<div id="choose" hidden><label for="root">เลือกคลังที่ต้องการตรวจ</label><br><select id="root"></select><br><button id="run">ตรวจ Range</button></div>
+<button id="clear" hidden>จบการทดสอบ</button><p id="status" role="status">พร้อมทดสอบ</p><pre id="result" aria-live="polite"></pre>
+<button id="copy" disabled>คัดลอกผลทดสอบ</button></section>
+<p><small>หน้าทดสอบนี้ตรวจ HTTP 206, Content-Range, ETag, If-Match และ SQLite header เท่านั้น หากฐานเป็น WAL จะไม่อนุญาตให้เปิด SQL จนกว่าจะยืนยัน snapshot สมบูรณ์ ไม่ใช่รุ่นเล่นเพลงที่เผยแพร่แล้ว</small></p><p><a href="../karaoke.html">กลับหน้าหลัก Karaoke</a></p><script type="module" src="./preview.mjs"></script></body></html>
