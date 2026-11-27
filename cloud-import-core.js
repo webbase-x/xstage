@@ -359,6 +359,27 @@ function validLyricsJson(raw,code){
     throw Error('Lyrics JSON มีรหัสเพลงไม่ปลอดภัย');
   return document;
 }
+// Keep only a bounded lyric preview and musical metadata, not MIDI bytes.
+async function catalogMetadata(opened){
+  const doc=opened?.document||{};
+  const clean=(v,max)=>typeof v==='string'||typeof v==='number'?String(v).trim().slice(0,max):'';
+  const result={firstLyric:(Array.isArray(doc.lines)?doc.lines:[]).slice(0,8)
+    .map(line=>clean(line?.text,512)).filter(Boolean).join(' ').slice(0,512),
+    rhythm:clean(doc.rhythm,80),keySignature:clean(doc.keySignature??doc.key_signature,40),bpm:clean(doc.bpm,32)};
+  const runtime=scope.XStageBrowserMidi;
+  if(runtime?.parseMidi&&opened?.midi?.size<=12*1024*1024){
+    try{
+      const midi=await opened.midi.arrayBuffer();
+      const parsed=runtime.parseMidi(midi);
+      result.keySignature||=clean(parsed.keySignature,40);
+      const tempos=parsed.tempoMap||[];
+      const point=tempos[0]?.tick===0&&tempos[0]?.tempo===500000&&tempos.length>1?tempos[1]:tempos[0];
+      if(!result.bpm&&Number.isFinite(point?.tempo)&&point.tempo>0)
+        result.bpm=String(Math.round(6000000000/point.tempo)/100);
+    }catch{/* Optional musical metadata must not reject a verified package. */}
+  }
+  return result;
+}
 function bucket(code){const c=String(code||'').charAt(0).toUpperCase();return /[0-9A-Z]/.test(c)?c:'_';}
-scope.XStageImportCore={MD5,hashBlob,ext,groupKey,scan,validAudio,validVideo,needsVideoConversion,embeddedVideoLyrics,videoMime,videoFingerprint,validateVideoDetails,validFont,lrcToJson,validLyricsJson,songIdentity,bucket};
+scope.XStageImportCore={MD5,hashBlob,ext,groupKey,scan,validAudio,validVideo,needsVideoConversion,embeddedVideoLyrics,videoMime,videoFingerprint,validateVideoDetails,validFont,lrcToJson,validLyricsJson,songIdentity,bucket,catalogMetadata};
 })(typeof window!=='undefined'?window:globalThis);
