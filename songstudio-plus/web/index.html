@@ -136,7 +136,7 @@
                 <button class="quiet-btn" id="db-history-clean" type="button" disabled>ล้างประวัติงานเสร็จ</button>
                 <button class="quiet-btn" id="db-compact" type="button" disabled>คืนพื้นที่ SQLite</button>
               </div>
-              <pre class="field-hint" id="db-audit-detail" aria-live="polite" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:330px;overflow:auto"></pre>
+              <pre class="field-hint" id="db-audit-detail" aria-live="polite"></pre>
             </section>
             <section class="panel issues-panel" aria-labelledby="issues-title">
               <div class="panel-head"><h2 id="issues-title">รายการนำเข้าไม่สมบูรณ์</h2><button class="quiet-btn" type="button" id="issues-load">ตรวจสอบรายการ</button></div>
@@ -157,9 +157,9 @@
           <button class="primary-btn full" id="ncn-start" type="button" disabled>เริ่มแปลง NCN to XMID</button>
           <button class="quiet-btn" id="ncn-stop" type="button" disabled>หยุดอย่างปลอดภัย</button>
           <p id="ncn-progress" role="status" aria-live="polite">ยังไม่ได้เริ่ม</p>
-          <progress id="ncn-progress-bar" value="0" max="1" style="width:100%"></progress>
+          <progress id="ncn-progress-bar" value="0" max="1"></progress>
           <p id="ncn-report" class="field-hint"></p>
-          <p id="ncn-errors" class="field-hint" style="white-space:pre-wrap;overflow-wrap:anywhere" aria-live="polite"></p>
+          <p id="ncn-errors" class="field-hint" aria-live="polite"></p>
         </article>
       </section>
       <section class="view" id="view-drive" aria-labelledby="drive-title">
@@ -530,10 +530,10 @@
       </div>
       <p id="settings-update-progress" class="field-hint" aria-live="polite">ข้ามรุ่นได้โดยตรง · ตรวจ SHA-256 ก่อนติดตั้ง · ไม่ลบฐานข้อมูลเพลง</p>
     </div>
-    <div class="panel" style="padding:18px;margin-top:16px">
-      <div class="panel-head" style="margin-bottom:10px"><div><span class="label-top">PROGRAM LOG</span><h3>Log วิเคราะห์ทั้งโปรแกรม</h3></div></div>
+    <div class="panel diagnostic-panel">
+      <div class="panel-head diagnostic-panel-head"><div><span class="label-top">PROGRAM LOG</span><h3>Log วิเคราะห์ทั้งโปรแกรม</h3></div></div>
       <p class="field-hint">บันทึกเหตุการณ์ของ X-Stage Song Studio Pro ทั้งโปรแกรม ไม่จำกัดเฉพาะการนำเข้าเพลง เช่น การเริ่ม Local Engine, เปิด UI, เลือกโฟลเดอร์, งานนำเข้า และข้อผิดพลาดสำคัญ</p>
-      <div class="toolbar" style="margin:0"><button id="diagnostic-open-log" class="primary-btn" type="button">เปิด Log วิเคราะห์</button></div>
+      <div class="toolbar diagnostic-toolbar"><button id="diagnostic-open-log" class="primary-btn" type="button">เปิด Log วิเคราะห์</button></div>
     </div>
   </div>
 </dialog>

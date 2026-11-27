@@ -407,7 +407,7 @@ def to_lrc(lines):
 
 
 def ncn_document(companions, *, header_rows=4, metadata_override=None,
-                 lyric_data=None, cursor_data=None, midi_info=None):
+                 lyric_data=None, cursor_data=None, midi_info=None, blank_markers_override=None):
     """NCN24 MIDI/LYR/CUR synchronisation, adapted from X-Stage Karaoke PC.
 
     A CUR entry represents one *CP874 source byte*, not a Unicode grapheme.
@@ -496,6 +496,8 @@ def ncn_document(companions, *, header_rows=4, metadata_override=None,
     # otherwise keep the established nonblank-line convention.
     blanks=sum(1 for part in body if not part.strip())
     blank_markers=(blanks>0 and len(positions)==needed(body)+blanks)
+    if blank_markers_override is not None:
+        blank_markers=bool(blank_markers_override)
     if blank_markers:
         warnings.append("CUR มีตำแหน่งบรรทัดว่างตามต้นฉบับ")
     division, tempo_map, _, midi_duration = (midi_info if midi_info is not None else midi_events(

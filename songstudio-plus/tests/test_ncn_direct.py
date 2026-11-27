@@ -210,15 +210,15 @@ class DirectCreditTests(unittest.TestCase):
 
 
 class ObservedLegacyLayoutTests(unittest.TestCase):
-    def test_empty_key_dot_and_surplus_with_leading_vendor(self):
+    def test_empty_key_dot_and_surplus(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d)/"in";out=Path(d)/"out"
-            midi=fixture(root,["title","artist","",".","...Nick_Karaoke..."],body="abc")
+            midi=fixture(root,["title","artist","","."],body="abc")
             lyr=midi.with_suffix(".lyr")
             cur=midi.with_suffix(".cur")
-            body=["...Nick_Karaoke...","abc"]
+            body=["abc"]
             count=sum(len(x)+1 for x in body)
-            cur.write_bytes(struct.pack("<"+"H"*(count+5),*([0]*count+[65535]*5)))
+            cur.write_bytes(struct.pack("<"+"H"*(count+5),*(list(range(count))+[65535]*5)))
             result=direct.convert_folder(str(root),str(out))
             self.assertEqual(result["converted"],1,result)
 

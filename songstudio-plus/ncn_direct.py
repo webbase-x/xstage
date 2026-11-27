@@ -116,7 +116,7 @@ def identify_header(lyr,cur,code, *, lyric_data=None,cursor_data=None,midi_tags=
                 exact=count in (needed,needed+blanks)
                 # Surplus is safe only for independently identified headers
                 # with no ambiguity about blank-line CUR consumption.
-                surplus=count>needed and blanks==0
+                surplus=count>needed+blanks
                 if needed and (exact or surplus):
                     actual=[x for x in body if x.strip()]
                     details={"header_credit":[x for x in rows[:cut] if is_credit(x)],
@@ -136,24 +136,6 @@ def identify_header(lyr,cur,code, *, lyric_data=None,cursor_data=None,midi_tags=
     if not candidates:
         raise ValueError("Unknown or ambiguous metadata/CUR layout; no guessing")
     rank=min(x[0] for x in candidates)
-    if rank==1:
-        # With surplus CUR, preserve the longest candidate when the only
-        # differences are recognised leading credits. Do not shift a timed
-        # lyric merely because a shorter candidate also fits the count.
-        preferred=[]
-        for item in candidates:
-            priority,signature,result=item
-            if priority!=rank:
-                continue
-            _,metadata,actual,_,_,_=result
-            if any(other[0]==rank and other[2][1]==metadata and
-                   len(other[2][2])>len(actual) and
-                   other[2][2][-len(actual):]==actual and
-                   all(is_credit(x) for x in other[2][2][:-len(actual)])
-                   for other in candidates):
-                continue
-            preferred.append(item)
-        candidates=preferred
     unique=[]
     for priority,signature,result in candidates:
         if priority==rank and not any(x[0]==signature for x in unique):
@@ -292,10 +274,10 @@ def convert_one(parts,dest,code,cancel=None):
     # Retry only by removing a known final credit. Its invalid/absent
     # positions never shift the earlier lyric. The original bytes are intact.
     original_rows=lyric.split(b"\x1a",1)[0].decode(encoding).replace("\r\n","\n").replace("\r","\n").split("\n")
-    def parse_body(candidate, reconstruct):
+    def parse_body(candidate, reconstruct, blank_override=None):
         parsing_lyric=("\n".join(original_rows[:cut]+candidate)+"\n").encode(encoding) if reconstruct else lyric
         parsed=reader.ncn_document(parts,header_rows=cut,metadata_override=metadata,
-            lyric_data=parsing_lyric,cursor_data=cursor,midi_info=midi_info)
+            lyric_data=parsing_lyric,cursor_data=cursor,midi_info=midi_info,blank_markers_override=blank_override)
         info=parsed["metadata"]
         if not info.get("timingComplete") or any("ย้อนกลับ" in w or "เกินความยาว" in w for w in info.get("timingWarnings",[])):
             raise ValueError("Incomplete or inconsistent CUR")
@@ -303,11 +285,27 @@ def convert_one(parts,dest,code,cancel=None):
             raise ValueError("Decoded lyric differs from original")
         measured_boundaries(parsed,midi_info[3])
         return parsed
+    def parse_checked(candidate,reconstruct):
+        needed=sum(1+len(x.encode("cp874")) for x in candidate if x.strip())
+        blanks=sum(not x.strip() for x in candidate)
+        if not blanks or len(cursor)//2<=needed+blanks:
+            return parse_body(candidate,reconstruct)
+        valid=[]
+        for mode in (False,True):
+            try:
+                valid.append(parse_body(candidate,reconstruct,mode))
+            except ValueError:
+                pass
+        if not valid:
+            raise ValueError("Neither blank-line CUR alignment is valid")
+        if len(valid)>1 and valid[0]["lines"]!=valid[1]["lines"]:
+            raise ValueError("Ambiguous blank-line CUR alignment")
+        return valid[0]
     def verify_sources():
         if any(file_stamp(p)!=stamp for p,stamp in ((midi,ms),(lyr,ls),(cur,cs))):
             raise ValueError("NCN component changed during conversion")
     try:
-        doc=parse_body(body,bool(details["footer_credit"]))
+        doc=parse_checked(body,bool(details["footer_credit"]))
     except ValueError:
         candidate=list(body)
         removed=[]
@@ -317,7 +315,7 @@ def convert_one(parts,dest,code,cancel=None):
                 candidate.pop()
         if not removed or not any(x.strip() for x in candidate):
             raise
-        doc=parse_body(candidate,True)
+        doc=parse_checked(candidate,True)
         details["footer_credit"]=list(reversed(removed))+details["footer_credit"]
         details["warnings"].append("Untimed or inconsistent final vendor credit excluded from timed lyrics")
     details["warnings"].extend(cursor_warnings+lyric_warnings)

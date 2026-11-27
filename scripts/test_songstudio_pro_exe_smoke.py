@@ -24,8 +24,10 @@ def main():
     env.update(QT_QPA_PLATFORM="offscreen", QT_OPENGL="software",
                QTWEBENGINE_CHROMIUM_FLAGS="--disable-gpu --no-sandbox")
     checks = dict(exe_launched=False, embedded_webview_loaded=False,
-                  javascript_bound=False, latest_dashboard_embedded=False)
+                  javascript_bound=False, latest_dashboard_embedded=False,
+                  timeline_ready=False, timeline_mime=False, csp_clean=False)
     errors = []
+    log.unlink(missing_ok=True)
     process = subprocess.Popen([str(exe), "--workspace", str(workspace)],
                                cwd=root, env=env)
     try:
@@ -43,6 +45,15 @@ def main():
                         checks["embedded_webview_loaded"] = True
                     if event.get("event") == "web.core.check" and event.get("bound") is True:
                         checks["javascript_bound"] = True
+                    if event.get("event") == "web.console":
+                        message=event.get("message","")
+                        if "[XSTAGE] timeline.ready" in message:
+                            checks["timeline_ready"]=True
+                        if any(x in message for x in ("Refused to apply inline style","Refused to execute script","timeline.init.failed")):
+                            if message not in errors:
+                                errors.append(message)
+                    if event.get("event") == "ui.session.ready":
+                        checks["csp_clean"]=not any("Refused to" in x or "timeline.init.failed" in x for x in errors)
                     if event.get("event") == "web.load.request" and not checks["latest_dashboard_embedded"]:
                         url = event.get("url")
                         if url:
@@ -51,12 +62,18 @@ def main():
                                     html = response.read().decode("utf-8")
                                 with urlopen(url+"style.css",timeout=3) as response:
                                     css = response.read().decode("utf-8")
+                                types=[]
+                                for asset in ("timeline-core.js","timeline-ui.js"):
+                                    with urlopen(url+asset,timeout=3) as response:
+                                        types.append(response.headers.get_content_type())
+                                        response.read()
+                                checks["timeline_mime"]=all(x in ("application/javascript","text/javascript") for x in types)
                                 overview=html.split('<div class="stat-grid"',1)[1].split("</div>",1)[0]
                                 checks["latest_dashboard_embedded"] = (
                                     len(re.findall(r'<article class="stat(?: stat-attention)?"',overview)) == 4
                                     and 'class="import-disclosure import-advanced"' in html
                                     and 'id="source-browse"' in html
-                                    and 'calm import workspace' in css)
+                                    and 'calm import workspace' in css and not re.search(r'\sstyle\s*=',html))
                             except (OSError,UnicodeError,IndexError) as exc:
                                 errors.append(str(exc)[:200])
             if all(checks.values()):
