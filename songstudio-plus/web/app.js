@@ -1008,6 +1008,8 @@
         $("ncn-progress-bar").max=Math.max(1,Number(s.total||0));
         $("ncn-progress-bar").value=Number(s.done||0);
         text("ncn-report",s.report?"รายงาน: "+s.report:"");
+        const reasons=Object.entries(s.errors||{}).sort((a,b)=>b[1]-a[1]);
+        text("ncn-errors","มีเครดิต "+number(s.with_credits)+" · มีคำเตือน "+number(s.with_warnings)+"\n"+reasons.map(([reason,count])=>number(count)+" · "+reason).join("\n"));
       }
       updateBuildSelection();
       $("import-start").disabled=!state.ready||Boolean(state.activeJob);

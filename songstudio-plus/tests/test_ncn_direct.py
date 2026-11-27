@@ -157,3 +157,53 @@ class DirectHardeningTests(unittest.TestCase):
             resume_elapsed=time.monotonic()-start
             self.assertEqual((resumed["skipped"],resumed["failed"]),(10000,0),resumed)
             print(f"NCN_SYNTHETIC_BENCHMARK count=10000 convert_seconds={elapsed:.3f} resume_seconds={resume_elapsed:.3f}",flush=True)
+
+
+class DirectCreditTests(unittest.TestCase):
+    def test_head_footer_without_cursor_and_missing_artist(self):
+        import json
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["ชื่อจริง","","C","","เครดิต: ผู้จัดทำ"])
+            lyr=midi.with_suffix(".lyr")
+            lyr.write_bytes(lyr.read_bytes()+".....เต่า คาราโอเกะ......\r\n".encode("cp874"))
+            before=lyr.read_bytes()
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["converted"],1,result)
+            row=json.loads(Path(result["report"]).read_text(encoding="utf-8"))
+            self.assertEqual(row["artist"],"")
+            self.assertTrue(row["header_credit"])
+            self.assertTrue(row["footer_credit"])
+            self.assertEqual(lyr.read_bytes(),before)
+            self.assertEqual(result["with_credits"],1)
+            self.assertEqual(result["with_warnings"],1)
+            core.read_xfile(out/"00001.xmid",verify_media=True)
+
+    def test_surplus_real_public_fixture(self):
+        import json
+        root=Path(__file__).resolve().parent/"fixtures"/"dontreecrab_ncn"
+        with tempfile.TemporaryDirectory() as d:
+            result=direct.convert_folder(str(root),d)
+            self.assertEqual(result["converted"],1,result)
+            row=json.loads(Path(result["report"]).read_text(encoding="utf-8"))
+            self.assertEqual(row["unused_cursor_values"],13)
+            self.assertEqual(row["title"],"Test Song")
+            self.assertEqual(row["artist"],"DontreeCrab")
+
+    def test_real_unmeasured_lyric_not_discarded(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["ชื่อจริง","ศิลปินจริง","C",""])
+            lyr=midi.with_suffix(".lyr")
+            lyr.write_bytes(lyr.read_bytes()+"เนื้อร้องอีกบรรทัด\r\n".encode("cp874"))
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["failed"],1,result)
+            self.assertFalse(list(out.glob("*.xmid")))
+
+    def test_timed_credit_kept_as_lyric(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["ชื่อจริง","ศิลปินจริง","C",""],body="เครดิต: ผู้จัดทำ")
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["converted"],1,result)
+            self.assertEqual(result["with_credits"],0)

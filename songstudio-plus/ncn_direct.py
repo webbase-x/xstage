@@ -34,6 +34,17 @@ def clean(value, code):
         return ""
     return value
 
+CREDIT_LABEL = re.compile(r"^(?:credit(?:s)?|created by|sequenced by|programmed by|arranged by|copyright|ผู้จัดทำ|จัดทำโดย|สร้างโดย|ผู้เรียบเรียง|เรียบเรียงโดย|เครดิต|ลิขสิทธิ์)\s*[:=：]\s*\S",re.I)
+VENDOR_CREDIT = re.compile(r"^(?:nick[\s_-]*karaoke(?:\s+professional)?|extreme[\s_-]*karaoke|นิค[\s_-]*คาราโอเกะ|เต่า[\s_-]*คาราโอเกะ)$",re.I)
+
+def is_credit(line):
+    value=line.strip(" \t.…·•*_-~=<>[]()")
+    return bool(CREDIT_LABEL.match(value) or VENDOR_CREDIT.fullmatch(value))
+
+def label_value(line):
+    m=re.fullmatch(r"\s*[@#]?\s*([^:=：]+?)\s*[:=：]\s*(.*?)\s*",line)
+    return (LABELS.get(m[1].strip().casefold()),m[2]) if m else (None,"")
+
 def identify_header(lyr,cur,code, *, lyric_data=None,cursor_data=None,midi_tags=None):
     raw=(bounded_read(Path(lyr),1024*1024)[0] if lyric_data is None else lyric_data).split(b"\x1a",1)[0]
     cursor=bounded_read(Path(cur),2*1024*1024)[0] if cursor_data is None else cursor_data
@@ -41,59 +52,95 @@ def identify_header(lyr,cur,code, *, lyric_data=None,cursor_data=None,midi_tags=
         raise ValueError("NCN component exceeds size limit")
     if len(cursor)%2 and cursor[-1:]!=b"\xff":
         raise ValueError("CUR odd length")
-    encoding="utf-8-sig"
-    try:
-        decoded=raw.decode(encoding)
-    except UnicodeError:
-        encoding="cp874"
-        decoded=raw.decode(encoding)
-    rows=decoded.replace("\r\n","\n").replace("\r","\n").split("\n")
-    count=len(cursor)//2
-    candidates=[]
-    for cut in range(1,min(65,len(rows))):
-        body=rows[cut:]
-        while body and not body[-1].strip(" \x00\x1a"):
-            body.pop()
+    for encoding in ("utf-8-sig","cp874","tis-620"):
         try:
-            encoded=[line.encode("cp874") for line in body]
+            decoded=raw.decode(encoding)
+            break
         except UnicodeError:
             continue
-        needed=sum(1+len(line) for line in encoded if line.strip())
-        blanks=sum(not line.strip() for line in encoded)
-        if not needed or count not in (needed,needed+blanks):
-            continue
-        header=rows[:cut]
-        metadata={}
-        conflict=False
-        for line in header:
-            match=re.fullmatch(r"\s*[@#]?\s*([^:=：]+?)\s*[:=：]\s*(.*?)\s*",line)
-            if not match:
+    else:
+        raise ValueError("Unsupported LYR encoding")
+    rows=decoded.replace("\r\n","\n").replace("\r","\n").split("\n")
+    count=len(cursor)//2
+    # Anchor layouts in structural evidence, not in the ability to discard
+    # arbitrary beginning lyrics until the CUR count happens to fit.
+    cuts={}
+    if len(rows)>4 and (KEY.fullmatch(rows[2].strip()) or
+                         (not rows[2].strip() and not rows[3].strip())):
+        if not any(label_value(x)[0] for x in rows[:4]):
+            cuts[4]={"title":rows[0],"artist":rows[1],"key":rows[2]}
+    meta={}
+    for i,line in enumerate(rows[:64]):
+        key,value=label_value(line)
+        if key:
+            if key in meta and meta[key]!=value:
+                break
+            meta[key]=value
+        elif not line.strip() or is_credit(line):
+            pass
+        else:
+            break
+        if "title" in meta or "artist" in meta:
+            cuts[i+1]=dict(meta)
+    candidates=[]
+    for start,fields in cuts.items():
+        # A recognised leading credit may have no CUR. Never drop an
+        # ordinary lyric, even when the length happens to fit.
+        possible=[start]
+        while possible[-1]<len(rows) and is_credit(rows[possible[-1]]):
+            possible.append(possible[-1]+1)
+        for cut in possible:
+            body=rows[cut:]
+            while body and not body[-1].strip(" \x00\x1a"):
+                body.pop()
+            try:
+                encoded=[line.encode("cp874") for line in body]
+            except UnicodeError:
                 continue
-            key=LABELS.get(match[1].strip().casefold())
-            if key:
-                if key in metadata and metadata[key]!=match[2]:
+            metadata=dict(fields)
+            conflict=False
+            for key in ("title","artist"):
+                recorded=clean(metadata.get(key,""),code)
+                tagged=(midi_tags or {}).get(key,"")
+                if recorded and tagged and recorded!=tagged:
                     conflict=True
-                metadata[key]=match[2]
-        if conflict:
-            continue
-        if not metadata and cut==4 and (KEY.fullmatch(header[2].strip()) or not header[2].strip()):
-            metadata={"title":header[0],"artist":header[1],"key":header[2]}
-        for key in ("title","artist"):
-            recorded=clean(metadata.get(key,""),code)
-            tagged=(midi_tags or {}).get(key,"")
-            if recorded and tagged and recorded!=tagged:
-                conflict=True
-            metadata[key]=recorded or tagged
-        if conflict:
-            continue
-        if metadata["title"] and metadata["artist"]:
-            # Different cuts across unconsumed blank lines are equivalent.
-            signature=(metadata,body if count!=needed else [x for x in body if x.strip()])
-            if not any(old[0]==signature for old in candidates):
-                candidates.append((signature,(cut,metadata,[x for x in body if x.strip()],encoding)))
-    if len(candidates)!=1:
+                metadata[key]=recorded or tagged
+            if conflict:
+                continue
+            footer=[]
+            while body:
+                needed=sum(1+len(line) for line in encoded if line.strip())
+                blanks=sum(not line.strip() for line in encoded)
+                exact=count in (needed,needed+blanks)
+                # Surplus is safe only for independently identified headers
+                # with no ambiguity about blank-line CUR consumption.
+                surplus=count>needed and blanks==0
+                if needed and (exact or surplus):
+                    actual=[x for x in body if x.strip()]
+                    details={"header_credit":[x for x in rows[:cut] if is_credit(x)],
+                             "footer_credit":list(reversed(footer)),
+                             "unused_cursor_values":max(0,count-needed-blanks),
+                             "warnings":[k+" missing" for k in ("title","artist") if not metadata[k]]}
+                    signature=(metadata,actual,body if count==needed+blanks and blanks else None)
+                    candidates.append((0 if exact else 1,signature,(cut,metadata,actual,encoding,details,body)))
+                    break
+                if not is_credit(body[-1]):
+                    break
+                footer.append(body.pop())
+                encoded.pop()
+                while body and not body[-1].strip(" \x00\x1a"):
+                    body.pop()
+                    encoded.pop()
+    if not candidates:
         raise ValueError("Unknown or ambiguous metadata/CUR layout; no guessing")
-    return candidates[0][1]
+    rank=min(x[0] for x in candidates)
+    unique=[]
+    for priority,signature,result in candidates:
+        if priority==rank and not any(x[0]==signature for x in unique):
+            unique.append((signature,result))
+    if len(unique)!=1:
+        raise ValueError("Unknown or ambiguous metadata/CUR layout; no guessing")
+    return unique[0][1]
 
 def scan(root,cancel):
     index=defaultdict(list)
@@ -184,15 +231,21 @@ def convert_one(parts,dest,code,cancel=None):
     cursor,cs=bounded_read(cur,2*1024*1024)
     midi_info=reader.midi_events(midi,include_duration=True,raw_data=raw)
     tags=explicit_midi_tags(midi_info[2],parts["code"])
-    cut,metadata,expected,encoding=identify_header(lyr,cur,parts["code"],
+    cut,metadata,expected,encoding,details,body=identify_header(lyr,cur,parts["code"],
         lyric_data=lyric,cursor_data=cursor,midi_tags=tags)
+    # Only the in-memory parsing view omits proven untimed footer credits.
+    # Original MID/LYR/CUR bytes remain untouched, and credit text is reported.
+    parsing_lyric=lyric
+    if details["footer_credit"]:
+        original_rows=lyric.split(b"\x1a",1)[0].decode(encoding).replace("\r\n","\n").replace("\r","\n").split("\n")
+        parsing_lyric=("\n".join(original_rows[:cut]+body)+"\n").encode(encoding)
     doc=reader.ncn_document(parts,header_rows=cut,metadata_override=metadata,
-        lyric_data=lyric,cursor_data=cursor,midi_info=midi_info)
+        lyric_data=parsing_lyric,cursor_data=cursor,midi_info=midi_info)
     def verify_sources():
         if any(file_stamp(p)!=stamp for p,stamp in ((midi,ms),(lyr,ls),(cur,cs))):
             raise ValueError("NCN component changed during conversion")
     info=doc["metadata"]
-    if not info.get("timingComplete") or info.get("unusedCursorValues") or any("ย้อนกลับ" in w or "เกินความยาว" in w for w in info.get("timingWarnings",[])):
+    if not info.get("timingComplete") or any("ย้อนกลับ" in w or "เกินความยาว" in w for w in info.get("timingWarnings",[])):
         raise ValueError("Incomplete or inconsistent CUR")
     if [line["text"] for line in doc["lines"]]!=expected:
         raise ValueError("Decoded lyric differs from original")
@@ -214,8 +267,9 @@ def convert_one(parts,dest,code,cancel=None):
            for text,start,end,cues,quality in validated]
     meta=core.metadata_bytes(song,version,lines,code_text=code)
     header=core.HEADER.pack(core.MAGIC,core.FORMAT_VERSION,len(meta),len(raw),media_hash,hashlib.sha256(meta).digest())
+    details["unused_cursor_values"]=info.get("unusedCursorValues",0)
     result={"title":metadata["title"],"artist":metadata["artist"],"metadata":metadata,
-            "header_rows":cut,"encoding":encoding,"timing_status":status}
+            "header_rows":cut,"encoding":encoding,"timing_status":status,**details}
     if dest.is_symlink():
         raise ValueError("Destination symlink is not permitted")
     if dest.exists():
@@ -346,7 +400,8 @@ def convert_folder(source,destination,progress=None,cancel=None):
 
 def _convert_locked(root,out,mids,index,progress,cancel):
     report=out/("ncn-conversion-"+uuid.uuid4().hex+".jsonl")
-    stats={"done":0,"total":len(mids),"converted":0,"skipped":0,"failed":0,"report":str(report)}
+    stats={"done":0,"total":len(mids),"converted":0,"skipped":0,"failed":0,"report":str(report),
+           "with_credits":0,"with_warnings":0,"errors":{}}
     codes=plan_codes(root,out,mids)
     last_progress=0.0
     outputs=defaultdict(list)
@@ -372,11 +427,20 @@ def _convert_locked(root,out,mids,index,progress,cancel):
                 if row["status"]=="cancelled":
                     break
                 stats[row["status"]]+=1
+                if row.get("header_credit") or row.get("footer_credit"):
+                    stats["with_credits"]+=1
+                if row.get("warnings") or row.get("unused_cursor_values"):
+                    stats["with_warnings"]+=1
                 if not matches:
                     outputs[code].append(dest)
             except (ValueError,OSError,OverflowError,KeyError) as exc:
                 row.update(status="failed",error=str(exc))
                 stats["failed"]+=1
+                reason=str(exc) if isinstance(exc,ValueError) else type(exc).__name__
+                # Bound the UI summary; complete errors remain in JSONL.
+                if reason not in stats["errors"] and len(stats["errors"])>=20:
+                    reason="Other errors"
+                stats["errors"][reason]=stats["errors"].get(reason,0)+1
             log.write(json.dumps(row,ensure_ascii=False)+"\n")
             log.flush()
             stats["done"]+=1
