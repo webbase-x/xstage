@@ -30,6 +30,7 @@
       <button class="nav-link" data-view="build" type="button"><span class="nav-icon">06</span><span>สร้างไฟล์ X-Stage<small>XMID · XMP3 · XM4A · XMP4</small></span></button>
       <button class="nav-link" data-view="library" type="button"><span class="nav-icon">07</span><span>คลังเพลง<small>ค้นหา · ตรวจสอบ · เวอร์ชัน</small></span></button>
       <button class="nav-link" data-view="risks" type="button"><span class="nav-icon">08</span><span>ประวัติเสี่ยงปาดเนื้อ<small>หลักฐานจริง · ทดลองเปิด · บันทึกผล</small></span></button>
+      <button class="nav-link" data-view="ncn" type="button"><span class="nav-icon">NCN</span><span>NCN to XMID<small>แปลงตรง · ไม่สร้างฐาน</small></span></button>
     </nav>
     <div class="side-bottom">
       <div class="engine-indicator"><span class="live-dot"></span><div><strong id="engine-name">กำลังเชื่อมต่อ...</strong><small id="engine-subtitle">Local SQLite Engine</small></div></div>
@@ -143,6 +144,23 @@
             </section>
           </div>
         </details>
+      </section>
+      <section class="view" id="view-ncn" aria-labelledby="ncn-title">
+        <div class="hero"><div class="hero-copy"><h1 id="ncn-title">NCN to XMID</h1></div></div>
+        <article class="panel feature-panel">
+          <p>แปลง MID + LYR + CUR โดยตรง ไม่เพิ่มเพลงลง SQLite ไม่แก้เนื้อร้อง ไม่เขียนทับต้นฉบับ</p>
+          <label class="field-label" for="ncn-source">โฟลเดอร์ NCN ต้นทาง</label>
+          <div class="input-wrap"><input id="ncn-source" type="text" spellcheck="false"><button id="ncn-source-pick" class="browse-btn" type="button">เลือกโฟลเดอร์</button></div>
+          <label class="field-label" for="ncn-dest">โฟลเดอร์ XMID ปลายทาง</label>
+          <div class="input-wrap"><input id="ncn-dest" type="text" spellcheck="false"><button id="ncn-dest-pick" class="browse-btn" type="button">เลือกโฟลเดอร์</button></div>
+          <p class="field-hint">ค้นหาทุกโฟลเดอร์ย่อย · ตรวจหัวข้อมูลและ CUR · ข้ามรูปแบบที่ไม่แน่ชัด · เก็บรายงาน JSONL</p>
+          <button class="primary-btn full" id="ncn-start" type="button" disabled>เริ่มแปลง NCN to XMID</button>
+          <button class="quiet-btn" id="ncn-stop" type="button" disabled>หยุดอย่างปลอดภัย</button>
+          <p id="ncn-progress" role="status" aria-live="polite">ยังไม่ได้เริ่ม</p>
+          <progress id="ncn-progress-bar" value="0" max="1" style="width:100%"></progress>
+          <p id="ncn-report" class="field-hint"></p>
+          <p id="ncn-errors" class="field-hint" style="white-space:pre-wrap;overflow-wrap:anywhere" aria-live="polite"></p>
+        </article>
       </section>
       <section class="view" id="view-drive" aria-labelledby="drive-title">
         <div class="page-eyebrow"><span class="eyebrow-line"></span> GOOGLE DRIVE · XSTAGEKARAOKE</div>

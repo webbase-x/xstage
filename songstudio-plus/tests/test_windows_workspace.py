@@ -87,7 +87,7 @@ class WindowsWorkspaceTests(unittest.TestCase):
         self.assertEqual(paths[0], old)
         self.assertEqual(plus_core.db_path(paths[0]), old / "DB" / "xstage_plus.sqlite3")
         self.assertEqual(plus_core.destination_for(paths[0], {"code": 1}, ".mid"),
-                         old / "MIDI" / "MID" / "XMID" / "0" / "00000001.xmid")
+                         old / "MIDI" / "MID" / "XMID" / "0" / "00001.xmid")
 
     def test_workspace_preference_persists_outside_song_database(self):
         chosen=self.base / "Music collection"

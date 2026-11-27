@@ -406,7 +406,8 @@ def to_lrc(lines):
     return "\n".join(rows) + ("\n" if rows else "")
 
 
-def ncn_document(companions):
+def ncn_document(companions, *, header_rows=4, metadata_override=None,
+                 lyric_data=None, cursor_data=None, midi_info=None):
     """NCN24 MIDI/LYR/CUR synchronisation, adapted from X-Stage Karaoke PC.
 
     A CUR entry represents one *CP874 source byte*, not a Unicode grapheme.
@@ -420,20 +421,20 @@ def ncn_document(companions):
                          " · ต้องมี .MID + .LYR + .CUR รหัสเดียวกัน")
     lyric_file = Path(companions["lyrics"])
     cursor_file = Path(companions["cursor"])
-    source_bytes = lyric_file.read_bytes().split(b"\x1a", 1)[0]
+    source_bytes = (lyric_file.read_bytes() if lyric_data is None else lyric_data).split(b"\x1a", 1)[0]
     if len(source_bytes) > 1024 * 1024:
         raise ValueError("ไฟล์ NCN .LYR ใหญ่เกิน 1 MB")
     # Legacy NCN is CP874. Normalize line endings in bytes before consuming
     # CUR indices: Windows CRLF is ONE line marker, not two time entries.
     rows = source_bytes.replace(b"\r\n", b"\n").replace(b"\r", b"\n").split(b"\n")
-    if len(rows) < 5:
+    if len(rows) <= header_rows or header_rows < 1:
         raise ValueError("NCN .LYR ไม่มีข้อมูลเนื้อร้องเริ่มจากบรรทัดที่ 5")
-    meta = {
+    meta = dict(metadata_override) if metadata_override is not None else {
         "title": _decode_text(rows[0]).strip(),
         "artist": _decode_text(rows[1]).strip(),
         "key": _decode_text(rows[2]).strip(),
     }
-    raw_cursor = cursor_file.read_bytes()
+    raw_cursor = cursor_file.read_bytes() if cursor_data is None else cursor_data
     if len(raw_cursor) > 2 * 1024 * 1024:
         raise ValueError("ไฟล์ NCN .CUR ใหญ่เกิน 2 MB")
     warnings = []
@@ -449,12 +450,12 @@ def ncn_document(companions):
     # historical CUR offsets indexed by CP874 bytes. Decode the text and
     # restore the original CP874 byte granularity ONLY when the CUR entry
     # count supports it; never silently synthesize missing CUR positions.
-    body = list(rows[4:])
+    body = list(rows[header_rows:])
     try:
         utf8_text=source_bytes.decode("utf-8-sig")
         if any(ord(char)>127 for char in utf8_text):
             utf8_rows=utf8_text.replace("\r\n","\n").replace("\r","\n").split("\n")
-            cp874_body=[line.encode("cp874") for line in utf8_rows[4:]]
+            cp874_body=[line.encode("cp874") for line in utf8_rows[header_rows:]]
             def count_positions(items):
                 return sum(1+len(item) for item in items if item.strip())
             original_total=count_positions(body)
@@ -497,8 +498,8 @@ def ncn_document(companions):
     blank_markers=(blanks>0 and len(positions)==needed(body)+blanks)
     if blank_markers:
         warnings.append("CUR มีตำแหน่งบรรทัดว่างตามต้นฉบับ")
-    division, tempo_map, _, midi_duration = midi_events(
-        Path(companions["midi"]), include_duration=True)
+    division, tempo_map, _, midi_duration = (midi_info if midi_info is not None else midi_events(
+        Path(companions["midi"]), include_duration=True))
     rendered = []
     previous_pos = 0
     cursor_index = 0

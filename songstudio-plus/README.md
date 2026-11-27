@@ -1,4 +1,12 @@
-# X-Stage Song Studio Pro — Technical Preview v0.1.45
+# X-Stage Song Studio Pro — Technical Preview v0.1.46
+
+## v0.1.46 — Direct NCN to XMID
+
+- Convert complete NCN triplets without importing into the song SQLite database or modifying source MIDI/LYR/CUR.
+- Accept independently identified untimed boundary credits and surplus CUR, preserve measured lyric cues, and report missing metadata rather than inventing values.
+- Persistent code reservations, atomic no-overwrite exports, cancellation/resume, and JSONL diagnostics.
+- Existing XMID files are never overwritten; conflicts are reported for review. Untimed credits are preserved in the report, not given fabricated playback cues.
+- Regression coverage includes a public NCN fixture, 10,000 synthetic conversions and 100,000 virtual code reservations.
 
 A new, standalone Windows-first song-production project in the existing
 https://github.com/webbase-x/xstage repository. It does not replace or
