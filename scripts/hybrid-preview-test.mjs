@@ -92,3 +92,34 @@ import {probeGoogleRange} from '../hybrid-preview/google-live.mjs';
  }
 }
 console.log('PASS: selected-root XMID mapping, duplicate/identity safety, Google Range and WAL rejection');
+
+import {diagnoseGoogleRange} from '../hybrid-preview/cors-diagnostics.mjs';
+{
+ const size=196608, data=new Uint8Array(size);
+ for(let i=0;i<size;i++)data[i]=(i*17+Math.floor(i/4096))%251;
+ data.set(new TextEncoder().encode('SQLite format 3\0'));
+ data[18]=data[19]=1;
+ for(const variant of ['strict','cors','noetag','wrong-range','wrong-offset','changed','wal','full','short','oversize']){
+   let calls=0;
+   data[18]=data[19]=variant==='wal'?2:1;
+   const result=await diagnoseGoogleRange({fileId:'mock',token:'mock',size,fetcher:async(url,opts)=>{
+     calls++;
+     const [,start,end]=/^bytes=(\d+)-(\d+)$/.exec(opts.headers.Range).map(Number);
+     const tag=variant==='changed'&&calls===2?'"v2"':'"v1"';
+     const headers={...(variant==='cors'?{}:{'Content-Range':variant==='wrong-range'?'bytes 0-0/1':'bytes '+start+'-'+end+'/'+size}),...(['cors','noetag'].includes(variant)?{}:{ETag:tag})};
+     const body=variant==='wrong-offset'?data.slice(0,end-start+1):variant==='short'?data.slice(start,end):variant==='oversize'?data.slice(start,end+2):data.slice(start,end+1);
+     return new Response(body,{status:variant==='full'?200:206,headers});
+   }});
+   assert.equal(result.ok,variant==='strict',variant);
+   assert.equal(result.transportOk,['strict','wal'].includes(variant),variant);
+   assert.equal(result.partialReadOk,['strict','cors','noetag','wal'].includes(variant),variant);
+   assert.ok(calls<=2,variant);
+   if(['strict','cors','noetag','wal'].includes(variant)){
+     assert.equal(result.bytes,131072,variant);assert.equal(result.sqliteHeader,true,variant);
+     assert.equal(result.overlapMatches,true,variant);assert.equal(result.distinctBlocks,true,variant);
+   }
+   if(variant==='cors'){assert.equal(result.samples[0].contentRange,null);assert.equal(result.samples[0].etagVisible,false);}
+   if(variant==='wal')assert.equal(result.wal,true);
+ }
+}
+console.log('PASS: CORS-hidden header diagnostics remain read-only, bounded, and never enable SQL');
