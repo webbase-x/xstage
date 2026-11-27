@@ -452,7 +452,75 @@ def plan_codes(root,out,mids):
         stage.unlink(missing_ok=True)
     return plan
 
-def convert_folder(source,destination,progress=None,cancel=None):
+# Resume is a local verification cache, never a song database.
+# Bump this revision when parsing/output semantics change.
+RESUME_REVISION=1
+RESUME_LIMIT=128*1024*1024
+
+def resume_key(midi):
+    return os.path.normcase(str(midi))
+
+def resume_stamp(parts,dest,code):
+    return {"revision":RESUME_REVISION,"code":code,
+            "inputs":[[os.path.normcase(str(parts[k])),list(file_stamp(Path(parts[k])))]
+                      for k in ("midi","lyrics","cursor")],
+            "output":[os.path.normcase(str(dest)),list(file_stamp(dest))]}
+
+def load_resume(out):
+    cached={}
+    snapshot=out/".ncn-resume.json"
+    try:
+        if snapshot.exists():
+            data=json.loads(bounded_read(snapshot,RESUME_LIMIT)[0].decode("utf-8"))
+            if data.get("revision")==RESUME_REVISION and isinstance(data.get("records"),dict):
+                cached=data["records"]
+    except (OSError,ValueError,TypeError,AttributeError):
+        pass
+    # The latest report is flushed as each song completes, so a crash
+    # before snapshot publication can still recover completed work.
+    try:
+        reports=[p for p in out.glob("ncn-conversion-*.jsonl") if not p.is_symlink() and p.is_file()]
+        if reports:
+            latest=max(reports,key=lambda p:p.stat().st_mtime_ns)
+            if latest.stat().st_size<=RESUME_LIMIT:
+                with latest.open("r",encoding="utf-8") as stream:
+                    for line in stream:
+                        try:
+                            row=json.loads(line)
+                            if row.get("resume") and row.get("status") in ("converted","skipped"):
+                                cached[resume_key(row["source"])]=row["resume"]
+                            elif row.get("status")=="failed":
+                                cached.pop(resume_key(row["source"]),None)
+                        except (ValueError,TypeError,KeyError,AttributeError):
+                            continue
+    except (OSError,ValueError):
+        pass
+    return cached
+
+def save_resume(out,cached):
+    target=out/".ncn-resume.json"
+    if target.is_symlink():
+        return False
+    stage=None
+    try:
+        fd,name=tempfile.mkstemp(prefix=".ncn-resume-",suffix=".tmp",dir=out)
+        stage=Path(name)
+        with os.fdopen(fd,"w",encoding="utf-8") as stream:
+            json.dump({"revision":RESUME_REVISION,"records":cached},stream,ensure_ascii=False,separators=(",",":"))
+            stream.flush();os.fsync(stream.fileno())
+        if stage.stat().st_size>RESUME_LIMIT:
+            return False
+        os.replace(stage,target)
+        return True
+    except (OSError,ValueError,TypeError):
+        return False
+    finally:
+        if stage is not None:
+            stage.unlink(missing_ok=True)
+
+def convert_folder(source,destination,progress=None,cancel=None,mode="retry"):
+    if mode not in ("retry","verify"):
+        raise ValueError("Unknown NCN conversion mode")
     if not isinstance(source,str) or not source.strip() or not isinstance(destination,str) or not destination.strip():
         raise ValueError("Select source and destination folders")
     root=Path(source).expanduser().resolve(strict=True)
@@ -466,12 +534,13 @@ def convert_folder(source,destination,progress=None,cancel=None):
         return {"cancelled":True,"done":0}
     out.mkdir(parents=True,exist_ok=True)
     with output_lock(out):
-        return _convert_locked(root,out,mids,index,progress,cancel)
+        return _convert_locked(root,out,mids,index,progress,cancel,mode)
 
-def _convert_locked(root,out,mids,index,progress,cancel):
+def _convert_locked(root,out,mids,index,progress,cancel,mode="retry"):
+    cached=load_resume(out)
     report=out/("ncn-conversion-"+uuid.uuid4().hex+".jsonl")
     stats={"done":0,"total":len(mids),"converted":0,"skipped":0,"failed":0,"report":str(report),
-           "with_credits":0,"with_warnings":0,"errors":{}}
+           "with_credits":0,"with_warnings":0,"fast_resumed":0,"errors":{}}
     codes=plan_codes(root,out,mids)
     last_progress=0.0
     outputs=defaultdict(list)
@@ -493,17 +562,48 @@ def _convert_locked(root,out,mids,index,progress,cancel):
                     raise ValueError("Ambiguous case-insensitive output")
                 dest=matches[0] if matches else out/(code+".xmid")
                 row["destination"]=str(dest)
-                row.update(convert_one(companions(midi,index),dest,code,cancel))
+                parts=companions(midi,index)
+                key=resume_key(midi)
+                before=None
+                if dest.exists() and not dest.is_symlink():
+                    try:
+                        before=resume_stamp(parts,dest,code)
+                    except (OSError,ValueError,KeyError):
+                        pass
+                old=cached.get(key)
+                if (mode=="retry" and before is not None and isinstance(old,dict)
+                        and old.get("stamp")==before and resume_stamp(parts,dest,code)==before):
+                    row.update(status="skipped",fast_resume=True,resume=old,
+                               cached_with_credits=bool(old.get("credits")),
+                               cached_with_warnings=bool(old.get("warnings")))
+                    stats["fast_resumed"]+=1
+                else:
+                    cached.pop(key,None)
+                    inputs_before=[[os.path.normcase(str(parts[k])),list(file_stamp(Path(parts[k])))]
+                                   for k in ("midi","lyrics","cursor")]
+                    row.update(convert_one(parts,dest,code,cancel))
+                    if row["status"] in ("converted","skipped"):
+                        try:
+                            stamp=resume_stamp(parts,dest,code)
+                            if stamp["inputs"]==inputs_before:
+                                record={"stamp":stamp,
+                                        "credits":bool(row.get("header_credit") or row.get("footer_credit")),
+                                        "warnings":bool(row.get("warnings") or row.get("unused_cursor_values"))}
+                                cached[key]=record
+                                row["resume"]=record
+                        except (OSError,ValueError,KeyError):
+                            pass
                 if row["status"]=="cancelled":
                     break
                 stats[row["status"]]+=1
-                if row.get("header_credit") or row.get("footer_credit"):
+                if row.get("header_credit") or row.get("footer_credit") or row.get("cached_with_credits"):
                     stats["with_credits"]+=1
-                if row.get("warnings") or row.get("unused_cursor_values"):
+                if row.get("warnings") or row.get("unused_cursor_values") or row.get("cached_with_warnings"):
                     stats["with_warnings"]+=1
                 if not matches:
                     outputs[code].append(dest)
             except (ValueError,OSError,OverflowError,KeyError) as exc:
+                cached.pop(resume_key(midi),None)
                 row.update(status="failed",error=str(exc))
                 stats["failed"]+=1
                 reason=str(exc) if isinstance(exc,ValueError) else type(exc).__name__
@@ -518,4 +618,5 @@ def _convert_locked(root,out,mids,index,progress,cancel):
             if progress and (now-last_progress>=.2 or stats["done"]==stats["total"]):
                 progress(stats,midi.name)
                 last_progress=now
+    stats["resume_saved"]=save_resume(out,cached)
     return dict(stats,cancelled=bool(cancel and cancel.is_set()))

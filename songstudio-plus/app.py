@@ -531,7 +531,7 @@ class Handler(BaseHTTPRequestHandler):
                 source=body.get("source","")
                 destination=body.get("destination","")
                 result=self.state.start_job("ncn-direct",lambda progress,cancel:
-                    ncn_direct.convert_folder(source,destination,progress,cancel))
+                    ncn_direct.convert_folder(source,destination,progress,cancel,body.get("mode","retry")))
             elif path=="/api/import":
                 source=body.get("folder","")
                 self.state.diagnostic("import.request",folder=source,

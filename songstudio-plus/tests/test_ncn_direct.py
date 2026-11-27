@@ -262,3 +262,45 @@ class ObservedLegacyLayoutTests(unittest.TestCase):
             self.assertEqual(result["converted"],1,result)
             self.assertEqual(lyr.read_bytes(),appended)
             self.assertEqual(direct.normalize_lyric_trailer(appended,b"\x00\x00")[0],appended)
+
+
+class ResumeVerificationTests(unittest.TestCase):
+    def test_fast_resume_retries_failure_and_verify_mode_rechecks(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            first=fixture(root,["title","artist","C",""],body="abc")
+            bad=root/"00002.mid"
+            for ext in (".mid",".lyr",".cur"):
+                bad.with_suffix(ext).write_bytes(first.with_suffix(ext).read_bytes())
+            bad.with_suffix(".cur").write_bytes(b"\0")
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual((result["converted"],result["failed"]),(1,1),result)
+            original=direct.convert_one
+            with patch.object(direct,"convert_one",wraps=original) as convert:
+                again=direct.convert_folder(str(root),str(out))
+                self.assertEqual((again["fast_resumed"],again["failed"],convert.call_count),(1,1,1),again)
+            bad.with_suffix(".cur").write_bytes(first.with_suffix(".cur").read_bytes())
+            self.assertEqual(direct.convert_folder(str(root),str(out))["converted"],1)
+            with patch.object(direct,"convert_one",wraps=original) as convert:
+                full=direct.convert_folder(str(root),str(out),mode="verify")
+                self.assertEqual((full["fast_resumed"],full["skipped"],convert.call_count),(0,2,2),full)
+            first.with_suffix(".lyr").write_bytes(first.with_suffix(".lyr").read_bytes().replace(b"abc",b"xyz"))
+            existing=(out/"00001.xmid").read_bytes()
+            changed=direct.convert_folder(str(root),str(out))
+            self.assertEqual((changed["fast_resumed"],changed["failed"]),(1,1),changed)
+            self.assertEqual((out/"00001.xmid").read_bytes(),existing)
+
+    def test_deleted_or_modified_output_is_not_fast_resumed(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            fixture(root,["title","artist","C",""],body="abc")
+            self.assertEqual(direct.convert_folder(str(root),str(out))["converted"],1)
+            target=out/"00001.xmid"
+            target.unlink()
+            again=direct.convert_folder(str(root),str(out))
+            self.assertEqual((again["converted"],again["fast_resumed"]),(1,0),again)
+            target.write_bytes(b"external file")
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual((result["failed"],result["fast_resumed"]),(1,0),result)
+            self.assertEqual(target.read_bytes(),b"external file")
