@@ -1,6 +1,6 @@
 /* Dedicated worker for the staged OPFS catalog API.
  * No OAuth tokens or Drive URLs cross this boundary. */
-import {importRevision,searchPage,lookupSong,randomSong} from './web-catalog-opfs-core.mjs';
+import {importRevision,searchPage,lookupSong,randomSong,validateCatalogBinding} from './web-catalog-opfs-core.mjs';
 const SQLITE_URL='https://cdn.jsdelivr.net/npm/@sqlite.org/sqlite-wasm@3.54.1-build1/dist/index.mjs';
 let pool,ownerKey,active=null,staged=null,tail=Promise.resolve();
 const fail=message=>{throw new Error(message);};
@@ -18,13 +18,13 @@ function discard(entry){
   entry.db.close();
   pool.unlink(entry.name);
 }
-async function dispatch({id,action,owner,file,md5,size,capability,term,cursor,code,title,artist,songId,favoriteIds}){
+async function dispatch({id,action,owner,file,md5,size,capability,term,cursor,code,title,artist,songId,favoriteIds,source}){
   if(action==='stage'){
     const p=await getPool(owner);
     if(staged&&staged!==active){discard(staged);staged=null;}
     const name='/'+md5+'-'+size+'.sqlite3';
-    if(active?.name===name)return {capability:active.capability,count:active.count,generation:active.generation,fromDisk:true};
-    const entry=await importRevision(p,file,md5,size,(received,total)=>self.postMessage({id,progress:{received,total}}));
+    if(active?.name===name){validateCatalogBinding(active.meta,source);return {capability:active.capability,count:active.count,generation:active.generation,fromDisk:true};}
+    const entry=await importRevision(p,file,md5,size,(received,total)=>self.postMessage({id,progress:{received,total}}),source);
     staged={...entry,capability:crypto.randomUUID()};
     return {capability:staged.capability,count:staged.count,generation:staged.generation,fromDisk:staged.fromDisk};
   }
