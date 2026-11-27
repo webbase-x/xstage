@@ -1,5 +1,6 @@
 """Direct NCN batch export without opening a song database."""
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
+import csv
 import hashlib
 import stat
 import string
@@ -173,7 +174,8 @@ def companions(midi,index):
             lyr=one(root/"Lyrics"/subdir,".lyr")
             cur=one(root/"Cursor"/subdir,".cur")
     if lyr is None or cur is None:
-        raise ValueError("Missing exact matching LYR/CUR")
+        missing = "/".join(label for label, part in (("LYR", lyr), ("CUR", cur)) if part is None)
+        raise ValueError("Missing exact matching " + missing)
     return {"midi":str(midi),"lyrics":str(lyr),"cursor":str(cur),"code":midi.stem,"missing":[]}
 
 def file_stamp(path):
@@ -398,17 +400,64 @@ def convert_folder(source,destination,progress=None,cancel=None):
     with output_lock(out):
         return _convert_locked(root,out,mids,index,progress,cancel)
 
+def diagnostic_category(exc):
+    message = str(exc)
+    if isinstance(exc, FileExistsError):
+        return "error", "DESTINATION_CONFLICT"
+    if message.startswith("Missing exact matching "):
+        return "rejected", "MISSING_" + message.rsplit(" ", 1)[-1].replace("/", "_")
+    for prefix, code in (
+        ("Ambiguous companion", "AMBIGUOUS_COMPANION"),
+        ("Duplicate NCN code", "DUPLICATE_CODE"),
+        ("Ambiguous case-insensitive output", "AMBIGUOUS_OUTPUT"),
+        ("Unknown or ambiguous metadata/CUR layout", "UNSUPPORTED_LAYOUT"),
+        ("Incomplete or inconsistent CUR", "INCONSISTENT_CUR"),
+        ("CUR odd length", "INVALID_CUR"),
+        ("Unsupported LYR encoding", "UNSUPPORTED_ENCODING"),
+        ("NCN component changed", "SOURCE_CHANGED"),
+        ("Conflicting explicit MIDI metadata", "METADATA_CONFLICT"),
+        ("Decoded lyric differs", "LYRIC_MISMATCH"),
+    ):
+        if message.startswith(prefix):
+            return "rejected", code
+    return "error", type(exc).__name__.upper()
+
+
+def csv_cell(value):
+    # CSV is for spreadsheet review; JSONL retains exact unmodified values.
+    value = str(value or "")
+    return "'" + value if value.lstrip().startswith(("=", "+", "-", "@")) or value.startswith(("\t", "\r", "\n")) else value
+
+
 def _convert_locked(root,out,mids,index,progress,cancel):
     report=out/("ncn-conversion-"+uuid.uuid4().hex+".jsonl")
-    stats={"done":0,"total":len(mids),"converted":0,"skipped":0,"failed":0,"report":str(report),
-           "with_credits":0,"with_warnings":0,"errors":{}}
+    logs = out / "LOGS"
+    if logs.is_symlink():
+        raise ValueError("LOGS cannot be a symlink")
+    logs.mkdir(exist_ok=True)
+    run = logs / report.stem
+    run.mkdir()
+    stats={"done":0,"total":len(mids),"converted":0,"skipped":0,"failed":0,"rejected":0,
+           "report":str(report),"log_folder":str(run),
+           "with_credits":0,"with_warnings":0,"errors":{},"error_codes":{}}
     codes=plan_codes(root,out,mids)
     last_progress=0.0
     outputs=defaultdict(list)
     for path in out.iterdir():
         if path.suffix.casefold()==".xmid":
             outputs[path.stem.casefold()].append(path)
-    with report.open("x",encoding="utf-8") as log:
+    fields = ("source", "original_code", "code", "destination", "status", "error_code", "error", "title", "artist", "encoding", "warnings")
+    with ExitStack() as stack:
+        log = stack.enter_context(report.open("x", encoding="utf-8", buffering=65536))
+        streams = [log]
+        writers = {}
+        for category in ("error", "rejected", "existing", "converted"):
+            stream = stack.enter_context((run / (category + ".csv")).open("x", encoding="utf-8-sig", newline="", buffering=65536))
+            streams.append(stream)
+            writer = csv.writer(stream)
+            writer.writerow(fields)
+            writers[category] = writer
+        last_flush = time.monotonic()
         for midi in mids:
             if cancel is not None and cancel.is_set():
                 break
@@ -427,6 +476,7 @@ def _convert_locked(root,out,mids,index,progress,cancel):
                 if row["status"]=="cancelled":
                     break
                 stats[row["status"]]+=1
+                row["category"] = "existing" if row["status"] == "skipped" else "converted"
                 if row.get("header_credit") or row.get("footer_credit"):
                     stats["with_credits"]+=1
                 if row.get("warnings") or row.get("unused_cursor_values"):
@@ -434,18 +484,33 @@ def _convert_locked(root,out,mids,index,progress,cancel):
                 if not matches:
                     outputs[code].append(dest)
             except (ValueError,OSError,OverflowError,KeyError) as exc:
-                row.update(status="failed",error=str(exc))
+                category, error_code = diagnostic_category(exc)
+                row.update(status="failed",error=str(exc),category=category,error_code=error_code)
                 stats["failed"]+=1
+                stats["rejected"] += category == "rejected"
+                stats["error_codes"][error_code] = stats["error_codes"].get(error_code, 0) + 1
                 reason=str(exc) if isinstance(exc,ValueError) else type(exc).__name__
                 # Bound the UI summary; complete errors remain in JSONL.
                 if reason not in stats["errors"] and len(stats["errors"])>=20:
                     reason="Other errors"
                 stats["errors"][reason]=stats["errors"].get(reason,0)+1
             log.write(json.dumps(row,ensure_ascii=False)+"\n")
-            log.flush()
+            writers[row["category"]].writerow(csv_cell(row.get(field)) for field in fields)
             stats["done"]+=1
             now=time.monotonic()
+            if stats["done"] % 256 == 0 or now - last_flush >= 1:
+                for stream in streams:
+                    stream.flush()
+                last_flush = now
             if progress and (now-last_progress>=.2 or stats["done"]==stats["total"]):
-                progress(stats,midi.name)
+                progress(dict(stats, errors=dict(stats["errors"]), error_codes=dict(stats["error_codes"])),midi.name)
                 last_progress=now
-    return dict(stats,cancelled=bool(cancel and cancel.is_set()))
+    result = dict(stats,cancelled=bool(cancel and cancel.is_set()))
+    summary = run / "summary.json"
+    stage = run / ".summary.tmp"
+    with stage.open("x", encoding="utf-8") as stream:
+        json.dump(result, stream, ensure_ascii=False, indent=2)
+    os.replace(stage, summary)
+    if progress:
+        progress(result, "Cancelled" if result["cancelled"] else "Completed")
+    return result
