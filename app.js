@@ -1611,6 +1611,30 @@ async function googleFetch(url,options={},label='Google',retries=1){
     }
   }
 }
+// UserInfo may be temporarily unreachable on one Google API hostname.
+// Both endpoints belong to Google; never use cached identity as proof of a
+// new token. Only transport errors, rate limits and 5xx trigger fallback.
+async function googleAccountResponse(token,signal){
+  const options={headers:requestHeaders(token),cache:'no-store',signal};
+  const endpoints=['https://openidconnect.googleapis.com/v1/userinfo',
+    'https://www.googleapis.com/oauth2/v3/userinfo'];
+  for(let index=0;index<endpoints.length;index++){
+    if(signal?.aborted)throw new DOMException('Aborted','AbortError');
+    const last=index===endpoints.length-1;
+    let response;
+    try{response=await googleFetch(endpoints[index],options,'Google Account',0);}
+    catch(error){
+      if(signal?.aborted||last)throw error;
+      continue;
+    }
+    if(!last&&(response.status===429||response.status>=500)){
+      try{void response.body?.cancel?.().catch(()=>{});}catch{}
+      continue;
+    }
+    // 401/403 and all other responses are authoritative, not bypassed.
+    return response;
+  }
+}
 function driveError(status, subject) {
   // A Drive 404 is not proof that Google login expired: drive.file only grants
   // access to files created or explicitly opened with this OAuth application.
@@ -2404,7 +2428,7 @@ function applyInstantCatalog(instant){
 
 async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseExistingSession=!!expectedSub, fullReadGranted=false) {
   setStatus('กำลังยืนยันบัญชี Google…');
-  const accountResult = await googleFetch('https://openidconnect.googleapis.com/v1/userinfo', {headers:requestHeaders(token),cache:'no-store'},'Google Account');
+  const accountResult = await googleAccountResponse(token);
   if (!accountResult.ok) throw driveError(accountResult.status,'ข้อมูลบัญชี Google');
   const account = await accountResult.json();
   if (!account.email_verified || !account.sub) throw Error('ไม่สามารถยืนยันบัญชี Google ได้');
@@ -5866,10 +5890,7 @@ async function ensureImporterGoogleAuth(force=false,interactive=false,readAll=fa
       });
       if(state.authId!==authId||state.accountSub!==expectedSub)
         throw Error('บัญชี Google เปลี่ยนระหว่างต่ออายุ · หยุดเพื่อป้องกันอัปโหลดผิดคลัง');
-      const accountResult=await googleFetch(
-        'https://openidconnect.googleapis.com/v1/userinfo',
-        {headers:requestHeaders(newToken.access_token),cache:'no-store'},
-        'Google Account',0);
+      const accountResult=await googleAccountResponse(newToken.access_token);
       if(!accountResult.ok)throw driveError(accountResult.status,'ข้อมูลบัญชี Google');
       const account=await accountResult.json();
       if(!account.email_verified||account.sub!==expectedSub)
