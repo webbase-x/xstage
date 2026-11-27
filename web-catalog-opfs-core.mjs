@@ -45,12 +45,15 @@ function decode(row){
     fail('Invalid song identity in SQLite');
   return song;
 }
-export function searchPage(db,raw,cursor=null){
+export function searchPage(db,raw,cursor=null,favoriteIds=null){
   const term=String(raw||'').normalize('NFC').toLocaleLowerCase('th').trim().slice(0,256);
   if(!term)return {songs:[],total:0,cursor:null,hasMore:false};
   const words=term.split(/\s+/u).filter(Boolean).slice(0,16);
   if(cursor!==null&&!Number.isSafeInteger(cursor))fail('Invalid search cursor');
-  const where='playable=1 AND '+words.map(()=> 'instr(search,?)>0').join(' AND ');
+  const ids=Array.isArray(favoriteIds)?[...new Set(favoriteIds.slice(0,5000).map(String))]:null;
+  if(ids&&!ids.length)return {songs:[],total:0,cursor:null,hasMore:false};
+  const where='playable=1 AND '+words.map(()=> 'instr(search,?)>0').join(' AND ')+(ids?' AND web_song_id IN ('+ids.map(()=>'?').join(',')+')':'');
+  if(ids)words.push(...ids);
   const total=scalar(db,'SELECT count(*) FROM songs WHERE '+where,words);
   const clause=cursor===null?'':' AND id>?';
   const page=rows(db,'SELECT web_song_id,payload,id FROM songs WHERE '+where+clause+' ORDER BY id LIMIT '+(PAGE_SIZE+1),cursor===null?words:[...words,cursor]);
