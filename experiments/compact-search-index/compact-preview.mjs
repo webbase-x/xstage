@@ -4,7 +4,7 @@ const retired=new Set(window.XSTAGE_RETIRED_DRIVE_ROOT_IDS||[]);
 const folder='application/vnd.google-apps.folder', validId=s=>typeof s==='string'&&/^[A-Za-z0-9_-]+$/.test(s);
 let token='',roots=[],generation=0,busy=false,session=null,owner='',cursor=null,term='',mode='auto';
 function status(s){$('status').textContent=s;}
-function reset(){generation++;token='';roots=[];busy=false;closeSession();$('result').textContent='';$('search-form').hidden=true;$('songs').replaceChildren();$('more').hidden=true;$('root').replaceChildren();$('choose').hidden=true;$('clear').hidden=true;$('connect').disabled=false;$('run').disabled=false;status('จบการทดสอบ · ไม่เก็บ token');}
+function reset(){generation++;token='';roots=[];busy=false;closeSession();$('result').textContent='';$('search-form').hidden=true;$('songs').replaceChildren();$('more').hidden=true;$('root').replaceChildren();$('choose').hidden=true;$('clear').hidden=true;$('connect').disabled=false;$('run').disabled=false;$('root').disabled=false;status('จบการทดสอบ · ไม่เก็บ token');}
 async function list(q,localToken,current){
  const results=[];const seen=new Set();let pageToken='';
  do{
@@ -75,7 +75,7 @@ $('run').onclick=async()=>{
  const root=roots[Number($('root').value)];if(!root||retired.has(root.id))return;
  closeSession();$('search-form').hidden=true;$('songs').replaceChildren();$('more').hidden=true;
  const id=++generation,localToken=token,current=()=>id===generation&&token===localToken;
- busy=true;$('run').disabled=true;$('connect').disabled=true;status('กำลังตรวจ revision ของฐานและดัชนี…');
+ busy=true;$('root').disabled=true;$('run').disabled=true;$('connect').disabled=true;status('กำลังตรวจ revision ของฐานและดัชนี…');
  try{
   const db=exact(await list("'"+root.id+"' in parents and name='DB' and trashed=false",localToken,current),root.id,'DB',folder);
   const files=await list("'"+db.id+"' in parents and (name='songs.sqlite3' or name='songs.search.sqlite3') and trashed=false",localToken,current);
@@ -101,13 +101,13 @@ $('run').onclick=async()=>{
   status('พร้อมค้นหา '+meta.count.toLocaleString('th-TH')+' เพลง · '+(verified.fromDisk?'ใช้ดัชนีที่เก็บไว้':'ตรวจ MD5 และเปิด SQLite สำเร็จ'));
   $('search-form').hidden=false;$('term').focus();
  }catch(e){if(current()){closeSession();status('เปิดดัชนีไม่สำเร็จ: '+String(e.message||e));}}
- finally{if(current()){busy=false;$('run').disabled=false;$('connect').disabled=false;}}
+ finally{if(current()){busy=false;$('root').disabled=false;$('run').disabled=false;$('connect').disabled=false;}}
 };
 async function search(reset){
  if(busy||!session)return;
  const s=session;if(reset){term=$('term').value.trim();mode=$('mode').value;cursor=null;$('songs').replaceChildren();}
  if(!term)return;
- busy=true;$('search').disabled=true;$('more').disabled=true;
+ busy=true;$('root').disabled=true;$('run').disabled=true;$('connect').disabled=true;$('search').disabled=true;$('more').disabled=true;
  try{
   const t=performance.now(),p=await rpc(s,'search',{term,mode,cursor});
   if(session!==s)return;
@@ -120,7 +120,8 @@ async function search(reset){
    row.append(verify);$('songs').append(row);
   }
   $('more').hidden=!p.hasMore;status('ค้นหา '+p.songs.length+' เพลง · '+Math.round(performance.now()-t)+' ms');
- }catch(e){status(String(e.message||e));}finally{busy=false;$('search').disabled=false;$('more').disabled=false;}
+ }catch(e){if(session===s)status(String(e.message||e));}finally{if(session===s||!session){busy=false;$('root').disabled=false;$('run').disabled=false;$('connect').disabled=false;$('search').disabled=false;$('more').disabled=false;}}
 }
 $('search-form').onsubmit=e=>{e.preventDefault();void search(true);};$('more').onclick=()=>void search(false);
+$('root').onchange=()=>{if(busy)return;generation++;closeSession();$('search-form').hidden=true;$('songs').replaceChildren();$('more').hidden=true;$('result').textContent='';status('เลือกคลังใหม่แล้ว · กดเปิดดัชนี');};
 $('clear').onclick=reset;window.addEventListener('pagehide',reset);
