@@ -2249,7 +2249,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
 
   // A new short-lived token for the SAME account must not reset the player,
   // downloaded audio, search results or queue. Only the credential changes.
-  if (reuseExistingSession && !androidTvCatalogRetryPending && state.token && state.accountSub===account.sub && state.libraryRootId && !isRetiredDriveRoot(state.libraryRootId)) {
+  if (androidTvCatalogRetryPending) reuseExistingSession=false;
+  if (reuseExistingSession && state.token && state.accountSub===account.sub && state.libraryRootId && !isRetiredDriveRoot(state.libraryRootId)) {
     if(fullReadGranted){fullDriveReadToken=token;rememberFullDriveRead(account.sub);}
     state.token=token;
     state.tokenExpiresAt=tokenExpiresAt;

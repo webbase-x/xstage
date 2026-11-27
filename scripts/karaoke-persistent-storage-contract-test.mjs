@@ -9,7 +9,7 @@ assert.doesNotMatch(switcher,/store\.clear\(/,'do not delete existing bank befor
 assert.match(font,/if\(removeLocal\)try\{await fontDisk/,'automatic recovery preserves bank');
 assert.match(app,/code:'CATALOG_TOO_LARGE'/);
 assert.match(app,/if\(androidTvCatalogRetryPending && state\.token && state\.accountSub\)/);
-assert.match(app,/!androidTvCatalogRetryPending && state\.token/);
+assert.match(app,/if \(androidTvCatalogRetryPending\) reuseExistingSession=false;/);
 console.log('One-bank persistence and catalog retry source contracts passed');
 
 assert.match(app,/function savePersistentQueue\(\)/);
