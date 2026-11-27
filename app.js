@@ -4212,18 +4212,22 @@ function releaseFinishedMedia(){
   state.activeBlobBytes=0;state.activeVideoBytes=0;
   trimQueueCache();
 }
-function playNext(skipWebWait=false){
-  if(skipWebWait!==true&&state.webCatalog&&state.medley&&!state.queue.length&&!state.medleyUpcoming){
+function playNext(){
+  if(state.webCatalog&&state.medley&&!state.queue.length&&!state.medleyUpcoming){
     if(state.webNextPending)return;
     const session=state.webCatalog,requestId=state.requestId;
     const waiting=requestWebMedley().then(()=>{
       if(state.webNextPending!==waiting)return;
       state.webNextPending=null;
-      if(session===state.webCatalog&&requestId===state.requestId&&state.medley&&!state.userStopped)playNext(true);
+      if(session===state.webCatalog&&requestId===state.requestId&&state.medley&&!state.userStopped)playNextReady();
     });
     state.webNextPending=waiting;
     return;
   }
+  return playNextReady();
+}
+// One synchronous queue handoff after an asynchronous disk lookup, if needed.
+function playNextReady(){
   if(state.updateAfterTrack&&state.updateAvailable&&!webGoogleAuthFlow&&!state.authRecovering){
     // The outgoing song has ended or the owner skipped to the next one.
     // Preserve the requested next song instead of reloading into the
