@@ -207,3 +207,226 @@ class DirectCreditTests(unittest.TestCase):
             result=direct.convert_folder(str(root),str(out))
             self.assertEqual(result["converted"],1,result)
             self.assertEqual(result["with_credits"],0)
+
+
+class ObservedLegacyLayoutTests(unittest.TestCase):
+    def test_empty_key_dot_and_surplus(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["title","artist","","."],body="abc")
+            lyr=midi.with_suffix(".lyr")
+            cur=midi.with_suffix(".cur")
+            body=["abc"]
+            count=sum(len(x)+1 for x in body)
+            cur.write_bytes(struct.pack("<"+"H"*(count+5),*(list(range(count))+[65535]*5)))
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["converted"],1,result)
+
+    def test_bad_final_credit_never_invalidates_real_lyrics(self):
+        import json
+        for footer in ("Music_By_นิค_คาราโอเกะ","GMM Grammy","By_นิค_คาราโอเกะ"):
+            with self.subTest(footer=footer),tempfile.TemporaryDirectory() as d:
+                root=Path(d)/"in";out=Path(d)/"out"
+                midi=fixture(root,["title","artist","C","."],body="abc")
+                lyr=midi.with_suffix(".lyr");cur=midi.with_suffix(".cur")
+                lyr.write_bytes(lyr.read_bytes()+(footer+"\r\n").encode("cp874"))
+                cur.write_bytes(cur.read_bytes()+b"\xff\xff"*(len(footer)+1))
+                before=cur.read_bytes()
+                result=direct.convert_folder(str(root),str(out))
+                self.assertEqual(result["converted"],1,result)
+                row=json.loads(Path(result["report"]).read_text(encoding="utf-8"))
+                self.assertEqual(row["footer_credit"],[footer])
+                self.assertEqual(cur.read_bytes(),before)
+
+    def test_exact_cursor_vendor_trailer_and_unknown_suffix(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["title","artist","C","."],body="abc")
+            cur=midi.with_suffix(".cur")
+            original=cur.read_bytes()
+            cur.write_bytes(original+b"\xffwww.patongbusiness.com")
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["converted"],1,result)
+            self.assertEqual(cur.read_bytes(),original+b"\xffwww.patongbusiness.com")
+            self.assertEqual(direct.normalize_cursor_trailer(original+b"X")[0],original+b"X")
+
+    def test_padded_binary_appendix_requires_exact_count(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["title","artist","C","."],body="abc")
+            lyr=midi.with_suffix(".lyr");cur=midi.with_suffix(".cur")
+            original=lyr.read_bytes()
+            appended=original+b"\r\n\r\n\r\n"+b" "*30+b"\x81\x00\x02"
+            lyr.write_bytes(appended)
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["converted"],1,result)
+            self.assertEqual(lyr.read_bytes(),appended)
+            self.assertEqual(direct.normalize_lyric_trailer(appended,b"\x00\x00")[0],appended)
+
+
+class ResumeVerificationTests(unittest.TestCase):
+    def test_fast_resume_retries_failure_and_verify_mode_rechecks(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            first=fixture(root,["title","artist","C",""],body="abc")
+            bad=root/"00002.mid"
+            for ext in (".mid",".lyr",".cur"):
+                bad.with_suffix(ext).write_bytes(first.with_suffix(ext).read_bytes())
+            bad.with_suffix(".cur").write_bytes(b"\0")
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual((result["converted"],result["failed"]),(1,1),result)
+            original=direct.convert_one
+            with patch.object(direct,"convert_one",wraps=original) as convert:
+                again=direct.convert_folder(str(root),str(out))
+                self.assertEqual((again["fast_resumed"],again["failed"],convert.call_count),(1,1,1),again)
+            bad.with_suffix(".cur").write_bytes(first.with_suffix(".cur").read_bytes())
+            self.assertEqual(direct.convert_folder(str(root),str(out))["converted"],1)
+            with patch.object(direct,"convert_one",wraps=original) as convert:
+                full=direct.convert_folder(str(root),str(out),mode="verify")
+                self.assertEqual((full["fast_resumed"],full["skipped"],convert.call_count),(0,2,2),full)
+            first.with_suffix(".lyr").write_bytes(first.with_suffix(".lyr").read_bytes().replace(b"abc",b"xyz"))
+            existing=(out/"00001.xmid").read_bytes()
+            changed=direct.convert_folder(str(root),str(out))
+            self.assertEqual((changed["fast_resumed"],changed["failed"]),(1,1),changed)
+            self.assertEqual((out/"00001.xmid").read_bytes(),existing)
+
+    def test_deleted_or_modified_output_is_not_fast_resumed(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            fixture(root,["title","artist","C",""],body="abc")
+            self.assertEqual(direct.convert_folder(str(root),str(out))["converted"],1)
+            target=out/"00001.xmid"
+            target.unlink()
+            again=direct.convert_folder(str(root),str(out))
+            self.assertEqual((again["converted"],again["fast_resumed"]),(1,0),again)
+            target.write_bytes(b"external file")
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual((result["failed"],result["fast_resumed"]),(1,0),result)
+            self.assertEqual(target.read_bytes(),b"external file")
+
+
+class ObservedMidiAndAlignmentTests(unittest.TestCase):
+    def test_anchored_timed_leading_credit_with_surplus(self):
+        import json
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            lead="Nick_Karaoke"; body="abc"
+            midi=fixture(root,["title","artist","",".",lead],body=body)
+            cur=midi.with_suffix(".cur")
+            count=len(lead)+1+len(body)+1
+            cur.write_bytes(struct.pack("<"+"H"*(count+3),*(list(range(count))+[65535]*3)))
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["converted"],1,result)
+            parsed=core.read_xfile(out/"00001.xmid",verify_media=True)
+            self.assertEqual([x["text"] for x in parsed["lines"]],[lead,body])
+
+    def test_ambiguous_blank_marker_does_not_guess(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["title","artist","C",""],body="abc")
+            lyr=midi.with_suffix(".lyr");cur=midi.with_suffix(".cur")
+            lyr.write_bytes(lyr.read_bytes()+b"\r\ndef\r\n")
+            cur.write_bytes(struct.pack("<12H",*range(12)))
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["failed"],1,result)
+            self.assertIn("Ambiguous blank-line CUR alignment",result["errors"])
+
+    def test_observed_marker_normalized_only_after_full_track_validation(self):
+        import hashlib,json
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["title","artist","C",""],body="abc")
+            standard=midi.read_bytes()
+            legacy=direct.reader.OBSERVED_SMF_MARKER+standard[4:]
+            midi.write_bytes(legacy)
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["converted"],1,result)
+            row=json.loads(Path(result["report"]).read_text(encoding="utf-8"))
+            self.assertTrue(row["midi_header_normalized"])
+            self.assertEqual(row["original_midi_sha256"],hashlib.sha256(legacy).hexdigest())
+            target=out/"00001.xmid"
+            info=core.read_xfile(target,verify_media=True)
+            self.assertEqual(target.read_bytes()[info["mediaOffset"]:],standard)
+            self.assertEqual(midi.read_bytes(),legacy)
+            # Nonstandard marker alone is never sufficient to accept a file.
+            for data in (legacy[:-1],legacy+b"trailing",b"????"+standard[4:]):
+                with self.assertRaises(ValueError):
+                    direct.reader.midi_events(midi,raw_data=data,include_duration=True)
+
+
+class PriorReportRetryTests(unittest.TestCase):
+    def test_failed_only_mode_reuses_old_report_without_parser_cache(self):
+        import json
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["title","artist","C",""],body="abc")
+            first=direct.convert_folder(str(root),str(out))
+            self.assertEqual(first["converted"],1)
+            # Simulate report from v0.1.46: status/code/path but no stamp.
+            (out/".ncn-resume.json").unlink()
+            report=Path(first["report"])
+            row=json.loads(report.read_text(encoding="utf-8"))
+            row.pop("resume",None)
+            report.write_text(json.dumps(row)+"\n",encoding="utf-8")
+            original=direct.convert_one
+            with patch.object(direct,"convert_one",wraps=original) as convert:
+                result=direct.convert_folder(str(root),str(out),mode="failed_only")
+                self.assertEqual((result["report_skipped"],result["fast_resumed"],convert.call_count),(1,0,0),result)
+            with patch.object(direct,"convert_one",wraps=original) as convert:
+                full=direct.convert_folder(str(root),str(out),mode="verify")
+                self.assertEqual((full["report_skipped"],full["skipped"],convert.call_count),(0,1,1),full)
+
+class BufferedDiagnosticsTests(unittest.TestCase):
+    def test_csv_categories_summary_and_unchanged_sources(self):
+        import csv
+        import json
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["ชื่อจริง","ศิลปินจริง","C",""])
+            (root/"00002.mid").write_bytes(midi.read_bytes())
+            before={p.name:p.read_bytes() for p in root.iterdir()}
+            first=direct.convert_folder(str(root),str(out))
+            self.assertEqual((first["converted"],first["rejected"],first["failed"]),(1,1,1))
+            folder=Path(first["log_folder"])
+            def rows(folder,name):
+                raw=(folder/(name+".csv")).read_bytes()
+                self.assertTrue(raw.startswith(b"\xef\xbb\xbf"))
+                with (folder/(name+".csv")).open(encoding="utf-8-sig",newline="") as f:
+                    return list(csv.DictReader(f))
+            self.assertEqual(rows(folder,"converted")[0]["title"],"ชื่อจริง")
+            self.assertEqual(rows(folder,"rejected")[0]["error_code"],"MISSING_LYR_CUR")
+            self.assertEqual(rows(folder,"error"),[])
+            self.assertEqual(json.loads((folder/"summary.json").read_text(encoding="utf-8")),first)
+            second=direct.convert_folder(str(root),str(out))
+            self.assertEqual(second["skipped"],1)
+            self.assertEqual(len(rows(Path(second["log_folder"]),"existing")),1)
+            self.assertNotEqual(first["log_folder"],second["log_folder"])
+            self.assertEqual(before,{p.name:p.read_bytes() for p in root.iterdir()})
+            self.assertFalse(list(Path(d).rglob("*.sqlite*")))
+
+    def test_safe_cancel_flushes_partial_report(self):
+        import csv
+        import json
+        import threading
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            fixture(root,["ชื่อจริง","ศิลปินจริง","C",""])
+            (root/"00002.mid").write_bytes(b"bad")
+            cancel=threading.Event()
+            def progress(stats,message):
+                if stats["done"]:
+                    cancel.set()
+            result=direct.convert_folder(str(root),str(out),progress,cancel)
+            self.assertTrue(result["cancelled"])
+            self.assertEqual(result["done"],1)
+            self.assertEqual(len(Path(result["report"]).read_text(encoding="utf-8").splitlines()),1)
+            folder=Path(result["log_folder"])
+            with (folder/"converted.csv").open(encoding="utf-8-sig",newline="") as stream:
+                self.assertEqual(len(list(csv.DictReader(stream))),1)
+            self.assertTrue(json.loads((folder/"summary.json").read_text(encoding="utf-8"))["cancelled"])
+
+    def test_spreadsheet_formula_escaped(self):
+        self.assertEqual(direct.csv_cell("=1+1"),"'=1+1")
+        self.assertEqual(direct.csv_cell("ชื่อเพลง"),"ชื่อเพลง")
