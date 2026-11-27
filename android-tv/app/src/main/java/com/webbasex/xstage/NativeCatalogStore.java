@@ -34,6 +34,7 @@ final class NativeCatalogStore implements AutoCloseable {
     private String activeScope = "";
     private String activeRevision = "";
     private long activeCount;
+    private boolean previewOnly;
     private File activeFile;
     interface Progress {
         void update(long received, long total);
@@ -201,11 +202,20 @@ final class NativeCatalogStore implements AutoCloseable {
         }
     }
 
-    private static SQLiteDatabase openVerified(File file, boolean fullCheck) throws Exception {
+    private static SQLiteDatabase openVerified(File file, boolean fullCheck, boolean preview) throws Exception {
         SQLiteDatabase db = SQLiteDatabase.openDatabase(file.getAbsolutePath(), null,
                 SQLiteDatabase.OPEN_READONLY | SQLiteDatabase.NO_LOCALIZED_COLLATORS);
         boolean valid = false;
         try {
+            if (preview) {
+                require("xstage-search-index-v1".equals(scalar(db, "SELECT value FROM index_meta WHERE key='format'", null)) &&
+                    "pc-local".equals(scalar(db, "SELECT value FROM index_meta WHERE key='source_schema'", null)) &&
+                    "unverified-preview-only".equals(scalar(db, "SELECT value FROM index_meta WHERE key='media_identity'", null)), "Unsupported preview catalog");
+                if (fullCheck) require("ok".equals(scalar(db, "PRAGMA quick_check(1)", null)), "SQLite integrity check failed");
+                try (Cursor ignored = db.rawQuery("SELECT id,code,title,artist,path FROM songs LIMIT 0", null)) { ignored.getColumnCount(); }
+                valid = true;
+                return db;
+            }
             // Distinguish an old PC catalog from a damaged shared catalog.
             if (!"1".equals(scalar(db, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='catalog_meta'", null)))
                 throw new IOException("ฐาน PC รุ่นเก่ายังไม่มี songs.verified.sqlite3 · สร้างฐานยืนยัน XMID บน PC แล้วคัดลอกลง XStageKaraoke/DB");
@@ -224,7 +234,12 @@ final class NativeCatalogStore implements AutoCloseable {
         } finally { if (!valid) db.close(); }
     }
 
-    private static void validateBinding(SQLiteDatabase db, String sourceMD5, long sourceBytes) throws Exception {
+    private static void validateBinding(SQLiteDatabase db, String sourceMD5, long sourceBytes, boolean preview) throws Exception {
+        if (preview) {
+            require(sourceMD5.matches("[a-f0-9]{32}") && sourceMD5.equals(scalar(db,"SELECT value FROM index_meta WHERE key='source_md5'",null)) && Long.toString(sourceBytes).equals(scalar(db,"SELECT value FROM index_meta WHERE key='source_bytes'",null)), "Search index stale");
+            require(scalar(db,"SELECT COUNT(*) FROM songs",null).equals(scalar(db,"SELECT value FROM index_meta WHERE key='count'",null)), "Search index count mismatch");
+            return;
+        }
         boolean sidecar = "verified-compact-v1".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='pcSchema'", null));
         if (!sidecar && sourceMD5.isEmpty()) return;
         require(sidecar && sourceMD5.matches("[a-f0-9]{32}") &&
@@ -260,12 +275,13 @@ final class NativeCatalogStore implements AutoCloseable {
      */
     synchronized JSONObject open(String token, String sub, String root, String dbId,
                                  String fileId, Progress progress) throws Exception {
-        return open(token, sub, root, dbId, fileId, "", "", 0, progress);
+        return open(token, sub, root, dbId, fileId, "", "", 0, false, progress);
     }
     synchronized JSONObject open(String token, String sub, String root, String dbId,
-                                 String fileId, String sourceId, String sourceMD5, long sourceBytes, Progress progress) throws Exception {
+                                 String fileId, String sourceId, String sourceMD5, long sourceBytes, boolean preview, Progress progress) throws Exception {
         String owner = scope(sub, root);
-        String name = sourceId.isEmpty() ? "songs.sqlite3" : "songs.verified.sqlite3";
+        String name = sourceId.isEmpty() ? "songs.sqlite3" : preview ? "songs.search.sqlite3" : "songs.verified.sqlite3";
+        require(!preview || !sourceId.isEmpty(), "Missing preview source");
         if (!sourceId.isEmpty()) {
             JSONObject original = verifySource(token, sub, root, dbId, sourceId);
             require(sourceMD5.matches("[a-f0-9]{32}") && sourceBytes >= 100 &&
@@ -282,7 +298,7 @@ final class NativeCatalogStore implements AutoCloseable {
         if (database != null && database.isOpen() && owner.equals(activeScope) &&
                 revision.equals(activeRevision) && activeFile != null &&
                 activeFile.isFile() && activeFile.length() == size) {
-            validateBinding(database, sourceMD5, sourceBytes);
+            validateBinding(database, sourceMD5, sourceBytes, preview);
             return summary(true);
         }
         File folder = new File(directory, owner);
@@ -300,8 +316,8 @@ final class NativeCatalogStore implements AutoCloseable {
                         while ((n = in.read(b)) != -1) digest.update(b, 0, n);
                     }
                     require(md5.equals(hex(digest.digest())), "Cached checksum mismatch");
-                    candidate = openVerified(target, false);
-                    validateBinding(candidate, sourceMD5, sourceBytes);
+                    candidate = openVerified(target, false, preview);
+                    validateBinding(candidate, sourceMD5, sourceBytes, preview);
                     cached = true;
                 } catch (Exception invalid) {
                     if (candidate != null) candidate.close();
@@ -313,9 +329,9 @@ final class NativeCatalogStore implements AutoCloseable {
                 require(folder.getUsableSpace() >= DISK_RESERVE &&
                         size - partial <= folder.getUsableSpace() - DISK_RESERVE, "Insufficient local storage for catalog");
                 stream(fileId, token, temp, size, md5, progress);
-                try (SQLiteDatabase checked = openVerified(temp, true)) {
-                    validateBinding(checked, sourceMD5, sourceBytes);
-                    scalar(checked, "SELECT COUNT(*) FROM songs WHERE playable=1", null);
+                try (SQLiteDatabase checked = openVerified(temp, true, preview)) {
+                    validateBinding(checked, sourceMD5, sourceBytes, preview);
+                    scalar(checked, preview ? "SELECT COUNT(*) FROM songs" : "SELECT COUNT(*) FROM songs WHERE playable=1", null);
                 }
                 // Metadata may have changed during download. Keep the previous local
                 // catalog if Drive now reports a different revision or moved the file.
@@ -325,14 +341,14 @@ final class NativeCatalogStore implements AutoCloseable {
                         "Cloud catalog changed during download; retry synchronization");
                 // Atomic same-filesystem rename. Old revision is not removed here.
                 Os.rename(temp.getAbsolutePath(), target.getAbsolutePath());
-                candidate = openVerified(target, false);
+                candidate = openVerified(target, false, preview);
             }
-            validateBinding(candidate, sourceMD5, sourceBytes);
+            validateBinding(candidate, sourceMD5, sourceBytes, preview);
             if (!sourceId.isEmpty()) {
                 JSONObject latestOriginal = verifySource(token, sub, root, dbId, sourceId);
                 require(sourceMD5.equalsIgnoreCase(latestOriginal.optString("md5Checksum")) && Long.toString(sourceBytes).equals(latestOriginal.optString("size")), "Original catalog changed during download");
             }
-            long count = Long.parseLong(scalar(candidate, "SELECT COUNT(*) FROM songs WHERE playable=1", null));
+            long count = Long.parseLong(scalar(candidate, preview ? "SELECT COUNT(*) FROM songs" : "SELECT COUNT(*) FROM songs WHERE playable=1", null));
             SQLiteDatabase previous = database;
             database = candidate;
             candidate = null;
@@ -340,6 +356,7 @@ final class NativeCatalogStore implements AutoCloseable {
             activeRevision = revision;
             activeFile = target;
             activeCount = count;
+            previewOnly = preview;
             if (previous != null) previous.close();
             return summary(cached);
         } finally {
@@ -351,6 +368,7 @@ final class NativeCatalogStore implements AutoCloseable {
         JSONObject result = new JSONObject();
         result.put("revision", activeRevision);
         result.put("count", activeCount);
+        result.put("previewOnly", previewOnly);
         result.put("fromDisk", cached);
         return result;
     }
@@ -370,6 +388,16 @@ final class NativeCatalogStore implements AutoCloseable {
         requireScope(sub, root, revision);
         require(raw != null && raw.length() <= 256 && offset >= 0, "Invalid catalog query");
         String term = normalize(raw);
+        if (previewOnly) {
+            JSONArray items = new JSONArray();
+            if (term.isEmpty()) return new JSONObject().put("total",0).put("songs",items);
+            String where = "instr(lower(code||' '||title||' '||artist),?)>0";
+            long total = Long.parseLong(scalar(database, "SELECT COUNT(*) FROM songs WHERE "+where, new String[]{term}));
+            try (Cursor rows = database.rawQuery("SELECT code,title,artist FROM songs WHERE "+where+" ORDER BY id LIMIT 5 OFFSET ?", new String[]{term,Long.toString(offset)})) {
+                while(rows.moveToNext()) items.put(new JSONObject().put("code",rows.getString(0)).put("title",rows.getString(1)).put("artist",rows.getString(2)).put("previewOnly",true));
+            }
+            return new JSONObject().put("total",total).put("songs",items);
+        }
         JSONObject result = new JSONObject();
         JSONArray songs = new JSONArray();
         if (term.isEmpty()) return result.put("total", 0).put("songs", songs);
@@ -401,6 +429,7 @@ final class NativeCatalogStore implements AutoCloseable {
     synchronized JSONObject lookup(String sub, String root, String revision, String id,
                                    String code, String title, String artist) throws Exception {
         requireScope(sub, root, revision);
+        require(!previewOnly, "Preview cannot resolve playable songs");
         if (id != null && !id.isEmpty()) {
             JSONObject hit = firstSong("web_song_id=?", new String[]{id});
             if (hit != null) return hit;
@@ -429,6 +458,7 @@ final class NativeCatalogStore implements AutoCloseable {
 
     synchronized JSONObject randomSong(String sub, String root, String revision) throws Exception {
         requireScope(sub, root, revision);
+        require(!previewOnly, "Preview cannot select playable songs");
         if (activeCount == 0) return null;
         long offset = (long) (Math.random() * activeCount);
         try (Cursor c = database.rawQuery("SELECT web_song_id,payload FROM songs WHERE playable=1 ORDER BY ordinal,id LIMIT 1 OFFSET ?",
@@ -441,7 +471,7 @@ final class NativeCatalogStore implements AutoCloseable {
     }
 
     synchronized void cleanupObsolete() {
-        if (activeFile == null) return;
+        if (activeFile == null || previewOnly) return;
         File[] files = activeFile.getParentFile().listFiles();
         if (files != null) for (File item : files) {
             if (!item.equals(activeFile) && item.isFile() &&
@@ -455,6 +485,7 @@ final class NativeCatalogStore implements AutoCloseable {
         activeScope = "";
         activeRevision = "";
         activeCount = 0;
+        previewOnly = false;
         activeFile = null;
     }
 }
