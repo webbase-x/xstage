@@ -5,11 +5,26 @@ export async function createWebCatalogClient(owner,{disk=globalThis.XStageWebCat
   if(!owner||!disk?.available())throw Error('Web catalog disk unavailable');
   const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(owner));
   const ownerKey=Array.from(new Uint8Array(hash),x=>x.toString(16).padStart(2,'0')).join('');
-  const worker=workerFactory(),pending=new Map();
+  // An SAH pool cannot safely be installed concurrently by multiple tabs.
+  // Acquire the per-owner lease before creating the worker and hold it for
+  // its entire lifetime. Never bypass the lock or fall back to whole-file RAM.
+  if(!globalThis.navigator?.locks?.request)throw Error('เบราว์เซอร์ไม่รองรับการล็อกฐาน SQLite ในเครื่อง');
+  let releaseLease;
+  const hold=new Promise(resolve=>{releaseLease=resolve;});
+  let grantedResolve,grantedReject;
+  const granted=new Promise((resolve,reject)=>{grantedResolve=resolve;grantedReject=reject;});
+  void navigator.locks.request('xstage-opfs-sql:'+ownerKey,{ifAvailable:true},async lock=>{
+    if(!lock){grantedReject(Error('คลังเพลงกำลังเปิดในอีกแท็บหนึ่ง · ปิดแท็บเดิมแล้วลองใหม่'));return;}
+    grantedResolve();await hold;
+  }).catch(grantedReject);
+  await granted;
+  let worker;
+  try{worker=workerFactory();}catch(error){releaseLease();throw error;}
+  const pending=new Map();
   let closed=false,active=null;
   function dispose(error){
     if(closed)return;
-    closed=true;active=null;worker.terminate();
+    closed=true;active=null;try{worker.terminate();}finally{releaseLease();}
     for(const p of pending.values()){clearTimeout(p.timer);p.reject(error);}
     pending.clear();
   }
