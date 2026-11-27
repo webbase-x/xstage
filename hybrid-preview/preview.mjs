@@ -4,7 +4,7 @@ const retired=new Set(window.XSTAGE_RETIRED_DRIVE_ROOT_IDS||[]);
 const folder='application/vnd.google-apps.folder', validId=s=>typeof s==='string'&&/^[A-Za-z0-9_-]+$/.test(s);
 let token='',roots=[],generation=0,busy=false,report='';
 function status(s){$('status').textContent=s;}
-function reset(){generation++;token='';roots=[];busy=false;report='';$('result').textContent='';$('copy').disabled=true;$('root').replaceChildren();$('choose').hidden=true;$('clear').hidden=true;$('connect').disabled=false;status('จบการทดสอบ · ไม่เก็บ token');}
+function reset(){generation++;token='';roots=[];busy=false;report='';$('result').textContent='';$('copy').disabled=true;$('root').replaceChildren();$('choose').hidden=true;$('clear').hidden=true;$('connect').disabled=false;$('run').disabled=false;status('จบการทดสอบ · ไม่เก็บ token');}
 async function list(q,localToken,current){
  const results=[];const seen=new Set();let pageToken='';
  do{
@@ -61,4 +61,4 @@ $('run').onclick=async()=>{
  finally{if(current()){busy=false;$('run').disabled=false;$('connect').disabled=false;}}
 };
 $('clear').onclick=reset;$('copy').onclick=async()=>{try{await navigator.clipboard.writeText(report);status('คัดลอกผลแล้ว');}catch{status('เลือกข้อความผลทดสอบเพื่อคัดลอก');}};
-window.addEventListener('pagehide',()=>{generation++;token='';});
+window.addEventListener('pagehide',reset);

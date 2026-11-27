@@ -1,0 +1,23 @@
+name: Hybrid Google Range Preview
+on:
+  pull_request:
+    paths:
+      - 'hybrid-preview/**'
+      - 'scripts/hybrid-preview-test.mjs'
+      - '.github/workflows/test-hybrid-preview.yml'
+  push:
+    branches: [main]
+    paths: ['hybrid-preview/**','scripts/hybrid-preview-test.mjs','.github/workflows/test-hybrid-preview.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - run: node --check hybrid-preview/preview.mjs
+      - run: node scripts/hybrid-preview-test.mjs
