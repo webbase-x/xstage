@@ -166,6 +166,21 @@ class LocalMasterWorkflowTests(TestCase):
         with closing(sqlite3.connect(target)) as db:
             self.assertEqual(db.execute("SELECT title FROM songs").fetchone()[0], "replacement")
 
+    def test_catalog_fingerprint_detects_same_size_changed_bytes_and_cancel(self):
+        from karaoke.local_master import _catalog_fingerprint
+        first = self.data / "first.sqlite3"
+        second = self.data / "second.sqlite3"
+        first.write_bytes(b"first catalog")
+        second.write_bytes(b"first catalog")
+        self.assertEqual(_catalog_fingerprint(first), _catalog_fingerprint(second))
+        second.write_bytes(b"other catalog")
+        self.assertEqual(first.stat().st_size, second.stat().st_size)
+        self.assertNotEqual(_catalog_fingerprint(first), _catalog_fingerprint(second))
+        cancel = threading.Event()
+        cancel.set()
+        with self.assertRaises(InterruptedError):
+            _catalog_fingerprint(first, cancel)
+
     def test_cancel_transfer_does_not_remove_source(self):
         cancel = threading.Event()
         cancel.set()

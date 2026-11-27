@@ -219,7 +219,7 @@ async function inspectPackage(drive,file,check){
   const midiSize=parsed.midi.size;
   const identity=scope.XStageImportCore.songIdentity(parsed.document,parsed.code);
   return {file,parsed:{code:parsed.code,document:{lyricsMode:parsed.document.lyricsMode}},
-    midiHash,midiSize,packedMd5,identity};
+    midiHash,midiSize,packedMd5,identity,catalogMetadata:await scope.XStageImportCore.catalogMetadata?.(parsed)||{}};
 }
 // A count match alone is never proof. Match package IDs, checksums, sizes
 // and verified MIDI identities; duplicates need not occupy another DB row.
@@ -673,6 +673,7 @@ function createWorkflow(options={}){
               metadataComplete:Boolean(item.identity.identityComplete),
               lyricsMode:item.parsed.document.lyricsMode||'timed',
               sourceFormat:kind.toUpperCase(),
+              ...item.catalogMetadata,
               ...(kind==='xmid'?{xmid:media}:{xsk:media})};
             rows.set(ident,row);hashes.set(item.midiHash,row);
             const k=code.toLowerCase();if(!codes.has(k))codes.set(k,[]);
