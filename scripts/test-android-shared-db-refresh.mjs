@@ -70,4 +70,16 @@ function fixture(){
   const f=fixture();f.state.libraryRootId='retired';await f.poll();
   assert.equal(f.queries.length,0);
 }
+{
+  const f=fixture();f.folders=[{id:'db1'}];f.pointer={generation:'verified-v1'};f.state.queue=[];
+  f.state.androidTvCatalogRetryPending=true;
+  await f.poll();
+  assert.equal(f.queries.length,0,'Pending catalog retry must not start background Drive polling');
+  assert.equal(f.readCount,0);
+  f.state.androidTvCatalogRetryPending=false;
+  f.pointer={generation:'preview-v1',previewOnly:true};
+  await f.poll();assert.equal(f.readCount,0,'Search-only preview must never activate playback catalog');
+  f.pointer={generation:'verified-v1'};
+  await f.poll();assert.equal(f.state.catalogGeneration,'verified-v1','Verified catalog refresh resumes after retry completes');
+}
 console.log('PASS: Android/Web discovers PC-created SQLite, refreshes revisions and preserves playback; duplicate/retired/switch guards');
