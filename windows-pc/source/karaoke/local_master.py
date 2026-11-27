@@ -75,7 +75,8 @@ def snapshot(source, target):
         with closing(sqlite3.connect(stage)) as db:
             if db.execute("PRAGMA quick_check(1)").fetchone()[0] != "ok":
                 raise ValueError("สำเนาฐานเพลงไม่สมบูรณ์")
-            db.execute("PRAGMA journal_mode=DELETE")
+            if db.execute("PRAGMA journal_mode=DELETE").fetchone()[0].lower() != "delete":
+                raise ValueError("สำเนาฐานยังไม่เป็น SQLite แบบไฟล์เดียว")
         _prepare_replacement(target)
         _safe(target)
         os.replace(stage, target)
@@ -109,6 +110,9 @@ def activate(home, data, settings, *, installed=False):
             snapshot(local, backup)
             if current == "pc":
                 settings["pc_only_backup"] = backup.name
+        if pending.get("legacy_migration"):
+            from .legacy_catalog_migration import migrate_queue
+            migrate_queue(data, staged, settings)
         snapshot(staged, local)
         if not pending.get("local_only"):
             if settings.get("shared_drive_root") != pending["root"]:
@@ -171,7 +175,8 @@ def _catalog_fingerprint(path, cancel=None):
     return before.st_size, digest.hexdigest()
 
 
-def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchanged=None):
+def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchanged=None,
+                    pending=False, progress=None):
     """Publish a completed PC snapshot independently of catalog scanning.
 
     The destination must be the selected library root. Do not modify songs
@@ -180,13 +185,15 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
     from .shared_song_library import validate_shared
     from .shared_drive_layout import inspect
     home = Path(home).resolve(strict=True)
-    source = home / "DB" / "songs.sqlite3"
+    source = home / "DB" / (".online-pending.sqlite3" if pending else "songs.sqlite3")
     root = Path(inspect(drive_root)["root"])
     if not root.is_dir() or not (root / "SONGS").is_dir():
         raise ValueError("กรุณาคัดลอกโฟลเดอร์ SONGS ไปยังคลัง Google Drive ก่อน")
     _safe(source.parent)
     _safe(source)
     validate_sqlite_sidecars(source.parent, (source.name,))
+    if any(source.with_name(source.name + suffix).exists() for suffix in ("-wal","-shm","-journal")):
+        raise ValueError("ฐานร่วม PC มี journal ค้าง · ปิดฐานก่อนสร้างสำเนา Cloud")
     validate_shared(home, source)
     target = root / "DB" / "songs.sqlite3"
     _safe(target.parent)
@@ -202,7 +209,13 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
     if target.exists():
         validate_sqlite_sidecars(target.parent, (target.name,))
         if any(target.with_name(target.name + suffix).exists() for suffix in ("-wal", "-shm", "-journal")):
-            raise ValueError("ฐานปลายทางมี journal ค้าง · ไม่ซิงก์จนกว่าจะปิดฐานอย่างปลอดภัย")
+            if not overwrite:
+                raise FileExistsError("ฐานปลายทางมี WAL/SHM · ต้องยืนยันสำรองและปิดฐานก่อนแทนที่")
+            # Only SQLite may checkpoint a local destination. Never delete a
+            # WAL/SHM by filename: it may contain committed songs. A busy
+            # reader/writer or invalid journal stops publication.
+            stopped()
+            _prepare_replacement(target)
     original = _catalog_fingerprint(target, cancel)
     cache = home / "CACHE"
     _safe(cache)
@@ -216,8 +229,9 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
         # catalog. Resolve them from the selected folder at playback time.
         import json
         with closing(sqlite3.connect(stage)) as db:
-            for ident, payload, path, size in db.execute(
-                    "SELECT id,payload,path,original_file_size FROM songs"):
+            total = db.execute("SELECT COUNT(*) FROM songs").fetchone()[0]
+            for number,(ident, payload, path, size) in enumerate(db.execute(
+                    "SELECT id,payload,path,original_file_size FROM songs"),1):
                 stopped()
                 row = json.loads(payload)
                 parts = path.split("/")
@@ -249,6 +263,9 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
                         row["pendingDriveLink"] = True
                 db.execute("UPDATE songs SET payload=? WHERE id=?",
                            (json.dumps(row, ensure_ascii=False, separators=(",", ":")), ident))
+                if progress and (number % 25 == 0 or number == total):
+                    progress(dict(scanned=number,total=total,accepted=number,
+                                  duplicates=0,reused=0),"ตรวจเพลงก่อนส่งฐานไป Google Drive")
             db.commit()
         validate_shared(root, stage)
         stopped()
@@ -264,7 +281,10 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
             if not overwrite:
                 raise FileExistsError("มีฐานปลายทางแล้ว · ต้องยืนยันก่อนเขียนทับ")
             _prepare_replacement(target)
-            backup = target.with_name("songs-" + secrets.token_hex(8) + ".sqlite3.bak")
+            backup_dir = root / "BACKUP"
+            _safe(backup_dir)
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            backup = backup_dir / ("songs-" + secrets.token_hex(8) + ".sqlite3.bak")
             snapshot(target, backup)
         # Copy only the changed, complete snapshot to the destination volume.
         # Keep the final atomic rename on that volume; a local staging file
@@ -289,8 +309,23 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
             raise ValueError("ฐาน Cloud เปลี่ยนก่อนแทนที่ · ไม่เขียนทับ")
         stopped()
         os.replace(upload, target)
+        # Final check: never advertise a WAL-dependent published database.
+        if any(target.with_name(target.name + suffix).exists() for suffix in ("-wal","-shm","-journal")):
+            raise ValueError("มี journal ใหม่หลังคัดลอก · หยุดและตรวจฐานก่อนซิงก์")
         return target
     finally:
         stage.unlink(missing_ok=True)
         if upload is not None:
             upload.unlink(missing_ok=True)
+
+
+def prepare_legacy_export(home, source_db, drive_root, *, progress=None, cancel=None, cache_dir=None):
+    """Migrate from the authoritative PC catalog using the copied SONGS tree.
+    Return a verified pending master. The live PC master stays unchanged until
+    the normal restart/activation workflow backs it up. No cloud write here.
+    """
+    from .legacy_catalog_migration import migrate
+    from .shared_drive_layout import inspect
+    root = Path(inspect(drive_root)["root"])
+    return migrate(source_db, root / "SONGS", home, progress=progress,
+                   cancel=cancel, cache_dir=cache_dir)

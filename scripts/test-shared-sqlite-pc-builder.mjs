@@ -79,6 +79,73 @@ try{
   sqlite.close();
   assert.equal(fs.readdirSync(path.join(root,'DB')).length,1);
   console.log('PASS: Karaoke PC creates real shared SQLite, Online reads and republishes it, 2 songs match, duplicate MIDI is rejected');
+
+  // Reproduce the actual P0: a legacy SongLibrary DB (no catalog_meta)
+  // exported via the PC migration path, not a separately invented Web DB.
+  for(let n=4;n<=7;n++){
+    const code=String(10000+n);
+    fs.writeFileSync(path.join(directory,code+'.xmid'),makeXmid(code,'เพลงทดสอบ '+code,'ศิลปิน',midi1));
+  }
+  const home=path.join(temp,'PC');
+  fs.mkdirSync(path.join(home,'DB'),{recursive:true});
+  const studioSource=fileURLToPath(new URL('../songstudio-plus/',import.meta.url));
+  const migrate=[
+    "import hashlib,json,sqlite3,sys",
+    "from pathlib import Path",
+    "from contextlib import closing",
+    "from karaoke.library import SongLibrary",
+    "from karaoke.local_master import prepare_legacy_export,export_portable",
+    "from karaoke.shared_song_library import SharedSongLibrary",
+    "sys.path.insert(0,sys.argv[3])",
+    "from xmid_library_manager import scan",
+    "home,root=map(Path,sys.argv[1:3])",
+    "source=home/'DB/songs.sqlite3'",
+    "lib=SongLibrary(source)",
+    "lib.upsert_catalog([dict(path=str(f),code=f.stem,title='เพลง '+f.stem,artist='',kind='midi',format='xmid',playable=1,first_lyric='เนื้อเดิม') for f in sorted((root/'SONGS').rglob('*.xmid'))])",
+    "with closing(sqlite3.connect(source)) as db:",
+    "    original=dict(db.execute('SELECT code,id FROM songs'))",
+    "    assert len(original)==7",
+    "    assert not db.execute(\"SELECT 1 FROM sqlite_master WHERE name='catalog_meta'\").fetchone()",
+    "prepared=prepare_legacy_export(home,source,root)",
+    "assert prepared['accepted']==7",
+    "out=export_portable(home,root,pending=True,overwrite=True)",
+    "before=hashlib.sha256(out.read_bytes()).hexdigest()",
+    "pc=SharedSongLibrary(root,{})",
+    "assert pc.count()==7",
+    "assert set(r['code'] for r in pc.search('เพลง',limit=20))==set(original)",
+    "# Host executes the same bounded SQLite search used by Android. This",
+    "# validates the exact database bytes, not Android device instrumentation.",
+    "with closing(sqlite3.connect(out.as_uri()+'?mode=ro',uri=True)) as db:",
+    "    assert dict(db.execute('SELECT key,value FROM catalog_meta'))['pcSchema']=='shared-v1'",
+    "    sql=\"SELECT web_song_id,payload FROM songs WHERE playable=1 AND instr(lower(code)||' '||lower(title)||' '||lower(artist),?)>0 ORDER BY ordinal,id LIMIT 5 OFFSET ?\"",
+    "    pages=[db.execute(sql,('เพลง',offset)).fetchall() for offset in (0,5)]",
+    "    assert list(map(len,pages))==[5,2]",
+    "    payloads=[json.loads(payload) for page in pages for ident,payload in page]",
+    "    assert all(r['legacyPcId']==original[r['code']] for r in payloads)",
+    "    assert all(r['firstLyric']=='เนื้อเดิม' for r in payloads)",
+    "for folder in (root,root/'SONGS'):",
+    "    plan=scan(str(out),str(folder))",
+    "    assert plan['schema']=='shared-v1' and len(plan['rows'])==7",
+    "    assert all(r['webSongId'] and r['stamp'] and not r['actionable'] for r in plan['rows'])",
+    "assert hashlib.sha256(out.read_bytes()).hexdigest()==before",
+    "assert [f.name for f in out.parent.iterdir()]==['songs.sqlite3']",
+    "print(json.dumps(dict(ids=original,sha256=before)))"
+  ].join('\n');
+  const migrated=spawnSync(python,['-c',migrate,home,root,studioSource],
+    {encoding:'utf8',env:{...process.env,PYTHONPATH:source}});
+  assert.equal(migrated.status,0,migrated.stderr||migrated.stdout||String(migrated.error));
+  const proof=JSON.parse(migrated.stdout.trim().split(/\r?\n/).at(-1));
+  const sameBytes=fs.readFileSync(path.join(root,'DB/songs.sqlite3'));
+  assert.equal(createHash('sha256').update(sameBytes).digest('hex'),proof.sha256);
+  const portable=await scope.XStageDriveSQLite.read(new Uint8Array(sameBytes));
+  assert.equal(portable.songs.length,7);
+  for(const song of portable.songs){
+    assert.equal(song.legacyPcId,proof.ids[song.code]);
+    assert.equal(song.firstLyric,'เนื้อเดิม');
+    assert.equal(song.xmid.md5Checksum,createHash('md5')
+      .update(fs.readFileSync(path.join(root,song.xmid.path))).digest('hex'));
+  }
+  console.log('PASS: one PC legacy-migrated SQLite file; all 7 songs, original IDs, metadata and checksums match in PC, Web, Android host paging and Studio read-only audit');
 }finally{
   fs.rmSync(temp,{recursive:true,force:true});
 }

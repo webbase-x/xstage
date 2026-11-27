@@ -197,16 +197,57 @@ final class NativeCatalogStore implements AutoCloseable {
         }
     }
 
+    private static boolean hasTable(SQLiteDatabase db, String table) {
+        try (Cursor c = db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", new String[]{table})) {
+            return c.moveToFirst();
+        }
+    }
+
+    private static java.util.Set<String> columns(SQLiteDatabase db, String table) {
+        java.util.Set<String> names = new java.util.HashSet<>();
+        // Only internal constants are used as table names.
+        try (Cursor c = db.rawQuery("PRAGMA table_info(" + table + ")", null)) {
+            while (c.moveToNext()) names.add(c.getString(1));
+        }
+        return names;
+    }
+
+    private static void verifyCatalogSchema(SQLiteDatabase db) throws Exception {
+        require(hasTable(db, "songs"),
+                "ฐาน DB/songs.sqlite3 ไม่ใช่ฐานเพลง Karaoke (ไม่พบตาราง songs) · กรุณาตรวจไฟล์ในคลังที่เลือก");
+        java.util.Set<String> songColumns = columns(db, "songs");
+        if (!hasTable(db, "catalog_meta")) {
+            if (songColumns.containsAll(java.util.Arrays.asList("id","path","code","title","artist")) &&
+                    !songColumns.contains("web_song_id") && !songColumns.contains("payload"))
+                throw new IOException("ฐาน PC แบบใช้เฉพาะเครื่อง · ไม่มี catalog_meta และข้อมูลเชื่อม Drive · เปิด Karaoke PC แล้วสร้างฐานร่วม PC/Online ก่อนคัดลอกไป DB/songs.sqlite3");
+            throw new IOException("ฐานเพลงไม่มี catalog_meta · ไม่สามารถยืนยันโครงสร้างฐานร่วม PC/Online ได้ · กรุณาสร้างหรือส่งออกฐานร่วมจาก Karaoke PC ใหม่");
+        }
+        require(columns(db, "catalog_meta").containsAll(java.util.Arrays.asList("key","value")),
+                "ตาราง catalog_meta ไม่ตรงโครงสร้างฐานร่วม PC/Online");
+        java.util.Map<String,String> meta = new java.util.HashMap<>();
+        try (Cursor c = db.rawQuery("SELECT key,value FROM catalog_meta WHERE key IN ('format','schemaVersion','kind','pcSchema','pathBase')", null)) {
+            while (c.moveToNext()) meta.put(c.getString(0), c.getString(1));
+        }
+        require("xstage-sqlite3-v1".equals(meta.get("format")) &&
+                "1".equals(meta.get("schemaVersion")) &&
+                "snapshot".equals(meta.get("kind")) &&
+                "shared-v1".equals(meta.get("pcSchema")) &&
+                "SONGS".equals(meta.get("pathBase")),
+                "ฐาน SQLite ไม่ใช่ shared-v1 snapshot · กรุณาสร้างฐานร่วม PC/Online ใหม่");
+        require(hasTable(db, "removed_songs") && columns(db, "removed_songs").contains("web_song_id") &&
+                songColumns.containsAll(java.util.Arrays.asList("ordinal","id","web_song_id","payload","code","title","artist","playable","path","kind","search","duplicate_of","duplicate_state","midi_md5","midi_size")),
+                "ฐาน SQLite ขาดคอลัมน์เพลงร่วม PC/Online · กรุณาส่งออกฐานร่วมใหม่");
+    }
+
     private static SQLiteDatabase openVerified(File file, boolean fullCheck) throws Exception {
         SQLiteDatabase db = SQLiteDatabase.openDatabase(file.getAbsolutePath(), null,
                 SQLiteDatabase.OPEN_READONLY | SQLiteDatabase.NO_LOCALIZED_COLLATORS);
         boolean valid = false;
         try {
+            // Detect a wrong database before querying metadata or unsupported
+            // PC-only FTS tables. Never invent metadata or modify source bytes.
+            verifyCatalogSchema(db);
             if (fullCheck) require("ok".equals(scalar(db, "PRAGMA quick_check(1)", null)), "SQLite integrity check failed");
-            require("xstage-sqlite3-v1".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='format'", null)) &&
-                    "1".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='schemaVersion'", null)) &&
-                    "snapshot".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='kind'", null)) &&
-                    "shared-v1".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='pcSchema'", null)), "Unsupported SQLite catalog schema");
             // Verify required tables/columns without materializing all rows.
             try (Cursor ignored = db.rawQuery("SELECT ordinal,id,web_song_id,payload,code,title,artist,playable FROM songs LIMIT 0", null)) {
                 ignored.getColumnCount();

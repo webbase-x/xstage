@@ -215,6 +215,14 @@ async function read(bytes){
   const SQL=await engine();
   const db=new SQL.Database(bytes);
   try{
+    const table=name=>db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name=?",[name])[0]?.values?.length>0;
+    if(!table('songs'))fail('DB/songs.sqlite3 ไม่ใช่ฐานเพลง Karaoke (ไม่พบตาราง songs)');
+    if(!table('catalog_meta')){
+      const fields=new Set((db.exec('PRAGMA table_info(songs)')[0]?.values||[]).map(row=>String(row[1])));
+      if(['id','path','code','title','artist'].every(c=>fields.has(c))&&!fields.has('web_song_id')&&!fields.has('payload'))
+        fail('ฐาน PC แบบใช้เฉพาะเครื่อง · กรุณาสร้างฐานร่วม PC/Online แล้วคัดลอกไป DB/songs.sqlite3');
+      fail('ฐานเพลงไม่มี catalog_meta · กรุณาสร้างหรือส่งออกฐานร่วม PC/Online ใหม่');
+    }
     const check=db.exec('PRAGMA quick_check(1)');
     if(!check.length||check[0].values[0][0]!=='ok')
       fail('ฐานข้อมูลไม่ผ่านการตรวจความสมบูรณ์');
@@ -230,7 +238,8 @@ async function read(bytes){
       .map(row=>String(row[1])));
     const indexed=columns.has('midi_md5')&&columns.has('midi_size');
     const shared=metadata.pcSchema==='shared-v1';
-    if(shared&&!['id','ordinal','path','kind','search','duplicate_of','duplicate_state'].every(c=>columns.has(c)))
+    if(shared&&(metadata.pathBase!=='SONGS'||!table('removed_songs')||
+      !['id','ordinal','path','kind','search','duplicate_of','duplicate_state','web_song_id','payload','playable','midi_md5','midi_size'].every(c=>columns.has(c))))
       fail('ฐาน SQLite ไม่ครบโครงสร้าง PC/Online ร่วม');
     const rowsSql=shared
       ?'SELECT web_song_id,payload,midi_md5,midi_size,id,path,kind FROM songs ORDER BY ordinal'

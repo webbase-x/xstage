@@ -5066,7 +5066,7 @@ function androidTvAuthPanel(){
       '<div class="android-tv-auth-qr-wrap"><canvas id="android-tv-auth-qr" width="248" height="248" hidden aria-label="QR สำหรับเปิดหน้า Google Device Login"></canvas><div id="android-tv-auth-qr-wait">กำลังสร้าง QR…</div></div>'+
       '<div class="android-tv-auth-details">'+
         '<div id="android-tv-auth-url" class="android-tv-auth-url">https://www.google.com/device</div>'+
-        '<div class="android-tv-auth-code-label">รหัสเข้าสู่ระบบ</div>'+
+        '<div id="android-tv-auth-code-label" class="android-tv-auth-code-label">รหัสเข้าสู่ระบบ</div>'+
         '<div id="android-tv-auth-code" class="android-tv-auth-code">----</div>'+
         '<div id="android-tv-auth-status" class="android-tv-auth-status">กำลังเตรียมรหัส…</div>'+
       '</div>'+
@@ -5126,7 +5126,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1223';
+    script.src='./assets/vendor/qrcode.min.js?v=1224';
     script.async=true;
     let done=false;
     const finish=error=>{
@@ -5166,6 +5166,9 @@ function showAndroidTvAuthPanel(){
   setAndroidTvStageAccess(false);
   panel.hidden=false;
   notifyAndroidTvLoginReady();
+  $('android-tv-auth-title').textContent='เข้าสู่ระบบ Google ผ่านมือถือ';
+  panel.querySelector('.android-tv-auth-copy').textContent='สแกน QR ด้วยมือถือหรืออุปกรณ์อื่น แล้วกรอกรหัสที่แสดง';
+  $('android-tv-auth-code-label').textContent='รหัสเข้าสู่ระบบ';
   $('android-tv-auth-code').textContent='----';
   $('android-tv-auth-status').textContent='กำลังเตรียมรหัส…';
   $('android-tv-auth-retry').hidden=true;
@@ -5254,7 +5257,10 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
         const panel=androidTvAuthPanel();panel.hidden=false;
         const qr=$('android-tv-auth-qr');if(qr)qr.hidden=true;
         const wait=$('android-tv-auth-qr-wait');if(wait){wait.hidden=false;wait.textContent='Google เชื่อมต่อแล้ว';}
-        $('android-tv-auth-url').textContent='ไม่ต้องสแกน QR ใหม่';
+        $('android-tv-auth-title').textContent='ตรวจสอบฐานเพลง SQLite';
+        panel.querySelector('.android-tv-auth-copy').textContent='Google เชื่อมต่อแล้ว · ใช้ฐานร่วม shared-v1 ที่สร้างและส่งออกจาก Karaoke PC';
+        $('android-tv-auth-code-label').textContent='สถานะฐานเพลง';
+        $('android-tv-auth-url').textContent='ไม่ต้องสแกน QR ใหม่ · ตรวจ DB/songs.sqlite3 ในคลังที่เลือก';
         $('android-tv-auth-code').textContent='SQLite';
         $('android-tv-auth-status').textContent='เชื่อมต่อ Google สำเร็จ · '+String(error.message||'เปิดฐานเพลงไม่สำเร็จ');
         const retry=$('android-tv-auth-retry');retry.hidden=false;retry.textContent='ลองโหลดฐานเพลงใหม่';
