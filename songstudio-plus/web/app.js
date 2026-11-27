@@ -40,7 +40,7 @@
   let confirmationPending=false;
   let lyricDialogLoading=false;
   let issuesDialogLoading=false;
-  const labels={ncn:"NCN to XMID",import:"นำเข้าเพลง",drive:"Google Drive",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
+  const labels={"xmid-manager":"ตรวจสอบและจัดการเพลง XMID",ncn:"NCN to XMID",import:"นำเข้าเพลง",drive:"Google Drive",lyrics:"แก้ไขเนื้อร้อง",media:"เสียงและวิดีโอ",
                 preview:"ทดสอบก่อนสร้าง .x...",manual:"ตรวจและปาดเนื้อร้อง",build:"สร้างไฟล์ X-Stage",
                 library:"คลังเพลง",risks:"ประวัติเสี่ยงปาดเนื้อ"};
   const number = v => Number(v||0).toLocaleString("en-US");
@@ -1004,10 +1004,11 @@
       if(job?.kind==="ncn-direct"){
         const n=job.progress||{}, result=job.result||{};
         const s=Object.assign({},n,result);
-        text("ncn-progress", (job.error||job.message||"")+" · "+number(s.done)+" / "+number(s.total)+" · สำเร็จ "+number(s.converted)+" · มีไฟล์เดิม "+number(s.skipped)+" · ข้าม/ผิดพลาด "+number(s.failed));
-        $("ncn-progress-bar").max=Math.max(1,Number(s.total||0));
-        $("ncn-progress-bar").value=Number(s.done||0);
-        text("ncn-report",s.report?"รายงาน: "+s.report:"");
+        const percent=s.total?Math.min(100,Math.max(0,100*Number(s.done||0)/Number(s.total))):0;
+        text("ncn-progress", (job.error||job.message||"")+" · "+number(s.done)+" / "+number(s.total)+" ("+percent.toFixed(2)+"%) · สำเร็จ "+number(s.converted)+" · มีไฟล์เดิม "+number(s.skipped)+" (Fast Resume "+number(s.fast_resumed)+" / รายงานเดิม "+number(s.report_skipped)+") · ข้าม (ตรวจไม่ผ่าน) "+number(s.rejected)+" · ข้อผิดพลาด "+number(Math.max(0,Number(s.failed||0)-Number(s.rejected||0))));
+        $("ncn-progress-bar").max=100;
+        $("ncn-progress-bar").value=percent;
+        text("ncn-report",s.log_folder?"CSV / สรุป: "+s.log_folder+"\nJSONL: "+s.report:s.report?"รายงาน: "+s.report:"");
         const reasons=Object.entries(s.errors||{}).sort((a,b)=>b[1]-a[1]);
         text("ncn-errors","มีเครดิต "+number(s.with_credits)+" · มีคำเตือน "+number(s.with_warnings)+"\n"+reasons.map(([reason,count])=>number(count)+" · "+reason).join("\n"));
       }
@@ -2537,7 +2538,77 @@
     }catch(error){toast(error.message,true);}
   }
 
+  function bindXmidManager(){
+    let snapshot=null,offset=0,busy=false,all=false;
+    const selected=new Set(),excluded=new Set();
+    const names={duplicate:"เพลงซ้ำตามฐาน",no_title:"ไม่มีชื่อเพลง",no_artist:"ไม่มีศิลปิน",missing:"ไม่พบไฟล์",unsafe:"พาธไม่ปลอดภัย",shared_path:"อ้างไฟล์เดียวกัน",unplayable:"เล่นไม่ได้ตามฐาน"};
+    const category=()=>$("xm-filter").value;
+    const controls=()=>{const n=all?Math.max(0,(snapshot?.actionable||0)-excluded.size):selected.size;
+      text("xm-selected","เลือก "+number(n)+" รายการ");
+      for(const id of ["xm-move","xm-delete"])$(id).disabled=busy||!n||!snapshot||snapshot.shared;
+      for(const id of ["xm-scan","xm-filter","xm-all","xm-none","xm-db","xm-root","xm-db-pick","xm-root-pick","xm-dest","xm-dest-pick"])$(id).disabled=busy;
+      $("xm-prev").disabled=busy||!snapshot||offset===0;
+      $("xm-next").disabled=busy||!snapshot||offset+100>=snapshot.matches;
+      for(const box of $("xm-rows").querySelectorAll("input"))box.disabled=busy||box.dataset.actionable!=="yes";
+    };
+    function reset(){all=false;selected.clear();excluded.clear();}
+    function paint(){
+      const tbody=$("xm-rows");tbody.replaceChildren();
+      for(const row of snapshot?.rows||[]){
+        const tr=document.createElement("tr"),td=document.createElement("td"),box=document.createElement("input");
+        box.type="checkbox";box.dataset.actionable=row.actionable?"yes":"no";
+        box.checked=row.actionable&&(all?!excluded.has(row.id):selected.has(row.id));
+        box.addEventListener("change",()=>{if(all){if(box.checked)excluded.delete(row.id);else excluded.add(row.id);}else{if(box.checked)selected.add(row.id);else selected.delete(row.id);}controls();});
+        td.append(box);tr.append(td);
+        for(const value of [row.code,row.title,row.artist,row.issues.map(k=>names[k]||k).join(" · ")+" | "+row.path]){
+          const cell=document.createElement("td");cell.textContent=value;cell.style.overflowWrap="anywhere";tr.append(cell);
+        }
+        tbody.append(tr);
+      }
+      text("xm-summary",snapshot?"ตรวจ XMID "+number(snapshot.total)+" เพลง · "+Object.entries(snapshot.counts).map(([k,n])=>(names[k]||k)+" "+number(n)).join(" · ")+(snapshot.shared?" · ฐานร่วม: ตรวจได้เท่านั้น":""):"");
+      text("xm-page",snapshot?number(Math.min(offset+1,snapshot.matches))+"–"+number(Math.min(offset+100,snapshot.matches))+" / "+number(snapshot.matches):"");
+      controls();
+    }
+    async function request(path,payload,apply){
+      if(busy)return;busy=true;controls();
+      try{const data=await api(path,payload,0);apply(data);}
+      catch(error){text("xm-result",error.message);}
+      finally{busy=false;paint();}
+    }
+    function invalidate(){snapshot=null;offset=0;reset();paint();}
+    for(const [id,target,kind] of [["xm-db-pick","xm-db","database"],["xm-root-pick","xm-root","folder"],["xm-dest-pick","xm-dest","folder"]]){
+      $(id).addEventListener("click",()=>request("/api/pick",{kind,current:$(target).value},result=>{if(result.path){$(target).value=result.path;if(target!=="xm-dest")invalidate();}}));
+    }
+    for(const id of ["xm-db","xm-root"])$(id).addEventListener("input",invalidate);
+    $("xm-scan").addEventListener("click",()=>{
+      if(!state.ready||state.activeJob)return;
+      invalidate();$("xm-filter").value="all";text("xm-result","กำลังตรวจสอบ...");
+      void request("/api/xmid-manager/scan",{database:$("xm-db").value.trim(),songs:$("xm-root").value.trim()},result=>{snapshot=result;text("xm-result","ตรวจสอบเสร็จแล้ว");});
+    });
+    function load(next){
+      if(!snapshot)return;
+      void request("/api/xmid-manager/page",{token:snapshot.token,category:category(),offset:next},result=>{snapshot=result;offset=next;});
+    }
+    $("xm-filter").addEventListener("change",()=>{reset();load(0);});
+    $("xm-prev").addEventListener("click",()=>load(Math.max(0,offset-100)));
+    $("xm-next").addEventListener("click",()=>load(offset+100));
+    $("xm-all").addEventListener("click",()=>{reset();all=Boolean(snapshot?.actionable);paint();});
+    $("xm-none").addEventListener("click",()=>{reset();paint();});
+    for(const [id,action] of [["xm-move","move"],["xm-delete","delete"]]){
+      $(id).addEventListener("click",()=>{
+        if(!snapshot||busy||state.activeJob||snapshot.shared)return;
+        const destination=$("xm-dest").value.trim();
+        if(!destination){text("xm-result","เลือกโฟลเดอร์ปลายทางก่อน");return;}
+        if(!window.confirm("ยืนยันว่าได้ปิด Karaoke แล้ว และต้องการย้ายไฟล์ที่เลือกออกจากคลัง (กู้คืนได้) ฐานเพลงจะยังไม่เปลี่ยน กรุณาตรวจ/อัปเดตฐานใน Karaoke ภายหลัง"))return;
+        void request("/api/xmid-manager/relocate",{token:snapshot.token,category:category(),ids:[...selected],all_selected:all,excluded:[...excluded],destination,action,confirmed:true},result=>{
+          invalidate();text("xm-result","ย้ายแล้ว "+number(result.moved)+" · ไม่สำเร็จ "+number(result.failed)+" · รายงาน "+result.log+" · กรุณาอัปเดตฐานใน Karaoke");
+        });
+      });
+    }
+    paint();
+  }
   function bind(){
+    bindXmidManager();
     for(const [id,target] of [["ncn-source-pick","ncn-source"],["ncn-dest-pick","ncn-dest"]]){
       $(id).addEventListener("click",async()=>{
         $(id).disabled=true;
@@ -2552,7 +2623,7 @@
       if(!state.ready||state.activeJob)return;
       const source=$("ncn-source").value.trim(),destination=$("ncn-dest").value.trim();
       if(!source||!destination)return toast("เลือกต้นทางและปลายทาง",true);
-      void startJob("ncn-direct",{source,destination});
+      void startJob("ncn-direct",{source,destination,mode:$("ncn-mode").value});
     });
     $("ncn-stop").addEventListener("click",()=>{$("cancel-job").click();});
     $("toast-dismiss").addEventListener("click",dismissToast);
