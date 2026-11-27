@@ -106,6 +106,10 @@ final class NativeCatalogStore implements AutoCloseable {
     // Strict root -> DB -> songs.sqlite3 verification, including account identity.
     private static JSONObject verifySource(String token, String sub, String root,
                                            String dbId, String fileId) throws Exception {
+        return verifySource(token, sub, root, dbId, fileId, "songs.sqlite3");
+    }
+    private static JSONObject verifySource(String token, String sub, String root,
+                                           String dbId, String fileId, String name) throws Exception {
         JSONObject account = json("https://openidconnect.googleapis.com/v1/userinfo", token);
         require(account.optBoolean("email_verified") && sub.equals(account.optString("sub")), "Google account changed");
         JSONObject rootMeta = metadata(root, token);
@@ -117,7 +121,7 @@ final class NativeCatalogStore implements AutoCloseable {
                 "application/vnd.google-apps.folder".equals(folder.optString("mimeType")), "Invalid DB folder");
         JSONObject file = metadata(fileId, token);
         verifyParent(file, dbId);
-        require(fileId.equals(file.optString("id")) && "songs.sqlite3".equals(file.optString("name")) &&
+        require(fileId.equals(file.optString("id")) && name.equals(file.optString("name")) &&
                 !"application/vnd.google-apps.shortcut".equals(file.optString("mimeType")), "Invalid catalog file");
         return file;
     }
@@ -206,7 +210,8 @@ final class NativeCatalogStore implements AutoCloseable {
             require("xstage-sqlite3-v1".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='format'", null)) &&
                     "1".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='schemaVersion'", null)) &&
                     "snapshot".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='kind'", null)) &&
-                    "shared-v1".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='pcSchema'", null)), "Unsupported SQLite catalog schema");
+                    ("shared-v1".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='pcSchema'", null)) ||
+                    "verified-compact-v1".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='pcSchema'", null))), "Unsupported SQLite catalog schema");
             // Verify required tables/columns without materializing all rows.
             try (Cursor ignored = db.rawQuery("SELECT ordinal,id,web_song_id,payload,code,title,artist,playable FROM songs LIMIT 0", null)) {
                 ignored.getColumnCount();
@@ -216,6 +221,18 @@ final class NativeCatalogStore implements AutoCloseable {
         } finally { if (!valid) db.close(); }
     }
 
+    private static void validateBinding(SQLiteDatabase db, String sourceMD5, long sourceBytes) throws Exception {
+        boolean sidecar = "verified-compact-v1".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='pcSchema'", null));
+        if (!sidecar && sourceMD5.isEmpty()) return;
+        require(sidecar && sourceMD5.matches("[a-f0-9]{32}") &&
+                "xstage-verified-compact-v1".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='mediaIdentity'", null)) &&
+                sourceMD5.equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='sourceMD5'", null)) &&
+                Long.toString(sourceBytes).equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='sourceBytes'", null)) &&
+                "0".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='rejectedCount'", null)), "Verified catalog stale or incomplete");
+        String count = scalar(db, "SELECT COUNT(*) FROM songs WHERE playable=1", null);
+        require(!"0".equals(count) && count.equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='verifiedCount'", null)) &&
+                count.equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='expectedCount'", null)), "Verified count mismatch");
+    }
     private static String contentRevision(String md5, long size) {
         return md5 + "-" + size;
     }
@@ -227,8 +244,19 @@ final class NativeCatalogStore implements AutoCloseable {
      */
     synchronized JSONObject open(String token, String sub, String root, String dbId,
                                  String fileId, Progress progress) throws Exception {
+        return open(token, sub, root, dbId, fileId, "", "", 0, progress);
+    }
+    synchronized JSONObject open(String token, String sub, String root, String dbId,
+                                 String fileId, String sourceId, String sourceMD5, long sourceBytes, Progress progress) throws Exception {
         String owner = scope(sub, root);
-        JSONObject info = verifySource(token, sub, root, dbId, fileId);
+        String name = sourceId.isEmpty() ? "songs.sqlite3" : "songs.verified.sqlite3";
+        if (!sourceId.isEmpty()) {
+            JSONObject original = verifySource(token, sub, root, dbId, sourceId);
+            require(sourceMD5.matches("[a-f0-9]{32}") && sourceBytes >= 100 &&
+                sourceMD5.equalsIgnoreCase(original.optString("md5Checksum")) &&
+                Long.toString(sourceBytes).equals(original.optString("size")), "Original catalog revision changed");
+        }
+        JSONObject info = verifySource(token, sub, root, dbId, fileId, name);
         long size = Long.parseLong(info.optString("size", "0"));
         String md5 = info.optString("md5Checksum", "").toLowerCase(Locale.ROOT);
         require(size >= 100 && md5.matches("[a-f0-9]{32}"), "Missing catalog size/checksum");
@@ -238,6 +266,7 @@ final class NativeCatalogStore implements AutoCloseable {
         if (database != null && database.isOpen() && owner.equals(activeScope) &&
                 revision.equals(activeRevision) && activeFile != null &&
                 activeFile.isFile() && activeFile.length() == size) {
+            validateBinding(database, sourceMD5, sourceBytes);
             return summary(true);
         }
         File folder = new File(directory, owner);
@@ -256,6 +285,7 @@ final class NativeCatalogStore implements AutoCloseable {
                     }
                     require(md5.equals(hex(digest.digest())), "Cached checksum mismatch");
                     candidate = openVerified(target, false);
+                    validateBinding(candidate, sourceMD5, sourceBytes);
                     cached = true;
                 } catch (Exception invalid) {
                     if (candidate != null) candidate.close();
@@ -268,17 +298,23 @@ final class NativeCatalogStore implements AutoCloseable {
                         size - partial <= folder.getUsableSpace() - DISK_RESERVE, "Insufficient local storage for catalog");
                 stream(fileId, token, temp, size, md5, progress);
                 try (SQLiteDatabase checked = openVerified(temp, true)) {
+                    validateBinding(checked, sourceMD5, sourceBytes);
                     scalar(checked, "SELECT COUNT(*) FROM songs WHERE playable=1", null);
                 }
                 // Metadata may have changed during download. Keep the previous local
                 // catalog if Drive now reports a different revision or moved the file.
-                JSONObject latest = verifySource(token, sub, root, dbId, fileId);
+                JSONObject latest = verifySource(token, sub, root, dbId, fileId, name);
                 require(size == Long.parseLong(latest.optString("size", "0")) &&
                         md5.equalsIgnoreCase(latest.optString("md5Checksum", "")),
                         "Cloud catalog changed during download; retry synchronization");
                 // Atomic same-filesystem rename. Old revision is not removed here.
                 Os.rename(temp.getAbsolutePath(), target.getAbsolutePath());
                 candidate = openVerified(target, false);
+            }
+            validateBinding(candidate, sourceMD5, sourceBytes);
+            if (!sourceId.isEmpty()) {
+                JSONObject latestOriginal = verifySource(token, sub, root, dbId, sourceId);
+                require(sourceMD5.equalsIgnoreCase(latestOriginal.optString("md5Checksum")) && Long.toString(sourceBytes).equals(latestOriginal.optString("size")), "Original catalog changed during download");
             }
             long count = Long.parseLong(scalar(candidate, "SELECT COUNT(*) FROM songs WHERE playable=1", null));
             SQLiteDatabase previous = database;
