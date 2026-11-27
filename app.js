@@ -56,6 +56,7 @@ const state = {
   userStopped: false, userPaused:false, resumeAfterInterruption:false, visualScale: 1,
   catalogPointerId:'',catalogGeneration:'',catalogPolling:false,catalogCache:new Map(),
   nativeCatalog:null,nativeCatalogDeferred:null,
+  diskQueueTimer:null,diskQueueTask:null,diskQueueReady:new Set(),diskQueueFailed:new Set(),
   libraryRootId:'',libraryRootCanShare:false,libraryRootOwnedByMe:false,libraryRootOwnerEmail:'',availableLibraries:[],
   queuePreload:null,queuePrepared:null,queuePreloadTimer:null,queuePreloadVersion:0,
   queuePreparedCache:new Map(),queuePreloadSkipped:new Set(),
@@ -1351,9 +1352,7 @@ async function loadSongVideo(song,request,token,signal,{forceCompatible=false}={
     if(getFileId(media)===getFileId(song.audio)&&state.objectUrl){
       karaokeVideo.src=state.objectUrl;
     }else{
-      const response=useOriginal
-        ?await privateFile(song.originalVideo.fileId,token,{signal})
-        :await privateFile(song.video.fileId,token,{signal});
+      const response=await privateMediaFile(media,token,{signal});
       const data=await response.blob();
       if(revision!==videoLoadRevision||request!==state.requestId||
           signal?.aborted||token!==state.token||state.current!==song)return;
@@ -1502,6 +1501,7 @@ async function clearPerformanceCache(){
   releaseQueuePreload();
   state.catalogCache.clear();
   state.medleyCache=null;state.medleyPrefetch=null;state.medleyUpcoming=null;
+  resetDiskQueuePreload();
   await clearCatalogStorage();
   if('caches' in window){
     try{
@@ -1670,6 +1670,29 @@ async function privateFile(id, token, opts = {}) {
   if (!r.ok) throw driveError(r.status, 'ไฟล์เพลงส่วนตัว');
   return r;
 }
+function queuedMediaParts(song){
+  if(!song)return [];
+  if(song.xmid||song.xsk)return [song.xmid||song.xsk].filter(Boolean);
+  return [song.midi||song.audio,song.lyrics].filter(Boolean);
+}
+function diskPreloadCount(){
+  try{
+    const value=localStorage.getItem('xstage-disk-preload-count')||'3';
+    if(value==='all')return Infinity;
+    return [0,1,3,5].includes(Number(value))?Number(value):3;
+  }catch{return 3;}
+}
+function privateMediaFile(media,token,opts={}){
+  const id=getFileId(media),cache=window.XStagePrivateMediaCache;
+  const fetcher=()=>privateFile(id,token,opts);
+  if(!cache?.available()||!state.accountSub||!state.libraryRootId||isRetiredDriveRoot(state.libraryRootId))
+    return opts.cacheOnly?Promise.resolve(null):fetcher();
+  const sub=state.accountSub,root=state.libraryRootId;
+  const owner=libraryCacheOwner(sub,root);
+  const current=()=>state.token===token&&state.accountSub===sub&&state.libraryRootId===root&&!isRetiredDriveRoot(root);
+  const pinned=[state.current,...state.queue.slice(0,diskPreloadCount())].flatMap(queuedMediaParts);
+  return cache.getOrFetch({owner,media,fetcher,signal:opts.signal,current,pinned,cacheOnly:!!opts.cacheOnly});
+}
 // High-throughput private Drive reads for bounded media files. Parallel
 // requests are permitted only when Google returns *exact* 206 byte ranges.
 // Otherwise fall back to the original single HTTP stream, with no truncation.
@@ -1682,6 +1705,8 @@ function fastDownloadParts(bytes){
   return mobile?2:bytes>=64*FAST_DOWNLOAD_MIB?4:2;
 }
 async function fastPrivateBlob(id,token,opts={}){
+  if(opts.md5Checksum&&typeof privateMediaFile==='function')
+    return (await privateMediaFile({fileId:id,size:opts.size,md5Checksum:opts.md5Checksum},token,opts)).blob();
   const size=Number(opts.size);
   const parts=fastDownloadParts(size);
   if(parts===1)return (await privateFile(id,token,opts)).blob();
@@ -1737,7 +1762,8 @@ async function fastPrivateBlob(id,token,opts={}){
 }
 
 async function privateJson(id, token, opts) {
-  const response = await privateFile(id, token, opts);
+  const response = opts?.media&&typeof privateMediaFile==='function'
+    ?await privateMediaFile(opts.media,token,opts):await privateFile(id,token,opts);
   try { return await response.json(); }
   catch { throw Error('ไฟล์ JSON บน Drive ไม่ถูกต้อง'); }
 }
@@ -2827,6 +2853,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   const pendingSearch=keepAuth?String(ui.search?.value||''):'';
   const oldToken = state.token;
   resetNativeCatalogClient();
+  resetDiskQueuePreload();
   state.requestId++;
   state.controller?.abort(); state.controller = null; state.loading = false;
   window.XStageMIDIPiano?.setSong({bytes:null});
@@ -3535,7 +3562,9 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
   // Do not duplicate a large SF2/SF3 bank during speculative prefetch.
   const fontTask=prefetch?Promise.resolve({bytes:null,pending:null}):
     getStartupSoundFont(token,signal);
-  const response=await privateFile(fileId,token,{signal});
+  const response=typeof privateMediaFile==='function'
+    ?await privateMediaFile(isXmid?song.xmid:song.xsk,token,{signal})
+    :await privateFile(fileId,token,{signal});
   const {bytes:fontBytes,pending:lateFont}=await fontTask;
   const packed=await response.blob();
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
@@ -3690,9 +3719,9 @@ async function prepareQueuedSong(song,token,signal){
     if(!sourceSize||sourceSize>12*monitor.MiB||
        !monitor.canHold(sourceSize*2,memoryResources()))return null;
     const [source,fontBytes,lyrics]=await Promise.all([
-      privateFile(song.midi.fileId,token,{signal}),
+      typeof privateMediaFile==='function'?privateMediaFile(song.midi,token,{signal}):privateFile(song.midi.fileId,token,{signal}),
       isLive?null:window.XStageBrowserMidi?.selectedFont(token,signal),
-      getFileId(song.lyrics)?privateJson(song.lyrics.fileId,token,{signal}):null
+      getFileId(song.lyrics)?privateJson(song.lyrics.fileId,token,{signal,media:song.lyrics}):null
     ]);
     if(!window.XStageBrowserMidi)throw Error('ยังไม่พบตัวเรนเดอร์ MIDI');
     const bytes=new Uint8Array(await source.arrayBuffer());
@@ -3724,8 +3753,8 @@ async function prepareQueuedSong(song,token,signal){
   if(!(limit>0)||(size>0&&(size>limit||
      !monitor.canHold(size*1.15,memoryResources()))))return null;
   const [response,lyrics]=await Promise.all([
-    privateFile(song.audio.fileId,token,{signal}),
-    privateJson(song.lyrics.fileId,token,{signal})
+    typeof privateMediaFile==='function'?privateMediaFile(song.audio,token,{signal}):privateFile(song.audio.fileId,token,{signal}),
+    privateJson(song.lyrics.fileId,token,{signal,media:song.lyrics})
   ]);
   const reported=Number(response.headers?.get?.('Content-Length')||0);
   if(reported&&(reported>limit||!monitor.canHold(reported*1.15,memoryResources()))){
@@ -3762,6 +3791,7 @@ async function prepareQueuedSong(song,token,signal){
 function scheduleQueuePreload(){
   clearTimeout(state.queuePreloadTimer);
   trimQueueCache();
+  if(typeof scheduleDiskQueuePreload==='function')scheduleDiskQueuePreload();
   if(!state.token)return;
   if(!state.queue.length){
     if(state.queuePreload||state.queuePreparedCache.size)releaseQueuePreload();
@@ -3797,6 +3827,62 @@ function scheduleQueuePreload(){
   // Start the next requested track's download on the next event-loop turn.
   // Do not delay a warm queue behind the random-medley scheduler.
   state.queuePreloadTimer=setTimeout(()=>{void preloadFirstQueueSong(next,state.token);},0);
+}
+function resetDiskQueuePreload(){
+  clearTimeout(state.diskQueueTimer);state.diskQueueTimer=null;
+  state.diskQueueTask?.controller.abort();state.diskQueueTask=null;
+  state.diskQueueReady.clear();state.diskQueueFailed.clear();
+}
+function scheduleDiskQueuePreload(){
+  clearTimeout(state.diskQueueTimer);
+  if(!state.token||!window.XStagePrivateMediaCache?.available()||!diskPreloadCount()){
+    resetDiskQueuePreload();return;
+  }
+  const windowSongs=state.queue.slice(0,diskPreloadCount());
+  for(const song of state.diskQueueReady)if(!windowSongs.includes(song))state.diskQueueReady.delete(song);
+  for(const song of state.diskQueueFailed)if(!windowSongs.includes(song))state.diskQueueFailed.delete(song);
+  const next=windowSongs.find(song=>!state.diskQueueReady.has(song)&&!state.diskQueueFailed.has(song));
+  if(state.diskQueueTask){
+    if(state.diskQueueTask.song===next&&state.diskQueueTask.token===state.token)return;
+    state.diskQueueTask.controller.abort();state.diskQueueTask=null;
+  }
+  if(!next)return;
+  // Let the existing RAM preloader prepare the immediate song first; the
+  // disk queue runs serially after it and never raises its RAM allowance.
+  state.diskQueueTimer=setTimeout(()=>{
+    if(!state.queue.includes(next)||state.loading||state.queuePreload){
+      if(state.queue.includes(next))scheduleDiskQueuePreload();
+      return;
+    }
+    void preloadQueueFilesToDisk(next,state.token);
+  },500);
+}
+async function preloadQueueFilesToDisk(song,token){
+  if(state.diskQueueTask||!token||state.token!==token||!state.queue.includes(song))return;
+  const controller=new AbortController(),task={song,token,controller};
+  state.diskQueueTask=task;
+  try{
+    if(song.pendingDriveLink===true)await resolvePcDriveLink(song,token,controller.signal);
+    const parts=queuedMediaParts(song);
+    if(!parts.length||parts.some(media=>!window.XStagePrivateMediaCache.cacheable(media))){
+      state.diskQueueFailed.add(song);return;
+    }
+    for(const media of parts){
+      const response=await privateMediaFile(media,token,{signal:controller.signal,cacheOnly:true});
+      if(!response){state.diskQueueFailed.add(song);return;}
+      // The verified file is now on disk; do not materialize its Blob here.
+      try{void response.body?.cancel?.().catch(()=>{});}catch{}
+    }
+    if(state.diskQueueTask===task&&state.queue.includes(song)&&state.token===token)
+      state.diskQueueReady.add(song);
+  }catch(error){
+    if(error?.name!=='AbortError'&&state.diskQueueTask===task)state.diskQueueFailed.add(song);
+  }finally{
+    if(state.diskQueueTask===task){
+      state.diskQueueTask=null;
+      if(state.token===token)renderQueue();
+    }
+  }
 }
 function setMidiEngineStatus(engine){
   const label=$('xstage-midi-engine-status');
@@ -3984,9 +4070,12 @@ function renderQueue() {
     const info=element('div','queue-info');
     const waiting=state.queuePreload?.song===song;
     const ready=state.queuePreparedCache.has(song);
+    const diskReady=state.diskQueueReady?.has(song);
+    const diskLoading=state.diskQueueTask?.song===song;
     info.append(element('strong','',song.title||'ไม่ระบุชื่อเพลง'),
       element('small','',(song.artist||song.code||'')+
         (ready?' · เตรียมพร้อมเล่นแล้ว':waiting?' · กำลังโหลดรอในงบ RAM':
+          diskReady?' · เก็บไฟล์ในเครื่องแล้ว':diskLoading?' · กำลังบันทึกไฟล์ลงเครื่อง':
           state.queuePreloadSkipped.has(song)?' · รอโหลดเมื่อถึงคิว':'')));
     const buttons=element('div','queue-controls');
     const up=control('↑',()=>moveQueue(i,-1),'เลื่อนขึ้น');up.disabled=i===0;
@@ -4321,12 +4410,12 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     let embeddedKaraokeLyrics=null,liveMidiBytes=null,liveFontBytes=null,lateFontPromise=null;
     const loadMedia=async()=>{
       if(!getFileId(song.midi))return fastPrivateBlob(song.audio.fileId,token,
-        {signal:controller.signal,size:Number(song.audio.size)||0});
+        {signal:controller.signal,size:Number(song.audio.size)||0,md5Checksum:song.audio.md5Checksum});
       if(!window.XStageBrowserMidi)throw Error('ไม่พบเครื่องเล่น MIDI ของเว็บ กรุณาอัปเดตหน้าเว็บ');
       setPlayStatus('กำลังโหลด MIDI และ SoundFont จาก Google Drive…');
       const fontTask=getStartupSoundFont(token,controller.signal);
       const midiBlob=await fastPrivateBlob(song.midi.fileId,token,
-        {signal:controller.signal,size:Number(song.midi.size)||0});
+        {signal:controller.signal,size:Number(song.midi.size)||0,md5Checksum:song.midi.md5Checksum});
       const {bytes:fontBytes,pending:lateFont}=await fontTask;
       lateFontPromise=lateFont;
       if(controller.signal.aborted)throw new DOMException('ยกเลิก','AbortError');
@@ -4367,7 +4456,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       [audio,lyrics]=await boundedPlaybackTask(Promise.all([
         loadMedia(),
         getFileId(song.lyrics)
-          ?privateJson(song.lyrics.fileId,token,{signal:controller.signal})
+          ?privateJson(song.lyrics.fileId,token,{signal:controller.signal,media:song.lyrics})
           :Promise.resolve(null)
       ]),120,'เตรียมเพลงจาก Google Drive/เรนเดอร์ MIDI นานเกินไป',controller);
       if(!lyrics&&song.sourceFormat==='KAR')lyrics=embeddedKaraokeLyrics;
@@ -5426,6 +5515,16 @@ ui.search.addEventListener('keydown',onSearchKey);
 bindSearchPaging(ui.songs,appendLiveSearchPage);
 ui.search.addEventListener('blur',restoreViewportAfterKeyboard);
 
+{
+  const select=$('xstage-disk-preload-count');
+  if(select){
+    const n=diskPreloadCount();select.value=n===Infinity?'all':String(n);
+    select.addEventListener('change',()=>{
+      try{localStorage.setItem('xstage-disk-preload-count',select.value);}catch{}
+      state.diskQueueFailed.clear();scheduleDiskQueuePreload();renderQueue();
+    });
+  }
+}
 ui.clearQueue.addEventListener('click',()=>{state.queue.length=0;renderQueue();setPlayStatus('ล้างคิวแล้ว');});
 ui.playPause.addEventListener('click',togglePlayback);
 ui.cancelCurrent.addEventListener('click',cancelCurrentSong);
@@ -5976,6 +6075,7 @@ window.addEventListener('offline',()=>setStatus('อุปกรณ์ออฟ�
 window.addEventListener('online',()=>{
   if(state.token){
     state.queuePreloadSkipped.clear();
+    state.diskQueueFailed.clear();
     state.medleyPreloadRetryAt=0;
     scheduleQueuePreload();
     void pollPublishedCatalog();
