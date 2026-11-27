@@ -284,8 +284,15 @@
     const reply=(type,message)=>send(conn,{type,requestId,message});
     if(!state.token){reply('request-error','จอ TV ยังไม่เปิดคลังเพลง');return;}
     if(state.queue.length>=150){reply('request-error','คิวเต็มแล้ว กรุณารอ');return;}
-    if(!Number.isSafeInteger(msg.index)||msg.index<0||msg.index>=state.songs.length){reply('request-error','ไม่พบเพลงที่เลือก กรุณาค้นหาใหม่');return;}
-    const song=state.songs[msg.index];if(!playable(song)){reply('request-error','เพลงนี้ยังเล่นไม่ได้');return;}
+    if(!Number.isSafeInteger(msg.index)||msg.index<0){reply('request-error','ไม่พบเพลงที่เลือก กรุณาค้นหาใหม่');return;}
+    let song;
+    if(state.nativeCatalog){
+      const saved=conn.xstageNativeResults;
+      if(saved?.capability!==state.nativeCatalog.capability){reply('request-error','ฐานเพลงเปลี่ยน กรุณาค้นหาใหม่');return;}
+      const id=saved.items.get(msg.index);
+      if(id)song=catalogSongById(id);
+    }else song=state.songs[msg.index];
+    if(!playable(song)){reply('request-error','ไม่พบเพลงที่เลือกหรือเพลงยังเล่นไม่ได้ กรุณาค้นหาใหม่');return;}
     const now=Date.now();while(limits.length&&now-limits[0]>60_000)limits.shift();
     if(limits.length>=8){reply('request-error','ขอเพลงบ่อยเกินไป กรุณารอสักครู่');return;}
     limits.push(now);
@@ -326,6 +333,7 @@
   function adminResult(entry,action,ok,message,data){send(entry.conn,{type:'admin-result',action,ok,message,data});}
   function findSongForImport(item){
     const code=String(item?.code||'').trim(),title=String(item?.title||'').trim().toLocaleLowerCase('th'),artist=String(item?.artist||'').trim().toLocaleLowerCase('th');
+    if(state.nativeCatalog)return catalogFindSong('',code,title,artist);
     if(code){const hit=state.songs.find(song=>String(song.code||'').trim()===code&&playable(song));if(hit)return hit;}
     if(title)return state.songs.find(song=>String(song.title||'').trim().toLocaleLowerCase('th')===title&&(!artist||String(song.artist||'').trim().toLocaleLowerCase('th')===artist)&&playable(song))||null;
     return null;
@@ -533,9 +541,25 @@
           if(!entryPermissions(entry).search){send(conn,{type:'results',items:[],query:String(msg.query||'').trim().toLocaleLowerCase('th')});return;}
           const now=Date.now();if(now-entry.lastSearch<150)return;entry.lastSearch=now;
           const term=String(msg.query||'').trim().slice(0,70).toLocaleLowerCase('th'),items=[];
+          conn.xstageNativeResults=null;
           if(term&&state.token){
-            const ranked=typeof window.XStageRankSearch==='function'?window.XStageRankSearch(state.songs,term,200):state.songs.map((song,index)=>({song,index}));
-            for(const match of ranked){const song=match.song;if(!playable(song))continue;items.push({index:match.index,code:String(song.code||''),title:String(song.title||''),artist:String(song.artist||'')});if(items.length>=30)break;}
+            if(state.nativeCatalog){
+              const pager=nativeCatalogPager(term),mapping=new Map();
+              while(pager.hasMore&&items.length<30){
+                const page=pager.next();
+                for(const song of page){
+                  if(!playable(song))continue;
+                  const index=(entry.nativeIndexCounter||0)+1;entry.nativeIndexCounter=index;
+                  mapping.set(index,songIdentity(song));
+                  items.push({index,code:String(song.code||''),title:String(song.title||''),artist:String(song.artist||'')});
+                  if(items.length>=30)break;
+                }
+              }
+              conn.xstageNativeResults={capability:state.nativeCatalog.capability,items:mapping};
+            }else{
+              const ranked=typeof window.XStageRankSearch==='function'?window.XStageRankSearch(state.songs,term,200):state.songs.map((song,index)=>({song,index}));
+              for(const match of ranked){const song=match.song;if(!playable(song))continue;items.push({index:match.index,code:String(song.code||''),title:String(song.title||''),artist:String(song.artist||'')});if(items.length>=30)break;}
+            }
           }
           send(conn,{type:'results',items,query:term,notReady:!state.token});
         }else if(msg.type==='request')acceptRequest(conn,msg,entry.requests);

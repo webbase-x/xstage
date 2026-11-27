@@ -67,7 +67,7 @@ document.addEventListener('keydown',e=>{
 const baseRender=renderSongs;
 renderSongs=function(){
  const songs=$pc('pc-favorites-only').checked&&state.token
-   ?state.songs.filter(s=>favorites.has(songIdentity(s))):state.songs;
+   ?(state.nativeCatalog?[...favorites].map(catalogSongById).filter(Boolean):state.songs.filter(s=>favorites.has(songIdentity(s)))):state.songs;
  baseRender(songs);
 };
 // Decorate every new page, without rebuilding previously displayed rows.
@@ -109,7 +109,7 @@ $pc('pc-history').onclick=()=>{
  for(const item of items){
    const row=document.createElement('div');row.className='pc-history-row';
    const title=document.createElement('span');title.textContent=[item.code,item.title,item.artist].filter(Boolean).join(' · ');
-   const song=state.songs.find(s=>songIdentity(s)===String(item.id));
+   const song=catalogSongById(String(item.id));
    const play=button(song?'เล่น':'ไม่พบในคลัง',()=>{if(song){dialog.close();playSong(song);}});
    play.disabled=!song;row.append(title,play);d.append(row);
  }
@@ -621,7 +621,7 @@ $pc('pc-import').onclick=()=>$pc('pc-queue-file').click();
 $pc('pc-queue-file').onchange=async e=>{
  const f=e.target.files[0];if(!f||!state.token)return;
  try{if(f.size>1e6)throw Error('ไฟล์ใหญ่เกินไป');const d=JSON.parse(await f.text());if(d.source!=='XStageSongQueue'||!Array.isArray(d.songs)||d.songs.length>10000)throw Error('รูปแบบไม่ถูกต้อง');
- const map=new Map(state.songs.filter(playable).map(s=>[songIdentity(s),s]));let count=0;for(const id of d.songs){const s=map.get(String(id));if(s){state.queue.push(s);count++;}}renderQueue();setPlayStatus('นำเข้าคิว '+count+' เพลง');}catch(e){setPlayStatus('นำเข้าคิวไม่สำเร็จ: '+e.message);}e.target.value='';
+ const map=new Map(state.songs.filter(playable).map(s=>[songIdentity(s),s]));let count=0;for(const id of d.songs){const s=state.nativeCatalog?catalogSongById(String(id)):map.get(String(id));if(s){state.queue.push(s);count++;}}renderQueue();setPlayStatus('นำเข้าคิว '+count+' เพลง');}catch(e){setPlayStatus('นำเข้าคิวไม่สำเร็จ: '+e.message);}e.target.value='';
 };
 function sendStageSnapshot(){
  if(!screen||screen.closed)return false;
@@ -676,7 +676,7 @@ function queueEditor(index){const song=state.queue[index];if(!song)return;show('
 }
 el('pc-export').onclick=()=>saveFile('xstage-web-queue.json',JSON.stringify({schemaVersion:1,source:'XStageSongQueue',songs:state.queue.map(song=>({id:songIdentity(song),singer:song.queueSinger||'',speed:Number(song.queueSpeed)||1}))},null,2),'application/json');
 el('pc-queue-file').onchange=async e=>{const f=e.target.files[0];if(!f||!state.token)return;try{if(f.size>1000000)throw Error('ไฟล์ใหญ่เกินไป');const data=JSON.parse(await f.text());if(data.source!=='XStageSongQueue'||!Array.isArray(data.songs)||data.songs.length>10000)throw Error('รูปแบบคิวไม่รองรับ');
- const index=new Map(state.songs.filter(playable).map(song=>[songIdentity(song),song]));let count=0;for(const item of data.songs){const id=typeof item==='string'?item:String(item?.id||'');const song=index.get(id);if(song){state.queue.push({...song,queueSinger:typeof item?.singer==='string'?item.singer.slice(0,80):'',queueSpeed:[.75,.9,1,1.1,1.25,1.5].includes(Number(item?.speed))?Number(item.speed):1});count++;}}renderQueue();setPlayStatus('นำเข้าคิว '+count+' รายการ');}catch(e){setPlayStatus(e.message);}e.target.value='';};
+ const index=new Map(state.songs.filter(playable).map(song=>[songIdentity(song),song]));let count=0;for(const item of data.songs){const id=typeof item==='string'?item:String(item?.id||'');const song=state.nativeCatalog?catalogSongById(id):index.get(id);if(song){state.queue.push({...song,queueSinger:typeof item?.singer==='string'?item.singer.slice(0,80):'',queueSpeed:[.75,.9,1,1.1,1.25,1.5].includes(Number(item?.speed))?Number(item.speed):1});count++;}}renderQueue();setPlayStatus('นำเข้าคิว '+count+' รายการ');}catch(e){setPlayStatus(e.message);}e.target.value='';};
 function stamp(seconds){const n=Math.max(0,Number(seconds)||0);return '['+String(Math.floor(n/60)).padStart(2,'0')+':'+(n%60).toFixed(2).padStart(5,'0')+']';}
 function lrcText(){return (state.lyrics?.lines||[]).map(line=>stamp(line.startTime)+String(line.text||'')).join('\n');}
 function parseLRC(text){
@@ -769,7 +769,7 @@ function stageEffects(){
  body.append(list);renderFx();
 }
 const previousTools=el('pc-other-tools').onclick;
-el('pc-other-tools').onclick=()=>{previousTools?.();body.append(b('แก้ไข / นำเข้าเนื้อร้อง LRC',lyricEditor),b(rec?'หยุดบันทึกไมโครโฟน':'บันทึกไมโครโฟน',micRecording),b('เสียงเอฟเฟกต์หน้าเวที',stageEffects),b('สุ่มเพิ่มเพลง 5 รายการ',()=>{const pool=state.songs.filter(playable).slice().sort(()=>Math.random()-.5);for(const song of pool.slice(0,5))state.queue.push(song);renderQueue();d.close();}));};
+el('pc-other-tools').onclick=()=>{previousTools?.();body.append(b('แก้ไข / นำเข้าเนื้อร้อง LRC',lyricEditor),b(rec?'หยุดบันทึกไมโครโฟน':'บันทึกไมโครโฟน',micRecording),b('เสียงเอฟเฟกต์หน้าเวที',stageEffects),b('สุ่มเพิ่มเพลง 5 รายการ',()=>{const pool=state.nativeCatalog?Array.from({length:5},()=>randomMedleySong()).filter(Boolean):state.songs.filter(playable).slice().sort(()=>Math.random()-.5);for(const song of pool.slice(0,5))state.queue.push(song);renderQueue();d.close();}));};
 ui.logout.addEventListener('click',()=>{if(rec){const r=rec;rec=null;r.stop();}clearStageFx();});
 window.addEventListener('xstage:drive-fx-folder-change',clearStageFx);
 })();
