@@ -206,6 +206,9 @@ final class NativeCatalogStore implements AutoCloseable {
                 SQLiteDatabase.OPEN_READONLY | SQLiteDatabase.NO_LOCALIZED_COLLATORS);
         boolean valid = false;
         try {
+            // Distinguish an old PC catalog from a damaged shared catalog.
+            if (!"1".equals(scalar(db, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='catalog_meta'", null)))
+                throw new IOException("ฐาน PC รุ่นเก่ายังไม่มี songs.verified.sqlite3 · สร้างฐานยืนยัน XMID บน PC แล้วคัดลอกลง XStageKaraoke/DB");
             if (fullCheck) require("ok".equals(scalar(db, "PRAGMA quick_check(1)", null)), "SQLite integrity check failed");
             require("xstage-sqlite3-v1".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='format'", null)) &&
                     "1".equals(scalar(db, "SELECT value FROM catalog_meta WHERE key='schemaVersion'", null)) &&
