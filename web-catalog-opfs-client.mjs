@@ -55,7 +55,7 @@ export async function createWebCatalogClient(owner,{disk=globalThis.XStageWebCat
     const onAbort=()=>dispose(new DOMException('Catalog owner changed','AbortError'));
     signal?.addEventListener('abort',onAbort,{once:true});
     try{
-      const candidate=await rpc('stage',{file:verified.file,md5:pointer.contentMD5,size:pointer.contentBytes},onProgress);
+      const candidate=await rpc('stage',{file:verified.file,md5:pointer.contentMD5,size:pointer.contentBytes,source:pointer.verifiedSource??null},onProgress);
       assertCurrent(current,signal);
       return candidate;
     }finally{signal?.removeEventListener('abort',onAbort);}
