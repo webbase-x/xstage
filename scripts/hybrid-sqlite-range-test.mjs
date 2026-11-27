@@ -42,7 +42,7 @@ for(const failure of ['http200','etag','range','overflow','truncated']){
  const schema=catalogSchema(['songs','song_fts'],['id','code','title','artist','playable','search','path']);
  assert.equal(schema.kind,'pc-local');
  const plan=planSearch(schema,'รัก');assert.equal(plan.mode,'contains');
- assert.match(plan.sql,/song_fts MATCH \?/);assert.equal(plan.bind[0],'"รัก"');
+ assert.match(plan.sql,/song_fts MATCH \?/);assert.match(plan.sql,/NOT EXISTS \(SELECT 1 FROM songs d WHERE d\.code=s\.code/);assert.equal(plan.bind[0],'"รัก"');
  const prefix=planSearch(schema,'%_');assert.equal(prefix.mode,'title');assert.equal(prefix.bind[0],'\\%\\_%');
  assert.match(prefix.sql,/ESCAPE/);
  assert.equal(planSearch(schema,'1').mode,'code');
@@ -87,8 +87,8 @@ import {probeGoogleRange} from '../experiments/hybrid-sqlite/google-live.mjs';
      return new Response(header,{status:kind==='full'?200:206,headers:{'Content-Range':'bytes 0-65535/65536',...(kind==='missing-etag'?{}:{ETag:kind==='changed'&&count>1?'"r2"':'"r1"'})}});
    }}).catch(error=>({ok:false,error:error.message}));
    assert.equal(result.ok,kind==='ok',kind);
-   if(kind==='wal')assert.equal(result.wal,true);
-   assert.equal(count,['ok','changed'].includes(kind)?2:1);
+   if(kind==='wal'){assert.equal(result.wal,true);assert.equal(result.transportOk,true,'WAL blocks SQL, not transport benchmark');}
+   assert.equal(count,['ok','changed','wal'].includes(kind)?2:1);
  }
 }
 console.log('PASS: selected-root XMID mapping, duplicate/identity safety, Google Range and WAL rejection');
