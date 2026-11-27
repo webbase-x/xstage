@@ -22,6 +22,7 @@ from pathlib import Path
 
 import plus_core as core
 import ncn_direct
+import xmid_library_manager as xmid_manager
 import db_maintenance as dbmaint
 import risk_audit as risks
 import preview_player as preview
@@ -42,6 +43,8 @@ class State:
         self.lock=threading.RLock()
         self.token=secrets.token_urlsafe(30)
         self.native_picker=None
+        self.xmid_manager_lock=threading.Lock()
+        self.xmid_manager_plan=None
         self.drive_push_plan=None  # verified, in-memory preview; never persisted to Drive
         # A successful update check must be the single verified snapshot used
         # by the subsequent download. Do not query CDN/Pages a SECOND time
@@ -145,6 +148,10 @@ class State:
                     job["message"]="ยกเลิกงานแล้ว" if job["cancel"].is_set() else "เสร็จเรียบร้อย"
                     job["updated_at"]=time.time()
                     job["revision"]=int(job.get("revision",0))+1
+                if kind=="ncn-direct" and isinstance(result,dict):
+                    self.diagnostic("ncn.summary",job=job_id,status=job["status"],
+                        elapsed_seconds=round(time.monotonic()-job["started_at"],2),
+                        **{k:result.get(k) for k in ("total","done","converted","skipped","failed","fast_resumed","report_skipped","report","errors")})
                 self.diagnostic("job.finish",kind=kind,job=job_id,status=job["status"])
             except Exception as e:
                 with self.lock:
@@ -186,6 +193,10 @@ class State:
                           moment-job.get("_progress_logged_at",-1e9)>=20)
             if log_progress:
                 job["_progress_logged_at"]=moment
+        if job.get("kind")=="ncn-direct" and moment-job.get("_ncn_logged_at",-1e9)>=20:
+            job["_ncn_logged_at"]=moment
+            self.diagnostic("ncn.progress",job=job.get("id"),source=str(message)[:180],
+                **{k:summary.get(k,0) for k in ("done","total","converted","skipped","failed","fast_resumed","report_skipped","files_per_second")})
         if log_progress:
             self.diagnostic("job.progress",kind="import",job=job.get("id"),
                             files_seen=summary.get("files_seen",0),
@@ -201,7 +212,7 @@ class State:
             rows=[]
             for job in list(self.jobs.values())[-10:][::-1]:
                 item={k:v for k,v in job.items() if k not in (
-                    "cancel","started_at","_rate_first_count","_rate_first_at","_progress_logged_at")}
+                    "cancel","started_at","_rate_first_count","_rate_first_at","_progress_logged_at","_ncn_logged_at")}
                 item["progress_age"]=round(max(0.0,now_epoch-float(job.get("updated_at",now_epoch))),3)
                 rows.append(item)
             return rows
@@ -384,7 +395,7 @@ class Handler(BaseHTTPRequestHandler):
                     not output.is_file()):
                 raise ValueError("ไฟล์อยู่นอกคลัง")
             self.send_json(200,core.inspect_xfile(output,False));return
-        if path=="/" or path in ("/app.js","/style.css","/icon.svg") or path.startswith("/web/"):
+        if path=="/" or path in ("/app.js","/style.css","/icon.svg","/timeline-core.js","/timeline-ui.js") or path.startswith("/web/"):
             self.static_file("index.html" if path=="/" else path.removeprefix("/web/").removeprefix("/"))
             return
         self.send_json(404,{"error":"ไม่พบหน้าที่เรียก"})
@@ -472,7 +483,7 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as exc:
             self.state.diagnostic("asset.error",name=name,error=str(exc)[:1000])
             raise
-        kind=mimetypes.guess_type(name)[0] or "application/octet-stream"
+        kind={".js":"application/javascript",".css":"text/css",".html":"text/html",".svg":"image/svg+xml"}.get(Path(name).suffix,"application/octet-stream")
         self.send_response(200)
         self.send_header("Content-Type",kind+("; charset=utf-8" if kind.startswith("text/") or "javascript" in kind else ""))
         self.send_header("Cache-Control","no-store")
@@ -519,11 +530,34 @@ class Handler(BaseHTTPRequestHandler):
                     return drivesync.publish(snapshot["source"],snapshot["root"],
                         snapshot["area"],progress,cancel,plan=snapshot)
                 result=self.state.start_job("drive-push",push_drive)
+            elif path=="/api/xmid-manager/scan":
+                with self.state.xmid_manager_lock:
+                    self.state.xmid_manager_plan=None
+                    plan=xmid_manager.scan(body.get("database",""),body.get("songs",""))
+                    self.state.xmid_manager_plan=plan
+                    result=xmid_manager.page(plan,"all")
+            elif path in ("/api/xmid-manager/page","/api/xmid-manager/relocate"):
+                with self.state.xmid_manager_lock:
+                    plan=self.state.xmid_manager_plan
+                    if not plan or body.get("token")!=plan["token"]:
+                        raise ValueError("กรุณาตรวจสอบคลังเพลงใหม่")
+                    category=body.get("category","all")
+                    if path.endswith("/page"):
+                        result=xmid_manager.page(plan,category,body.get("offset",0))
+                    else:
+                        if body.get("confirmed") is not True:
+                            raise ValueError("ต้องยืนยันการย้ายไฟล์และการอัปเดตฐานภายหลัง")
+                        try:
+                            result=xmid_manager.relocate(plan,category,body.get("ids",[]),
+                                body.get("all_selected") is True,body.get("excluded",[]),
+                                body.get("destination",""),body.get("action",""))
+                        finally:
+                            self.state.xmid_manager_plan=None
             elif path=="/api/ncn-direct":
                 source=body.get("source","")
                 destination=body.get("destination","")
                 result=self.state.start_job("ncn-direct",lambda progress,cancel:
-                    ncn_direct.convert_folder(source,destination,progress,cancel))
+                    ncn_direct.convert_folder(source,destination,progress,cancel,body.get("mode","retry")))
             elif path=="/api/import":
                 source=body.get("folder","")
                 self.state.diagnostic("import.request",folder=source,
@@ -620,7 +654,7 @@ class Handler(BaseHTTPRequestHandler):
                 result=core.undo_edit(self.state.workspace,body.get("batch",""))
             elif path=="/api/pick":
                 kind=body.get("kind")
-                if kind not in ("folder","lrc","media"):
+                if kind not in ("folder","lrc","media","database"):
                     raise ValueError("ประเภทการเลือกไม่ถูกต้อง")
                 if not self.state.native_picker:
                     self.state.diagnostic("picker.unavailable",kind=kind)
