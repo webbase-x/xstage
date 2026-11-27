@@ -29,6 +29,8 @@ on:
       - "web-catalog-opfs-*.mjs"
       - "web-catalog-disk.js"
       - "scripts/web-catalog-large-browser-e2e.mjs"
+      - "scripts/verified-xmid-browser-e2e.mjs"
+      - "windows-pc/source/karaoke/compact_verified_index.py"
       - "scripts/cloud-import-test.mjs"
       - "scripts/cloud-import-contract-test.mjs"
       - "scripts/cloud-import-browser-e2e.mjs"
@@ -44,6 +46,8 @@ on:
       - "web-catalog-opfs-*.mjs"
       - "web-catalog-disk.js"
       - "scripts/web-catalog-large-browser-e2e.mjs"
+      - "scripts/verified-xmid-browser-e2e.mjs"
+      - "windows-pc/source/karaoke/compact_verified_index.py"
       - "scripts/cloud-import-test.mjs"
       - "scripts/cloud-import-contract-test.mjs"
       - "scripts/cloud-import-browser-e2e.mjs"
@@ -94,5 +98,7 @@ jobs:
         run: node scripts/cloud-import-browser-e2e.mjs
       - name: Verify real SQLite larger than 192 MiB in Chromium OPFS
         run: node scripts/web-catalog-large-browser-e2e.mjs
+      - name: Verify original sidecar and XMID MIDI parser in real Chromium
+        run: node scripts/verified-xmid-browser-e2e.mjs
       - name: Verify real AVI to H.264/AAC conversion in browser Worker
         run: node scripts/video-browser-transcode-e2e.mjs
