@@ -1,4 +1,4 @@
-import {probeGoogleRange} from './google-live.mjs';
+import {diagnoseGoogleRange} from './cors-diagnostics.mjs?v=2';
 const $=id=>document.getElementById(id),scope='https://www.googleapis.com/auth/drive.readonly';
 const retired=new Set(window.XSTAGE_RETIRED_DRIVE_ROOT_IDS||[]);
 const folder='application/vnd.google-apps.folder', validId=s=>typeof s==='string'&&/^[A-Za-z0-9_-]+$/.test(s);
@@ -53,10 +53,10 @@ $('run').onclick=async()=>{
   const db=exact(await list("'"+root.id+"' in parents and name='DB' and trashed=false",localToken,current),root.id,'DB',folder);
   const file=exact(await list("'"+db.id+"' in parents and name='songs.sqlite3' and trashed=false",localToken,current),db.id,'songs.sqlite3');
   const size=Number(file.size);if(!Number.isSafeInteger(size)||size<100)throw Error('Invalid SQLite size');
-  const p=await probeGoogleRange({fileId:file.id,token:localToken,size,current});
+  const p=await diagnoseGoogleRange({fileId:file.id,token:localToken,size,current});
   if(!current())return;
-  report=JSON.stringify({test:'X-Stage Hybrid Range Preview',date:new Date().toISOString(),browser:navigator.userAgent,size,status:p.status,transportOk:p.transportOk===true,sqlReady:p.ok===true,wal:p.wal??null,bytes:p.bytes??null,elapsedMs:Number.isFinite(p.ms)?Math.round(p.ms):null,conditionalMs:Number.isFinite(p.conditionalMs)?Math.round(p.conditionalMs):null,reason:p.reason||null},null,2);
-  $('result').textContent=report;$('copy').disabled=false;status(p.ok?'ผ่านการตรวจ Range และ header · ยังต้องทดสอบ SQL':p.transportOk?'Range ผ่าน · ยังไม่อนุญาต SQL':'ยังไม่ผ่านเงื่อนไข Range');
+  report=JSON.stringify({test:'X-Stage Hybrid Range Preview',date:new Date().toISOString(),browser:navigator.userAgent,size,status:p.status,diagnosticVersion:2,transportOk:p.transportOk===true,partialReadOk:p.partialReadOk===true,sqliteHeader:p.sqliteHeader,overlapMatches:p.overlapMatches,distinctBlocks:p.distinctBlocks,conditionalVerified:p.conditionalVerified,sqlReady:p.ok===true,wal:p.wal??null,samples:p.samples,bytes:p.bytes??null,elapsedMs:Number.isFinite(p.ms)?Math.round(p.ms):null,conditionalMs:Number.isFinite(p.conditionalMs)?Math.round(p.conditionalMs):null,reason:p.reason||null},null,2);
+  $('result').textContent=report;$('copy').disabled=false;status(p.ok?'ผ่านการตรวจ Range และ header · ยังต้องทดสอบ SQL':p.transportOk?'Range ผ่าน · ยังไม่อนุญาต SQL':p.partialReadOk?'รับข้อมูลบางช่วงจริงแล้ว · ยังไม่ยืนยันรุ่นไฟล์หรือ Content-Range':'ยังไม่ผ่านเงื่อนไข Range');
  }catch(e){if(current()){report=JSON.stringify({test:'X-Stage Hybrid Range Preview',date:new Date().toISOString(),error:String(e.message||e)},null,2);$('result').textContent=report;$('copy').disabled=false;status('ทดสอบไม่สำเร็จ');}}
  finally{if(current()){busy=false;$('run').disabled=false;$('connect').disabled=false;}}
 };
