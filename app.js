@@ -467,36 +467,37 @@ function xstageTvRenderSearch(panel){
   const results=panel.querySelector('#xstage-tv-search-results');
   const status=panel.querySelector('#xstage-tv-search-status');
   if(!input||!results||!status)return;
-  results.replaceChildren();
+  results.replaceChildren();results.scrollTop=0;panel.searchPager=null;
   const term=normalizeSearchText(input.value.trim());
-  if(!state.token){
-    status.textContent='กรุณาเข้าสู่ Google Drive ก่อนค้นหาเพลง';
-    return;
-  }
-  if(!term){
-    status.textContent='พิมพ์ชื่อเพลง ศิลปิน หรือรหัสเพลง';
-    return;
-  }
-  const ranked=rankedSearchEntries(state.songs,term,8);
-  status.textContent=ranked.total
-    ?'พบ '+num(ranked.total)+' เพลง · แสดง '+ranked.results.length+' รายการที่ตรงที่สุด'
-    :'ไม่พบเพลงที่ตรงกับคำค้น';
-  for(const {song} of ranked.results){
+  if(!state.token){status.textContent='กรุณาเข้าสู่ Google Drive ก่อนค้นหาเพลง';return;}
+  if(!term){status.textContent='พิมพ์ชื่อเพลง ศิลปิน หรือรหัสเพลง';return;}
+  panel.searchPager={pager:createSearchPager(state.songs,term),source:state.songs,authId:state.authId,term};
+  if(!panel.searchPager.pager.total){status.textContent='ไม่พบเพลงที่ตรงกับคำค้น';return;}
+  xstageTvAppendSearchPage(panel);
+}
+function xstageTvAppendSearchPage(panel){
+  const session=panel.searchPager;
+  const input=panel.querySelector('#xstage-tv-search-input');
+  const results=panel.querySelector('#xstage-tv-search-results');
+  const status=panel.querySelector('#xstage-tv-search-status');
+  if(!session||!state.token||session.authId!==state.authId||session.source!==state.songs||
+     session.term!==normalizeSearchText(input.value)||!session.pager.hasMore)return false;
+  const page=session.pager.next();
+  for(const song of page){
     const button=document.createElement('button');
-    button.type='button';
-    button.className='xstage-tv-search-song';
-    const title=document.createElement('strong');
-    const artist=document.createElement('span');
+    button.type='button';button.className='xstage-tv-search-song';
+    const title=document.createElement('strong'),artist=document.createElement('span');
     title.textContent=String(song.title||song.code||'ไม่ระบุชื่อเพลง');
     artist.textContent=[song.code,song.artist].filter(Boolean).map(String).join(' · ');
     button.append(title,artist);
     button.addEventListener('click',()=>{
-      if(!state.token||!playable(song))return;
-      xstageTvCloseSearch(false);
-      chooseSearchSong(song);
+      if(!state.token||session.authId!==state.authId||session.source!==state.songs||!playable(song))return;
+      xstageTvCloseSearch(false);chooseSearchSong(song);
     });
     results.append(button);
   }
+  status.textContent='พบ '+num(session.pager.total)+' เพลง · โหลด '+num(session.pager.loaded)+(session.pager.hasMore?' · เลื่อนลงเพื่อดูเพิ่ม':'');
+  return page.length>0;
 }
 function xstageTvSearchPanel(){
   let panel=document.getElementById('xstage-tv-search-panel');
@@ -518,6 +519,7 @@ function xstageTvSearchPanel(){
     '</div>';
   document.body.append(panel);
   panel.querySelector('#xstage-tv-search-input').addEventListener('input',()=>xstageTvRenderSearch(panel));
+  bindSearchPaging(panel.querySelector('#xstage-tv-search-results'),()=>xstageTvAppendSearchPage(panel));
   panel.querySelector('#xstage-tv-search-input').addEventListener('keydown',event=>{
     if(event.key==='Escape'){event.preventDefault();xstageTvCloseSearch(true);}
   });
@@ -747,6 +749,12 @@ window.XStageTvMoveFocus=direction=>{
   const items=xstageTvFocusable(scope);
   if(!items.length)return false;
   const active=document.activeElement;
+  if(scope.id==='xstage-tv-search-panel'&&active?.classList?.contains('xstage-tv-search-song')&&
+     (direction==='down'||direction==='up')){
+    if(direction==='down'&&!active.nextElementSibling)xstageTvAppendSearchPage(scope);
+    const next=direction==='down'?active.nextElementSibling:active.previousElementSibling;
+    if(next){next.focus({preventScroll:true});next.scrollIntoView?.({block:'nearest',inline:'nearest'});return true;}
+  }
   if((active?.matches?.('input,textarea')||false)&&(direction==='left'||direction==='right')&&scope===document){
     const key=direction==='left'?'ArrowLeft':'ArrowRight';
     active.dispatchEvent(new KeyboardEvent('keydown',{key,code:key,bubbles:true,cancelable:true}));
@@ -2948,6 +2956,49 @@ function rankedSearchEntries(songs,rawTerm,maxResults=5){
 window.XStageRankSearch=(songs,rawTerm,limit=5)=>
   rankedSearchEntries(songs,rawTerm,limit).results;
 
+// Each query scans the normalized index once. Only compact integer positions
+// are retained in score buckets; song rows are constructed five at a time.
+const SEARCH_PAGE_SIZE=5;
+function createSearchPager(songs,rawTerm){
+  const term=normalizeSearchText(rawTerm),words=term.split(' ').filter(Boolean);
+  const index=indexedSongs(songs),buckets=Array.from({length:11},()=>[]);
+  const scoreSlots=[0,10,20,30,40,50,55,60,70,80,90];
+  let total=0,loaded=0,bucket=0,offset=0;
+  if(term)for(const entry of index){
+    const score=searchScore(entry,term,words);
+    const slot=scoreSlots.indexOf(score);
+    if(slot<0)continue;
+    buckets[slot].push(entry.index);total++;
+  }
+  return {total,get loaded(){return loaded;},get hasMore(){return loaded<total;},
+    next(){
+      const page=[];
+      while(page.length<SEARCH_PAGE_SIZE&&bucket<buckets.length){
+        const positions=buckets[bucket];
+        if(offset>=positions.length){bucket++;offset=0;continue;}
+        page.push(index[positions[offset++]].song);loaded++;
+      }
+      return page;
+    }};
+}
+function nearSearchEnd(list){
+  return list.scrollHeight-list.scrollTop-list.clientHeight<=Math.max(24,list.clientHeight*.22);
+}
+function bindSearchPaging(list,loadNext){
+  list.addEventListener('scroll',()=>{if(nearSearchEnd(list))loadNext();},{passive:true});
+  // Exactly five rows can fill the viewport without overflow. Wheel/swipe
+  // still requests the next batch, but mere initial rendering does not.
+  list.addEventListener('wheel',event=>{if(event.deltaY>0&&nearSearchEnd(list))loadNext();},{passive:true});
+  let startY=null;
+  list.addEventListener('touchstart',event=>{startY=event.touches.length===1?event.touches[0].clientY:null;},{passive:true});
+  list.addEventListener('touchend',event=>{
+    const y=event.changedTouches[0]?.clientY;
+    if(startY!==null&&Number.isFinite(y)&&startY-y>22&&nearSearchEnd(list))loadNext();
+    startY=null;
+  },{passive:true});
+  list.addEventListener('touchcancel',()=>{startY=null;},{passive:true});
+}
+let liveSearchPager=null;
 function setLiveSearchExpanded(open){
   const dock=ui.search?.closest('.search-dock');
   if(!dock)return;
@@ -2981,8 +3032,9 @@ function clearSearchAfterChoice(){
   else document.activeElement?.blur?.();
   restoreViewportAfterKeyboard();
 }
-function renderSongs() {
-  ui.songs.replaceChildren();
+function renderSongs(songs=state.songs) {
+  liveSearchPager=null;
+  ui.songs.replaceChildren();ui.songs.scrollTop=0;
   const rawTerm=ui.search.value.trim();
   const term=normalizeSearchText(rawTerm);
   const highlightTerm=rawTerm.toLocaleLowerCase('th');
@@ -3011,43 +3063,53 @@ function renderSongs() {
     return;
   }
   setLiveSearchExpanded(true);
-  const ranked=rankedSearchEntries(state.songs,term,5);
-  state.shown=ranked.results.map(item=>item.song);
-  state.selectedIndex=Math.max(0,Math.min(state.selectedIndex,state.shown.length-1));
-  ui.resultCount.textContent=`พบ ${num(ranked.total)} เพลง${ranked.total>5?' · 5 ผลลัพธ์ที่ตรงที่สุด':''}`;
-  if(ui.searchRefine){
-    ui.searchRefine.hidden=ranked.total<=5;
-    ui.searchRefine.textContent='พิมพ์เพิ่มเพื่อเจาะจงผลค้นหา';
-  }
-  if (!state.shown.length) {
+  liveSearchPager={pager:createSearchPager(songs,term),term,highlightTerm,source:state.songs,authId:state.authId};
+  state.shown=[];state.selectedIndex=0;
+  if(!liveSearchPager.pager.total){
+    ui.resultCount.textContent='พบ 0 เพลง';
     if(ui.searchRefine)ui.searchRefine.hidden=true;
     ui.search.removeAttribute('aria-activedescendant');
-    ui.songs.append(element('div','empty-state',term?'ไม่พบเพลงที่ค้นหา':'ยังไม่มีเพลงที่พร้อมเล่น'));return;
+    ui.songs.append(element('div','empty-state','ไม่พบเพลงที่ค้นหา'));return;
   }
-  const fragment = document.createDocumentFragment();
-  state.shown.forEach((song,i) => {
+  appendLiveSearchPage();
+  ui.search.setAttribute('aria-activedescendant','song-option-0');
+}
+function appendLiveSearchPage(){
+  const session=liveSearchPager;
+  if(!session||!state.token||session.authId!==state.authId||
+     session.source!==state.songs||session.term!==normalizeSearchText(ui.search.value)||
+     !session.pager.hasMore)return false;
+  const page=session.pager.next(),first=state.shown.length;
+  state.shown.push(...page);
+  const fragment=document.createDocumentFragment();
+  page.forEach((song,offset)=>{
+    const i=first+offset;
     const row=element('div','song-item'+(i===state.selectedIndex?' selected':''));
     row.role='option';row.id='song-option-'+i;row.setAttribute('aria-selected',String(i===state.selectedIndex));
-    row.tabIndex = -1;row.title=state.current||state.loading?'เลือกเพื่อเพิ่มเข้าคิว':'เลือกเพื่อเล่นทันที';
+    row.setAttribute('aria-posinset',String(i+1));row.setAttribute('aria-setsize',String(session.pager.total));
+    row.tabIndex=-1;row.title=state.current||state.loading?'เลือกเพื่อเพิ่มเข้าคิว':'เลือกเพื่อเล่นทันที';
     const details=element('div','song-details');
     const code=element('div','song-code'),title=element('strong'),artist=element('small');
-    renderMatchedText(code,song.code||'—',highlightTerm);
-    renderMatchedText(title,song.title||'ไม่ระบุชื่อเพลง',highlightTerm);
-    renderMatchedText(artist,song.artist||'ไม่ระบุศิลปิน',highlightTerm);
+    renderMatchedText(code,song.code||'—',session.highlightTerm);
+    renderMatchedText(title,song.title||'ไม่ระบุชื่อเพลง',session.highlightTerm);
+    renderMatchedText(artist,song.artist||'ไม่ระบุศิลปิน',session.highlightTerm);
     details.append(code,title,artist);
     const add=element('button','song-add','+');add.type='button';add.title='เพิ่มเพลงเข้าคิว';add.setAttribute('aria-label','เพิ่มเพลง '+(song.title||'')+' เข้าคิว');
     add.addEventListener('click',e=>{e.stopPropagation();selectSong(i,false);addToQueue(song);clearSearchAfterChoice();});
     row.append(details,add);
-    row.addEventListener('click',()=>{
-      selectSong(i,false);
-      chooseSearchSong(song);
-    });
+    row.addEventListener('click',()=>{selectSong(i,false);chooseSearchSong(song);});
+    window.XStageDecorateSearchRow?.(row,song);
     fragment.append(row);
   });
   ui.songs.append(fragment);
-  if(state.shown.length)ui.search.setAttribute('aria-activedescendant','song-option-'+state.selectedIndex);
-  else ui.search.removeAttribute('aria-activedescendant');
+  ui.resultCount.textContent='พบ '+num(session.pager.total)+' เพลง · โหลด '+num(session.pager.loaded);
+  if(ui.searchRefine){
+    ui.searchRefine.hidden=!session.pager.hasMore;
+    ui.searchRefine.textContent='เลื่อนลงเพื่อดูเพิ่ม';
+  }
+  return page.length>0;
 }
+
 function selectSong(i,scroll=true) {
   if (i<0||i>=state.shown.length) return;
   state.selectedIndex = i;
@@ -4323,12 +4385,12 @@ function updateTransport(){
   }
 }
 function onSearchKey(e){
-  if(e.key==='ArrowDown'){e.preventDefault();if(state.shown.length)selectSong(Math.min(state.selectedIndex+1,state.shown.length-1));}
+  if(e.key==='ArrowDown'){e.preventDefault();if(state.selectedIndex>=state.shown.length-1)appendLiveSearchPage();if(state.shown.length)selectSong(Math.min(state.selectedIndex+1,state.shown.length-1));}
   else if(e.key==='ArrowUp'){e.preventDefault();if(state.shown.length)selectSong(Math.max(0,state.selectedIndex-1));}
   else if(e.key==='Enter'){
     if(e.isComposing)return;
     e.preventDefault();
-    renderSongs();
+    if(!liveSearchPager||liveSearchPager.source!==state.songs||liveSearchPager.authId!==state.authId||liveSearchPager.term!==normalizeSearchText(ui.search.value))renderSongs();
     updateTransport();
     if(!state.token){
       setStatus(ui.search.value.trim()
@@ -5127,6 +5189,7 @@ ui.search.addEventListener('input',()=>{
   if(ui.search.value.trim())setLiveSearchExpanded(true);
 });
 ui.search.addEventListener('keydown',onSearchKey);
+bindSearchPaging(ui.songs,appendLiveSearchPage);
 ui.search.addEventListener('blur',restoreViewportAfterKeyboard);
 
 ui.clearQueue.addEventListener('click',()=>{state.queue.length=0;renderQueue();setPlayStatus('ล้างคิวแล้ว');});
