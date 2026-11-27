@@ -2305,6 +2305,14 @@ async function stageWebCatalog(pointer,sub,root,token,current,onProgress){
   const same=()=>current()&&state.webCatalogClient===holder;
   const candidate=await holder.client.stage({pointer,fetcher:()=>privateFile(pointer.catalogFileId,token),current:same,onProgress});
   if(!same())throw new DOMException('Catalog changed','AbortError');
+  if(pointer.verifiedSource){
+    const expected=pointer.verifiedSource;
+    const response=await googleFetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(expected.id)+'?fields=id,name,parents,mimeType,trashed,size,md5Checksum',{headers:requestHeaders(token),cache:'no-store'},'ตรวจฐานต้นฉบับ');
+    if(!response.ok)throw Error('ไม่สามารถยืนยัน revision ของฐานต้นฉบับ');
+    const original=await response.json();
+    if(!same()||original.id!==expected.id||original.name!=='songs.sqlite3'||original.trashed||original.mimeType==='application/vnd.google-apps.shortcut'||!original.parents?.includes(pointer.verifiedDbId)||Number(original.size)!==expected.size||String(original.md5Checksum||'').toLowerCase()!==expected.md5)
+      throw Error('ฐานต้นฉบับเปลี่ยนระหว่างเตรียมฐาน XMID');
+  }
   return {holder,candidate,pointer};
 }
 async function activateWebCatalog(staged,dbId,current){
@@ -2450,7 +2458,7 @@ async function selectVerifiedCatalog(canonical,dbId,token){
      !/^[a-f0-9]{32}$/.test(pointer.contentMD5)||!Number.isSafeInteger(pointer.contentBytes)||pointer.contentBytes<100)
     throw Error('ข้อมูลยืนยันฐาน XMID ไม่สมบูรณ์');
   return {...pointer,catalogFileId:file.id,contentMD5:md5,contentBytes:size,
-    verifiedSource:{id:canonical.id,md5:pointer.contentMD5,size:pointer.contentBytes},
+    verifiedDbId:dbId,verifiedSource:{id:canonical.id,md5:pointer.contentMD5,size:pointer.contentBytes},
     generation:'verified:'+file.id+':'+md5+':'+pointer.contentMD5};
 }
 async function activeDriveCatalog(dbId,token){
@@ -3712,6 +3720,7 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
   const packed=await response.blob();
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   onStatus('กำลังตรวจและแยก XMID/XSK2 ในหน่วยความจำ…');
+  if(song.verifiedOriginal===true&&(!isXmid||!song.xmid?.sha256||!(/^[a-f0-9]{32}$/.test(song.xmid.md5Checksum||''))))throw Error('XMID ไม่มีหลักฐานต้นฉบับครบถ้วน');
   if(isXmid&&song.xmid?.sha256){
     const expected=String(song.xmid.sha256);
     if(!/^[a-f0-9]{64}$/.test(expected)||packed.size!==Number(song.xmid.size)||packed.size>97*1048576)throw Error('XMID ไม่ตรงขนาดที่ยืนยัน');
