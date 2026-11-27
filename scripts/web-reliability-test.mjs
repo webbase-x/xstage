@@ -192,3 +192,27 @@ console.log('PASS: Web reliability, SQLite cursor, Drive root guard, audio meter
    opener.closed=true;now+=5000;sync.checkStageConnection();assert.match(status.textContent,/จอหลักปิด/);
    assert.equal(requests.length,2);
  }
+
+ // Verify the menu shows the same running release as the existing header.
+ {
+   assert.match(index,/<div class="mobile-menu-brand"[^>]*><img src="assets\/xstage-stage-logo\.png\?v=\d+"[^>]*alt="X-Stage Karaoke Online"/);
+   const menuLogo=index.match(/<div class="mobile-menu-brand"[^>]*>(<img[^>]+>)/)?.[1]||'';
+   assert.match(menuLogo,/\bwidth="128"\s+height="43"/,'Logo intrinsic layout must fit even when old CSS is cached');
+   assert.match(menuLogo,/style="[^"]*max-width:100%[^"]*max-height:43px[^"]*object-fit:contain/,'Logo is bounded before CSS loads');
+   assert.match(index,/href="xstage-ux\.css\?v=[^"]*menu-fit2"/,'Refresh the changed menu stylesheet cache');
+   assert.match(index,/id="mobile-menu-release-label"/);
+   assert.match(index,/id="mobile-menu-close"/);
+   const script=[...index.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
+     .find(match=>/\bwindow\.XSTAGE_RELEASE\s*=/.test(match[1])&&match[1].includes('mobile-menu-release-label'));
+   assert.ok(script,'Release initializer exists');
+   for(const native of [undefined,{getAppVersion:()=> '1.0.111',getAppBuild:()=>1111}]){
+     const labels={'karaoke-release-label':{},'mobile-menu-release-label':{}};
+     const window={XStageAndroid:native};
+     const document={getElementById:id=>labels[id],addEventListener:(name,fn)=>{assert.equal(name,'DOMContentLoaded');fn();}};
+     new Function('window','document',script[1]+';')(window,document);
+     const web=window.XSTAGE_RELEASE;
+     const running='v'+web.version+' · Build '+web.build;
+     assert.equal(labels['mobile-menu-release-label'].textContent,native?'APK v1.0.111 · Build 1111 | Web '+running:running);
+     assert.ok(labels['karaoke-release-label'].textContent.endsWith(running));
+   }
+ }
