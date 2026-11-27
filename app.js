@@ -2269,7 +2269,12 @@ function stageNativeCatalog(pointer,sub,root,dbId,progress){
       },180000);
     }};
     nativeCatalogRequests.set(requestId,pending);pending.arm();
-    try{window.XStageAndroid.catalogOpen(requestId,String(sub),String(root),String(dbId),String(pointer.catalogFileId));}
+    try{
+      if(pointer.verifiedSource){
+        if(typeof window.XStageAndroid.catalogOpenVerified!=='function')throw Error('กรุณาอัปเดต APK เพื่อเปิดฐาน XMID ที่ยืนยันแล้ว');
+        window.XStageAndroid.catalogOpenVerified(requestId,String(sub),String(root),String(dbId),String(pointer.catalogFileId),String(pointer.verifiedSource.id),pointer.verifiedSource.md5,String(pointer.verifiedSource.size));
+      }else window.XStageAndroid.catalogOpen(requestId,String(sub),String(root),String(dbId),String(pointer.catalogFileId));
+    }
     catch(error){clearTimeout(pending.timer);nativeCatalogRequests.delete(requestId);reject(Object.assign(error,{code:'CATALOG_LOAD_FAILED'}));}
   }).then(data=>{
     if(pointer.contentMD5&&pointer.contentBytes&&data.revision!==pointer.contentMD5+'-'+pointer.contentBytes)
@@ -2433,11 +2438,26 @@ function directCatalogPointer(file){
     contentMD5:String(file.md5Checksum||'').toLowerCase(),contentBytes:Number(file.size||0),
     generation:'sqlite:'+file.id+':'+String(file.md5Checksum||file.modifiedTime||file.size||'')};
 }
+async function selectVerifiedCatalog(canonical,dbId,token){
+  const pointer=directCatalogPointer(canonical);
+  const list=await driveList(`'${dbId}' in parents and name='songs.verified.sqlite3' and trashed=false`,token);
+  if(list.length>1)throw Error('พบ songs.verified.sqlite3 ซ้ำใน DB');
+  if(!list.length)return pointer;
+  const file=list[0],md5=String(file.md5Checksum||'').toLowerCase(),size=Number(file.size);
+  if(file.name!=='songs.verified.sqlite3'||!file.parents?.includes(dbId)||!file.id||
+     file.mimeType==='application/vnd.google-apps.shortcut'||file.mimeType==='application/vnd.google-apps.folder'||
+     !/^[a-f0-9]{32}$/.test(md5)||!Number.isSafeInteger(size)||size<100||
+     !/^[a-f0-9]{32}$/.test(pointer.contentMD5)||!Number.isSafeInteger(pointer.contentBytes)||pointer.contentBytes<100)
+    throw Error('ข้อมูลยืนยันฐาน XMID ไม่สมบูรณ์');
+  return {...pointer,catalogFileId:file.id,contentMD5:md5,contentBytes:size,
+    verifiedSource:{id:canonical.id,md5:pointer.contentMD5,size:pointer.contentBytes},
+    generation:'verified:'+file.id+':'+md5+':'+pointer.contentMD5};
+}
 async function activeDriveCatalog(dbId,token){
   if(!dbId)return null;
   const direct=await driveList(`'${dbId}' in parents and name='songs.sqlite3' and trashed=false`,token);
   if(direct.length>1)throw Error('พบ songs.sqlite3 ซ้ำใน DB');
-  return direct.length?{pointer:directCatalogPointer(direct[0])}:null;
+  return direct.length?{pointer:await selectVerifiedCatalog(direct[0],dbId,token)}:null;
 }
 async function pollPublishedCatalog(){
   if(!state.token||!state.libraryRootId||isRetiredDriveRoot(state.libraryRootId)||state.catalogPolling)return;
@@ -2699,7 +2719,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       setStatus('ยังไม่มี DB/songs.sqlite3 ที่แอปเข้าถึงได้ · เลือกไฟล์เพลงแล้วกดเริ่มนำเข้าเพื่อสร้างฐานใหม่','success');
       return;
     }
-    const pointer=directCatalogPointer(canonical[0]);
+    const pointer=await selectVerifiedCatalog(canonical[0],dbId,token);
     if(nativeCatalogBridgeAvailable()){
       showCatalogLoading('กำลังตรวจฐานเพลงในเครื่อง','ตรวจขนาดและ MD5 ก่อนดาวน์โหลด',35);
       const data=await stageNativeCatalog(pointer,account.sub,root.id,dbId,progress=>{
@@ -3692,6 +3712,12 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
   const packed=await response.blob();
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   onStatus('กำลังตรวจและแยก XMID/XSK2 ในหน่วยความจำ…');
+  if(isXmid&&song.xmid?.sha256){
+    const expected=String(song.xmid.sha256);
+    if(!/^[a-f0-9]{64}$/.test(expected)||packed.size!==Number(song.xmid.size)||packed.size>97*1048576)throw Error('XMID ไม่ตรงขนาดที่ยืนยัน');
+    const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await packed.arrayBuffer())),b=>b.toString(16).padStart(2,'0')).join('');
+    if(digest!==expected)throw Error('SHA-256 ของ XMID ไม่ตรงไฟล์ต้นฉบับ');
+  }
   const unpacked=await (isXmid?window.XStageXmid:window.XStageXsk).openPackage(packed);
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   // Never play a different song under a stale catalog title/code.
