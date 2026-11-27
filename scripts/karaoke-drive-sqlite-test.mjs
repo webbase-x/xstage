@@ -11,8 +11,10 @@ assert.ok(version.build>=1144,'revision must not regress');
 assert.ok(page.indexOf('drive-sqlite.js?v=')>0&&
   page.indexOf('drive-sqlite.js?v=')<page.indexOf('cloud-import.js?v='),
   'Shared SQLite codec must load before importer');
-assert.match(app,/const bytes=await readCatalogBytes\(response\);\s*assertCurrent\(\);\s*const data=await codec\.read\(bytes\);/,
+assert.match(app,/bytes=await readCatalogBytes\(response\);\s*\}\s*assertCurrent\(\);\s*const data=await codec\.read\(bytes\);/,
   'Drive SQLite must pass bounded bytes to the codec after checking the active session');
+assert.match(app,/bytes=await readCatalogBytes\(new Response\(saved\.file\)\)/,
+  'Persisted OPFS bytes must use the same bounded reader as downloaded bytes');
 const readerStart=app.indexOf('async function readCatalogBytes(');
 const readerEnd=app.indexOf('\n}',readerStart)+2;
 assert.ok(readerStart>=0&&readerEnd>readerStart);
