@@ -2270,7 +2270,9 @@ function stageNativeCatalog(pointer,sub,root,dbId,progress){
     }};
     nativeCatalogRequests.set(requestId,pending);pending.arm();
     try{
-      if(pointer.verifiedSource){
+      if(pointer.previewOnly){
+        window.XStageAndroid.catalogOpenPreview(requestId,String(sub),String(root),String(dbId),String(pointer.catalogFileId),String(pointer.verifiedSource.id),pointer.verifiedSource.md5,String(pointer.verifiedSource.size));
+      }else if(pointer.verifiedSource){
         if(typeof window.XStageAndroid.catalogOpenVerified!=='function')throw Error('กรุณาอัปเดต APK เพื่อเปิดฐาน XMID ที่ยืนยันแล้ว');
         window.XStageAndroid.catalogOpenVerified(requestId,String(sub),String(root),String(dbId),String(pointer.catalogFileId),String(pointer.verifiedSource.id),pointer.verifiedSource.md5,String(pointer.verifiedSource.size));
       }else window.XStageAndroid.catalogOpen(requestId,String(sub),String(root),String(dbId),String(pointer.catalogFileId));
@@ -2450,7 +2452,21 @@ async function selectVerifiedCatalog(canonical,dbId,token){
   const pointer=directCatalogPointer(canonical);
   const list=await driveList(`'${dbId}' in parents and name='songs.verified.sqlite3' and trashed=false`,token);
   if(list.length>1)throw Error('พบ songs.verified.sqlite3 ซ้ำใน DB');
-  if(!list.length)return pointer;
+  if(!list.length){
+    if(typeof window.XStageAndroid?.catalogOpenPreview!=='function')return pointer;
+    const previews=await driveList(`'${dbId}' in parents and name='songs.search.sqlite3' and trashed=false`,token);
+    if(previews.length>1)throw Error('พบ songs.search.sqlite3 ซ้ำใน DB');
+    if(!previews.length)return pointer;
+    const file=previews[0],md5=String(file.md5Checksum||'').toLowerCase(),size=Number(file.size);
+    if(file.name!=='songs.search.sqlite3'||!file.parents?.includes(dbId)||!file.id||
+       file.mimeType==='application/vnd.google-apps.shortcut'||file.mimeType==='application/vnd.google-apps.folder'||
+       !/^[a-f0-9]{32}$/.test(md5)||!Number.isSafeInteger(size)||size<100||
+       !/^[a-f0-9]{32}$/.test(pointer.contentMD5)||!Number.isSafeInteger(pointer.contentBytes)||pointer.contentBytes<100)
+      throw Object.assign(Error('ข้อมูลดัชนีค้นหาไม่สมบูรณ์'),{code:'CATALOG_LOAD_FAILED'});
+    return {...pointer,previewOnly:true,catalogFileId:file.id,contentMD5:md5,contentBytes:size,
+      verifiedDbId:dbId,verifiedSource:{id:canonical.id,md5:pointer.contentMD5,size:pointer.contentBytes},
+      generation:'preview:'+file.id+':'+md5+':'+pointer.contentMD5};
+  }
   const file=list[0],md5=String(file.md5Checksum||'').toLowerCase(),size=Number(file.size);
   if(file.name!=='songs.verified.sqlite3'||!file.parents?.includes(dbId)||!file.id||
      file.mimeType==='application/vnd.google-apps.shortcut'||file.mimeType==='application/vnd.google-apps.folder'||
@@ -2485,7 +2501,7 @@ async function pollPublishedCatalog(){
     if(!sameLibrary())return;
     state.catalogDbDirId=dbId;
     const pointer=published?.pointer;
-    if(!pointer||!pointer.generation||pointer.generation===state.catalogGeneration)return;
+    if(!pointer||pointer.previewOnly||!pointer.generation||pointer.generation===state.catalogGeneration)return;
     if(typeof nativeCatalogBridgeAvailable==='function'&&nativeCatalogBridgeAvailable()){
       const busy=()=>state.queue.length||state.loading||state.queuePreload||state.medleyPrefetch||playbackHasActiveIntent();
       if(busy())return; // Playback and its next song take priority over DB transfer.
@@ -2728,6 +2744,14 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       return;
     }
     const pointer=await selectVerifiedCatalog(canonical[0],dbId,token);
+    if(pointer.previewOnly){
+      const data=await stageNativeCatalog(pointer,account.sub,root.id,dbId,progress=>{
+        if(authId===state.authId)showCatalogLoading('กำลังดาวน์โหลดดัชนีค้นหา',num(progress.received)+' / '+num(progress.total)+' ไบต์',Math.min(95,35+Math.floor(progress.received/Math.max(1,progress.total)*60)));
+      });
+      if(authId!==state.authId||state.libraryRootId!==root.id)return;
+      if(data.previewOnly!==true||!window.XStageAndroid.catalogActivate(data.capability))throw Object.assign(Error('เปิดดัชนีค้นหาไม่ได้'),{code:'CATALOG_LOAD_FAILED'});
+      throw Object.assign(Error('ค้นหาได้ แต่ยังเล่นไม่ได้ · ต้องสร้าง songs.verified.sqlite3 จาก XMID ต้นฉบับบน PC'),{code:'CATALOG_LOAD_FAILED',preview:{data,sub:account.sub,root:root.id,authId}});
+    }
     if(nativeCatalogBridgeAvailable()){
       showCatalogLoading('กำลังตรวจฐานเพลงในเครื่อง','ตรวจขนาดและ MD5 ก่อนดาวน์โหลด',35);
       const data=await stageNativeCatalog(pointer,account.sub,root.id,dbId,progress=>{
@@ -2736,6 +2760,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
         showCatalogLoading('กำลังดาวน์โหลดฐานเพลงลงเครื่อง',num(progress.received)+' / '+num(progress.total)+' ไบต์',percent);
       });
       if(authId!==state.authId||state.libraryRootId!==root.id)return;
+      if(data.previewOnly===true)throw Object.assign(Error('ดัชนีค้นหาไม่ใช่ฐานพร้อมเล่น'),{code:'CATALOG_LOAD_FAILED'});
       activateNativeCatalog(data,pointer,account.sub,root.id,dbId);
       restorePersistentQueue();renderSongs();renderQueue();
       ui.libraryState.textContent='SQLite ในเครื่อง · '+libraryLabel(root);
@@ -5316,7 +5341,36 @@ async function renderAndroidTvLoginQr(url){
     if(wait){wait.hidden=false;wait.textContent='เปิด google.com/device บนมือถือ แล้วกรอกรหัสด้านขวา';}
   }
 }
+function renderAndroidTvCatalogPreview(info){
+  $('android-tv-preview')?.remove();
+  if(!info)return;
+  const panel=androidTvAuthPanel(),box=panel.querySelector('.android-tv-auth-box');
+  if(!box)return;
+  const preview=element('section','android-tv-catalog-preview');
+  preview.id='android-tv-preview';
+  preview.style.cssText='margin:12px 0;text-align:left;max-height:32vh;overflow:auto;';
+  const heading=element('strong','',num(info.data.count)+' เพลง · ค้นหาอย่างเดียว (ยังไม่เปิดเล่น)');
+  const input=document.createElement('input');input.type='search';input.placeholder='รหัสเพลง ชื่อเพลง ศิลปิน';input.maxLength=120;
+  input.style.cssText='display:block;width:100%;margin:8px 0;padding:10px;';
+  const list=element('div',''),more=element('button','','5 เพลงถัดไป');more.type='button';more.hidden=true;
+  let offset=0,last='';
+  const load=reset=>{
+    if(info.authId!==state.authId||state.libraryRootId!==info.root||state.accountSub!==info.sub||!state.token){preview.remove();return;}
+    if(reset){offset=0;last=input.value.trim();list.replaceChildren();}
+    if(!last){more.hidden=true;return;}
+    try{
+      const result=JSON.parse(window.XStageAndroid.catalogSearch(info.data.capability,info.sub,info.root,info.data.revision,last,offset));
+      if(result.error)throw Error(result.error);
+      for(const song of result.songs||[])list.append(element('div','',[song.code,song.title,song.artist].join(' · ')));
+      offset+=(result.songs||[]).length;more.hidden=offset>=result.total||!(result.songs||[]).length;
+      if(!offset)list.textContent='ไม่พบเพลง';
+    }catch(error){list.textContent=String(error.message||error);more.hidden=true;}
+  };
+  input.addEventListener('input',()=>load(true));more.addEventListener('click',()=>load(false));
+  preview.append(heading,input,list,more);box.append(preview);
+}
 function showAndroidTvAuthPanel(){
+  renderAndroidTvCatalogPreview(null);
   const panel=androidTvAuthPanel();
   setAndroidTvStageAccess(false);
   panel.hidden=false;
@@ -5330,6 +5384,7 @@ function showAndroidTvAuthPanel(){
   setTimeout(()=>$('android-tv-auth-cancel')?.focus?.(),20);
 }
 function hideAndroidTvAuthPanel(){
+  renderAndroidTvCatalogPreview(null);
   const panel=$('android-tv-auth-panel');
   if(panel)panel.hidden=true;
 }
@@ -5410,7 +5465,8 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
         const qr=$('android-tv-auth-qr');if(qr)qr.hidden=true;
         const wait=$('android-tv-auth-qr-wait');if(wait){wait.hidden=false;wait.textContent='Google เชื่อมต่อแล้ว';}
         $('android-tv-auth-url').textContent='ไม่ต้องสแกน QR ใหม่';
-        $('android-tv-auth-code').textContent='SQLite';
+        $('android-tv-auth-code').textContent=error.preview?'ค้นหา':'SQLite';
+        renderAndroidTvCatalogPreview(error.preview);
         $('android-tv-auth-status').textContent='เชื่อมต่อ Google สำเร็จ · '+String(error.message||'เปิดฐานเพลงไม่สำเร็จ');
         const retry=$('android-tv-auth-retry');retry.hidden=false;retry.textContent='ลองโหลดฐานเพลงใหม่';
         setStatus('เชื่อมต่อ Google สำเร็จ · '+String(error.message||'เปิดฐานเพลงไม่สำเร็จ'),'error');
