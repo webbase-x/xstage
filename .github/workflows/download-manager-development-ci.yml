@@ -1,0 +1,277 @@
+name: Download Manager development CI (no release)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'dev/download-manager-ci-only']
+    paths:
+      - 'download-manager/**'
+      - '.github/workflows/download-manager-development-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: download-manager-development-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve and cross-check release identity
+        id: version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $checker = Get-Content 'download-manager/UpdateChecker.cs' -Raw
+          $installer = Get-Content 'download-manager/installer/XStageDownloadManager.iss' -Raw
+          $versionMatch = [regex]::Match($checker, 'CurrentVersion\s*=\s*"(?<v>\d+\.\d+\.\d+)"')
+          $buildMatch = [regex]::Match($checker, 'CurrentBuild\s*=\s*(?<b>\d+)')
+          $issVersion = [regex]::Match($installer, '#define MyAppVersion "(?<v>\d+\.\d+\.\d+)"')
+          $issBuild = [regex]::Match($installer, '#define MyAppBuild "(?<b>\d+)"')
+          if (-not ($versionMatch.Success -and $buildMatch.Success -and $issVersion.Success -and $issBuild.Success)) {
+            throw 'Could not resolve Download Manager version/build metadata.'
+          }
+          $version = $versionMatch.Groups['v'].Value
+          $build = [int]$buildMatch.Groups['b'].Value
+          if ($issVersion.Groups['v'].Value -cne $version -or [int]$issBuild.Groups['b'].Value -ne $build) {
+            throw "Version mismatch: UpdateChecker=$version Build $build; installer=$($issVersion.Groups['v'].Value) Build $($issBuild.Groups['b'].Value)"
+          }
+          [xml]$project = Get-Content 'download-manager/XStageDownloadManager.csproj' -Raw
+          $projectVersion = [string]$project.Project.PropertyGroup.Version
+          $projectFileVersion = [string]$project.Project.PropertyGroup.FileVersion
+          if ($projectVersion -cne $version -or $projectFileVersion -cne "$version.$build") {
+            throw "Project version mismatch: $projectVersion / $projectFileVersion"
+          }
+          $file = "X-Stage-Download-Manager-v$version-build$build-win-x64-Setup.exe"
+          $artifact = "X-Stage-Download-Manager-v$version-build$build-Windows-EXE-ONLY"
+          $tag = "xstage-download-manager-v$version-build$build-preview"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "build=$build" >> $env:GITHUB_OUTPUT
+          "file=$file" >> $env:GITHUB_OUTPUT
+          "artifact=$artifact" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "Resolved Download Manager v$version Build $build"
+
+      - name: Prepare .NET 8
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+      - name: Test actual HTTP Range resume and fallback
+        shell: pwsh
+        run: |
+          dotnet run --project download-manager/tests/DownloadEngine.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'DownloadEngine integration tests failed' }
+      - name: Render WinForms desktop layout and vector icons across six viewports
+        shell: pwsh
+        run: |
+          dotnet run --project download-manager/tests/DownloadEngine.Tests.csproj -c Release -- --ui-smoke
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop WinForms/GDI+ rendering smoke failed' }
+      - name: Validate X-Stage portal contract
+        shell: pwsh
+        run: |
+          node download-manager/tests/portal-contract.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Portal contract test failed' }
+      - name: Validate X-Stage desktop menu and icon contracts
+        shell: pwsh
+        run: |
+          node download-manager/tests/desktop-workspace-contract.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'X-Stage desktop workspace contract test failed' }
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Generate X-Stage app icon
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check Pillow==11.3.0 pefile==2024.8.26
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to install Pillow' }
+          python download-manager/generate_icon.py
+          if ($LASTEXITCODE -ne 0) { throw 'Icon creation failed' }
+          if (-not (Test-Path download-manager/app.ico)) { throw 'Windows ICO missing' }
+      - name: Build Windows x64 self-contained EXE
+        shell: pwsh
+        run: |
+          dotnet publish download-manager/XStageDownloadManager.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o download-manager/out
+          if ($LASTEXITCODE -ne 0) { throw 'Download Manager build failed' }
+          if (-not (Test-Path download-manager/out/XStageDownloadManager.exe)) { throw 'Windows EXE missing' }
+          python download-manager/verify_exe_icon.py download-manager/out/XStageDownloadManager.exe
+          if ($LASTEXITCODE -ne 0) { throw 'EXE must contain its application icon' }
+      - name: Verify detached single-file updater readiness in empty folder
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP ('xstage-helper-probe-' + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $dir | Out-Null
+          $copy = Join-Path $dir 'xstage-update-helper-probe.exe'
+          Copy-Item 'download-manager/out/XStageDownloadManager.exe' $copy
+          $name = 'Local\XStageDownloadReady_' + [guid]::NewGuid().ToString('N')
+          $ready = [System.Threading.EventWaitHandle]::new($false, [System.Threading.EventResetMode]::ManualReset, $name)
+          $process = $null
+          try {
+            $process = Start-Process -FilePath $copy -ArgumentList @('--probe-update-helper', $name) -WorkingDirectory $dir -PassThru
+            $watch = [System.Diagnostics.Stopwatch]::StartNew()
+            while (-not $ready.WaitOne(250)) {
+              if ($process.HasExited) { throw "Copied helper exited before readiness: $($process.ExitCode)" }
+              if ($watch.Elapsed.TotalSeconds -ge 90) { throw 'Copied helper readiness timed out' }
+            }
+            if (-not $process.WaitForExit(10000)) { throw 'Helper probe did not exit' }
+            if ($process.ExitCode -ne 0) { throw "Helper probe returned $($process.ExitCode)" }
+            Write-Host "PASS detached single-file updater GUI readiness: $($watch.Elapsed.TotalSeconds)s; no installer launched"
+          } finally {
+            if ($null -ne $process) {
+              if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit(5000) | Out-Null }
+              $process.Dispose()
+            }
+            $ready.Dispose()
+            Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
+          }
+      - name: Bundle pinned yt-dlp, Deno, and FFmpeg without runtime installers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          $tools = 'download-manager/out/tools'
+          $staging = Join-Path $env:RUNNER_TEMP 'xstage-media-dependencies'
+          New-Item -ItemType Directory -Force -Path $tools, $staging | Out-Null
+          $packages = @(
+            @{
+              Key='ytdlp'; Filename='yt-dlp.exe'
+              Url='https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp.exe'
+              Sha256='f5389d3698ecde4ef06f4e6b1ce0294fe9ac1396228c8990b8d3416d6d177a7d'
+            },
+            @{
+              Key='deno'; Filename='deno-windows-x64.zip'
+              Url='https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-pc-windows-msvc.zip'
+              Sha256='cba84b26e0df5ae7f74fc66b86a95b866872a86292ebd84fa1e959927edd93bf'
+            },
+            @{
+              Key='ffmpeg'; Filename='ffmpeg-windows-x64.zip'
+              Url='https://github.com/yt-dlp/FFmpeg-Builds/releases/download/autobuild-2026-11-16-23-35/ffmpeg-N-128970-g11337618b2-win64-gpl.zip'
+              Sha256='66789a599f9b6606036f29980ee054abe75201f18a24ca24c623a78c9be3f7c0'
+            }
+          )
+          foreach ($item in $packages) {
+            $dest = Join-Path $staging $item.Filename
+            Write-Host "Fetching pinned official dependency $($item.Key)"
+            Invoke-WebRequest -Uri $item.Url -OutFile $dest -MaximumRedirection 6
+            if (-not (Test-Path $dest)) { throw "Download failed for $($item.Key)" }
+            $actual = (Get-FileHash -Algorithm SHA256 $dest).Hash.ToLowerInvariant()
+            if ($actual -cne $item.Sha256) {
+              throw "Supply chain SHA-256 verification failed for $($item.Key). Expected $($item.Sha256), got $actual"
+            }
+            if ($item.Key -eq 'ytdlp') {
+              Copy-Item $dest (Join-Path $tools 'yt-dlp.exe')
+            } else {
+              $expanded = Join-Path $staging ('extracted-' + $item.Key)
+              Expand-Archive -Path $dest -DestinationPath $expanded -Force
+              foreach ($exe in @($(if ($item.Key -eq 'deno') { 'deno.exe' } else { 'ffmpeg.exe'; 'ffprobe.exe' }))) {
+                $source = Get-ChildItem -Path $expanded -File -Recurse -Filter $exe | Select-Object -First 1
+                if (-not $source) { throw "$exe missing from pinned $($item.Key) archive" }
+                Copy-Item $source.FullName (Join-Path $tools $exe)
+              }
+            }
+          }
+          @'
+          X-Stage Download Manager third-party notices
+
+          yt-dlp 2026.10.26 | Unlicense | https://github.com/yt-dlp/yt-dlp/tree/2026.10.26
+          Deno 2.9.8 | MIT | https://github.com/denoland/deno/tree/v2.9.8
+          FFmpeg N-128970-g11337618b2 | GPL build supplied by yt-dlp/FFmpeg-Builds
+          FFmpeg build scripts, matching source revision and notices:
+          https://github.com/yt-dlp/FFmpeg-Builds/tree/autobuild-2026-11-16-23-35
+          https://github.com/FFmpeg/FFmpeg/tree/11337618b2
+          https://www.gnu.org/licenses/gpl-3.0.html
+
+          These are separate, independently maintained subprocess executables.
+          The user is responsible for rights and website terms when downloading media.
+          No DRM circumvention or extraction of private/paid content is provided.
+          '@ | Set-Content -Path (Join-Path $tools 'THIRD-PARTY-NOTICES.txt') -Encoding UTF8
+          $licenseDir = Join-Path $tools 'licenses'
+          New-Item -ItemType Directory -Force -Path $licenseDir | Out-Null
+          $licenses = @(
+            @{ Filename='yt-dlp-UNLICENSE.txt'; Url='https://raw.githubusercontent.com/yt-dlp/yt-dlp/2026.10.26/LICENSE' },
+            @{ Filename='Deno-MIT.txt'; Url='https://raw.githubusercontent.com/denoland/deno/v2.9.8/LICENSE.md' },
+            @{ Filename='FFmpeg-GPLv3.txt'; Url='https://raw.githubusercontent.com/FFmpeg/FFmpeg/11337618b2/COPYING.GPLv3' }
+          )
+          foreach ($license in $licenses) {
+            $dest = Join-Path $licenseDir $license.Filename
+            Invoke-WebRequest -Uri $license.Url -OutFile $dest
+            if (-not (Test-Path $dest) -or (Get-Item $dest).Length -lt 500) {
+              throw "Required license text missing: $($license.Filename)"
+            }
+          }
+          foreach ($exe in @('yt-dlp.exe','deno.exe','ffmpeg.exe','ffprobe.exe')) {
+            if (-not (Test-Path (Join-Path $tools $exe) -PathType Leaf)) { throw "$exe missing in portable installer payload" }
+          }
+          & (Join-Path $tools 'yt-dlp.exe') --version
+          if ($LASTEXITCODE -ne 0) { throw 'yt-dlp smoke test failed' }
+          & (Join-Path $tools 'deno.exe') --version
+          if ($LASTEXITCODE -ne 0) { throw 'Bundled Deno smoke test failed' }
+          & (Join-Path $tools 'ffmpeg.exe') -version
+          if ($LASTEXITCODE -ne 0) { throw 'Bundled ffmpeg smoke test failed' }
+          Write-Host 'Bundled verified video tools; no dependencies will be downloaded when the user installs.'
+      - name: Verify mixed native HTTP and bundled yt-dlp bandwidth on loopback
+        shell: pwsh
+        run: |
+          $yt = (Resolve-Path 'download-manager/out/tools/yt-dlp.exe').Path
+          dotnet run --project download-manager/tests/DownloadEngine.Tests.csproj -c Release -- --mixed-bandwidth $yt
+          if ($LASTEXITCODE -ne 0) { throw 'Mixed native/media bandwidth smoke failed' }
+      - name: Smoke-test playable MP4 with bundled FFmpeg and FFprobe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tools = (Resolve-Path 'download-manager/out/tools').Path
+          $ffmpeg = Join-Path $tools 'ffmpeg.exe'
+          $sample = Join-Path $env:RUNNER_TEMP 'xstage-synthetic-video.mkv'
+          & $ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'testsrc2=size=160x90:rate=15' -f lavfi -i 'sine=frequency=440:sample_rate=44100' -t 2 -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac $sample
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sample)) {
+            throw 'Could not generate synthetic audio/video for MP4 integrity regression'
+          }
+          dotnet run --project download-manager/tests/DownloadEngine.Tests.csproj -c Release -- --media-smoke $sample $tools
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Bundled FFmpeg/FFprobe failed real MKV-to-MP4 validation test'
+          }
+      - name: Smoke-test live audio silence detection and verified clip output
+        shell: pwsh
+        run: |
+          node download-manager/tests/live-capture-media-smoke.mjs download-manager/out/tools
+          if ($LASTEXITCODE -ne 0) { throw 'Live capture FFmpeg silence-splitting smoke test failed' }
+      - name: Validate and bundle optional Chrome/Edge extension
+        shell: pwsh
+        run: |
+          node --check download-manager/browser-extension/background.js
+          node --check download-manager/browser-extension/popup.js
+          node -e "const m=require('./download-manager/browser-extension/manifest.json'); if (m.manifest_version!==3 || !m.permissions.includes('nativeMessaging')) process.exit(1)"
+          Copy-Item -Path download-manager/browser-extension -Destination download-manager/out/browser-extension -Recurse -Force
+          if (-not (Test-Path download-manager/out/browser-extension/manifest.json)) { throw 'Browser extension missing in Setup payload' }
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress --limit-output
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+      - name: Package and verify installer EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $compiler)) { throw 'Inno Setup 6 missing' }
+          & $compiler download-manager/installer/XStageDownloadManager.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Setup build failed' }
+          $setup = "download-manager/installer/output/${{ steps.version.outputs.file }}"
+          if (-not (Test-Path $setup -PathType Leaf)) { throw 'Setup EXE missing' }
+          if ((Get-Item $setup).Length -lt 1000000) { throw 'Installer suspiciously small' }
+          python scripts/verify_songstudio_exe_icon.py $setup
+          if ($LASTEXITCODE -ne 0) { throw 'Setup EXE missing embedded application icon' }
+          $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
+          if ($hash -notmatch '^[a-f0-9]{64}$') { throw 'Invalid installer checksum' }
+          Write-Host "Installer EXE SHA-256: $hash"
+      - name: Upload Windows installer EXE only
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.version.outputs.artifact }}
+          path: download-manager/installer/output/${{ steps.version.outputs.file }}
+          if-no-files-found: error
+          retention-days: 30
