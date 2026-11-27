@@ -26,12 +26,17 @@ class SearchPagingTests(unittest.TestCase):
         self.assertTrue(state.accept(8, 0, 0, False))
         self.assertIsNone(state.request(8))
 
-    def test_five_rows_fit_compact_and_desktop(self):
-        for width, height in ((800, 500), (1024, 768), (1920, 1080)):
-            layout = overlay_layout(width, height)
-            self.assertEqual(layout['rows'], 5)
+    def test_five_rows_fit_desktop_and_compact_preserves_lyrics(self):
+        for width, height, row_height, expected in (
+                (800, 500, 32, 3), (1024, 600, 32, 5),
+                (1024, 768, 40, 5), (1920, 1080, 48, 5),
+                (800, 500, 48, 2)):
+            layout = overlay_layout(width, height, row_height)
+            self.assertEqual(layout['rows'], expected)
             _, y, _, h = layout['search']
-            self.assertLessEqual(y+h, height)
+            self.assertGreaterEqual(y, 100)
+            self.assertGreaterEqual(height-y-h, 136)
+            self.assertEqual(h, 166+expected*row_height)
 
     def test_sqlite_pages_beyond_old_200_limit_without_duplicates(self):
         with tempfile.TemporaryDirectory() as directory:

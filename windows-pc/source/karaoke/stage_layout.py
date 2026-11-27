@@ -8,13 +8,17 @@ def lyric_top(height, band_height, line_height, gap, reserved_top, reserved_bott
     target = height*.40 if idle else height-band_height-reserved_bottom-line_height-gap
     return max(reserved_top, min(target, height-band_height-16))
 
-def overlay_layout(width, height):
+def overlay_layout(width, height, search_row_height=32):
     width, height = max(360, int(width)), max(400, int(height))
     margin = 12 if width < 1000 else 24
-    rows = 5
     top = 132 if height < 650 else 174
-    search_height = 166 + rows * 32
-    search_top = max(0, min(top, height-search_height-8))
+    row_height = max(32, int(search_row_height))
+    # Keep the operator overlay clear of the lyric band, even at 800x500.
+    # Five rows is the target; only compact/high-DPI viewports reduce it.
+    overhead, lyric_reserve = 166, 136
+    search_top = max(100, min(top, height-lyric_reserve-overhead-5*row_height))
+    rows = max(1, min(5, (height-lyric_reserve-search_top-overhead)//row_height))
+    search_height = overhead + rows*row_height
     return {
         'search': (margin, search_top, width-2*margin, search_height),
         'queue': (margin, top, width-2*margin, 218),

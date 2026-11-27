@@ -393,16 +393,15 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
     def layout_overlays(self, event=None):
         from .stage_layout import overlay_layout
         width, height = self.surface.winfo_width(), self.surface.winfo_height()
-        layout = overlay_layout(width, height)
+        row_height = int(ttk.Style(self).lookup('Search.Treeview', 'rowheight') or 32)
+        layout = overlay_layout(width, height, row_height)
+        self.songs.configure(height=layout['rows'])
         if self.search_visible:
             x, y, w, h = layout['search']
-            # Account for the actual Thai-font row height and DPI scaling.
-            h = max(h, self.search_overlay.winfo_reqheight())
-            self.search_overlay.place(x=x, y=max(0, min(y, height-h-8)), width=w, height=min(h, height))
+            self.search_overlay.place(x=x, y=y, width=w, height=h)
         if self.queue_browser_visible:
             x, y, w, h = layout['queue']
             self.queue_browser.place(x=x, y=y, width=w, height=h)
-        self.songs.configure(height=layout['rows'])
         self.search_query_slot.configure(width=layout['query_width'])
         # Single-line labels clip at the right edge instead of expanding the band.
         self.search_title_label.configure(wraplength=0)
@@ -1654,7 +1653,8 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
         from .remote_ui import stage_invite
         data['remote_invite'] = stage_invite(self)
         from .stage_layout import overlay_layout
-        layout = overlay_layout(self.surface.winfo_width(), self.surface.winfo_height())
+        row_height = int(ttk.Style(self).lookup('Search.Treeview', 'rowheight') or 32)
+        layout = overlay_layout(self.surface.winfo_width(), self.surface.winfo_height(), row_height)
         reserved_top = 132 if self.surface.winfo_height() < 650 else 174
         if self.search_visible or self.queue_browser_visible:
             _, y, _, h = layout['search' if self.search_visible else 'queue']
