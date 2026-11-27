@@ -54,7 +54,8 @@ def open_builder(app, initial_root=None, *, parent=None):
     ttk.Label(frame, text="ฐานหลัก PC: " + str(Path(getattr(app, "home", app.data_dir)) / "DB" / "songs.sqlite3"), style="Muted.TLabel", wraplength=640).pack(anchor="w", pady=5)
     from .local_master import kind
     legacy_db = tk.StringVar(value="")
-    for candidate in (Path(app.home)/"DB"/"songs.sqlite3", Path(app.data_dir)/"songs.sqlite3"):
+    home_path=Path(getattr(app,"home",app.data_dir))
+    for candidate in (home_path/"DB"/"songs.sqlite3", Path(app.data_dir)/"songs.sqlite3"):
         try:
             if kind(candidate) == "pc":
                 legacy_db.set(str(candidate))
@@ -214,17 +215,24 @@ def open_builder(app, initial_root=None, *, parent=None):
     def export_database():
         if state["busy"] or getattr(app, "_shared_build_busy", False) or getattr(app, "scanning", False):
             return
-        if app.settings.get("pending_online_master"):
-            status.set("เปิดโปรแกรมใหม่เพื่อใช้ฐานที่เพิ่งสร้างก่อนคัดลอก")
-            return
+        pending=app.settings.get("pending_online_master")
         if not target.get():
             change_target()
         try:
             _, root = drive_library(target.get(), explicit=True, remembered=target.get())
             destination = root / "DB" / "songs.sqlite3"
             overwrite = destination.exists()
+            live=home_path/"DB"/"songs.sqlite3"
+            selected_legacy=legacy_db.get().strip()
+            if not pending and kind(live) != "online":
+                selected_legacy=selected_legacy or (str(live) if kind(live)=="pc" else "")
+                if not selected_legacy:
+                    raise ValueError("ยังไม่มีฐาน PC · กรุณาสร้างหรือเลือกฐานเดิมก่อน")
+            else:
+                selected_legacy=""
             if not messagebox.askyesno("คัดลอกฐาน PC ไป Online",
-                    "ตรวจสอบเพลงใน SONGS แล้วคัดลอกฐาน PC ไปยังคลังที่เลือก\n"
+                    ("แปลงฐาน PC เดิมเป็นฐานร่วมโดยตรวจไฟล์ใน SONGS ก่อนส่ง\n" if selected_legacy else
+                     "ตรวจสอบเพลงใน SONGS แล้วคัดลอกฐาน PC ไปยังคลังที่เลือก\n")+
                     "หากมีฐานเดิม ระบบจะสำรองก่อนแทนที่\n" + str(destination),
                     parent=panel, default="no"):
                 return
@@ -240,16 +248,29 @@ def open_builder(app, initial_root=None, *, parent=None):
         cancel.configure(state="normal")
         status.set("กำลังตรวจและคัดลอกฐาน SQLite ไป Google Drive…")
         def worker():
-            from .local_master import export_portable
+            from .local_master import export_portable, prepare_legacy_export
+            prepared=None
             try:
                 unchanged = []
-                result = export_portable(app.home, root, overwrite=overwrite, cancel=stop,
-                                         on_unchanged=lambda: unchanged.append(True))
+                if selected_legacy:
+                    prepared=prepare_legacy_export(home_path,selected_legacy,root,
+                        progress=update,cancel=stop,cache_dir=Path(app.data_dir)/"index-cache")
+                result = export_portable(home_path, root, overwrite=overwrite, cancel=stop,
+                                         on_unchanged=lambda: unchanged.append(True),
+                                         pending=bool(pending or prepared),progress=update)
                 message = ("ฐาน SQLite เหมือนเดิม · ไม่ส่งซ้ำ: " if unchanged else
                            "คัดลอกฐานสำเร็จ · รอ Google Drive ซิงก์: ") + str(result)
             except Exception as exc:
                 message = "ไม่สำเร็จ · " + str(exc)
             def done():
+                if prepared:
+                    app.settings["pending_online_master"]={
+                        "root":str(home_path),"generation":prepared["generation"],
+                        "source_songs":str(root/"SONGS"),"local_only":True,
+                        "legacy_migration":Path(selected_legacy).resolve()==Path(
+                            getattr(app.library,"path",home_path/"DB"/"songs.sqlite3")).resolve()}
+                    app.settings.pop("pending_pc_only",None)
+                    app.save_settings()
                 app._shared_build_busy = False
                 state["busy"] = False
                 if not state["closed"]:

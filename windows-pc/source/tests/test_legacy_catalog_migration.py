@@ -53,3 +53,30 @@ class LegacyMigrationTests(unittest.TestCase):
         (self.songs/"00001.xmid").write_bytes((self.folder/"00001.xmid").read_bytes())
         with self.assertRaises(ValueError):migrate(self.source,self.songs,self.home)
         self.assertEqual(Path(first["database"]).read_bytes(),previous)
+
+
+    def test_pc_legacy_export_keeps_master_and_cloud_backup(self):
+        from karaoke.local_master import prepare_legacy_export, export_portable
+        import shutil
+        drive=self.root/"XStageKaraoke"
+        shutil.copytree(self.songs,drive/"SONGS")
+        (drive/"SOUNDFONT").mkdir()
+        (drive/"FX").mkdir()
+        (drive/"DB").mkdir()
+        (self.home/"DB").mkdir()
+        live=self.home/"DB"/"songs.sqlite3"
+        shutil.copyfile(self.source,live)
+        cloud=drive/"DB"/"songs.sqlite3"
+        shutil.copyfile(self.source,cloud)
+        original=live.read_bytes()
+        prepared=prepare_legacy_export(self.home,live,drive)
+        self.assertEqual(prepared["accepted"],2)
+        with self.assertRaises(FileExistsError):
+            export_portable(self.home,drive,pending=True)
+        self.assertEqual(cloud.read_bytes(),original)
+        export_portable(self.home,drive,pending=True,overwrite=True)
+        self.assertEqual(live.read_bytes(),original)
+        with closing(sqlite3.connect(cloud)) as db:
+            self.assertEqual(db.execute("SELECT value FROM catalog_meta WHERE key='pcSchema'").fetchone()[0],"shared-v1")
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM songs").fetchone()[0],2)
+        self.assertEqual(len(list(cloud.parent.glob("*.bak"))),1)

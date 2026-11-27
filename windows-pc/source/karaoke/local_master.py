@@ -174,7 +174,8 @@ def _catalog_fingerprint(path, cancel=None):
     return before.st_size, digest.hexdigest()
 
 
-def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchanged=None):
+def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchanged=None,
+                    pending=False, progress=None):
     """Publish a completed PC snapshot independently of catalog scanning.
 
     The destination must be the selected library root. Do not modify songs
@@ -183,7 +184,7 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
     from .shared_song_library import validate_shared
     from .shared_drive_layout import inspect
     home = Path(home).resolve(strict=True)
-    source = home / "DB" / "songs.sqlite3"
+    source = home / "DB" / (".online-pending.sqlite3" if pending else "songs.sqlite3")
     root = Path(inspect(drive_root)["root"])
     if not root.is_dir() or not (root / "SONGS").is_dir():
         raise ValueError("กรุณาคัดลอกโฟลเดอร์ SONGS ไปยังคลัง Google Drive ก่อน")
@@ -219,8 +220,9 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
         # catalog. Resolve them from the selected folder at playback time.
         import json
         with closing(sqlite3.connect(stage)) as db:
-            for ident, payload, path, size in db.execute(
-                    "SELECT id,payload,path,original_file_size FROM songs"):
+            total = db.execute("SELECT COUNT(*) FROM songs").fetchone()[0]
+            for number,(ident, payload, path, size) in enumerate(db.execute(
+                    "SELECT id,payload,path,original_file_size FROM songs"),1):
                 stopped()
                 row = json.loads(payload)
                 parts = path.split("/")
@@ -252,6 +254,9 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
                         row["pendingDriveLink"] = True
                 db.execute("UPDATE songs SET payload=? WHERE id=?",
                            (json.dumps(row, ensure_ascii=False, separators=(",", ":")), ident))
+                if progress and (number % 25 == 0 or number == total):
+                    progress(dict(scanned=number,total=total,accepted=number,
+                                  duplicates=0,reused=0),"ตรวจเพลงก่อนส่งฐานไป Google Drive")
             db.commit()
         validate_shared(root, stage)
         stopped()
@@ -297,3 +302,15 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
         stage.unlink(missing_ok=True)
         if upload is not None:
             upload.unlink(missing_ok=True)
+
+
+def prepare_legacy_export(home, source_db, drive_root, *, progress=None, cancel=None, cache_dir=None):
+    """Migrate from the authoritative PC catalog using the copied SONGS tree.
+    Return a verified pending master. The live PC master stays unchanged until
+    the normal restart/activation workflow backs it up. No cloud write here.
+    """
+    from .legacy_catalog_migration import migrate
+    from .shared_drive_layout import inspect
+    root = Path(inspect(drive_root)["root"])
+    return migrate(source_db, root / "SONGS", home, progress=progress,
+                   cancel=cancel, cache_dir=cache_dir)
