@@ -118,7 +118,7 @@
             <button type="button" data-cmd="fullscreen">เต็มหน้าจอ</button>
           </div>
           <nav id="mobile-stage-menu" class="mobile-stage-menu" aria-label="เมนูหน้าจอเล็ก" hidden>
-            <div class="mobile-menu-head"><strong>เมนู X-Stage</strong><button type="button" id="mobile-menu-close" aria-label="ปิดเมนู">✕</button></div>
+            <div class="mobile-menu-head"><div class="mobile-menu-brand"><img src="assets/xstage-stage-logo.png?v=1223" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async"><small id="mobile-menu-release-label">v1.0.223 · Build 1223</small></div><button type="button" id="mobile-menu-close" aria-label="ปิดเมนู">✕</button></div>
             <div id="mobile-menu-status" class="mobile-menu-status" role="status"></div>
             <details class="xstage-menu-category" name="xstage-main-menu">
               <summary>01. หน้าแรก</summary>
@@ -590,13 +590,15 @@
 window.XSTAGE_RELEASE={version:'1.0.223',build:1223};
 document.addEventListener('DOMContentLoaded',function(){
   const label=document.getElementById('karaoke-release-label');
-  if(!label)return;
+  const menuLabel=document.getElementById('mobile-menu-release-label');
   const web=window.XSTAGE_RELEASE;
-  label.textContent='Karaoke Web v'+web.version+' · Build '+web.build;
+  if(label)label.textContent='Karaoke Web v'+web.version+' · Build '+web.build;
+  if(menuLabel)menuLabel.textContent='v'+web.version+' · Build '+web.build;
   try{
     const native=window.XStageAndroid;
     if(native&&typeof native.getAppVersion==='function'&&typeof native.getAppBuild==='function'){
-      label.textContent='Android v'+native.getAppVersion()+' · Build '+native.getAppBuild()+' | Web v'+web.version+' · Build '+web.build;
+      if(label)label.textContent='Android v'+native.getAppVersion()+' · Build '+native.getAppBuild()+' | Web v'+web.version+' · Build '+web.build;
+      if(menuLabel)menuLabel.textContent='APK v'+native.getAppVersion()+' · Build '+native.getAppBuild()+' | Web v'+web.version+' · Build '+web.build;
     }
   }catch(error){/* Native bridge may be unavailable in normal web browsers. */}
 });
