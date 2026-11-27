@@ -155,7 +155,7 @@ def relocate(plan, category, ids, all_selected, excluded, destination, action):
     if current["revision"] != plan["revision"] or current["shared"]:
         raise ValueError("Catalog changed; scan again")
     old = {r["id"]: r for r in filtered(plan, category)}
-    chosen = (set(old) - set(excluded)) if all_selected else set(ids)
+    chosen = ({i for i, row in old.items() if row["actionable"]} - set(excluded)) if all_selected else set(ids)
     if not chosen or not chosen <= old.keys():
         raise ValueError("Invalid or empty selection")
     new = {r["id"]: r for r in filtered(current, category)}
@@ -171,7 +171,7 @@ def relocate(plan, category, ids, all_selected, excluded, destination, action):
     moved = failed = 0
     with log.open("x", encoding="utf-8") as stream:
         for row in selected:
-            src = local_path(root, row["path"])
+            src = Path(row["path"])
             dest = run / src.relative_to(root)
             entry = {"id": row["id"], "source": str(src), "destination": str(dest), "action": action}
             # Record intention before moving; no permanent deletion or overwrite.
@@ -179,12 +179,16 @@ def relocate(plan, category, ids, all_selected, excluded, destination, action):
             stream.flush()
             os.fsync(stream.fileno())
             try:
-                if stamp(src) != tuple(row["stamp"]):
+                db = Path(plan["database"])
+                wal = Path(str(db) + "-wal")
+                if (stamp(db), stamp(wal) if wal.exists() else None) != plan["revision"]:
+                    raise ValueError("Catalog changed; scan again")
+                if local_path(root, str(src)) != src or stamp(src) != tuple(row["stamp"]):
                     raise ValueError("File changed since audit")
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 # Same filesystem only, atomic no-clobber link; if unsupported fail safely.
                 os.link(src, dest)
-                if not os.path.samefile(src, dest):
+                if local_path(root, str(src)) != src or not os.path.samefile(src, dest) or stamp(src)[:4] != tuple(row["stamp"])[:4]:
                     raise ValueError("Destination identity mismatch")
                 src.unlink()
                 moved += 1
