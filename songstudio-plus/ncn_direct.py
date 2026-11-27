@@ -23,7 +23,7 @@ LABELS = {
     "นักร้องนำ":"artist","composer":"composer","ผู้แต่ง":"composer",
     "arranger":"arranger","ผู้เรียบเรียง":"arranger",
 }
-KEY = re.compile(r"(?:[A-G](?:#|b|♯|♭)?(?:m|maj|min|major|minor)?|[-+]?\d{1,2})",re.I)
+KEY = re.compile(r"(?:[A-G](?:#|b|♯|♭)?(?:m|maj|min|major|minor)?(?:[679]|11|13)?|[-+]?\d{1,2})",re.I)
 
 def clean(value, code):
     value=value.strip()
@@ -39,7 +39,9 @@ VENDOR_CREDIT = re.compile(r"^(?:nick[\s_-]*karaoke(?:\s+professional)?|extreme[
 
 def is_credit(line):
     value=line.strip(" \t.…·•*_-~=<>[]()")
-    return bool(CREDIT_LABEL.match(value) or VENDOR_CREDIT.fullmatch(value))
+    # Explicit vendor names observed in legacy NCN boundary credits.
+    vendor=re.fullmatch(r"(?:(?:music[\s_-]+)?by[\s_-]+)?(?:nick[\s_-]*karaoke|นิค[\s_-]*คาราโอเกะ|เต่า[\s_-]*คาราโอเกะ)(?:[\s_-]+\d{2,4}[- ]?\d{3}[- ]?\d{3,4})?",value,re.I)
+    return bool(CREDIT_LABEL.match(value) or VENDOR_CREDIT.fullmatch(value) or vendor or re.fullmatch(r"GMM[\s_-]+Grammy",value,re.I))
 
 def label_value(line):
     m=re.fullmatch(r"\s*[@#]?\s*([^:=：]+?)\s*[:=：]\s*(.*?)\s*",line)
@@ -66,7 +68,7 @@ def identify_header(lyr,cur,code, *, lyric_data=None,cursor_data=None,midi_tags=
     # arbitrary beginning lyrics until the CUR count happens to fit.
     cuts={}
     if len(rows)>4 and (KEY.fullmatch(rows[2].strip()) or
-                         (not rows[2].strip() and not rows[3].strip())):
+                         (not rows[2].strip() and rows[3].strip() in ("","."))):
         if not any(label_value(x)[0] for x in rows[:4]):
             cuts[4]={"title":rows[0],"artist":rows[1],"key":rows[2]}
     meta={}
@@ -134,6 +136,24 @@ def identify_header(lyr,cur,code, *, lyric_data=None,cursor_data=None,midi_tags=
     if not candidates:
         raise ValueError("Unknown or ambiguous metadata/CUR layout; no guessing")
     rank=min(x[0] for x in candidates)
+    if rank==1:
+        # With surplus CUR, preserve the longest candidate when the only
+        # differences are recognised leading credits. Do not shift a timed
+        # lyric merely because a shorter candidate also fits the count.
+        preferred=[]
+        for item in candidates:
+            priority,signature,result=item
+            if priority!=rank:
+                continue
+            _,metadata,actual,_,_,_=result
+            if any(other[0]==rank and other[2][1]==metadata and
+                   len(other[2][2])>len(actual) and
+                   other[2][2][-len(actual):]==actual and
+                   all(is_credit(x) for x in other[2][2][:-len(actual)])
+                   for other in candidates):
+                continue
+            preferred.append(item)
+        candidates=preferred
     unique=[]
     for priority,signature,result in candidates:
         if priority==rank and not any(x[0]==signature for x in unique):
@@ -224,33 +244,85 @@ def measured_boundaries(doc,duration):
             next_at=cues[j+1]["start"] if j+1<len(cues) else end
             cue["duration"]=round(next_at-cue["start"],6)
 
+def normalize_cursor_trailer(raw):
+    """Recognise the observed exact vendor suffix; never trim arbitrary bytes."""
+    suffix=b"www.patongbusiness.com"
+    if raw.endswith(b"\xff"+suffix):
+        data=raw[:-len(suffix)]
+        if len(data)%2==1:
+            return data, ["CUR vendor text trailer excluded from parsing"]
+    return raw, []
+
+def normalize_lyric_trailer(raw,cursor):
+    """Recover only an unambiguous text prefix before a padded binary appendix."""
+    try:
+        raw.split(b"\x1a",1)[0].decode("cp874")
+        return raw, []
+    except UnicodeError:
+        pass
+    matches=[]
+    count=len(cursor)//2
+    for m in re.finditer(rb"(?:\r\n){3,}[ \t]{20,}",raw):
+        prefix=raw[:m.start()]
+        try:
+            rows=prefix.decode("cp874").replace("\r\n","\n").replace("\r","\n").split("\n")
+        except UnicodeError:
+            continue
+        if len(rows)<=4 or not (KEY.fullmatch(rows[2].strip()) or
+                                  not rows[2].strip()):
+            continue
+        needed=sum(1+len(line.encode("cp874")) for line in rows[4:] if line.strip())
+        if needed>0 and count in (needed,needed+1):
+            matches.append(prefix)
+    if len(matches)==1:
+        return matches[0], ["LYR padded binary appendix excluded from parsing"]
+    return raw, []
+
 def convert_one(parts,dest,code,cancel=None):
     midi,lyr,cur=(Path(parts[x]) for x in ("midi","lyrics","cursor"))
     raw,ms=bounded_read(midi,64*1024*1024)
     lyric,ls=bounded_read(lyr,1024*1024)
     cursor,cs=bounded_read(cur,2*1024*1024)
+    cursor, cursor_warnings=normalize_cursor_trailer(cursor)
+    lyric, lyric_warnings=normalize_lyric_trailer(lyric,cursor)
     midi_info=reader.midi_events(midi,include_duration=True,raw_data=raw)
     tags=explicit_midi_tags(midi_info[2],parts["code"])
     cut,metadata,expected,encoding,details,body=identify_header(lyr,cur,parts["code"],
         lyric_data=lyric,cursor_data=cursor,midi_tags=tags)
-    # Only the in-memory parsing view omits proven untimed footer credits.
-    # Original MID/LYR/CUR bytes remain untouched, and credit text is reported.
-    parsing_lyric=lyric
-    if details["footer_credit"]:
-        original_rows=lyric.split(b"\x1a",1)[0].decode(encoding).replace("\r\n","\n").replace("\r","\n").split("\n")
-        parsing_lyric=("\n".join(original_rows[:cut]+body)+"\n").encode(encoding)
-    doc=reader.ncn_document(parts,header_rows=cut,metadata_override=metadata,
-        lyric_data=parsing_lyric,cursor_data=cursor,midi_info=midi_info)
+    # Retry only by removing a known final credit. Its invalid/absent
+    # positions never shift the earlier lyric. The original bytes are intact.
+    original_rows=lyric.split(b"\x1a",1)[0].decode(encoding).replace("\r\n","\n").replace("\r","\n").split("\n")
+    def parse_body(candidate, reconstruct):
+        parsing_lyric=("\n".join(original_rows[:cut]+candidate)+"\n").encode(encoding) if reconstruct else lyric
+        parsed=reader.ncn_document(parts,header_rows=cut,metadata_override=metadata,
+            lyric_data=parsing_lyric,cursor_data=cursor,midi_info=midi_info)
+        info=parsed["metadata"]
+        if not info.get("timingComplete") or any("ย้อนกลับ" in w or "เกินความยาว" in w for w in info.get("timingWarnings",[])):
+            raise ValueError("Incomplete or inconsistent CUR")
+        if [line["text"] for line in parsed["lines"]]!=[x for x in candidate if x.strip()]:
+            raise ValueError("Decoded lyric differs from original")
+        measured_boundaries(parsed,midi_info[3])
+        return parsed
     def verify_sources():
         if any(file_stamp(p)!=stamp for p,stamp in ((midi,ms),(lyr,ls),(cur,cs))):
             raise ValueError("NCN component changed during conversion")
+    try:
+        doc=parse_body(body,bool(details["footer_credit"]))
+    except ValueError:
+        candidate=list(body)
+        removed=[]
+        while candidate and is_credit(candidate[-1]):
+            removed.append(candidate.pop())
+            while candidate and not candidate[-1].strip():
+                candidate.pop()
+        if not removed or not any(x.strip() for x in candidate):
+            raise
+        doc=parse_body(candidate,True)
+        details["footer_credit"]=list(reversed(removed))+details["footer_credit"]
+        details["warnings"].append("Untimed or inconsistent final vendor credit excluded from timed lyrics")
+    details["warnings"].extend(cursor_warnings+lyric_warnings)
     info=doc["metadata"]
-    if not info.get("timingComplete") or any("ย้อนกลับ" in w or "เกินความยาว" in w for w in info.get("timingWarnings",[])):
-        raise ValueError("Incomplete or inconsistent CUR")
-    if [line["text"] for line in doc["lines"]]!=expected:
-        raise ValueError("Decoded lyric differs from original")
     verify_sources()
-    measured_boundaries(doc,midi_info[3])
     validated=core.valid_lines(doc)
     if not validated:
         raise ValueError("No timed lyrics")

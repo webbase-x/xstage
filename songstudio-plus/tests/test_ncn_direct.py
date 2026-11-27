@@ -207,3 +207,58 @@ class DirectCreditTests(unittest.TestCase):
             result=direct.convert_folder(str(root),str(out))
             self.assertEqual(result["converted"],1,result)
             self.assertEqual(result["with_credits"],0)
+
+
+class ObservedLegacyLayoutTests(unittest.TestCase):
+    def test_empty_key_dot_and_surplus_with_leading_vendor(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["title","artist","",".","...Nick_Karaoke..."],body="abc")
+            lyr=midi.with_suffix(".lyr")
+            cur=midi.with_suffix(".cur")
+            body=["...Nick_Karaoke...","abc"]
+            count=sum(len(x)+1 for x in body)
+            cur.write_bytes(struct.pack("<"+"H"*(count+5),*([0]*count+[65535]*5)))
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["converted"],1,result)
+
+    def test_bad_final_credit_never_invalidates_real_lyrics(self):
+        import json
+        for footer in ("Music_By_นิค_คาราโอเกะ","GMM Grammy","By_นิค_คาราโอเกะ"):
+            with self.subTest(footer=footer),tempfile.TemporaryDirectory() as d:
+                root=Path(d)/"in";out=Path(d)/"out"
+                midi=fixture(root,["title","artist","C","."],body="abc")
+                lyr=midi.with_suffix(".lyr");cur=midi.with_suffix(".cur")
+                lyr.write_bytes(lyr.read_bytes()+(footer+"\r\n").encode("cp874"))
+                cur.write_bytes(cur.read_bytes()+b"\xff\xff"*(len(footer)+1))
+                before=cur.read_bytes()
+                result=direct.convert_folder(str(root),str(out))
+                self.assertEqual(result["converted"],1,result)
+                row=json.loads(Path(result["report"]).read_text(encoding="utf-8"))
+                self.assertEqual(row["footer_credit"],[footer])
+                self.assertEqual(cur.read_bytes(),before)
+
+    def test_exact_cursor_vendor_trailer_and_unknown_suffix(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["title","artist","C","."],body="abc")
+            cur=midi.with_suffix(".cur")
+            original=cur.read_bytes()
+            cur.write_bytes(original+b"\xffwww.patongbusiness.com")
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["converted"],1,result)
+            self.assertEqual(cur.read_bytes(),original+b"\xffwww.patongbusiness.com")
+            self.assertEqual(direct.normalize_cursor_trailer(original+b"X")[0],original+b"X")
+
+    def test_padded_binary_appendix_requires_exact_count(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["title","artist","C","."],body="abc")
+            lyr=midi.with_suffix(".lyr");cur=midi.with_suffix(".cur")
+            original=lyr.read_bytes()
+            appended=original+b"\r\n\r\n\r\n"+b" "*30+b"\x81\x00\x02"
+            lyr.write_bytes(appended)
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["converted"],1,result)
+            self.assertEqual(lyr.read_bytes(),appended)
+            self.assertEqual(direct.normalize_lyric_trailer(appended,b"\x00\x00")[0],appended)
