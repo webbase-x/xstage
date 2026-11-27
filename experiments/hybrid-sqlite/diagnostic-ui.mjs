@@ -1,7 +1,6 @@
 /* Preview dialog intentionally does not insert a PC path into playback/queue.
  * All output uses textContent. Close or switch account invalidates the reader. */
 import {openGoogleExperiment} from './google-live.mjs';
-import {portableXmidPath} from './path-resolver.mjs';
 const element=(tag,value)=>{const e=document.createElement(tag);if(value!==undefined)e.textContent=value;return e;};
 export async function showHybridExperiment(options){
   document.getElementById('xstage-hybrid-experiment')?.close();
@@ -10,7 +9,7 @@ export async function showHybridExperiment(options){
   const heading=element('h2','Hybrid SQLite · ทดลองอ่านจาก Google Drive');
   const notice=element('p','อ่านอย่างเดียว · ไม่ดาวน์โหลดฐานเต็ม · ยังไม่แก้คิวหรือเล่นเพลง');
   const status=element('p','กำลังตรวจ HTTP Range…');status.setAttribute('role','status');
-  const close=element('button','ปิด / กลับโหมดปกติ');close.type='button';
+  const close=element('button','ปิดหน้าต่างทดสอบ');close.type='button';
   const search=element('input');search.type='search';search.placeholder='รหัสเพลง / ชื่อ / ศิลปิน';search.disabled=true;search.maxLength=120;
   const submit=element('button','ค้นหา');submit.disabled=true;
   const more=element('button','5 เพลงถัดไป');more.disabled=true;
