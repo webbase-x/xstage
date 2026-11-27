@@ -1,6 +1,6 @@
 {
   "name": "X-Stage Song Studio Pro",
-  "version": "0.1.46",
+  "version": "0.1.47",
   "channel": "preview",
   "available": true,
   "windows_artifact_build": false,
@@ -9,9 +9,9 @@
   "player_compatible": false,
   "workflow_url": "https://github.com/webbase-x/xstage/actions/workflows/test-songstudio-pro.yml",
   "documentation_url": "https://github.com/webbase-x/xstage/tree/main/songstudio-plus",
-  "status": "Verified Song Studio Pro v0.1.46 direct NCN to XMID Windows Setup: installs in Program Files with UAC, Start Menu shortcut and uninstall support, preserving existing SQLite and original media. Unsigned Preview.",
-  "file": "X-Stage-Song-Studio-Pro-v0.1.46-win-x64-Setup.exe",
-  "sha256": "a5024b457309cee52161380559d510c00fa6a34bf7e0068a2001f998f380f3dd",
-  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.46-preview/X-Stage-Song-Studio-Pro-v0.1.46-win-x64-Setup.exe",
-  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.46-preview"
+  "status": "Verified Song Studio Pro v0.1.47 NCN and XMID catalog management Windows Setup: installs in Program Files with UAC, Start Menu shortcut and uninstall support, preserving existing SQLite and original media. Unsigned Preview.",
+  "file": "X-Stage-Song-Studio-Pro-v0.1.47-win-x64-Setup.exe",
+  "sha256": "e22510e5b4786dd34e699bc01889cefbaa4e9358c2a8c082651dc77ac64801ea",
+  "download_url": "https://github.com/webbase-x/xstage/releases/download/song-studio-pro-v0.1.47-preview/X-Stage-Song-Studio-Pro-v0.1.47-win-x64-Setup.exe",
+  "release_url": "https://github.com/webbase-x/xstage/releases/tag/song-studio-pro-v0.1.47-preview"
 }
