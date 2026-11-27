@@ -157,12 +157,12 @@
           <label for="xm-filter">ประเภทข้อบกพร่อง</label>
           <select id="xm-filter"><option value="all">ข้อบกพร่องทั้งหมด</option><option value="duplicate">เพลงซ้ำตามฐาน</option><option value="no_title">ไม่มีชื่อเพลง</option><option value="no_artist">ไม่มีศิลปิน</option><option value="missing">ไม่พบไฟล์</option><option value="unplayable">เล่นไม่ได้ตามฐาน</option><option value="unsafe">พาธไม่ปลอดภัย</option><option value="shared_path">อ้างถึงไฟล์เดียวกัน</option></select>
           <div><button id="xm-all" type="button" class="quiet-btn">เลือกทั้งหมดในตัวกรอง (ที่จัดการได้)</button> <button id="xm-none" type="button" class="quiet-btn">ยกเลิกเลือก</button> <span id="xm-selected"></span></div>
-          <div style="overflow:auto"><table><thead><tr><th>เลือก</th><th>รหัส</th><th>ชื่อเพลง</th><th>ศิลปิน</th><th>ปัญหา / พาธ</th></tr></thead><tbody id="xm-rows"></tbody></table></div>
+          <div class="xm-table-scroll"><table><thead><tr><th>เลือก</th><th>รหัส</th><th>ชื่อเพลง</th><th>ศิลปิน</th><th>ปัญหา / พาธ</th></tr></thead><tbody id="xm-rows"></tbody></table></div>
           <div><button id="xm-prev" type="button" class="quiet-btn">ก่อนหน้า</button> <span id="xm-page"></span> <button id="xm-next" type="button" class="quiet-btn">ถัดไป</button></div>
           <label for="xm-dest">โฟลเดอร์ปลายทาง / ที่พักไฟล์สำหรับกู้คืน</label><div class="input-wrap"><input id="xm-dest"><button id="xm-dest-pick" class="browse-btn" type="button">เลือกโฟลเดอร์</button></div>
           <p>ลบ = ย้ายเข้าที่พักไฟล์ ไม่ลบถาวร · ปิด Karaoke ก่อนจัดการไฟล์ แล้วตรวจ/อัปเดตฐานใน Karaoke ใหม่ · ฐานร่วม Online ตรวจได้เท่านั้น</p>
           <button id="xm-move" class="quiet-btn" type="button" disabled>ย้ายเพลงที่เลือก</button> <button id="xm-delete" class="quiet-btn" type="button" disabled>ลบเข้าที่พักไฟล์</button>
-          <p id="xm-result" role="status" style="overflow-wrap:anywhere"></p>
+          <p id="xm-result" role="status"></p>
         </article>
       </section>
       <section class="view" id="view-ncn" aria-labelledby="ncn-title">
@@ -181,7 +181,7 @@
           <button class="quiet-btn" id="ncn-stop" type="button" disabled>หยุดอย่างปลอดภัย</button>
           <p id="ncn-progress" role="status" aria-live="polite">ยังไม่ได้เริ่ม</p>
           <progress id="ncn-progress-bar" value="0" max="1"></progress>
-          <p id="ncn-report" class="field-hint" style="white-space:pre-wrap;overflow-wrap:anywhere"></p>
+          <p id="ncn-report" class="field-hint"></p>
           <p id="ncn-errors" class="field-hint" aria-live="polite"></p>
         </article>
       </section>
