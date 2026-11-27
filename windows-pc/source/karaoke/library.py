@@ -159,6 +159,14 @@ class SearchReader:
                                           len(row['title']), row['id']))
         return tuple(row['id'] for row in candidates[:limit])
 
+    def _search_filters(self, favorite, playable_only):
+        filters = []
+        if favorite:
+            filters.append('(favorite=1 OR EXISTS (SELECT 1 FROM songs d WHERE d.duplicate_of=songs.id AND d.favorite=1))')
+        if playable_only:
+            filters.append('playable=1')
+        return filters
+
     def search(self, text='', favorite=False, limit=1000, playable_only=False, cancelled=None, *, offset=None):
         cancelled = cancelled or (lambda: False)
         if cancelled():
@@ -182,9 +190,7 @@ class SearchReader:
                     ids = self._title_prefix_ids(query, limit, favorite, playable_only)
             if ids is None:
                 tokens = query.split()
-                where = ['duplicate_of=0 AND duplicate_state NOT IN (\'deleted\',\'moved\',\'recycled\',\'invalid\',\'missing\',\'excluded\',\'manual_hidden\')'] + (['(favorite=1 OR EXISTS (SELECT 1 FROM songs d WHERE d.duplicate_of=songs.id AND d.favorite=1))'] if favorite else [])
-                if playable_only:
-                    where.append('playable=1')
+                where = ['duplicate_of=0 AND duplicate_state NOT IN (\'deleted\',\'moved\',\'recycled\',\'invalid\',\'missing\',\'excluded\',\'manual_hidden\')'] + self._search_filters(favorite, playable_only)
                 values = []
                 indexed = [token for token in tokens if len(token) >= 3] if self.fts else []
                 if indexed:

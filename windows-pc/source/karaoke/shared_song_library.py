@@ -74,9 +74,29 @@ class SharedReader(SearchReader):
         self._version=self._count=None
         self._cache.clear()
 
+    def _search_filters(self, favorite, playable_only):
+        filters = []
+        if favorite:
+            filters.append('xstage_local_favorite(id)=1')
+        if playable_only:
+            filters.extend(('playable=1', 'xstage_safe_path(path)=1'))
+        return filters
+
     def search(self, text="", favorite=False, limit=1000,
-               playable_only=False, cancelled=None):
+               playable_only=False, cancelled=None, *, offset=None):
         self._refresh_if_changed()
+        # Apply local-only favorites and portable path validation before LIMIT,
+        # so pages cannot end early when unsupported songs precede valid songs.
+        favorites = self.library.settings.get("shared_favorite_song_ids", [])
+        favorite_ids = frozenset(x for x in favorites if type(x) is int) if isinstance(favorites, list) else frozenset()
+        if favorite_ids != getattr(self, '_page_favorites', None):
+            self._cache.clear()
+            self._page_favorites = favorite_ids
+        self.db.create_function('xstage_local_favorite', 1, lambda song_id: int(song_id in favorite_ids), deterministic=True)
+        self.db.create_function('xstage_safe_path', 1, lambda path: int(self.library._safe_parts(path) is not None), deterministic=True)
+        if offset is not None:
+            rows = super().search(text, favorite, limit, playable_only, cancelled, offset=offset)
+            return [self.library._visible(row, verify=False) for row in rows]
         # Local favorites are a per-device presentation preference; never
         # modify a shared cloud music catalog just because PC marked a star.
         fetch_limit = 5000 if favorite else limit
@@ -104,16 +124,20 @@ class SharedSongLibrary:
         stat=self.path.stat()
         return (stat.st_ino,stat.st_size,stat.st_mtime_ns)
 
-    def _visible(self, row, verify=True):
-        row = dict(row)
-        raw = str(row.get("path") or "")
-        # Search lists never hydrate 1,000 Drive placeholders just to render
-        # titles; the exact media path and filesystem are verified on play.
-        parts = raw.split("/")
+    @staticmethod
+    def _safe_parts(path):
+        parts = str(path or "").split("/")
         safe = len(parts) >= 2 and parts[0] == "SONGS" and all(
             part not in ("", ".", "..") and ":" not in part and chr(92) not in part
             for part in parts)
-        if not safe:
+        return parts if safe else None
+
+    def _visible(self, row, verify=True):
+        row = dict(row)
+        raw = str(row.get("path") or "")
+        # Search lists never hydrate Drive placeholders just to render titles.
+        parts = self._safe_parts(raw)
+        if parts is None:
             row["path"] = ""
             row["playable"] = 0
         elif verify:

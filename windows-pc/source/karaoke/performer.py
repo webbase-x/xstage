@@ -1083,9 +1083,10 @@ class PlaybackApp(PerformanceFeatures,ClassicApp):
             return
         paging = self._search_paging
         offset = paging.request(self.search_revision)
+        if advance and paging.inflight is not None and self.songs.selection():
+            paging.advance = self.songs.selection()[0]
         if offset is None:
             return
-        paging.advance = self.songs.selection()[0] if advance and self.songs.selection() else None
         request = self.search_revision, self.search_var.get(), self.favorite_var.get(), self.playable_var.get(), offset
         with self._search_condition:
             self._search_request = request
