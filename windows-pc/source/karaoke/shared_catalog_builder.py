@@ -14,6 +14,7 @@ import re
 import secrets
 import shutil
 import sqlite3
+import struct
 import threading
 import time
 import unicodedata
@@ -22,6 +23,8 @@ from contextlib import closing
 from pathlib import Path
 
 from .xmid_reader import read_xmid
+from .midi_structure import parse_structure
+from .inspection_errors import ReviewRequired
 
 MAX_PACKAGES = 300000
 MAX_SQLITE_BYTES = 192 * 1048576
@@ -62,8 +65,8 @@ CREATE TABLE removed_songs (web_song_id TEXT PRIMARY KEY NOT NULL);
 INSERT = """INSERT INTO songs (
  id,ordinal,web_song_id,path,kind,search,format,code,title,artist,
  source_format,original_filename,original_relative_path,original_file_size,
- source_code,midi_size,midi_md5,payload
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"""
+ source_code,midi_size,midi_md5,payload,first_lyric,rhythm,key_signature,bpm
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"""
 
 
 def _stop(cancel):
@@ -136,7 +139,9 @@ def _read_xsk(path):
             or raw[:4] not in (b"MThd", b"NCN1")):
             raise ValueError("XSK MIDI ไม่ผ่านการตรวจ SHA-256")
         return raw, {"code": doc.get("songCode"), "title": doc.get("title"),
-                     "artist": doc.get("artist"), "lines": doc.get("lines")}
+                     "artist": doc.get("artist"), "lines": doc.get("lines"),
+                      "rhythm": doc.get("rhythm"), "keySignature": doc.get("keySignature"),
+                      "bpm": doc.get("bpm")}
 
 
 def _old_refs(path):
@@ -193,6 +198,26 @@ def _files(root, cancel, source_songs=None):
     return sorted(files, key=lambda entry: entry[0].casefold())
 
 
+def _catalog_metadata(doc, midi):
+    """Only searchable text and musical metadata, never embedded media."""
+    lines = doc.get("lines") or []
+    lyric = " ".join(str(line.get("text") or "").strip()
+                     for line in lines[:8] if isinstance(line, dict))[:512].strip()
+    rhythm = str(doc.get("rhythm") or "").strip()[:80]
+    key = str(doc.get("keySignature") or doc.get("key_signature") or "").strip()[:40]
+    bpm = str(doc.get("bpm") or "").strip()[:32]
+    try:
+        song = parse_structure(midi, legacy=True)
+        if not lyric:
+            lyric = " ".join(line.text for line in song.lyrics.lines[:8])[:512].strip()
+        key = key or song.key_signature
+        bpm = bpm or str(round(song.initial_bpm, 2))
+    except (ValueError, ReviewRequired, EOFError, struct.error):
+        # Old packages may still be indexed; unknown metadata stays empty.
+        pass
+    return {"firstLyric": lyric, "rhythm": rhythm, "keySignature": key, "bpm": bpm}
+
+
 def _record(relative, file, old, *, fingerprint=True):
     ext = file.suffix.lower()
     if ext == ".xmid":
@@ -226,6 +251,7 @@ def _record(relative, file, old, *, fingerprint=True):
         "originalRelativePath": relative, "originalFileSize": file.stat().st_size,
         "midiHash": midi_hash, "midiSize": len(midi),
         "lyricsMode": "timed" if doc.get("lines") else "unavailable",
+        **_catalog_metadata(doc, midi),
         kind: media,
     }
     if not file_id:
@@ -253,7 +279,7 @@ def _verified_rows(songs, root, references, cache_dir, cancel, full_verify, fing
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha256(os.path.normcase(str(root)).encode("utf-8")).hexdigest()
-    with closing(sqlite3.connect(cache_dir / (("shared-index-v1-" if fingerprint else "shared-index-fast-v1-") + key + ".sqlite3"), timeout=15)) as cache:
+    with closing(sqlite3.connect(cache_dir / (("shared-index-v2-" if fingerprint else "shared-index-fast-v2-") + key + ".sqlite3"), timeout=15)) as cache:
         cache.execute("CREATE TABLE IF NOT EXISTS checked (path TEXT PRIMARY KEY, stamp TEXT NOT NULL, payload TEXT NOT NULL)")
         cache.commit()
         pending = 0
@@ -302,7 +328,8 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         raise ValueError("DB/songs.sqlite3 ไม่ใช่ไฟล์ SQLite ปกติ หยุดเพื่อไม่เขียนนอกคลัง")
     original_signature = _hash(old_file) if old_file.exists() else None
     references = {} if local_only else _old_refs(old_file)
-    old_ids = _old_ids(old_file) if not deduplicate else {}
+    old_ids = _old_ids(old_file)
+    seen_web_ids = set()
     rows, midi_hashes, paths, codes, ids = [], set(), set(), set(), set()
     duplicates = reused = 0
     for index, (relative, row, cached) in enumerate(_verified_rows(songs, Path(source_songs).resolve() if source_songs is not None else root, references, cache_dir, cancel, full_verify, deduplicate), 1):
@@ -320,9 +347,16 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         else:
             # Online verifies package MD5, not a duplicate MIDI fingerprint.
             # Retain each path, including byte-identical packages in different folders.
-            row["webSongId"] = old_ids.get(key) or ("browser/" + file_kind(row) + "/" + hashlib.sha256(
-                relative.casefold().encode("utf-8")).hexdigest())
             row.pop("midiHash", None)
+        # Preserve existing IDs; fresh unique packages match the Web importer.
+        # Identical packages at distinct paths remain addressable in PC-only mode.
+        row["webSongId"] = old_ids.get(key) or row["webSongId"]
+        if row["webSongId"] in seen_web_ids:
+            if deduplicate or key in old_ids:
+                raise ValueError("รหัสอ้างอิงเพลงซ้ำ: " + row["webSongId"])
+            row["webSongId"] = "browser/" + file_kind(row) + "/" + hashlib.sha256(
+                relative.casefold().encode("utf-8")).hexdigest()
+        seen_web_ids.add(row["webSongId"])
         base_code = row["code"]
         if base_code.casefold() in codes:
             row["code"] = base_code + "-" + hashlib.sha256(relative.casefold().encode("utf-8")).hexdigest()[:12]
@@ -344,12 +378,12 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         return {"scanned": len(songs), "accepted": len(rows),
                 "duplicates": duplicates, "reused": reused,
                 "pending_drive_ids": sum(bool(row.get("pendingDriveLink")) for _, row in rows)}
-    for directory in (("DB",) if local_only else ("DB", "CACHE", "BACKUP")):
+    for directory in ("DB", "CACHE", "BACKUP"):
         (root / directory).mkdir(parents=True, exist_ok=True)
     # Share the same advisory lock namespace as the browser importer.
     # Drive Desktop propagation is asynchronous, so also re-check the old
     # snapshot immediately before committing the new database.
-    cache_root = root / ("DB" if local_only else "CACHE")
+    cache_root = root / "CACHE"
     for other in cache_root.glob(".xstage-import-lock-*"):
         if other.is_symlink():
             raise ValueError("CACHE มี symlink ของงานสร้างฐาน ไม่ปลอดภัย")
@@ -383,12 +417,13 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
                 db.execute(INSERT, (ident, ordinal, row["webSongId"],
                     "SONGS/" + row["originalRelativePath"], "MIDI",
                     unicodedata.normalize("NFC",
-                        " ".join(str(row.get(k, "")) for k in ("code","title","artist"))).lower(),
+                        " ".join(str(row.get(k, "")) for k in ("code","title","artist","firstLyric","rhythm"))).lower(),
                     row["sourceFormat"], row["code"], row["title"], row["artist"],
                     row["sourceFormat"], row["originalFilename"],
                     row["originalRelativePath"], row["originalFileSize"],
                     row["sourceCode"], row["midiSize"], row.get("midiHash"),
-                    json.dumps(row, ensure_ascii=False, separators=(",",":"))))
+                    json.dumps(row, ensure_ascii=False, separators=(",",":")),
+                    row["firstLyric"], row["rhythm"], row["keySignature"], row["bpm"]))
             db.commit()
             if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                 raise ValueError("SQLite ที่สร้างไม่ผ่าน integrity_check")
@@ -400,7 +435,7 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
         if (_hash(old_file) if old_file.exists() else None) != original_signature:
             raise ValueError("ฐานบน Google Drive เปลี่ยนระหว่างทำงาน กรุณาสร้างใหม่")
         if old_file.exists():
-            backup = root / ("DB" if local_only else "BACKUP") / (
+            backup = root / "BACKUP" / (
                 "songs-" + time.strftime("%Y%m%d-%H%M%S") + "-" +
                 original_signature[:12] + ".sqlite3.bak")
             shutil.copyfile(old_file, backup)
@@ -417,7 +452,11 @@ def build(root_value, progress=None, cancel=None, publish=True, *, cache_dir=Non
                     meta = dict(previous.execute("SELECT key,value FROM catalog_meta"))
                     if meta.get("pcSchema") != "shared-v1":
                         raise ValueError("พบฐาน PC เดิมคนละโครงสร้าง · ไม่เขียนทับ")
-                backup = local.with_name("songs-" + secrets.token_hex(8) + ".sqlite3.bak")
+                backup_dir = local.parent.parent / "BACKUP"
+                if backup_dir.is_symlink() or getattr(backup_dir, "is_junction", lambda: False)():
+                    raise ValueError("โฟลเดอร์สำรองไม่ปลอดภัย")
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                backup = backup_dir / ("songs-" + secrets.token_hex(8) + ".sqlite3.bak")
                 shutil.copyfile(local, backup)
             local_stage = local.with_name(".songs-" + secrets.token_hex(12) + ".sqlite3")
             with closing(sqlite3.connect(stage)) as src, closing(sqlite3.connect(local_stage)) as dst:
