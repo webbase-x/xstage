@@ -603,6 +603,22 @@ public final class MainActivity extends Activity {
     public final class AndroidBridge {
         @JavascriptInterface
         public void catalogOpen(String requestId, String sub, String root, String db, String file) {
+            catalogOpenInternal(requestId, sub, root, db, file, "", "", 0);
+        }
+
+        @JavascriptInterface
+        public void catalogOpenVerified(String requestId, String sub, String root, String db, String file,
+                                        String sourceId, String sourceMD5, String sourceSize) {
+            try {
+                if (sourceId == null || sourceId.isEmpty() || sourceMD5 == null || !sourceMD5.matches("[a-f0-9]{32}")) throw new IllegalArgumentException("Invalid source catalog identity");
+                long bytes = Long.parseLong(sourceSize);
+                if (bytes < 100) throw new IllegalArgumentException("Invalid source size");
+                catalogOpenInternal(requestId, sub, root, db, file, sourceId, sourceMD5, bytes);
+            } catch (Exception e) { catalogCallback(requestId, "error", catalogError(e)); }
+        }
+
+        private void catalogOpenInternal(String requestId, String sub, String root, String db, String file,
+                                         String sourceId, String sourceMD5, long sourceBytes) {
             if (requestId == null || !requestId.matches("[A-Za-z0-9_-]{8,128}")) return;
             final String token = catalogAccessToken;
             if (token.isEmpty()) {
@@ -619,7 +635,7 @@ public final class MainActivity extends Activity {
                     NativeCatalogStore next = new NativeCatalogStore(MainActivity.this);
                     boolean kept = false;
                     try {
-                        JSONObject result = next.open(token, sub, root, db, file, (received, total) -> {
+                        JSONObject result = next.open(token, sub, root, db, file, sourceId, sourceMD5, sourceBytes, (received, total) -> {
                             if (epoch != catalogEpoch) return;
                             try {
                                 catalogCallback(requestId, "progress", new JSONObject().put("received", received).put("total", total));
