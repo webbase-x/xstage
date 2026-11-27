@@ -56,6 +56,11 @@ jobs:
       - name: Run cross-platform regression checks before Android build
         run: npm test
 
+      - name: Verify persistent catalog and single SoundFont storage contracts
+        run: |
+          node scripts/karaoke-persistent-storage-contract-test.mjs
+          python -m unittest discover -s android-tv/tools -p 'test_native_catalog_disk.py' -v
+
       - name: Install pinned SQLite engine for cross-platform acceptance
         run: npm install --no-save --ignore-scripts --no-audit --no-fund sql.js@1.13.0
 

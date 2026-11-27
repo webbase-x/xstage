@@ -55,6 +55,8 @@ const state = {
   medleyUpcoming: null, medleyPoolSource: null, medleyPool: [], medleyRecent: [],
   userStopped: false, userPaused:false, resumeAfterInterruption:false, visualScale: 1,
   catalogPointerId:'',catalogGeneration:'',catalogPolling:false,catalogCache:new Map(),
+  nativeCatalog:null,nativeCatalogDeferred:null,
+  diskQueueTimer:null,diskQueueTask:null,diskQueueReady:new Set(),diskQueueFailed:new Set(),
   libraryRootId:'',libraryRootCanShare:false,libraryRootOwnedByMe:false,libraryRootOwnerEmail:'',availableLibraries:[],
   queuePreload:null,queuePrepared:null,queuePreloadTimer:null,queuePreloadVersion:0,
   queuePreparedCache:new Map(),queuePreloadSkipped:new Set(),
@@ -1350,9 +1352,7 @@ async function loadSongVideo(song,request,token,signal,{forceCompatible=false}={
     if(getFileId(media)===getFileId(song.audio)&&state.objectUrl){
       karaokeVideo.src=state.objectUrl;
     }else{
-      const response=useOriginal
-        ?await privateFile(song.originalVideo.fileId,token,{signal})
-        :await privateFile(song.video.fileId,token,{signal});
+      const response=await privateMediaFile(media,token,{signal});
       const data=await response.blob();
       if(revision!==videoLoadRevision||request!==state.requestId||
           signal?.aborted||token!==state.token||state.current!==song)return;
@@ -1501,7 +1501,9 @@ async function clearPerformanceCache(){
   releaseQueuePreload();
   state.catalogCache.clear();
   state.medleyCache=null;state.medleyPrefetch=null;state.medleyUpcoming=null;
+  resetDiskQueuePreload();
   await clearCatalogStorage();
+  await window.XStageWebCatalogDisk?.clear?.();
   if('caches' in window){
     try{
       const keys=await caches.keys();
@@ -1664,10 +1666,34 @@ async function selectedDriveRootById(id, token) {
 }
 async function privateFile(id, token, opts = {}) {
   const r = await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`, {
-    headers: requestHeaders(token), cache:'no-store',signal:opts.signal
+    headers: {...requestHeaders(token),...(opts.range?{Range:opts.range}:{})}, cache:'no-store',signal:opts.signal
   },'Google Drive');
   if (!r.ok) throw driveError(r.status, 'ไฟล์เพลงส่วนตัว');
   return r;
+}
+function queuedMediaParts(song){
+  if(!song)return [];
+  if(song.xmid||song.xsk)return [song.xmid||song.xsk].filter(Boolean);
+  return [song.midi||song.audio,song.lyrics].filter(Boolean);
+}
+function diskPreloadCount(){
+  try{
+    const value=localStorage.getItem('xstage-disk-preload-count')||'3';
+    if(value==='all')return Infinity;
+    return [0,1,3,5].includes(Number(value))?Number(value):3;
+  }catch{return 3;}
+}
+function privateMediaFile(media,token,opts={}){
+  const id=getFileId(media),cache=window.XStagePrivateMediaCache;
+  const fetcher=()=>privateFile(id,token,opts);
+  const rangeFetcher=offset=>offset>0?privateFile(id,token,{...opts,range:'bytes='+offset+'-'}):fetcher();
+  if(!cache?.available()||!state.accountSub||!state.libraryRootId||isRetiredDriveRoot(state.libraryRootId))
+    return opts.cacheOnly?Promise.resolve(null):fetcher();
+  const sub=state.accountSub,root=state.libraryRootId;
+  const owner=libraryCacheOwner(sub,root);
+  const current=()=>state.token===token&&state.accountSub===sub&&state.libraryRootId===root&&!isRetiredDriveRoot(root);
+  const pinned=[state.current,...state.queue.slice(0,diskPreloadCount())].flatMap(queuedMediaParts);
+  return cache.getOrFetch({owner,media,fetcher,rangeFetcher,signal:opts.signal,current,pinned,cacheOnly:!!opts.cacheOnly});
 }
 // High-throughput private Drive reads for bounded media files. Parallel
 // requests are permitted only when Google returns *exact* 206 byte ranges.
@@ -1681,6 +1707,8 @@ function fastDownloadParts(bytes){
   return mobile?2:bytes>=64*FAST_DOWNLOAD_MIB?4:2;
 }
 async function fastPrivateBlob(id,token,opts={}){
+  if(opts.md5Checksum&&typeof privateMediaFile==='function')
+    return (await privateMediaFile({fileId:id,size:opts.size,md5Checksum:opts.md5Checksum},token,opts)).blob();
   const size=Number(opts.size);
   const parts=fastDownloadParts(size);
   if(parts===1)return (await privateFile(id,token,opts)).blob();
@@ -1736,7 +1764,8 @@ async function fastPrivateBlob(id,token,opts={}){
 }
 
 async function privateJson(id, token, opts) {
-  const response = await privateFile(id, token, opts);
+  const response = opts?.media&&typeof privateMediaFile==='function'
+    ?await privateMediaFile(opts.media,token,opts):await privateFile(id,token,opts);
   try { return await response.json(); }
   catch { throw Error('ไฟล์ JSON บน Drive ไม่ถูกต้อง'); }
 }
@@ -2065,7 +2094,7 @@ async function readCatalogBytes(response,maxBytes=192*1048576,idleMs=30000){
   const length=Number(response.headers?.get?.('Content-Length')||0);
   if(length>maxBytes){
     try{void response.body?.cancel?.().catch(()=>{});}catch{}
-    throw Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด');
+    throw Object.assign(Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด'),{code:'CATALOG_TOO_LARGE'});
   }
   let timer;
   const bounded=task=>Promise.race([task,new Promise((_,reject)=>{
@@ -2073,7 +2102,7 @@ async function readCatalogBytes(response,maxBytes=192*1048576,idleMs=30000){
   })]).finally(()=>clearTimeout(timer));
   if(!response.body?.getReader){
     const buffer=await bounded(response.arrayBuffer());
-    if(buffer.byteLength>maxBytes)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด');
+    if(buffer.byteLength>maxBytes)throw Object.assign(Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด'),{code:'CATALOG_TOO_LARGE'});
     return new Uint8Array(buffer);
   }
   const reader=response.body.getReader(),chunks=[];
@@ -2083,7 +2112,7 @@ async function readCatalogBytes(response,maxBytes=192*1048576,idleMs=30000){
       const {done,value}=await bounded(reader.read());
       if(done){complete=true;break;}
       total+=value.byteLength;
-      if(total>maxBytes)throw Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด');
+      if(total>maxBytes)throw Object.assign(Error('ฐานข้อมูล SQLite3 ใหญ่เกินกำหนด'),{code:'CATALOG_TOO_LARGE'});
       chunks.push(value);
     }
     const bytes=new Uint8Array(total);
@@ -2130,8 +2159,25 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
     }
     const codec=window.XStageDriveSQLite;
     if(!codec)throw Error('ไม่พบตัวอ่าน SQLite3 กรุณาโหลดหน้าเว็บใหม่');
-    const response=await privateFile(id,token);
-    const bytes=await readCatalogBytes(response);
+    // Persist the exact verified SQLite bytes on capable Web browsers.
+    // sql.js remains a bounded legacy parser until the OPFS SQL worker is wired.
+    // Do not start an oversized transfer solely to fail the current parser.
+    const disk=window.XStageWebCatalogDisk;
+    let bytes;
+    if(disk?.available()&&sub&&Number(pointer.contentBytes)<=192*1048576){
+      try{
+        const saved=await disk.getOrFetch({owner:sub,pointer,fetcher:()=>privateFile(id,token),
+          current:()=>state.authId===authGeneration});
+        if(saved){assertCurrent();bytes=await readCatalogBytes(new Response(saved.file));}
+      }catch(error){
+        if(error?.name==='AbortError')throw error;
+        console.warn('X-Stage persistent SQLite storage:',error?.message||error);
+      }
+    }
+    if(!bytes){
+      const response=await privateFile(id,token);
+      bytes=await readCatalogBytes(response);
+    }
     assertCurrent();
     const data=await codec.read(bytes);
     assertCurrent();
@@ -2152,12 +2198,112 @@ async function readPublishedCatalog(pointer,token,{sub='',onProgress=null}={}){
     throw Error('ฐาน SQLite3 มีรหัสอ้างอิงเพลงซ้ำ');
   return base;
 }
+// Native APK catalog transport: only five song payloads per page cross the bridge.
+// The canonical database stays in app-private disk storage, not the JS heap.
+const nativeCatalogRequests=new Map();
+function nativeCatalogBridgeAvailable(){
+  const bridge=window.XStageAndroid;
+  return !!(bridge&&typeof bridge.catalogOpen==='function'&&typeof bridge.catalogActivate==='function'&&
+    typeof bridge.catalogSearch==='function'&&typeof bridge.catalogLookup==='function'&&typeof bridge.catalogRandom==='function');
+}
+window.XStageNativeCatalogEvent=(requestId,kind,raw)=>{
+  const pending=nativeCatalogRequests.get(String(requestId));
+  if(!pending)return;
+  let data;
+  try{data=JSON.parse(raw);}catch{data={error:'Native catalog response invalid'};kind='error';}
+  if(kind==='progress'){
+    pending.arm();
+    try{pending.progress?.(data);}catch{}
+    return;
+  }
+  clearTimeout(pending.timer);
+  nativeCatalogRequests.delete(String(requestId));
+  if(kind==='ready'&&data?.capability&&data?.revision&&Number.isSafeInteger(data.count)&&data.count>=0)pending.resolve(data);
+  else pending.reject(Object.assign(Error(data?.error||'เปิดฐานเพลงในเครื่องไม่สำเร็จ'),{code:'CATALOG_LOAD_FAILED'}));
+};
+function stageNativeCatalog(pointer,sub,root,dbId,progress){
+  if(!nativeCatalogBridgeAvailable())return Promise.reject(Error('Native SQLite unavailable'));
+  const requestId=typeof crypto.randomUUID==='function'?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint32Array(4)),n=>n.toString(16).padStart(8,'0')).join('');
+  return new Promise((resolve,reject)=>{
+    const pending={resolve,reject,progress,timer:null,arm(){
+      clearTimeout(this.timer);
+      this.timer=setTimeout(()=>{
+        nativeCatalogRequests.delete(requestId);
+        reject(Object.assign(Error('ฐานเพลงหยุดตอบสนอง · ลองซิงก์ใหม่'),{code:'CATALOG_LOAD_FAILED'}));
+      },180000);
+    }};
+    nativeCatalogRequests.set(requestId,pending);pending.arm();
+    try{window.XStageAndroid.catalogOpen(requestId,String(sub),String(root),String(dbId),String(pointer.catalogFileId));}
+    catch(error){clearTimeout(pending.timer);nativeCatalogRequests.delete(requestId);reject(Object.assign(error,{code:'CATALOG_LOAD_FAILED'}));}
+  }).then(data=>{
+    if(pointer.contentMD5&&pointer.contentBytes&&data.revision!==pointer.contentMD5+'-'+pointer.contentBytes)
+      throw Object.assign(Error('ฐานเพลง Cloud เปลี่ยนระหว่างตรวจสอบ · ลองอีกครั้ง'),{code:'CATALOG_LOAD_FAILED'});
+    return data;
+  });
+}
+function resetNativeCatalogClient(){
+  state.nativeCatalog=null;state.nativeCatalogDeferred=null;
+  for(const pending of nativeCatalogRequests.values()){
+    clearTimeout(pending.timer);pending.reject(new DOMException('เปลี่ยนคลังหรือบัญชี','AbortError'));
+  }
+  nativeCatalogRequests.clear();
+  try{window.XStageAndroid?.catalogReset?.();}catch{}
+}
+function activateNativeCatalog(data,pointer,sub,root,dbId){
+  if(!window.XStageAndroid.catalogActivate(data.capability))
+    throw Object.assign(Error('ฐานใหม่ยังไม่พร้อมใช้งาน'),{code:'CATALOG_LOAD_FAILED'});
+  state.nativeCatalog={capability:data.capability,revision:data.revision,count:data.count,sub:String(sub),root:String(root)};
+  state.nativeCatalogDeferred=null;
+  state.catalogGeneration=String(pointer.generation||'');state.catalogDbDirId=dbId;
+  state.manifest=null;state.songs=[];state.catalogCache.clear();state.medleyPoolSource=null;
+  state.medleyUpcoming=null;
+  ui.songTotal.textContent=num(data.count)+' เพลง';
+  setSearchAvailability(true);
+}
+function nativeCatalogQuery(method,...args){
+  const c=state.nativeCatalog;
+  if(!c||!state.token||c.sub!==String(state.accountSub)||c.root!==String(state.libraryRootId))return null;
+  const raw=window.XStageAndroid[method](c.capability,c.sub,c.root,c.revision,...args);
+  const data=JSON.parse(raw);
+  if(data?.error)throw Error(data.error);
+  return data;
+}
+function catalogSongById(id){
+  if(!id)return null;
+  if(state.nativeCatalog)return nativeCatalogQuery('catalogLookup',String(id),'','','');
+  return state.songs.find(song=>songIdentity(song)===String(id))||null;
+}
+function catalogFindSong(id,code,title,artist=''){
+  if(state.nativeCatalog)return nativeCatalogQuery('catalogLookup',String(id||''),String(code||''),String(title||''),String(artist||''));
+  return catalogSongById(id)||
+    state.songs.find(song=>code&&String(song.code||'')===String(code))||
+    state.songs.find(song=>title&&String(song.title||'')===String(title)&&(!artist||String(song.artist||'')===String(artist)))||null;
+}
+function nativeCatalogPager(rawTerm){
+  const term=normalizeSearchText(rawTerm).slice(0,256);
+  const empty={total:0,songs:[]};
+  let initial=term?nativeCatalogQuery('catalogSearch',term,0)||empty:empty;
+  let offset=0,loaded=0;
+  const total=Math.max(0,Number(initial.total)||0);
+  return {total,get loaded(){return loaded;},get hasMore(){return offset<total;},
+    next(){
+      const result=initial||nativeCatalogQuery('catalogSearch',term,offset)||empty;
+      initial=null;
+      const rows=Array.isArray(result.songs)?result.songs:[];
+      if(!rows.length){offset=total;return [];}
+      offset+=rows.length;
+      const page=rows.filter(playable);
+      loaded+=page.length;
+      return page;
+    }};
+}
 // The canonical XStageKaraoke/DB/songs.sqlite3 file IS the manifest.
 // File ID/MD5 from the songs.sqlite3 Drive listing identify revisions.
 function directCatalogPointer(file){
   if(!file?.id||file.name!=='songs.sqlite3')throw Error('DB/songs.sqlite3 ไม่ถูกต้อง');
   return {schemaVersion:1,layoutVersion:6,format:'xstage-sqlite3-v1',
     directFile:true,catalogFileId:file.id,deltaFileIds:[],
+    contentMD5:String(file.md5Checksum||'').toLowerCase(),contentBytes:Number(file.size||0),
     generation:'sqlite:'+file.id+':'+String(file.md5Checksum||file.modifiedTime||file.size||'')};
 }
 async function activeDriveCatalog(dbId,token){
@@ -2185,9 +2331,42 @@ async function pollPublishedCatalog(){
     state.catalogDbDirId=dbId;
     const pointer=published?.pointer;
     if(!pointer||!pointer.generation||pointer.generation===state.catalogGeneration)return;
+    if(typeof nativeCatalogBridgeAvailable==='function'&&nativeCatalogBridgeAvailable()){
+      const busy=()=>state.queue.length||state.loading||state.queuePreload||state.medleyPrefetch||playbackHasActiveIntent();
+      if(busy())return; // Playback and its next song take priority over DB transfer.
+      let staged=state.nativeCatalogDeferred;
+      if(!staged||staged.generation!==pointer.generation||staged.authId!==authId){
+        const result=await stageNativeCatalog(pointer,sub,rootId,dbId,progress=>{
+          if(sameLibrary()&&!busy())ui.libraryState.textContent='กำลังซิงก์ฐานเพลงลงเครื่อง · '+Math.round(progress.received/Math.max(1,progress.total)*100)+'%';
+        });
+        if(!sameLibrary())return;
+        staged={result,generation:pointer.generation,authId};state.nativeCatalogDeferred=staged;
+      }
+      if(busy())return; // The old database remains active until the queue drains.
+      activateNativeCatalog(staged.result,pointer,sub,rootId,dbId);
+      restorePersistentQueue();renderSongs();renderQueue();
+      ui.libraryState.textContent='SQLite ในเครื่อง · อัปเดตแล้ว';
+      setStatus('ฐานเพลงพร้อมใช้ · '+num(staged.result.count)+' เพลง','success');
+      return;
+    }
+    // The legacy reader materializes a whole catalog in RAM. Do not start
+    // that work during playback/queue preload; the native disk reader can
+    // stage a download separately in a later integration.
+    if(state.queue.length||state.loading||state.current&&state.currentlyCatalogBusy!==false){
+      // An ended/paused track may still be the history/current selection.
+      // Use transport intent where available, not just a stale song object.
+      if(state.queue.length||state.loading||
+         (typeof playbackHasActiveIntent==='function'&&playbackHasActiveIntent()))return;
+    }
     const cacheOwner=libraryCacheOwner(sub,rootId);
     const catalog=await readPublishedCatalog(pointer,token,{sub:cacheOwner});
     if(!sameLibrary())return;
+    if(state.queue.length||state.loading||
+       (typeof playbackHasActiveIntent==='function'&&playbackHasActiveIntent())){
+      // The user started a song during the network read. Keep the old
+      // active generation and retry later; readPublishedCatalog caches it.
+      return;
+    }
     const countBefore=state.songs.length;
     state.manifest=catalog;
     state.songs=catalog.songs.filter(playable);
@@ -2218,7 +2397,7 @@ function applyInstantCatalog(instant){
   hideCatalogLoading();
   renderSongs();renderQueue();
   setStatus(`พร้อมใช้งานทันที · ${num(state.songs.length)} เพลงจากฐานในเครื่อง · กำลังตรวจอัปเดตเบื้องหลัง`,'success');
-  void restorePlaybackAfterReload();
+  // Wait for the verified canonical library before restoring the saved queue.
   if(!readPlaybackResumeState())ui.search.focus();
   return true;
 }
@@ -2234,6 +2413,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
 
   // A new short-lived token for the SAME account must not reset the player,
   // downloaded audio, search results or queue. Only the credential changes.
+  if (androidTvCatalogRetryPending) reuseExistingSession=false;
   if (reuseExistingSession && state.token && state.accountSub===account.sub && state.libraryRootId && !isRetiredDriveRoot(state.libraryRootId)) {
     if(fullReadGranted){fullDriveReadToken=token;rememberFullDriveRead(account.sub);}
     state.token=token;
@@ -2301,6 +2481,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       // whose XStageKaraoke was deleted must never show ghost songs that fail 404.
       // Do not erase the user's browser cache permanently: their library may
       // reappear after a Google Drive permission grant or restored ownership.
+      resetNativeCatalogClient();
       state.libraryRootId='';
       if(ui.libraryDriveLink)ui.libraryDriveLink.hidden=true;
       state.catalogPointerId='';
@@ -2330,6 +2511,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     const preferred=preferredRootId&&roots.find(item=>String(item.id)===preferredRootId);
     const root=preferred||(!preferredRootId&&roots.length===1?roots[0]:null);
     if(!root){
+      resetNativeCatalogClient();
       state.libraryRootId='';state.manifest=null;state.songs=[];state.shown=[];state.queue=[];
       releaseQueuePreload();renderSongs();renderQueue();hideCatalogLoading();
       setSearchAvailability(false);ui.songTotal.textContent='0 เพลง';
@@ -2362,7 +2544,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       accountSub:account.sub,rootId:String(root.id),label:libraryLabel(root),ownedByMe:!!root.ownedByMe
     }}));
     const cacheOwner=libraryCacheOwner(account.sub,root.id);
-    if(!instant){
+    if(!instant&&!nativeCatalogBridgeAvailable()){
       const rootCached=await loadLatestCachedCatalog(account.sub,root.id);
       if(rootCached){instant=rootCached;applyInstantCatalog(instant);}
     }
@@ -2382,6 +2564,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       // A missing pointer can also mean drive.file lacks permission; avoid
       // claiming definitively that the user's entire Drive is empty.
       if(authId!==state.authId)return;
+      resetNativeCatalogClient();
       state.manifest=null;
       state.catalogPointerId='';
       state.catalogDbDirId=dbId;
@@ -2406,6 +2589,24 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       return;
     }
     const pointer=directCatalogPointer(canonical[0]);
+    if(nativeCatalogBridgeAvailable()){
+      showCatalogLoading('กำลังตรวจฐานเพลงในเครื่อง','ตรวจขนาดและ MD5 ก่อนดาวน์โหลด',35);
+      const data=await stageNativeCatalog(pointer,account.sub,root.id,dbId,progress=>{
+        if(authId!==state.authId)return;
+        const percent=Math.min(95,35+Math.floor(progress.received/Math.max(1,progress.total)*60));
+        showCatalogLoading('กำลังดาวน์โหลดฐานเพลงลงเครื่อง',num(progress.received)+' / '+num(progress.total)+' ไบต์',percent);
+      });
+      if(authId!==state.authId||state.libraryRootId!==root.id)return;
+      activateNativeCatalog(data,pointer,account.sub,root.id,dbId);
+      restorePersistentQueue();renderSongs();renderQueue();
+      ui.libraryState.textContent='SQLite ในเครื่อง · '+libraryLabel(root);
+      hideCatalogLoading();
+      setAndroidTvStageAccess(true,account.sub);
+      setStatus('พร้อมใช้ · '+num(data.count)+' เพลง · '+(data.fromDisk?'ใช้ฐานเดิมในเครื่อง':'บันทึกฐาน SQLite ลงเครื่องแล้ว'),'success');
+      void restorePlaybackAfterReload();
+      if(!readPlaybackResumeState())ui.search.focus();
+      return;
+    }
     if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังดาวน์โหลดเฉพาะฐานรายชื่อเพลง…',42);
     if(authId!==state.authId)return;
 
@@ -2446,8 +2647,10 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       state.songs=catalog.songs.filter(playable);
       state.selectedIndex=0;
       ui.songTotal.textContent=`${num(state.songs.length)} เพลง`;
-      renderSongs();renderQueue();
+      renderSongs();
     }
+    // Only restore persisted private IDs after the library was verified.
+    restorePersistentQueue();renderQueue();
     setSearchAvailability(true);
     ui.libraryState.textContent='Google Drive · '+libraryLabel(root)+' · พร้อมใช้งาน';
     ui.resultCount.textContent=ui.search.value.trim() ? ui.resultCount.textContent : 'พิมพ์เพื่อค้นหาเพลง';
@@ -2668,6 +2871,8 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   if (!keepAuth){state.authId++;webGoogleAuthFlow=null;}
   const pendingSearch=keepAuth?String(ui.search?.value||''):'';
   const oldToken = state.token;
+  resetNativeCatalogClient();
+  resetDiskQueuePreload();
   state.requestId++;
   state.controller?.abort(); state.controller = null; state.loading = false;
   window.XStageMIDIPiano?.setSong({bytes:null});
@@ -2677,6 +2882,7 @@ function resetPrivate({revoke = false, keepAuth = false} = {}) {
   resetSongVideo();
   if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
   state.objectUrl = ''; state.token = '';fullDriveReadToken='';state.tokenExpiresAt=0; state.accountSub = ''; state.manifest = null;
+  queueDiskOwner='';
   state.songs = [];state.shown = [];state.queue = [];state.history = [];
   state.catalogPointerId='';state.catalogDbDirId='';state.catalogGeneration='';state.catalogCache.clear();
   state.libraryRootId='';state.libraryRootCanShare=false;state.libraryRootOwnedByMe=false;state.libraryRootOwnerEmail='';state.availableLibraries=[];
@@ -2793,6 +2999,43 @@ setupLibrarySharing();
 
 
 const PLAYBACK_RESUME_KEY='xstage-playback-resume-v1';
+const QUEUE_DISK_PREFIX='xstage-queue-v1:';
+let queueDiskOwner='';
+function currentQueueOwner(){
+  return state.token&&state.accountSub&&state.libraryRootId&&!isRetiredDriveRoot(state.libraryRootId)
+    ?libraryCacheOwner(state.accountSub,state.libraryRootId):'';
+}
+function savePersistentQueue(){
+  const owner=currentQueueOwner();
+  if(!owner||queueDiskOwner!==owner)return;
+  try{
+    const items=state.queue.map(song=>({
+      id:String(song.webSongId||''),singer:String(song.queueSinger||'').slice(0,80),
+      speed:Number(song.queueSpeed)||1
+    })).filter(item=>item.id);
+    localStorage.setItem(QUEUE_DISK_PREFIX+owner,JSON.stringify({version:1,items}));
+  }catch(error){console.warn('X-Stage queue storage:',error.message);}
+}
+function restorePersistentQueue(){
+  const owner=currentQueueOwner();
+  if(!owner||queueDiskOwner===owner)return false;
+  queueDiskOwner=owner;
+  let saved;
+  try{saved=JSON.parse(localStorage.getItem(QUEUE_DISK_PREFIX+owner)||'null');}
+  catch{return false;}
+  if(saved?.version!==1||!Array.isArray(saved.items))return false;
+  const byId=state.nativeCatalog?null:new Map(state.songs.map(song=>[String(song.webSongId||''),song]));
+  const queue=[];
+  for(const item of saved.items.slice(0,10000)){
+    const song=byId?byId.get(String(item?.id||'')):catalogSongById(String(item?.id||''));
+    if(!song||!playable(song))continue;
+    queue.push({...song,queueSinger:String(item.singer||'').slice(0,80),
+      queueSpeed:[.75,.9,1,1.1,1.25,1.5].includes(Number(item.speed))?Number(item.speed):1});
+  }
+  state.queue.splice(0,state.queue.length,...queue);
+  if(queue.length!==saved.items.length)setStatus('กู้คืนคิวแล้ว · ข้ามเพลงที่ไม่พบในคลัง','error');
+  return true;
+}
 function clearPlaybackResumeState(){
   try{sessionStorage.removeItem(PLAYBACK_RESUME_KEY);}catch{}
 }
@@ -2825,21 +3068,23 @@ function readPlaybackResumeState(){
   }catch{return null;}
 }
 function findResumeSong(key,code,title){
-  return state.songs.find(song=>songIdentity(song)===String(key||''))||
-    state.songs.find(song=>code&&String(song.code||'')===String(code))||
-    state.songs.find(song=>title&&String(song.title||'')===String(title))||null;
+  return catalogFindSong(key,code,title);
 }
 async function restorePlaybackAfterReload(){
-  if(state.playbackRestoreAttempted||!state.songs.length)return false;
+  if(state.playbackRestoreAttempted||!(state.nativeCatalog?.count||state.songs.length))return false;
   const saved=readPlaybackResumeState();
   if(!saved)return false;
   state.playbackRestoreAttempted=true;
   const song=findResumeSong(saved.songKey,saved.songCode,saved.songTitle);
   if(!song){clearPlaybackResumeState();return false;}
-  const restoredQueue=(Array.isArray(saved.queueKeys)?saved.queueKeys:[])
-    .map(key=>state.songs.find(item=>songIdentity(item)===String(key)))
-    .filter(Boolean);
-  state.queue.splice(0,state.queue.length,...restoredQueue);
+  // Durable queue carries singer/speed and the latest ordering. An explicit
+  // update handoff uses its session snapshot (which already removed the next song).
+  if(!queueDiskOwner||saved.songKey===songIdentity(state.queue[0])){
+    const restoredQueue=(Array.isArray(saved.queueKeys)?saved.queueKeys:[])
+      .map(key=>catalogSongById(key))
+      .filter(Boolean);
+    state.queue.splice(0,state.queue.length,...restoredQueue);
+  }
   renderQueue();
   await playSong(song,{remember:false,resumeAt:Number(saved.currentTime)||0,autoplay:!!saved.wasPlaying});
   return true;
@@ -2960,6 +3205,7 @@ window.XStageRankSearch=(songs,rawTerm,limit=5)=>
 // are retained in score buckets; song rows are constructed five at a time.
 const SEARCH_PAGE_SIZE=5;
 function createSearchPager(songs,rawTerm){
+  if(typeof state!=='undefined'&&state.nativeCatalog&&songs===state.songs)return nativeCatalogPager(rawTerm);
   const term=normalizeSearchText(rawTerm),words=term.split(' ').filter(Boolean);
   const index=indexedSongs(songs),buckets=Array.from({length:11},()=>[]);
   const scoreSlots=[0,10,20,30,40,50,55,60,70,80,90];
@@ -3154,6 +3400,15 @@ function medleyPool(){
   return state.medleyPool;
 }
 function randomMedleySong(){
+  if(typeof state!=='undefined'&&state.nativeCatalog){
+    const recent=new Set([state.current,...(state.medleyRecent||[])].filter(Boolean).map(songIdentity));
+    let song=null;
+    for(let i=0;i<12;i++){
+      song=nativeCatalogQuery('catalogRandom');
+      if(!song||!recent.has(songIdentity(song)))break;
+    }
+    return song&&playable(song)?song:null;
+  }
   const pool=medleyPool();
   if(!pool.length)return null;
   const recent=new Set([state.current,...(state.medleyRecent||[])]);
@@ -3326,7 +3581,9 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
   // Do not duplicate a large SF2/SF3 bank during speculative prefetch.
   const fontTask=prefetch?Promise.resolve({bytes:null,pending:null}):
     getStartupSoundFont(token,signal);
-  const response=await privateFile(fileId,token,{signal});
+  const response=typeof privateMediaFile==='function'
+    ?await privateMediaFile(isXmid?song.xmid:song.xsk,token,{signal})
+    :await privateFile(fileId,token,{signal});
   const {bytes:fontBytes,pending:lateFont}=await fontTask;
   const packed=await response.blob();
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
@@ -3481,9 +3738,9 @@ async function prepareQueuedSong(song,token,signal){
     if(!sourceSize||sourceSize>12*monitor.MiB||
        !monitor.canHold(sourceSize*2,memoryResources()))return null;
     const [source,fontBytes,lyrics]=await Promise.all([
-      privateFile(song.midi.fileId,token,{signal}),
+      typeof privateMediaFile==='function'?privateMediaFile(song.midi,token,{signal}):privateFile(song.midi.fileId,token,{signal}),
       isLive?null:window.XStageBrowserMidi?.selectedFont(token,signal),
-      getFileId(song.lyrics)?privateJson(song.lyrics.fileId,token,{signal}):null
+      getFileId(song.lyrics)?privateJson(song.lyrics.fileId,token,{signal,media:song.lyrics}):null
     ]);
     if(!window.XStageBrowserMidi)throw Error('ยังไม่พบตัวเรนเดอร์ MIDI');
     const bytes=new Uint8Array(await source.arrayBuffer());
@@ -3515,8 +3772,8 @@ async function prepareQueuedSong(song,token,signal){
   if(!(limit>0)||(size>0&&(size>limit||
      !monitor.canHold(size*1.15,memoryResources()))))return null;
   const [response,lyrics]=await Promise.all([
-    privateFile(song.audio.fileId,token,{signal}),
-    privateJson(song.lyrics.fileId,token,{signal})
+    typeof privateMediaFile==='function'?privateMediaFile(song.audio,token,{signal}):privateFile(song.audio.fileId,token,{signal}),
+    privateJson(song.lyrics.fileId,token,{signal,media:song.lyrics})
   ]);
   const reported=Number(response.headers?.get?.('Content-Length')||0);
   if(reported&&(reported>limit||!monitor.canHold(reported*1.15,memoryResources()))){
@@ -3553,6 +3810,7 @@ async function prepareQueuedSong(song,token,signal){
 function scheduleQueuePreload(){
   clearTimeout(state.queuePreloadTimer);
   trimQueueCache();
+  if(typeof scheduleDiskQueuePreload==='function')scheduleDiskQueuePreload();
   if(!state.token)return;
   if(!state.queue.length){
     if(state.queuePreload||state.queuePreparedCache.size)releaseQueuePreload();
@@ -3574,20 +3832,77 @@ function scheduleQueuePreload(){
   if(!monitor)return;
   const pressure=monitor.plan(memoryResources());
   if(pressure.heapPressure||pressure.nativePressure)return;
-  if(state.queuePreload){
-    if(state.token===state.queuePreload.token&&
-       state.queue.includes(state.queuePreload.song))return;
-    state.queuePreload.controller.abort();state.queuePreload=null;
-  }
   const quota=monitor.plan(memoryResources()).queueLimit;
   const windowSongs=state.queue.slice(0,quota);
   const next=windowSongs.find(song=>!state.queuePreparedCache.has(song)&&
     !state.queuePreloadSkipped.has(song));
+  if(state.queuePreload){
+    if(state.token===state.queuePreload.token&&next===state.queuePreload.song)return;
+    state.queuePreloadVersion++;
+    state.queuePreload.controller.abort();state.queuePreload=null;
+  }
   if(!next)return;
   if(state.queuePreparedCache.size>=quota)return;
   // Start the next requested track's download on the next event-loop turn.
   // Do not delay a warm queue behind the random-medley scheduler.
   state.queuePreloadTimer=setTimeout(()=>{void preloadFirstQueueSong(next,state.token);},0);
+}
+function resetDiskQueuePreload(){
+  clearTimeout(state.diskQueueTimer);state.diskQueueTimer=null;
+  state.diskQueueTask?.controller.abort();state.diskQueueTask=null;
+  state.diskQueueReady?.clear();state.diskQueueFailed?.clear();
+}
+function scheduleDiskQueuePreload(){
+  clearTimeout(state.diskQueueTimer);
+  if(!state.diskQueueReady||!state.diskQueueFailed)return;
+  if(!state.token||!window.XStagePrivateMediaCache?.available()||!diskPreloadCount()){
+    resetDiskQueuePreload();return;
+  }
+  const windowSongs=state.queue.slice(0,diskPreloadCount());
+  for(const song of state.diskQueueReady)if(!windowSongs.includes(song))state.diskQueueReady.delete(song);
+  for(const song of state.diskQueueFailed)if(!windowSongs.includes(song))state.diskQueueFailed.delete(song);
+  const next=windowSongs.find(song=>!state.diskQueueReady.has(song)&&!state.diskQueueFailed.has(song));
+  if(state.diskQueueTask){
+    if(state.diskQueueTask.song===next&&state.diskQueueTask.token===state.token)return;
+    state.diskQueueTask.controller.abort();state.diskQueueTask=null;
+  }
+  if(!next)return;
+  // Let the existing RAM preloader prepare the immediate song first; the
+  // disk queue runs serially after it and never raises its RAM allowance.
+  state.diskQueueTimer=setTimeout(()=>{
+    if(!state.queue.includes(next)||state.loading||state.queuePreload){
+      if(state.queue.includes(next))scheduleDiskQueuePreload();
+      return;
+    }
+    void preloadQueueFilesToDisk(next,state.token);
+  },500);
+}
+async function preloadQueueFilesToDisk(song,token){
+  if(state.diskQueueTask||!token||state.token!==token||!state.queue.includes(song))return;
+  const controller=new AbortController(),task={song,token,controller};
+  state.diskQueueTask=task;
+  try{
+    if(song.pendingDriveLink===true)await resolvePcDriveLink(song,token,controller.signal);
+    const parts=queuedMediaParts(song);
+    if(!parts.length||parts.some(media=>!window.XStagePrivateMediaCache.cacheable(media))){
+      state.diskQueueFailed.add(song);return;
+    }
+    for(const media of parts){
+      const response=await privateMediaFile(media,token,{signal:controller.signal,cacheOnly:true});
+      if(!response){state.diskQueueFailed.add(song);return;}
+      // The verified file is now on disk; do not materialize its Blob here.
+      try{void response.body?.cancel?.().catch(()=>{});}catch{}
+    }
+    if(state.diskQueueTask===task&&state.queue.includes(song)&&state.token===token)
+      state.diskQueueReady.add(song);
+  }catch(error){
+    if(error?.name!=='AbortError'&&state.diskQueueTask===task)state.diskQueueFailed.add(song);
+  }finally{
+    if(state.diskQueueTask===task){
+      state.diskQueueTask=null;
+      if(state.token===token)renderQueue();
+    }
+  }
 }
 function setMidiEngineStatus(engine){
   const label=$('xstage-midi-engine-status');
@@ -3763,6 +4078,7 @@ function addToQueue(song) {
   setPlayStatus(`เพิ่มเข้าคิว: ${song.title||song.code}`);
 }
 function renderQueue() {
+  savePersistentQueue();
   scheduleQueuePreload();
   ui.queue.replaceChildren();ui.queueCount.textContent=String(state.queue.length);
   ui.clearQueue.disabled=!state.queue.length;
@@ -3774,9 +4090,12 @@ function renderQueue() {
     const info=element('div','queue-info');
     const waiting=state.queuePreload?.song===song;
     const ready=state.queuePreparedCache.has(song);
+    const diskReady=state.diskQueueReady?.has(song);
+    const diskLoading=state.diskQueueTask?.song===song;
     info.append(element('strong','',song.title||'ไม่ระบุชื่อเพลง'),
       element('small','',(song.artist||song.code||'')+
         (ready?' · เตรียมพร้อมเล่นแล้ว':waiting?' · กำลังโหลดรอในงบ RAM':
+          diskReady?' · เก็บไฟล์ในเครื่องแล้ว':diskLoading?' · กำลังบันทึกไฟล์ลงเครื่อง':
           state.queuePreloadSkipped.has(song)?' · รอโหลดเมื่อถึงคิว':'')));
     const buttons=element('div','queue-controls');
     const up=control('↑',()=>moveQueue(i,-1),'เลื่อนขึ้น');up.disabled=i===0;
@@ -4111,12 +4430,12 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
     let embeddedKaraokeLyrics=null,liveMidiBytes=null,liveFontBytes=null,lateFontPromise=null;
     const loadMedia=async()=>{
       if(!getFileId(song.midi))return fastPrivateBlob(song.audio.fileId,token,
-        {signal:controller.signal,size:Number(song.audio.size)||0});
+        {signal:controller.signal,size:Number(song.audio.size)||0,md5Checksum:song.audio.md5Checksum});
       if(!window.XStageBrowserMidi)throw Error('ไม่พบเครื่องเล่น MIDI ของเว็บ กรุณาอัปเดตหน้าเว็บ');
       setPlayStatus('กำลังโหลด MIDI และ SoundFont จาก Google Drive…');
       const fontTask=getStartupSoundFont(token,controller.signal);
       const midiBlob=await fastPrivateBlob(song.midi.fileId,token,
-        {signal:controller.signal,size:Number(song.midi.size)||0});
+        {signal:controller.signal,size:Number(song.midi.size)||0,md5Checksum:song.midi.md5Checksum});
       const {bytes:fontBytes,pending:lateFont}=await fontTask;
       lateFontPromise=lateFont;
       if(controller.signal.aborted)throw new DOMException('ยกเลิก','AbortError');
@@ -4157,7 +4476,7 @@ async function playSong(song,{remember=true,preloaded=null,pending=null,resumeAt
       [audio,lyrics]=await boundedPlaybackTask(Promise.all([
         loadMedia(),
         getFileId(song.lyrics)
-          ?privateJson(song.lyrics.fileId,token,{signal:controller.signal})
+          ?privateJson(song.lyrics.fileId,token,{signal:controller.signal,media:song.lyrics})
           :Promise.resolve(null)
       ]),120,'เตรียมเพลงจาก Google Drive/เรนเดอร์ MIDI นานเกินไป',controller);
       if(!lyrics&&song.sourceFormat==='KAR')lyrics=embeddedKaraokeLyrics;
@@ -4714,6 +5033,7 @@ function notifyAndroidTvLoginReady(){
 // previously threw ReferenceError before the QR callback could render.
 let androidTvLoginWatchdog=0;
 let androidTvLoginInProgress=false;
+let androidTvCatalogRetryPending=false;
 function clearAndroidTvLoginWatchdog(){
   if(androidTvLoginWatchdog){clearTimeout(androidTvLoginWatchdog);androidTvLoginWatchdog=0;}
 }
@@ -4768,6 +5088,12 @@ function androidTvAuthPanel(){
   }
   $('android-tv-auth-retry')?.addEventListener('click',()=>{
     $('android-tv-auth-retry').hidden=true;
+    if(androidTvCatalogRetryPending && state.token && state.accountSub){
+      if(state.tokenExpiresAt>Date.now()+30000)
+        void window.XStageReceiveAndroidToken(state.token,Math.floor((state.tokenExpiresAt-Date.now())/1000));
+      else restoreAndroidTvGoogleSession();
+      return;
+    }
     startAndroidTvDeviceLogin(true);
   });
   $('android-tv-auth-cancel')?.addEventListener('click',()=>{
@@ -4800,7 +5126,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1222';
+    script.src='./assets/vendor/qrcode.min.js?v=1223';
     script.async=true;
     let done=false;
     const finish=error=>{
@@ -4843,6 +5169,7 @@ function showAndroidTvAuthPanel(){
   $('android-tv-auth-code').textContent='----';
   $('android-tv-auth-status').textContent='กำลังเตรียมรหัส…';
   $('android-tv-auth-retry').hidden=true;
+  $('android-tv-auth-retry').textContent='ลองใหม่';
   const qr=$('android-tv-auth-qr');if(qr)qr.hidden=true;
   const qrWait=$('android-tv-auth-qr-wait');if(qrWait){qrWait.hidden=false;qrWait.textContent='กำลังขอรหัสจาก Google…';}
   setTimeout(()=>$('android-tv-auth-cancel')?.focus?.(),20);
@@ -4914,11 +5241,26 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
   try{
     await openDrive(token,authId,expiresAt,existingSub);
     if(authId===state.authId&&state.token){
+      androidTvCatalogRetryPending=false;
       if(!document.documentElement.classList.contains('xstage-native-auth-pending'))hideAndroidTvAuthPanel();
       androidTvRefreshingSession=false;
     }
   }catch(error){
     if(authId===state.authId){
+      if(['CATALOG_TOO_LARGE','CATALOG_LOAD_FAILED'].includes(error?.code)&&state.token&&state.accountSub&&state.libraryRootId){
+        androidTvCatalogRetryPending=true;
+        androidTvRefreshingSession=false;
+        clearPendingAuth();
+        const panel=androidTvAuthPanel();panel.hidden=false;
+        const qr=$('android-tv-auth-qr');if(qr)qr.hidden=true;
+        const wait=$('android-tv-auth-qr-wait');if(wait){wait.hidden=false;wait.textContent='Google เชื่อมต่อแล้ว';}
+        $('android-tv-auth-url').textContent='ไม่ต้องสแกน QR ใหม่';
+        $('android-tv-auth-code').textContent='SQLite';
+        $('android-tv-auth-status').textContent='เชื่อมต่อ Google สำเร็จ · '+String(error.message||'เปิดฐานเพลงไม่สำเร็จ');
+        const retry=$('android-tv-auth-retry');retry.hidden=false;retry.textContent='ลองโหลดฐานเพลงใหม่';
+        setStatus('เชื่อมต่อ Google สำเร็จ · '+String(error.message||'เปิดฐานเพลงไม่สำเร็จ'),'error');
+        return;
+      }
       if(existingSub&&state.token){
         // Renewal may fail while Google is briefly offline. Keep the existing
         // audio and queue; retry via the native refresh-token watchdog.
@@ -4942,6 +5284,7 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
 window.XStageAndroidSignedOut=()=>{
   clearAndroidTvLoginWatchdog();
   androidTvVerifiedConnectionSub='';
+  androidTvCatalogRetryPending=false;
   setAndroidTvStageAccess(false);
   if(state.token)resetPrivate({keepAuth:false});
   if(androidTvNativeBridgeReady())startAndroidTvDeviceLogin(true);
@@ -5192,6 +5535,16 @@ ui.search.addEventListener('keydown',onSearchKey);
 bindSearchPaging(ui.songs,appendLiveSearchPage);
 ui.search.addEventListener('blur',restoreViewportAfterKeyboard);
 
+{
+  const select=$('xstage-disk-preload-count');
+  if(select){
+    const n=diskPreloadCount();select.value=n===Infinity?'all':String(n);
+    select.addEventListener('change',()=>{
+      try{localStorage.setItem('xstage-disk-preload-count',select.value);}catch{}
+      state.diskQueueFailed.clear();scheduleDiskQueuePreload();renderQueue();
+    });
+  }
+}
 ui.clearQueue.addEventListener('click',()=>{state.queue.length=0;renderQueue();setPlayStatus('ล้างคิวแล้ว');});
 ui.playPause.addEventListener('click',togglePlayback);
 ui.cancelCurrent.addEventListener('click',cancelCurrentSong);
@@ -5740,7 +6093,14 @@ async function recoverPendingGoogleAuth(reason='กำลังกู้คื�
 })();
 window.addEventListener('offline',()=>setStatus('อุปกรณ์ออฟไลน์ · เพลงที่โหลดไว้แล้วอาจเล่นต่อได้ แต่ค้น/โหลดเพลงใหม่ไม่ได้','error'));
 window.addEventListener('online',()=>{
-  if(state.token)return;
+  if(state.token){
+    state.queuePreloadSkipped.clear();
+    state.diskQueueFailed.clear();
+    state.medleyPreloadRetryAt=0;
+    scheduleQueuePreload();
+    void pollPublishedCatalog();
+    return;
+  }
   if(readPendingAuth()){void recoverPendingGoogleAuth('กลับมาออนไลน์แล้ว · กำลังกู้คืนการเข้าสู่ระบบ Google…');return;}
   const saved=readActiveAuth();
   if(!saved){if(rememberedGoogleAccount())setStatus('กลับมาออนไลน์แล้ว · แตะเชื่อมต่อ Google เดิมเพื่อรับสิทธิ์ใหม่');return;}

@@ -537,18 +537,18 @@ function finishFontTrial(bytes){
   if(fontCache?.bytes===bytes&&localGet(FONT_RECOVERY)===currentFontKey())
     localSet(FONT_RECOVERY,'');
 }
-async function recoverFont(bytes,reason){
+async function recoverFont(bytes,reason,{removeLocal=false}={}){
   if(bytes&&fontCache?.bytes!==bytes)return false;
   if(selected===BUILTIN_GM_ID)return false;
   ++switchGeneration;downloadController?.abort();
   selected=BUILTIN_GM_ID;approvedFont='';fontCache=null;fontLoadPromise=null;
   const select=$('xstage-soundfont-select');if(select)select.value=selected;
   const pref='xstage-font-pref:'+context?.sub+':'+context?.rootId+':'+(context?.fontFolderId||'default');
-  localSet(pref,selected);localSet(FONT_READY,'');localSet(FONT_RECOVERY,'');
-  fontWarning='ถอน SoundFont จากเครื่องแล้ว · ใช้ GM 6 MB · '+String(reason||'โหลดหรือเล่นไม่สำเร็จ');
+  localSet(pref,selected);if(removeLocal)localSet(FONT_READY,'');localSet(FONT_RECOVERY,'');
+  fontWarning='กลับไปใช้ GM 6 MB · '+String(reason||'โหลดหรือเล่นไม่สำเร็จ');
   let removed=true;
-  try{await fontDisk('readwrite',store=>store.clear());}catch{removed=false;}
-  const out=$('xstage-soundfont-local-status');if(out)out.textContent=removed?'กลับไปใช้ GM · ไฟล์บน Drive ยังอยู่':'กลับไปใช้ GM · ถอนแคชไม่สำเร็จ กรุณากดถอนอีกครั้ง';
+  if(removeLocal)try{await fontDisk('readwrite',store=>store.clear());}catch{removed=false;}
+  const out=$('xstage-soundfont-local-status');if(out)out.textContent=!removeLocal?'คืน RAM แล้ว · รักษาไฟล์ SoundFont ในเครื่อง':removed?'กลับไปใช้ GM · ไฟล์บน Drive ยังอยู่':'กลับไปใช้ GM · ถอนแคชไม่สำเร็จ กรุณากดถอนอีกครั้ง';
   if(!removed)fontWarning='กลับไปใช้ GM · ถอนแคชในเครื่องไม่สำเร็จ';
   fontStatusChanged();return true;
 }
@@ -588,6 +588,7 @@ async function readDiskFont(key,size){
 }
 async function saveDiskFont(key,bytes,isCurrent=()=>true){
   if(!key||!scope.indexedDB)return false;
+  try{await scope.navigator?.storage?.persist?.().catch(()=>false);}catch{}
   try{await fontDisk('readwrite',store=>{
     if(!isCurrent())throw Error('SoundFont selection changed');
     store.clear();
@@ -646,7 +647,7 @@ async function refreshFonts(auth){
   const clear=$('xstage-soundfont-local-clear');
   if(clear)clear.onclick=async()=>{
     if(selected!==BUILTIN_GM_ID){
-      await recoverFont(null,'ผู้ใช้ถอน SoundFont');
+      await recoverFont(null,'ผู้ใช้ถอน SoundFont',{removeLocal:true});
       scope.dispatchEvent?.(new CustomEvent('xstage:soundfont-change',{detail:{soundFontId:selected}}));
     }else{
       try{await fontDisk('readwrite',store=>store.clear());localSet(FONT_READY,'');
@@ -722,8 +723,8 @@ async function refreshFonts(auth){
       let interrupted=false;
       if(!recoveryChecked&&localGet(FONT_RECOVERY)){
         interrupted=true;
-        try{await fontDisk('readwrite',store=>store.clear());}catch{}
-        localSet(FONT_RECOVERY,'');localSet(FONT_READY,'');
+        // Interrupted audio trial is not proof of file corruption.
+        localSet(FONT_RECOVERY,'');
         saved=BUILTIN_GM_ID;localSet(storageKey,saved);
       }
       recoveryChecked=true;
@@ -757,7 +758,7 @@ async function refreshFonts(auth){
       select.value=autoChoice?.value||BUILTIN_GM_ID;
       selected=select.value;
       if(restored)approvedFont=savedKey;
-      fontWarning=interrupted?'พบการโหลดหรือเล่น SoundFont ที่ไม่เสร็จ · ถอนแคชแล้ว · ใช้ GM 6 MB':savedTooLarge
+      fontWarning=interrupted?'พบการโหลดหรือเล่น SoundFont ที่ไม่เสร็จ · เก็บไฟล์เดิมไว้ · ใช้ GM 6 MB':savedTooLarge
         ?'SoundFont เดิม '+Math.round(Number(savedChoice.dataset.size)/1048576)+
           ' MB ใหญ่เกินไปสำหรับเริ่มเพลงทันที · ใช้ GM 6 MB ก่อน'
         :'';
@@ -772,15 +773,16 @@ async function refreshFonts(auth){
           select.value=previous;fontWarning='เกินเพดานตัวถอดรหัส 256 MB · ใช้ชุดเสียงอื่น';fontStatusChanged();return;
         }
         if(next!==BUILTIN_GM_ID&&size>FAST_START_FONT_MAX_BYTES&&
-           typeof scope.confirm==='function'&&!scope.confirm('SoundFont '+Math.round(size/1048576)+' MB · RAM ว่างจริงอาจตรวจไม่ได้ (เกณฑ์แนะนำ '+Math.round(recommendedFontBytes()/1048576)+' MB)\\nยืนยันการโหลดหรือไม่? หากเล่นไม่ได้จะถอนแคชและกลับไปใช้ GM โดยไม่ลบไฟล์บน Drive')){
+           typeof scope.confirm==='function'&&!scope.confirm('SoundFont '+Math.round(size/1048576)+' MB · RAM ว่างจริงอาจตรวจไม่ได้ (เกณฑ์แนะนำ '+Math.round(recommendedFontBytes()/1048576)+' MB)\\nยืนยันการโหลดหรือไม่? หากเล่นไม่ได้จะคืน RAM และกลับไปใช้ GM โดยไม่ลบไฟล์เดิม')){
           select.value=previous;return;
         }
         const generation=++switchGeneration;
         downloadController?.abort();selected=next;fontCache=null;fontLoadPromise=null;fontWarning='';
         approvedFont=currentFontKey()||next;localSet(storageKey,selected);
-        localSet(FONT_READY,'');localSet(FONT_RECOVERY,'');fontStatusChanged();
-        // Clear private local cache BEFORE starting a new bank; no Drive mutation.
-        const cleanup=fontDisk('readwrite',store=>store.clear()).catch(()=>{});
+        localSet(FONT_RECOVERY,'');fontStatusChanged();
+        // Keep the one previous disk bank until the new bank is validated.
+        // saveDiskFont atomically clears and replaces it in a single transaction.
+        const cleanup=Promise.resolve();
         switchTask=cleanup;
         void cleanup.finally(()=>{
           if(switchTask===cleanup)switchTask=null;

@@ -23,7 +23,7 @@
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
   <link rel="stylesheet" href="style.css?v=1153-concert-lights">
-  <link rel="stylesheet" href="xstage-ux.css?v=1164-mobile-controls-lights-thai-accents-1169-live-update-ui-google-remember-tv-online-parity-v1180-tv-dpad-search-queue-r1-1204-update-1222-paged-search">
+  <link rel="stylesheet" href="xstage-ux.css?v=1164-mobile-controls-lights-thai-accents-1169-live-update-ui-google-remember-tv-online-parity-v1180-tv-dpad-search-queue-r1-1204-update-1223-paged-search">
   <link rel="stylesheet" href="cloud-import.css?v=1214-shared-pc-online-new-sqlite-r1">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
@@ -35,8 +35,8 @@
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
-        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1222" alt="" width="48" height="48">
-        <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small><small id="karaoke-release-label">Karaoke Web v1.0.222 · Build 1222</small></span>
+        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1223" alt="" width="48" height="48">
+        <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small><small id="karaoke-release-label">Karaoke Web v1.0.223 · Build 1223</small></span>
       </a>
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
       <div class="account-tools">
@@ -69,7 +69,7 @@
             <span id="app-update-text">มี X-Stage เวอร์ชันใหม่</span>
             <div class="app-update-actions">
               <button id="app-update-action" type="button">อัปเดตตอนนี้</button>
-              <a id="app-update-direct" href="karaoke.html?build=1222" hidden>เปิดรุ่นใหม่โดยตรง</a>
+              <a id="app-update-direct" href="karaoke.html?build=1223" hidden>เปิดรุ่นใหม่โดยตรง</a>
               <button id="app-update-after-song" type="button" hidden>อัปเดตหลังจบเพลง</button>
             </div>
           </div>
@@ -78,7 +78,7 @@
             <div class="stage-brand-scene">
               <canvas id="stage-viz-left" class="stage-brand-side-viz" width="320" height="190"></canvas>
               <div class="stage-brand-lockup">
-                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1222" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
+                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1223" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
               </div>
               <canvas id="stage-viz-right" class="stage-brand-side-viz" width="320" height="190"></canvas>
             </div>
@@ -325,7 +325,7 @@
             <output id="xstage-midi-engine-status" class="xstage-midi-engine-status" role="status" hidden aria-live="polite"></output>
             <nav class="pc-tools" aria-label="เครื่องมือ X-Stage"><button type="button" id="pc-find">⌕ ค้นหา F3</button><button type="button" id="pc-random">สุ่มเพลง</button><button type="button" id="pc-history">ประวัติ</button><button type="button" id="pc-loop-a">จุด A</button><button type="button" id="pc-loop-b">จุด B</button><button type="button" id="pc-loop-clear">เลิกวน</button><button type="button" id="pc-lyrics-settings">เนื้อร้อง / BG</button><button type="button" id="pc-eq">EQ Monitor</button><button type="button" id="pc-stage-pop">จอร้องแยก</button><button type="button" id="pc-other-tools">เครื่องมือ</button><button type="button" id="pc-share-library">⇄ แชร์โฟลเดอร์เพลง</button><button type="button" id="pc-clear-cache">เคลียร์แคช</button></nav>
           </div>
-          <aside class="dock queue-dock" id="stage-queue-panel" aria-labelledby="queue-title"><div class="dock-head"><div><span class="overline">UP NEXT</span><h2 id="queue-title">คิวเพลง</h2></div><span id="queue-count" class="count-chip">0</span></div><div class="queue-hint">เพิ่มเพลงด้วย Enter หรือปุ่ม + จากผลค้นหา</div><output id="xstage-queue-memory" class="xstage-memory-indicator" data-level="low" role="status" aria-live="polite">คิว · งบหน่วยความจำกำลังประเมิน</output><ol id="queue" class="queue-list"><li class="empty-state">ยังไม่มีเพลงในคิว</li></ol><div class="queue-footer"><div class="pc-queue-files"><button type="button" id="pc-import">นำเข้าคิว</button><button type="button" id="pc-export">ส่งออกคิว</button><input type="file" id="pc-queue-file" accept="application/json,.json" hidden></div><button id="clear-queue" type="button" class="button button-ghost" disabled>ล้างคิวทั้งหมด</button><div class="shortcut-line">F5 เล่น/พัก · F6 ถัดไป</div></div></aside>
+          <aside class="dock queue-dock" id="stage-queue-panel" aria-labelledby="queue-title"><div class="dock-head"><div><span class="overline">UP NEXT</span><h2 id="queue-title">คิวเพลง</h2></div><span id="queue-count" class="count-chip">0</span></div><div class="queue-hint">เพิ่มเพลงด้วย Enter หรือปุ่ม + จากผลค้นหา</div><label class="queue-hint" for="xstage-disk-preload-count">เก็บเพลงล่วงหน้าในเครื่อง <select id="xstage-disk-preload-count" aria-label="จำนวนเพลงที่โหลดลงเครื่องล่วงหน้า"><option value="0">ปิด</option><option value="1">1 เพลง</option><option value="3" selected>3 เพลง</option><option value="5">5 เพลง</option><option value="all">ทั้งคิว</option></select></label><output id="xstage-queue-memory" class="xstage-memory-indicator" data-level="low" role="status" aria-live="polite">คิว · งบหน่วยความจำกำลังประเมิน</output><ol id="queue" class="queue-list"><li class="empty-state">ยังไม่มีเพลงในคิว</li></ol><div class="queue-footer"><div class="pc-queue-files"><button type="button" id="pc-import">นำเข้าคิว</button><button type="button" id="pc-export">ส่งออกคิว</button><input type="file" id="pc-queue-file" accept="application/json,.json" hidden></div><button id="clear-queue" type="button" class="button button-ghost" disabled>ล้างคิวทั้งหมด</button><div class="shortcut-line">F5 เล่น/พัก · F6 ถัดไป</div></div></aside>
           <section id="xstage-eq-panel" class="xstage-eq-panel" data-monitor-only="true" hidden aria-label="แสดงระดับเสียง EQ ไม่ปรับเสียงลำโพง">
             <header class="xstage-eq-head" data-eq-drag>
               <div class="xstage-eq-brand"><img src="assets/xstage-app-icon-192.png" alt=""><strong>EQ Monitor · ไม่ปรับเสียง</strong></div>
@@ -585,9 +585,9 @@
   },16000);
 })();
 </script>
-<script src="config.js?v=1222-startup-recovery"></script>
+<script src="config.js?v=1223-startup-recovery"></script>
 <script>
-window.XSTAGE_RELEASE={version:'1.0.222',build:1222};
+window.XSTAGE_RELEASE={version:'1.0.223',build:1223};
 document.addEventListener('DOMContentLoaded',function(){
   const label=document.getElementById('karaoke-release-label');
   if(!label)return;
@@ -602,25 +602,27 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 </script>
 <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="drive-sqlite.js?v=1222-shared-sqlite" defer></script>
-  <script src="cloud-import-core.js?v=1137" defer></script>
+  <script src="drive-sqlite.js?v=1223-shared-sqlite" defer></script>
+  <script src="cloud-import-core.js?v=1223" defer></script>
+  <script src="private-media-cache.js?v=1223" defer></script>
+  <script src="web-catalog-disk.js?v=1223" defer></script>
   <script src="xsk-browser.js?v=1137" defer></script>
-  <script src="xmid-browser.js?v=1222-metadata" defer></script>
+  <script src="xmid-browser.js?v=1223-metadata" defer></script>
   <script src="memory-budget.js?v=1137" defer></script>
   <script src="ios-midi-audio.js?v=1151-queue-handoff-1168-screen-wake" defer></script>
-  <script src="browser-midi.js?v=1222-fixed-soundfont" defer></script>
+  <script src="browser-midi.js?v=1223-fixed-soundfont" defer></script>
   <script src="midi-pro-engine.js?v=1137-playback-restore-1168-screen-wake" defer></script>
   <script src="video-metadata-editor.js?v=1138-verified-video-selection" defer></script>
   <script src="video-transcode.js?v=1137" defer></script>
-  <script src="cloud-import.js?v=1222-fixed-layout" defer></script>
-  <script src="cloud-drive-folders.js?v=1222-fixed-layout" defer></script>
+  <script src="cloud-import.js?v=1223-fixed-layout" defer></script>
+  <script src="cloud-drive-folders.js?v=1223-fixed-layout" defer></script>
   <script src="tv-refresh.js?v=1214" defer></script>
-  <script src="app.js?v=1222-startup-recovery" defer></script><script src="pc-extensions.js?v=1222-scoped-fx-mirror" defer></script>
+  <script src="app.js?v=1223-startup-recovery" defer></script><script src="pc-extensions.js?v=1223-scoped-fx-mirror" defer></script>
   <script src="midi-keyboard-ui.js?v=1215-mobile-manual" defer></script>
-  <script src="native-audio-meter.js?v=1222" defer></script>
-  <script src="stage-controls.js?v=1222-monitor-only-eq" defer></script>
+  <script src="native-audio-meter.js?v=1223" defer></script>
+  <script src="stage-controls.js?v=1223-monitor-only-eq" defer></script>
   <script src="mobile-layout.js?v=1202-menu" defer></script>
-  <script src="android-apk-download.js?v=1222" defer></script>
+  <script src="android-apk-download.js?v=1223" defer></script>
 
   <script src="windows-volume-bridge.js?v=1215-auto-connect" defer></script>
   <script src="stage-ui.js?v=1164-bottom-menu" defer></script>
