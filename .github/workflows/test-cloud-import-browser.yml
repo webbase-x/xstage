@@ -26,6 +26,9 @@ on:
       - "index.html"
       - "karaoke.html"
       - "app.js"
+      - "web-catalog-opfs-*.mjs"
+      - "web-catalog-disk.js"
+      - "scripts/web-catalog-large-browser-e2e.mjs"
       - "scripts/cloud-import-test.mjs"
       - "scripts/cloud-import-contract-test.mjs"
       - "scripts/cloud-import-browser-e2e.mjs"
@@ -38,6 +41,9 @@ on:
       - "index.html"
       - "karaoke.html"
       - "app.js"
+      - "web-catalog-opfs-*.mjs"
+      - "web-catalog-disk.js"
+      - "scripts/web-catalog-large-browser-e2e.mjs"
       - "scripts/cloud-import-test.mjs"
       - "scripts/cloud-import-contract-test.mjs"
       - "scripts/cloud-import-browser-e2e.mjs"
@@ -86,5 +92,7 @@ jobs:
           sudo apt-get install -y -qq ffmpeg
       - name: Test browser Google Drive private-folder workflow
         run: node scripts/cloud-import-browser-e2e.mjs
+      - name: Verify real SQLite larger than 192 MiB in Chromium OPFS
+        run: node scripts/web-catalog-large-browser-e2e.mjs
       - name: Verify real AVI to H.264/AAC conversion in browser Worker
         run: node scripts/video-browser-transcode-e2e.mjs
