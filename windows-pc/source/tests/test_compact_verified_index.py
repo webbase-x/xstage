@@ -1,3 +1,4 @@
+from contextlib import closing
 import hashlib
 import json
 import sqlite3
@@ -27,11 +28,11 @@ class VerifiedCompactTest(unittest.TestCase):
             package(orig/'0'/'2.xmid','2','ผิด','ศิลปิน')
             src=root/'songs.sqlite3';compact=root/'songs.search.sqlite3';journal=root/'verification-journal.sqlite3'
             rows=[(1,'1','รัก','ศิลปิน','SONGS/MIDI/XMID/0/1.xmid'),(2,'2','เพลง','ศิลปิน','SONGS/MIDI/XMID/0/2.xmid'),(3,'3','เพลง','ศิลปิน','SONGS/MIDI/XMID/0/3.xmid')]
-            with sqlite3.connect(src) as c:
+            with closing(sqlite3.connect(src)) as c, c:
                 c.execute('CREATE TABLE songs(id INTEGER PRIMARY KEY,code,title,artist,path,playable)')
                 c.executemany('INSERT INTO songs VALUES(?,?,?,?,?,1)',rows)
             raw=src.read_bytes()
-            with sqlite3.connect(compact) as c:
+            with closing(sqlite3.connect(compact)) as c, c:
                 c.executescript('CREATE TABLE index_meta(key,value);CREATE TABLE songs(id INTEGER PRIMARY KEY,code,title,artist,path);')
                 c.executemany('INSERT INTO songs VALUES(?,?,?,?,?)',rows)
                 c.executemany('INSERT INTO index_meta VALUES(?,?)',dict(format='xstage-search-index-v1',source_md5=hashlib.md5(raw).hexdigest(),source_sha256=hashlib.sha256(raw).hexdigest(),source_bytes=str(len(raw)),count='3').items())
@@ -45,7 +46,7 @@ class VerifiedCompactTest(unittest.TestCase):
             self.assertFalse(out.exists())
             stats=build(src,compact,orig,out,journal)
             self.assertEqual((stats['verified'],stats['reused'],stats['rejected']),(1,1,2))
-            with sqlite3.connect(out) as c:
+            with closing(sqlite3.connect(out)) as c, c:
                 s=json.loads(c.execute('SELECT payload FROM songs').fetchone()[0])
                 self.assertEqual(s['xmid']['md5Checksum'],hashlib.md5(good).hexdigest())
                 self.assertEqual(s['xmid']['sha256'],hashlib.sha256(good).hexdigest())
