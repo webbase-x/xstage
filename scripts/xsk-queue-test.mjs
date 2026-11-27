@@ -107,7 +107,7 @@ const nextEnd=app.indexOf('// Release the finished media and lyrics',nextBegin);
 assert.ok(nextBegin>=0&&nextEnd>nextBegin);
 const runner=new Function('state','scheduleQueuePreload','renderQueue',
   'playSong','clearIdleStage','nextMedleyCandidate','MEDLEY_RECENT_LIMIT','releaseFinishedMedia',
-  'getFileId','window','stopSoundFontFill',
+  'getFileId','window','stopSoundFontFill','requestWebMedley',
   app.slice(nextBegin,nextEnd)+'\nreturn playNext;');
 const active={song,token:'token-001',promise:Promise.resolve({blob:audio,
   lyrics:mimeDoc,song,token:'token-001'}),controller:new AbortController()};
@@ -124,6 +124,34 @@ assert.equal(accepted.picked,song);
 assert.equal(accepted.opts.pending,active,'Playback must consume same in-flight Promise');
 assert.equal(active.controller.signal.aborted,false,'Do not abort promoted XSK pre-render');
 assert.equal(state.queue.length,1);
+
+// Web disk-backed medley must wait for SQL without consuming a queue twice.
+// Run the same production entry point and handoff used by the native player.
+let completeLookup,lookupCalls=0,played=[];
+const medleySong={...song,code:'00003'};
+const webState={...state,webCatalog:{},medley:true,queue:[],requestId:1,
+  medleyUpcoming:null,webNextPending:null,userStopped:false,medleyRecent:[],
+  queuePreparedCache:new Map(),queuePreloadSkipped:new Set(),queuePreload:null};
+const webTransition=runner(webState,()=>{},()=>{},picked=>played.push(picked),
+  ()=>{},()=>webState.medleyUpcoming,10,()=>{},file=>file?.fileId||null,
+  {XStageIOSMidiAudio:{keepPlayingBetweenSongs(){}}},()=>{},()=>{
+    lookupCalls++;
+    return new Promise(resolve=>{completeLookup=()=>{
+      webState.medleyUpcoming=medleySong;resolve(medleySong);
+    };});
+  });
+webTransition();webTransition();
+assert.equal(lookupCalls,1,'Repeated next must share the pending SQL lookup');
+assert.equal(played.length,0,'Do not advance until lookup completes');
+let waiting=webState.webNextPending;
+completeLookup();await waiting;
+assert.equal(webState.webNextPending,null);
+assert.deepEqual(played,[medleySong],'Exactly one playback handoff');
+webState.medleyUpcoming=null;
+webTransition();waiting=webState.webNextPending;
+webState.requestId++;
+completeLookup();await waiting;
+assert.deepEqual(played,[medleySong],'Stale lookup must not start playback after request changes');
 
 assert.ok(app.includes('task.promise=prepareQueuedSong(song,token,controller.signal)'),
   'Medley must prepare XMID/XSK2 with the same format-aware preloader as the queue');
