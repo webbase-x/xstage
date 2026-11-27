@@ -65,6 +65,29 @@ class SharedSongLibraryTests(unittest.TestCase):
         self.assertFalse((self.database.parent / "songs.sqlite3-shm").exists())
         self.assertEqual(list((self.root / "DB").iterdir()),[self.database])
 
+    def test_paged_shared_search_filters_before_limit_and_never_writes(self):
+        with closing(sqlite3.connect(self.database)) as db:
+            with db:
+                for i in range(20):
+                    db.execute("""INSERT INTO songs(id,web_song_id,path,kind,search,playable,code,title,artist,
+                        source_format,original_relative_path,payload)
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        (i+1, f'web/{i}', 'SONGS/../unsafe.xmid' if i%4==0 else f'SONGS/{i}.xmid',
+                         'MIDI', 'paged', int(i%4!=1), f'{i:05}', f'paged {i:02}', 'artist', 'XMID', '', '{}'))
+        before = hashlib.sha256(self.database.read_bytes()).hexdigest()
+        self.prefs['shared_favorite_song_ids'] = [i+1 for i in range(20) if i%4==2 or i%4==3]
+        library = SharedSongLibrary(str(self.root), self.prefs)
+        with closing(library.open_reader()) as reader:
+            expected = [i+1 for i in range(20) if i%4 in (2,3)]
+            for favorite in (False, True):
+                first = reader.search('paged', favorite, limit=6, playable_only=True, offset=0)
+                second = reader.search('paged', favorite, limit=6, playable_only=True, offset=5)
+                self.assertEqual([r['id'] for r in first[:5]+second], expected)
+                self.assertEqual(len(second), 5)
+            self.prefs['shared_favorite_song_ids'] = [expected[-1]]
+            self.assertEqual([r['id'] for r in reader.search('paged', True, limit=6, playable_only=True, offset=0)], [expected[-1]])
+        self.assertEqual(before, hashlib.sha256(self.database.read_bytes()).hexdigest())
+
     def test_write_actions_fail_closed(self):
         library = SharedSongLibrary(str(self.root),{})
         for action in [lambda:library.add_files([self.file]),

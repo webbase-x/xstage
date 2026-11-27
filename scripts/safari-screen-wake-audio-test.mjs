@@ -81,7 +81,9 @@ function setup({midi=true,recover=true}={}){
   t.document.hidden=true;t.api.saveScreenSleepPlaybackIntent();
   t.document.hidden=false;
   t.api.tryRecoverInterruptedPlayback();
-  assert.equal(t.timers.length,1,'Focus/visibility recovery must be deferred once');
+  t.api.tryRecoverInterruptedPlayback();
+  t.api.tryRecoverInterruptedPlayback();
+  assert.equal(t.timers.length,1,'Overlapping focus/pageshow/visibility events must schedule only one recovery');
   await t.timers.shift()();
   await Promise.resolve();
   assert.equal(t.engineCalls(),1,'Deferred wake resumes the audio engine');

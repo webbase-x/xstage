@@ -159,7 +159,15 @@ class SearchReader:
                                           len(row['title']), row['id']))
         return tuple(row['id'] for row in candidates[:limit])
 
-    def search(self, text='', favorite=False, limit=1000, playable_only=False, cancelled=None):
+    def _search_filters(self, favorite, playable_only):
+        filters = []
+        if favorite:
+            filters.append('(favorite=1 OR EXISTS (SELECT 1 FROM songs d WHERE d.duplicate_of=songs.id AND d.favorite=1))')
+        if playable_only:
+            filters.append('playable=1')
+        return filters
+
+    def search(self, text='', favorite=False, limit=1000, playable_only=False, cancelled=None, *, offset=None):
         cancelled = cancelled or (lambda: False)
         if cancelled():
             raise SearchCancelled()
@@ -167,20 +175,22 @@ class SearchReader:
         limit = max(0, min(5000, int(limit)))
         if not limit:
             return []
-        key = query, bool(favorite), bool(playable_only), limit
+        # Explicit offset opts into globally ranked, consistently ordered pages.
+        # The legacy bounded prefix shortcuts are not safe across page boundaries.
+        paged = offset is not None
+        offset = max(0, int(offset or 0))
+        key = query, bool(favorite), bool(playable_only), limit, paged, offset
         self.db.set_progress_handler(lambda: 1 if cancelled() else 0, 1000)
         try:
             self._check_version()
             ids = self._cache.get(key)
-            if ids is None:
+            if ids is None and not paged:
                 ids = self._exact_numeric_code_ids(query, limit, favorite, playable_only)
                 if ids is None:
                     ids = self._title_prefix_ids(query, limit, favorite, playable_only)
             if ids is None:
                 tokens = query.split()
-                where = ['duplicate_of=0 AND duplicate_state NOT IN (\'deleted\',\'moved\',\'recycled\',\'invalid\',\'missing\',\'excluded\',\'manual_hidden\')'] + (['(favorite=1 OR EXISTS (SELECT 1 FROM songs d WHERE d.duplicate_of=songs.id AND d.favorite=1))'] if favorite else [])
-                if playable_only:
-                    where.append('playable=1')
+                where = ['duplicate_of=0 AND duplicate_state NOT IN (\'deleted\',\'moved\',\'recycled\',\'invalid\',\'missing\',\'excluded\',\'manual_hidden\')'] + self._search_filters(favorite, playable_only)
                 values = []
                 indexed = [token for token in tokens if len(token) >= 3] if self.fts else []
                 if indexed:
@@ -198,6 +208,9 @@ class SearchReader:
                 else:
                     statement += ' ORDER BY title COLLATE NOCASE,id LIMIT ?'
                     values.append(limit)
+                if paged:
+                    statement += ' OFFSET ?'
+                    values.append(offset)
                 ids = tuple(row[0] for row in self.db.execute(statement, values))
             if key not in self._cache:
                 if cancelled():

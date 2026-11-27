@@ -40,17 +40,23 @@ function metadata(bytes){
   if(offset!==bytes.length)fail('metadata มีข้อมูลส่วนเกิน');
   const document={schemaVersion:1,songCode:code,title,artist,sourceFormat:'XMID',
     songId,lyricsVersionId,timingStatus,lines};
-  scope.XStageImportCore?.validLyricsJson(document,code);
   if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(code))fail('รหัสเพลงไม่ปลอดภัย');
+  // A valid MIDI-only export may contain zero timed lyric lines.
+  // Validate all present lines; do not invent text or timing for missing lyrics.
+  if(lines.length)scope.XStageImportCore?.validLyricsJson(document,code);
   const identity=scope.XStageImportCore?.songIdentity(document,code);
   if(!identity)fail('ไม่พบระบบตรวจสอบชื่อเพลง');
   // Some intact XMID packages contain playable MIDI but do not contain
   // a real artist or timed lyrics. Preserve the original package bytes and
   // mark missing metadata explicitly instead of treating MIDI as corrupt.
-  const placeholderLyrics=lines.length===1&&
+  const placeholderLyrics=lines.length===0||lines.length===1&&
     /^x-stage karaoke$/i.test(String(lines[0].text||'').trim());
   document.title=identity.title;document.artist=identity.artist;
   document.metadataComplete=Boolean(identity.identityComplete);
+  document.metadataIssues=[...(identity.title==='ไม่ระบุชื่อเพลง'?['missing-title']:[]),
+    ...(identity.artist==='ไม่ระบุศิลปิน'?['missing-artist']:[]),
+    ...(placeholderLyrics?['missing-timed-lyrics']:[]),
+    ...(/[\uFFFD\u0000-\u001F\u007F-\u009F]/.test(String(title||'')+' '+String(artist||''))?['suspect-text-encoding']:[])];
   if(placeholderLyrics){
     document.lines=[];
     document.lyricsMode='unavailable';
@@ -62,7 +68,7 @@ async function openPackage(file,{metadataOnly=false}={}){
   if(!(file instanceof Blob))fail('ไม่พบไฟล์');
   if(file.size<HEADER||file.size>HEADER+MAX_META+MAX_MIDI)fail('ขนาดไฟล์เกินขอบเขต');
   const header=new Uint8Array(await file.slice(0,HEADER).arrayBuffer());
-  const magic=decoder.decode(header.subarray(0,8));
+  const magic=String.fromCharCode(...header.subarray(0,8));
   if(magic!=='XSTGPLS1')fail('ไม่ใช่ XMID จาก Song Studio Pro');
   const view=new DataView(header.buffer);
   if(view.getUint32(8,true)!==1)fail('เวอร์ชันไฟล์ไม่รองรับ');
@@ -72,12 +78,14 @@ async function openPackage(file,{metadataOnly=false}={}){
      HEADER+metaSize+mediaSize!==file.size)fail('ส่วนหัวระบุขนาดผิดปกติ');
   const meta=new Uint8Array(await file.slice(HEADER,HEADER+metaSize).arrayBuffer());
   await verify(meta,header.subarray(60,92));
-  const result=metadata(meta);
+  let result;
+  try{result=metadata(meta);}
+  catch(error){if(/^XMID:/.test(String(error?.message||error)))throw error;fail('metadata ไม่ถูกต้อง: '+String(error?.message||error));}
   if(metadataOnly)return result;
   const midi=new Uint8Array(await file.slice(HEADER+metaSize).arrayBuffer());
   await verify(midi,header.subarray(28,60));
-  if(decoder.decode(midi.subarray(0,4))!=='MThd' &&
-     decoder.decode(midi.subarray(0,4))!=='NCN1')fail('สื่อใน XMID ไม่ใช่ MIDI');
+  const mediaMagic=String.fromCharCode(...midi.subarray(0,4));
+  if(mediaMagic!=='MThd' && mediaMagic!=='NCN1')fail('สื่อใน XMID ไม่ใช่ MIDI');
   return {...result,midi:new Blob([midi],{type:'audio/midi'})};
 }
 scope.XStageXmid={inspectMetadata:file=>openPackage(file,{metadataOnly:true}),openPackage};

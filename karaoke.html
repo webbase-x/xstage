@@ -23,7 +23,7 @@
     document.documentElement.classList.add('xstage-native-auth-pending');
   </script>
   <link rel="stylesheet" href="style.css?v=1153-concert-lights">
-  <link rel="stylesheet" href="xstage-ux.css?v=1164-mobile-controls-lights-thai-accents-1169-live-update-ui-google-remember-tv-online-parity-v1180-tv-dpad-search-queue-r1-1204-update">
+  <link rel="stylesheet" href="xstage-ux.css?v=1164-mobile-controls-lights-thai-accents-1169-live-update-ui-google-remember-tv-online-parity-v1180-tv-dpad-search-queue-r1-1204-update-1222-paged-search">
   <link rel="stylesheet" href="cloud-import.css?v=1214-shared-pc-online-new-sqlite-r1">
 <script id="xstage-official-logo-loader">(function(){
   var logo=new Image();
@@ -35,8 +35,8 @@
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="./" aria-label="X-Stage Karaoke Online หน้าแรก">
-        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1221" alt="" width="48" height="48">
-        <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small><small id="karaoke-release-label">Karaoke Web v1.0.221 · Build 1221</small></span>
+        <img class="brand-mark" src="assets/xstage-app-icon.svg?v=1222" alt="" width="48" height="48">
+        <span class="brand-name"><strong>X-STAGE <em>KARAOKE</em></strong><small>ONLINE PLAYER <span class="brand-pip"></span> PERSONAL DRIVE</small><small id="karaoke-release-label">Karaoke Web v1.0.222 · Build 1222</small></span>
       </a>
       <div class="topbar-center" aria-hidden="true"><span class="live-dot"></span> YOUR STAGE. YOUR MUSIC.</div>
       <div class="account-tools">
@@ -69,7 +69,7 @@
             <span id="app-update-text">มี X-Stage เวอร์ชันใหม่</span>
             <div class="app-update-actions">
               <button id="app-update-action" type="button">อัปเดตตอนนี้</button>
-              <a id="app-update-direct" href="karaoke.html?build=1221" hidden>เปิดรุ่นใหม่โดยตรง</a>
+              <a id="app-update-direct" href="karaoke.html?build=1222" hidden>เปิดรุ่นใหม่โดยตรง</a>
               <button id="app-update-after-song" type="button" hidden>อัปเดตหลังจบเพลง</button>
             </div>
           </div>
@@ -78,7 +78,7 @@
             <div class="stage-brand-scene">
               <canvas id="stage-viz-left" class="stage-brand-side-viz" width="320" height="190"></canvas>
               <div class="stage-brand-lockup">
-                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1221" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
+                <img class="stage-official-banner" src="assets/xstage-stage-logo.png?v=1222" alt="X-Stage Karaoke Online" width="2048" height="682" decoding="async">
               </div>
               <canvas id="stage-viz-right" class="stage-brand-side-viz" width="320" height="190"></canvas>
             </div>
@@ -89,7 +89,7 @@
             <div class="stage-search-slot"><aside class="dock search-dock pc-overlay" id="pc-search" aria-labelledby="catalog-title">
         <div class="dock-head"><div><span class="overline">LIBRARY</span><h2 id="catalog-title">ค้นหาเพลง</h2></div><span id="song-total" class="count-chip">0 เพลง</span><button type="button" id="pc-hide-search" title="ย่อผลการค้นหา (F3)" class="pc-search-fold">▾</button></div>
         <div class="search-box"><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" role="combobox" aria-autocomplete="list" aria-controls="songs" aria-expanded="false" autocomplete="off" placeholder="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง" aria-label="ค้นหาเพลง ชื่อศิลปิน หรือรหัสเพลง" aria-disabled="false" data-library-ready="false"><kbd>Ctrl F</kbd></div>
-        <div class="library-hint"><label class="pc-favorite-toggle"><input id="pc-favorites-only" type="checkbox"> ★ เพลงโปรด</label><label id="library-switcher" class="library-switcher" hidden><span>คลัง</span><select id="library-select" aria-label="เลือกคลังเพลง"></select></label><span id="result-count">กรุณาเข้าสู่ระบบ</span><span id="search-refine-hint" class="search-refine-hint" hidden>พิมพ์เพิ่มเพื่อเจาะจงผลค้นหา</span><span>↑ ↓ เลือก · Enter เล่น/เข้าคิว</span></div>
+        <div class="library-hint"><label class="pc-favorite-toggle"><input id="pc-favorites-only" type="checkbox"> ★ เพลงโปรด</label><label id="library-switcher" class="library-switcher" hidden><span>คลัง</span><select id="library-select" aria-label="เลือกคลังเพลง"></select></label><span id="result-count">กรุณาเข้าสู่ระบบ</span><span id="search-refine-hint" class="search-refine-hint" hidden>เลื่อนลงเพื่อดูเพิ่ม</span><span>↑ ↓ เลือก · Enter เล่น/เข้าคิว</span></div>
         <div id="songs" class="song-results" role="listbox" aria-label="รายการเพลง" aria-live="off"><div class="empty-state"><span class="empty-graphic" aria-hidden="true">♫</span>เพลงจาก Google Drive ของคุณจะแสดงที่นี่</div></div>
         <div class="dock-foot"><span class="status-dot"></span> <span id="library-state">คลังส่วนตัว · ไม่มีการเผยแพร่เพลงสาธารณะ</span><a id="library-drive-link" href="#" target="_blank" rel="noopener noreferrer" hidden title="ดูโฟลเดอร์ Google Drive ที่เว็บกำลังใช้งานจริง">เปิดโฟลเดอร์ที่ใช้งาน</a></div>
       </aside></div>
@@ -585,9 +585,9 @@
   },16000);
 })();
 </script>
-<script src="config.js?v=1221-startup-recovery"></script>
+<script src="config.js?v=1222-startup-recovery"></script>
 <script>
-window.XSTAGE_RELEASE={version:'1.0.221',build:1221};
+window.XSTAGE_RELEASE={version:'1.0.222',build:1222};
 document.addEventListener('DOMContentLoaded',function(){
   const label=document.getElementById('karaoke-release-label');
   if(!label)return;
@@ -602,25 +602,25 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 </script>
 <script src="https://accounts.google.com/gsi/client" defer></script>
-  <script src="drive-sqlite.js?v=1221-shared-sqlite" defer></script>
+  <script src="drive-sqlite.js?v=1222-shared-sqlite" defer></script>
   <script src="cloud-import-core.js?v=1137" defer></script>
   <script src="xsk-browser.js?v=1137" defer></script>
-  <script src="xmid-browser.js?v=1186-optional-artist" defer></script>
+  <script src="xmid-browser.js?v=1222-metadata" defer></script>
   <script src="memory-budget.js?v=1137" defer></script>
   <script src="ios-midi-audio.js?v=1151-queue-handoff-1168-screen-wake" defer></script>
-  <script src="browser-midi.js?v=1221-fixed-soundfont" defer></script>
+  <script src="browser-midi.js?v=1222-fixed-soundfont" defer></script>
   <script src="midi-pro-engine.js?v=1137-playback-restore-1168-screen-wake" defer></script>
   <script src="video-metadata-editor.js?v=1138-verified-video-selection" defer></script>
   <script src="video-transcode.js?v=1137" defer></script>
-  <script src="cloud-import.js?v=1221-fixed-layout" defer></script>
-  <script src="cloud-drive-folders.js?v=1221-fixed-layout" defer></script>
+  <script src="cloud-import.js?v=1222-fixed-layout" defer></script>
+  <script src="cloud-drive-folders.js?v=1222-fixed-layout" defer></script>
   <script src="tv-refresh.js?v=1214" defer></script>
-  <script src="app.js?v=1221-startup-recovery" defer></script><script src="pc-extensions.js?v=1206-scoped-fx" defer></script>
+  <script src="app.js?v=1222-startup-recovery" defer></script><script src="pc-extensions.js?v=1222-scoped-fx-mirror" defer></script>
   <script src="midi-keyboard-ui.js?v=1215-mobile-manual" defer></script>
-  <script src="native-audio-meter.js?v=1221" defer></script>
-  <script src="stage-controls.js?v=1221-monitor-only-eq" defer></script>
+  <script src="native-audio-meter.js?v=1222" defer></script>
+  <script src="stage-controls.js?v=1222-monitor-only-eq" defer></script>
   <script src="mobile-layout.js?v=1202-menu" defer></script>
-  <script src="android-apk-download.js?v=1221" defer></script>
+  <script src="android-apk-download.js?v=1222" defer></script>
 
   <script src="windows-volume-bridge.js?v=1215-auto-connect" defer></script>
   <script src="stage-ui.js?v=1164-bottom-menu" defer></script>

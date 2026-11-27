@@ -425,6 +425,10 @@ class ClassicApp(KaraokeApp):
                 if handle_message(self,kind,data):continue
                 if kind == 'search_ready':
                     self.on_search_ready(data)
+                elif kind == 'search_page':
+                    self.apply_search_page(*data)
+                elif kind == 'search_page_error':
+                    self.search_page_error(*data)
                 elif kind == 'search_results':
                     revision, songs, count = data
                     if revision != self.search_revision:

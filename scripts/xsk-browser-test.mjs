@@ -79,3 +79,42 @@ await assert.rejects(()=>bridge.openPackage(badDigest),/SHA-256/);
 await assert.rejects(()=>bridge.openPackage(xsk({...doc,title:'00001',artist:'X-Stage Karaoke'})),
   /ชื่อเพลงหรือศิลปิน/);
 console.log('PASS: portable XSK2 (no key), ZIP deflate, SHA-256, real identity and XSK1 migration');
+
+
+ // Build an authentic XSTGPLS1 fixture with SHA-256 hashes and binary metadata.
+ vm.runInNewContext(fs.readFileSync(new URL('../xmid-browser.js',import.meta.url),'utf8'),ctx);
+ const xmid=ctx.XStageXmid;
+ const u32=n=>{const b=Buffer.alloc(4);b.writeUInt32LE(n);return b;};
+ const f64=n=>{const b=Buffer.alloc(8);b.writeDoubleLE(n);return b;};
+ const str=s=>{const b=Buffer.from(s,'utf8');return Buffer.concat([u32(b.length),b]);};
+ function fixture({title='ทดสอบภาษาไทย',artist='ศิลปินทดสอบ',lines=[],badHash=false}={}){
+   const parts=['song-1','00001','lyrics-1',title,artist,'verified'].map(str);
+   parts.push(u32(lines.length));
+   for(const line of lines)parts.push(f64(line.startTime),f64(line.endTime),str(line.text),str('verified'),u32(0));
+   const meta=Buffer.concat(parts),header=Buffer.alloc(92);
+   header.write('XSTGPLS1');header.writeUInt32LE(1,8);
+   header.writeBigUInt64LE(BigInt(meta.length),12);header.writeBigUInt64LE(BigInt(midi.length),20);
+   createHash('sha256').update(midi).digest().copy(header,28);
+   createHash('sha256').update(meta).digest().copy(header,60);
+   if(badHash)header[28]^=255;
+   return new Blob([header,meta,midi]);
+ }
+ const empty=await xmid.openPackage(fixture({title:'00001',artist:'unknown'}));
+ assert.equal(empty.lyricsAvailable,false);
+ assert.equal(empty.document.lines.length,0);
+ assert.equal(empty.document.title,'ไม่ระบุชื่อเพลง');
+ assert.equal(empty.document.artist,'ไม่ระบุศิลปิน');
+ assert.deepEqual(Array.from(empty.document.metadataIssues),['missing-title','missing-artist','missing-timed-lyrics']);
+ assert.deepEqual(Buffer.from(await empty.midi.arrayBuffer()),midi);
+ const thai=await xmid.openPackage(fixture({lines:[{startTime:1,endTime:3,text:'ภาษาไทย'}]}));
+ assert.equal(thai.document.title,'ทดสอบภาษาไทย');
+ assert.equal(thai.document.lines[0].text,'ภาษาไทย');
+ assert.equal(thai.lyricsAvailable,true);
+ assert.equal(thai.document.metadataIssues.length,0);
+ const suspect=await xmid.inspectMetadata(fixture({artist:'ทดสอบ\uFFFD'}));
+ assert.ok(suspect.document.metadataIssues.includes('suspect-text-encoding'));
+ const broken=fixture({badHash:true});
+ await assert.rejects(()=>xmid.openPackage(broken),/SHA-256/);
+ await assert.rejects(()=>xmid.openPackage(fixture({lines:[{startTime:3,endTime:1,text:'ผิดเวลา'}]})),/เวลา/);
+ await assert.rejects(()=>xmid.openPackage(fixture({lines:[{startTime:1,endTime:3,text:' '}]})),/^Error: XMID: metadata/);
+ console.log('PASS: XMID verified MIDI-only, missing metadata, Thai text, invalid timing and corrupt media digest');

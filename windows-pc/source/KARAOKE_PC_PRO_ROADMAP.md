@@ -465,3 +465,9 @@ The user requested batched coding without physical QA. **This is a coding update
 
 - PASS-CI: [run 45727434620](https://github.com/webbase-x/xstage/actions/runs/45727434620), exact source `376494e36c901274aa5f39a61d7f4791ab751681`: SQLite 14 tests; full regression 1301 tests, 0 failures, 0 errors, 81 skipped; isolated Tk GUI 18 passed, 0 failed, 1 retired. Native ASIO bridge compilation, BASS verification, installer compilation, silent install/uninstall preserving Data and Songs, Sigstore provenance verification and artifact upload all succeeded.
 - Preview publication run 45728361490 succeeded; not Stable. Physical ASIO and long playback remain DEFERRED-HARDWARE. Keep 24 of 27 historical acceptance items open pending individual evidence review; no new acceptance closure inferred from aggregate CI.
+
+## 2026-11-27 — P0.4 search paging regression recovery
+
+- Windows [run 45914401477](https://github.com/webbase-x/xstage/actions/runs/45914401477), exact source `f586d11ca18c471d0d6c83e7e4c48e89b2ee2aa3`: 1,311 tests, 1 failure, 1 error, 81 skipped; no installer built. The existing lyric-space constraint failed at compact viewport and the keyboard test fixture lacked the new paging callback.
+- Keep five-row SQL batches and scrollbar-free search; dynamically reduce visible rows only on constrained/high-DPI screens to preserve the lyrics band. Use the same row geometry in preview telemetry. Extend keyboard regression to assert prefetch and next-page intent. No song, settings, version or release changes.
+- PENDING-QA: full Windows regression and actual Tk layout/installer verification on the new commit; no new acceptance closure. 24/27 checklist items remain historically open; physical audio/display remains DEFERRED-HARDWARE.

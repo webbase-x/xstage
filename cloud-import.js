@@ -1573,6 +1573,7 @@ class Importer {
           const xmidHash=await core.hashBlob(item.file,()=>this.check());
           return {item,sourceCode,rawMidiSize,rawMidiHash,identity,xmidHash,
             identityComplete:Boolean(identity.identityComplete),
+            metadataIssues:Array.isArray(opened.document.metadataIssues)?opened.document.metadataIssues.slice(0,8):[],
             lyricsAvailable:Boolean(opened.lyricsAvailable),
             ident:'browser/xmid/'+xmidHash,name:sourceXmidName(item.file.name)};
         }));
@@ -1621,11 +1622,12 @@ class Importer {
             title:entry.identity.title,artist:entry.identity.artist,
             sourceFormat:'XMID',
             lyricsMode:entry.lyricsAvailable?'timed':'unavailable',
-            metadataComplete:entry.identityComplete,xmid:outcome.value};
+            metadataComplete:entry.identityComplete&&!entry.metadataIssues.includes('suspect-text-encoding'),
+            metadataIssues:entry.metadataIssues,xmid:outcome.value};
           rows.set(entry.ident,record);addMaps(record);
           byMidi.set(entry.rawMidiHash,record);
           revisions.push(record);this.stats.newSongs++;finished++;
-          if(!entry.identityComplete)this.stats.metadataPending++;
+          if(!record.metadataComplete)this.stats.metadataPending++;
           show('นำเข้า XMID '+finished+' / '+work.length+' · ใหม่ '+this.stats.newSongs+
             ' · ซ้ำ '+this.stats.duplicates+
             ' · รอตรวจชื่อ/ศิลปิน '+this.stats.metadataPending);

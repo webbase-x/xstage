@@ -66,17 +66,16 @@ document.addEventListener('keydown',e=>{
 },true);
 const baseRender=renderSongs;
 renderSongs=function(){
- if(!state.token){baseRender();return;}
- const saved=state.songs,filtered=$pc('pc-favorites-only').checked;
- if(filtered)state.songs=saved.filter(s=>favorites.has(songIdentity(s)));
- try{baseRender();}finally{state.songs=saved;}
- [...ui.songs.querySelectorAll('.song-item')].forEach((row,i)=>{
-  const song=state.shown[i];if(!song)return;
-  const star=document.createElement('button');star.type='button';star.className='pc-star';star.style.cssText='border:0;background:transparent;color:#ffd46a;font-size:20px;padding:3px 7px';star.textContent=favorites.has(songIdentity(song))?'★':'☆';star.title='เพิ่ม/นำออกจากเพลงโปรด · บันทึกในเบราว์เซอร์นี้';
-  star.onclick=e=>{e.stopPropagation();const id=songIdentity(song);if(favorites.has(id))favorites.delete(id);else favorites.add(id);saveFavorites();renderSongs();};
-  row.insertBefore(star,row.lastElementChild);
-  row.addEventListener('contextmenu',e=>{e.preventDefault();showSong(song);});
- });
+ const songs=$pc('pc-favorites-only').checked&&state.token
+   ?state.songs.filter(s=>favorites.has(songIdentity(s))):state.songs;
+ baseRender(songs);
+};
+// Decorate every new page, without rebuilding previously displayed rows.
+window.XStageDecorateSearchRow=(row,song)=>{
+ const star=document.createElement('button');star.type='button';star.className='pc-star';star.style.cssText='border:0;background:transparent;color:#ffd46a;font-size:20px;padding:3px 7px';star.textContent=favorites.has(songIdentity(song))?'★':'☆';star.title='เพิ่ม/นำออกจากเพลงโปรด · บันทึกในเบราว์เซอร์นี้';
+ star.onclick=e=>{e.stopPropagation();const id=songIdentity(song);if(favorites.has(id))favorites.delete(id);else favorites.add(id);saveFavorites();if($pc('pc-favorites-only').checked)renderSongs();else star.textContent=favorites.has(id)?'★':'☆';};
+ row.insertBefore(star,row.lastElementChild);
+ row.addEventListener('contextmenu',e=>{e.preventDefault();showSong(song);});
 };
 $pc('pc-favorites-only').onchange=()=>{state.selectedIndex=0;renderSongs();};
 const loginObserver=new MutationObserver(()=>{
@@ -610,7 +609,7 @@ audio.addEventListener('play',()=>{
   loadPersistentLibraryData();
   recordPersistentHistory(state.current);
 });
-window.addEventListener('message',e=>{if(e.origin!==location.origin||e.source!==screen||e.data?.type!=='xstage-eq-command')return;const d=e.data;if(d.action==='open')openEq('singer');else if(d.action==='close'){eqDisplayTarget='main';syncEqDisplaySelector();applyEqVisibility();} /* Preset, bypass, and gain writes are ignored in monitor-only mode. */});
+window.addEventListener('message',e=>{if(e.origin!==location.origin||e.source!==screen)return;if(e.data?.type==='xstage-stage-ready'){sendStageSnapshot();sendBackgroundToSecondScreen();sendEqState();applyEqVisibility();return;}if(e.data?.type!=='xstage-eq-command')return;const d=e.data;if(d.action==='open')openEq('singer');else if(d.action==='close'){eqDisplayTarget='main';syncEqDisplaySelector();applyEqVisibility();} /* Preset, bypass, and gain writes are ignored in monitor-only mode. */});
 if(eqPresetSelect){eqPresetSelect.value='flat';eqPresetSelect.disabled=true;}syncEqDisplaySelector();
 function downloadQueue(){
  const data={schemaVersion:1,source:'XStageSongQueue',songs:state.queue.map(songIdentity)};
@@ -624,12 +623,27 @@ $pc('pc-queue-file').onchange=async e=>{
  try{if(f.size>1e6)throw Error('ไฟล์ใหญ่เกินไป');const d=JSON.parse(await f.text());if(d.source!=='XStageSongQueue'||!Array.isArray(d.songs)||d.songs.length>10000)throw Error('รูปแบบไม่ถูกต้อง');
  const map=new Map(state.songs.filter(playable).map(s=>[songIdentity(s),s]));let count=0;for(const id of d.songs){const s=map.get(String(id));if(s){state.queue.push(s);count++;}}renderQueue();setPlayStatus('นำเข้าคิว '+count+' เพลง');}catch(e){setPlayStatus('นำเข้าคิวไม่สำเร็จ: '+e.message);}e.target.value='';
 };
+function sendStageSnapshot(){
+ if(!screen||screen.closed)return false;
+ try{
+   screen.postMessage({type:'xstage-stage',title:state.current?.title||'',artist:state.current?.artist||'',lines:state.lyrics?.lines||[],offset:Number(state.lyrics?.audioOffsetMs)||0,time:audio.currentTime,duration:Number.isFinite(audio.duration)?audio.duration:Number(state.current?.duration)||0,playing:!!audio.src&&!audio.paused,queueCount:state.queue.length},location.origin);
+   return true;
+ }catch{return false;}
+}
 $pc('pc-stage-pop').onclick=()=>{
- if(screen&&!screen.closed){screen.focus();return;}screen=window.open('./stage.html','xstage-second-stage','width=1100,height=640');
- if(!screen)setPlayStatus('กรุณาอนุญาตให้เปิดหน้าต่างจอร้องแยก');
-  else screen.addEventListener('load',()=>{sendBackgroundToSecondScreen();syncEqDisplaySelector();sendEqState();applyEqVisibility();},{once:true});
+ if(screen&&!screen.closed){screen.focus();sendStageSnapshot();return;}
+ screen=window.open('./stage.html?build='+encodeURIComponent(window.XSTAGE_RELEASE?.build||0),'xstage-second-stage','width=1100,height=640');
+ if(!screen){setPlayStatus('กรุณาอนุญาตให้เปิดหน้าต่างจอร้องแยก');return;}
+ // The secondary page explicitly asks for a fresh snapshot after reload/wake.
+ sendStageSnapshot();
 };
-setInterval(()=>{if(!screen||screen.closed){if(eqDisplayTarget!=='main'){eqDisplayTarget='main';syncEqDisplaySelector();eqPanel.hidden=false;}return;}try{screen.postMessage({type:'xstage-stage',title:state.current?.title||'',artist:state.current?.artist||'',lines:state.lyrics?.lines||[],offset:Number(state.lyrics?.audioOffsetMs)||0,time:audio.currentTime,duration:Number.isFinite(audio.duration)?audio.duration:Number(state.current?.duration)||0,playing:!!audio.src&&!audio.paused,queueCount:state.queue.length},location.origin);}catch{}},200);
+setInterval(()=>{
+ if(!screen||screen.closed){if(eqDisplayTarget!=='main'){eqDisplayTarget='main';syncEqDisplaySelector();eqPanel.hidden=false;}return;}
+ sendStageSnapshot();
+},200);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)sendStageSnapshot();});
+window.addEventListener('pageshow',sendStageSnapshot);
+
 $pc('pc-other-tools').onclick=()=>{const d=openDialog('ความสามารถ X-Stage Web');d.append(para('เว็บ: ค้นหาแบบเรียลไทม์, คิวเพลง, ประวัติ, เพลงโปรดในเซสชัน, สุ่มเพลง, A–B, EQ, ตั้งค่าเนื้อร้องและพื้นหลัง, จอร้องแยก, ส่งออก/นำเข้าคิว'));
  d.append(para('เฉพาะ Windows: MIDI Mixer / SoundFont แยกชิ้นดนตรี, GM Keyboard, ปิด Guide Melody, ASIO, ปรับคีย์ดนตรีอิสระจาก M4A และจัดการฐานเพลงในเครื่อง'));
 };

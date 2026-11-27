@@ -50,13 +50,26 @@ class QueueFlowTests(unittest.TestCase):
         tree.selection.return_value = ('one',)
         query = Mock()
         app = SimpleNamespace(search_visible=True, search_pending=False, songs=tree,
-                              search_entry=Mock(), search_var=query, update_search_detail=Mock())
+                              search_entry=Mock(), search_var=query, update_search_detail=Mock(),
+                              request_search_page=Mock())
         PlaybackApp.navigate_search(app, 1)
         tree.selection_set.assert_called_once_with('two')
         tree.see.assert_called_once_with('two')
         app.search_entry.icursor.assert_called_once_with('end')
         app.search_entry.focus_set.assert_called_once()
         query.set.assert_not_called()
+        app.request_search_page.assert_called_once_with()
+
+    def test_navigation_requests_next_page_at_last_loaded_song(self):
+        tree = Mock()
+        tree.get_children.return_value = ('one', 'two', 'three', 'four', 'five')
+        tree.selection.return_value = ('five',)
+        app = SimpleNamespace(search_visible=True, search_pending=False, songs=tree,
+                              search_entry=Mock(), update_search_detail=Mock(),
+                              request_search_page=Mock())
+        PlaybackApp.navigate_search(app, 1)
+        app.request_search_page.assert_any_call(advance=True)
+        tree.see.assert_called_once_with('five')
 
     def test_queue_right_down_left_up(self):
         items = [object(), object(), object()]
