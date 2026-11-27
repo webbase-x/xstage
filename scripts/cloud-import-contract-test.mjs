@@ -593,7 +593,10 @@ const googleScope={
   window:{dispatchEvent(){}},CustomEvent:class{constructor(type,init){this.type=type;this.detail=init.detail;}},
   setTimeout,clearTimeout,Date,Error,console
 };
-vm.runInNewContext(renewalSource+
+const accountStart=app.indexOf('async function googleAccountResponse(');
+const accountEnd=app.indexOf('function driveError(',accountStart);
+assert.ok(accountStart>=0&&accountEnd>accountStart,'Real UserInfo fallback helper exists');
+vm.runInNewContext(app.slice(accountStart,accountEnd)+'\n'+renewalSource+
   '\nwindow.renew=ensureImporterGoogleAuth;',googleScope,{filename:'app.js importer renewal'});
 await Promise.all([googleScope.window.renew(),googleScope.window.renew()]);
 assert.equal(googleRequests,1,'Concurrent Drive chunks must share one Google OAuth refresh');
