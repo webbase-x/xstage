@@ -5551,3 +5551,9 @@ html body.xstage-ui-v2 .stage .stage-search-slot #songs::-webkit-scrollbar,
 @media(max-height:700px){
   #xstage-tv-search-results{--xs-tv-search-row:54px;--xs-tv-search-gap:6px;max-height:min(38dvh,calc(5 * var(--xs-tv-search-row) + 4 * var(--xs-tv-search-gap) + 10px))!important}
 }
+
+/* Official menu brand and actual installed release; keep close control visible. */
+body.xstage-ui-v2 .stage .mobile-stage-menu .mobile-menu-brand{display:flex;flex:1;min-width:0;flex-direction:column;align-items:flex-start;gap:3px;padding:4px 0}
+body.xstage-ui-v2 .stage .mobile-stage-menu .mobile-menu-brand img{display:block;width:128px;max-width:100%;height:auto;object-fit:contain}
+body.xstage-ui-v2 .stage .mobile-stage-menu .mobile-menu-brand small{display:block;font-size:.7rem;line-height:1.35;font-weight:600;color:#b8d5ef;overflow-wrap:anywhere}
+body.xstage-ui-v2 .stage .mobile-stage-menu #mobile-menu-close{flex-shrink:0;align-self:flex-start}
