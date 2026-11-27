@@ -304,3 +304,52 @@ class ResumeVerificationTests(unittest.TestCase):
             result=direct.convert_folder(str(root),str(out))
             self.assertEqual((result["failed"],result["fast_resumed"]),(1,0),result)
             self.assertEqual(target.read_bytes(),b"external file")
+
+
+class ObservedMidiAndAlignmentTests(unittest.TestCase):
+    def test_anchored_timed_leading_credit_with_surplus(self):
+        import json
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            lead="Nick_Karaoke"; body="abc"
+            midi=fixture(root,["title","artist","",".",lead],body=body)
+            cur=midi.with_suffix(".cur")
+            count=len(lead)+1+len(body)+1
+            cur.write_bytes(struct.pack("<"+"H"*(count+3),*(list(range(count))+[65535]*3)))
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["converted"],1,result)
+            parsed=core.read_xfile(out/"00001.xmid",verify_media=True)
+            self.assertEqual([x["text"] for x in parsed["lines"]],[lead,body])
+
+    def test_ambiguous_blank_marker_does_not_guess(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["title","artist","C",""],body="abc")
+            lyr=midi.with_suffix(".lyr");cur=midi.with_suffix(".cur")
+            lyr.write_bytes(lyr.read_bytes()+b"\r\ndef\r\n")
+            cur.write_bytes(struct.pack("<12H",*range(12)))
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["failed"],1,result)
+            self.assertIn("Ambiguous blank-line CUR alignment",result["errors"])
+
+    def test_observed_marker_normalized_only_after_full_track_validation(self):
+        import hashlib,json
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["title","artist","C",""],body="abc")
+            standard=midi.read_bytes()
+            legacy=direct.reader.OBSERVED_SMF_MARKER+standard[4:]
+            midi.write_bytes(legacy)
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["converted"],1,result)
+            row=json.loads(Path(result["report"]).read_text(encoding="utf-8"))
+            self.assertTrue(row["midi_header_normalized"])
+            self.assertEqual(row["original_midi_sha256"],hashlib.sha256(legacy).hexdigest())
+            target=out/"00001.xmid"
+            info=core.read_xfile(target,verify_media=True)
+            self.assertEqual(target.read_bytes()[info["mediaOffset"]:],standard)
+            self.assertEqual(midi.read_bytes(),legacy)
+            # Nonstandard marker alone is never sufficient to accept a file.
+            for data in (legacy[:-1],legacy+b"trailing",b"????"+standard[4:]):
+                with self.assertRaises(ValueError):
+                    direct.reader.midi_events(midi,raw_data=data,include_duration=True)

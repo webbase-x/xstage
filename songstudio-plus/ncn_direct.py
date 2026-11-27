@@ -141,6 +141,13 @@ def identify_header(lyr,cur,code, *, lyric_data=None,cursor_data=None,midi_tags=
         if priority==rank and not any(x[0]==signature for x in unique):
             unique.append((signature,result))
     if len(unique)!=1:
+        # Classic NCN has a documented four-row metadata header. Retain
+        # measured credits at row five rather than silently shifting all
+        # subsequent CUR slots. Only a unique exact shorter layout can
+        # take precedence over this full-body convention.
+        anchored=[x for x in unique if x[1][0]==4 and 4 in cuts and not any(label_value(y)[0] for y in rows[:4])]
+        if len(anchored)==1 and rank==1:
+            return anchored[0][1]
         raise ValueError("Unknown or ambiguous metadata/CUR layout; no guessing")
     return unique[0][1]
 
@@ -268,6 +275,15 @@ def convert_one(parts,dest,code,cancel=None):
     cursor, cursor_warnings=normalize_cursor_trailer(cursor)
     lyric, lyric_warnings=normalize_lyric_trailer(lyric,cursor)
     midi_info=reader.midi_events(midi,include_duration=True,raw_data=raw)
+    midi_normalized=raw[:4]==reader.OBSERVED_SMF_MARKER
+    original_media_hash=hashlib.sha256(raw).hexdigest() if midi_normalized else None
+    if midi_normalized:
+        # These observed files have complete standard tracks and only a
+        # non-standard file marker. Export standard SMF in the XMID payload
+        # for PC/Web compatibility. Never touch source files or decrypt data.
+        raw=b"MThd"+raw[4:]
+        if reader.midi_events(midi,include_duration=True,raw_data=raw)!=midi_info:
+            raise ValueError("MIDI header normalization changed parsed events")
     tags=explicit_midi_tags(midi_info[2],parts["code"])
     cut,metadata,expected,encoding,details,body=identify_header(lyr,cur,parts["code"],
         lyric_data=lyric,cursor_data=cursor,midi_tags=tags)
@@ -319,6 +335,10 @@ def convert_one(parts,dest,code,cancel=None):
         details["footer_credit"]=list(reversed(removed))+details["footer_credit"]
         details["warnings"].append("Untimed or inconsistent final vendor credit excluded from timed lyrics")
     details["warnings"].extend(cursor_warnings+lyric_warnings)
+    if midi_normalized:
+        details["warnings"].append("Validated legacy SMF marker normalized in XMID only")
+        details["original_midi_sha256"]=original_media_hash
+        details["midi_header_normalized"]=True
     info=doc["metadata"]
     verify_sources()
     validated=core.valid_lines(doc)
@@ -454,7 +474,7 @@ def plan_codes(root,out,mids):
 
 # Resume is a local verification cache, never a song database.
 # Bump this revision when parsing/output semantics change.
-RESUME_REVISION=1
+RESUME_REVISION=2
 RESUME_LIMIT=128*1024*1024
 
 def resume_key(midi):
