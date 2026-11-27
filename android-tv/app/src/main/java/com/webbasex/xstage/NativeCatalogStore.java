@@ -129,33 +129,65 @@ final class NativeCatalogStore implements AutoCloseable {
 
     private static void stream(String id, String token, File target, long size,
                                String md5, Progress progress) throws Exception {
-        HttpURLConnection c = connect("https://www.googleapis.com/drive/v3/files/" +
-                validId(id) + "?alt=media&supportsAllDrives=true", token);
-        try {
-            require(c.getResponseCode() == 200, "Catalog download failed (HTTP " + c.getResponseCode() + ")");
-            long advertised = longHeader(c, "Content-Length");
-            require(advertised < 0 || advertised == size, "Catalog size changed");
-            MessageDigest digest = MessageDigest.getInstance("MD5");
-            long received = 0;
-            long reported = -BUFFER_SIZE * 8L;
-            try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(target)) {
-                byte[] buffer = new byte[BUFFER_SIZE];
+        long existing = target.isFile() ? target.length() : 0;
+        if (existing > size) {
+            require(target.delete(), "Cannot reset invalid partial catalog");
+            existing = 0;
+        }
+        MessageDigest digest = MessageDigest.getInstance("MD5");
+        byte[] buffer = new byte[BUFFER_SIZE];
+        if (existing > 0) {
+            try (InputStream in = new java.io.FileInputStream(target)) {
                 int n;
                 while ((n = in.read(buffer)) != -1) {
                     if (Thread.currentThread().isInterrupted()) throw new IOException("Catalog download cancelled");
-                    require(n <= size - received, "Catalog exceeded its verified size");
-                    out.write(buffer, 0, n);
                     digest.update(buffer, 0, n);
-                    received += n;
-                    if (progress != null && (received - reported >= BUFFER_SIZE * 8L || received == size)) {
-                        progress.update(received, size);
-                        reported = received;
-                    }
                 }
-                require(received == size && md5.equals(hex(digest.digest())), "Catalog checksum or length mismatch");
-                out.getFD().sync();
             }
-        } finally { c.disconnect(); }
+        }
+        if (existing < size) {
+            HttpURLConnection c = connect("https://www.googleapis.com/drive/v3/files/" +
+                    validId(id) + "?alt=media&supportsAllDrives=true", token);
+            try {
+                if (existing > 0) c.setRequestProperty("Range", "bytes=" + existing + "-");
+                int status = c.getResponseCode();
+                if (existing > 0 && status == 200) {
+                    // A server that ignores Range requires a clean restart.
+                    existing = 0;
+                    digest.reset();
+                } else if (existing > 0) {
+                    require(status == 206 && ("bytes " + existing + "-" + (size - 1) + "/" + size)
+                            .equals(c.getHeaderField("Content-Range")), "Invalid catalog resume range");
+                } else {
+                    require(status == 200, "Catalog download failed (HTTP " + status + ")");
+                }
+                long advertised = longHeader(c, "Content-Length");
+                require(advertised < 0 || advertised == size - existing, "Catalog size changed");
+                long received = existing;
+                long reported = existing - BUFFER_SIZE * 8L;
+                try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(target, existing > 0)) {
+                    int n;
+                    while ((n = in.read(buffer)) != -1) {
+                        if (Thread.currentThread().isInterrupted()) throw new IOException("Catalog download cancelled");
+                        require(n <= size - received, "Catalog exceeded its verified size");
+                        out.write(buffer, 0, n);
+                        digest.update(buffer, 0, n);
+                        received += n;
+                        if (progress != null && (received - reported >= BUFFER_SIZE * 8L || received == size)) {
+                            progress.update(received, size);
+                            reported = received;
+                        }
+                    }
+                    out.getFD().sync();
+                    require(received == size, "Catalog download interrupted");
+                }
+            } finally { c.disconnect(); }
+        }
+        if (target.length() != size || !md5.equals(hex(digest.digest()))) {
+            // An invalid complete transfer cannot be resumed forever.
+            if (target.length() >= size) target.delete();
+            throw new IOException("Catalog checksum or length mismatch");
+        }
     }
 
     private static String scalar(SQLiteDatabase db, String sql, String[] args) throws Exception {
@@ -191,7 +223,7 @@ final class NativeCatalogStore implements AutoCloseable {
     /**
      * Reuse unchanged revision on disk; never replace an active DB before a complete
      * download, digest check and SQLite validation. One canonical DB per account/root.
-     * The temporary file is removed on error (resumable transfer is a later layer).
+     * A content-keyed temporary file survives an interrupted transfer for Range resume.
      */
     synchronized JSONObject open(String token, String sub, String root, String dbId,
                                  String fileId, Progress progress) throws Exception {
@@ -231,8 +263,9 @@ final class NativeCatalogStore implements AutoCloseable {
                 }
             }
             if (!cached) {
+                long partial = temp.isFile() && temp.length() <= size ? temp.length() : 0;
                 require(folder.getUsableSpace() >= DISK_RESERVE &&
-                        size <= folder.getUsableSpace() - DISK_RESERVE, "Insufficient local storage for catalog");
+                        size - partial <= folder.getUsableSpace() - DISK_RESERVE, "Insufficient local storage for catalog");
                 stream(fileId, token, temp, size, md5, progress);
                 try (SQLiteDatabase checked = openVerified(temp, true)) {
                     scalar(checked, "SELECT COUNT(*) FROM songs WHERE playable=1", null);
@@ -256,15 +289,9 @@ final class NativeCatalogStore implements AutoCloseable {
             activeFile = target;
             activeCount = count;
             if (previous != null) previous.close();
-            // Clean obsolete copies only after the new DB is fully available.
-            File[] files = folder.listFiles();
-            if (files != null) for (File item : files) {
-                if (!item.equals(target) && item.isFile() && item.getName().endsWith(".sqlite3")) item.delete();
-            }
             return summary(cached);
         } finally {
             if (candidate != null) candidate.close();
-            if (temp.isFile()) temp.delete();
         }
     }
 
@@ -317,6 +344,57 @@ final class NativeCatalogStore implements AutoCloseable {
             }
         }
         return result.put("total", total).put("songs", songs);
+    }
+
+    synchronized JSONObject lookup(String sub, String root, String revision, String id,
+                                   String code, String title, String artist) throws Exception {
+        requireScope(sub, root, revision);
+        if (id != null && !id.isEmpty()) {
+            JSONObject hit = firstSong("web_song_id=?", new String[]{id});
+            if (hit != null) return hit;
+        }
+        if (code != null && !code.isEmpty()) {
+            JSONObject hit = firstSong("code=? COLLATE NOCASE", new String[]{code});
+            if (hit != null) return hit;
+        }
+        if (title != null && !title.isEmpty()) {
+            if (artist != null && !artist.isEmpty())
+                return firstSong("title=? COLLATE NOCASE AND artist=? COLLATE NOCASE", new String[]{title, artist});
+            return firstSong("title=? COLLATE NOCASE", new String[]{title});
+        }
+        return null;
+    }
+
+    private JSONObject firstSong(String condition, String[] args) throws Exception {
+        try (Cursor c = database.rawQuery("SELECT web_song_id,payload FROM songs WHERE playable=1 AND (" +
+                condition + ") ORDER BY ordinal,id LIMIT 1", args)) {
+            if (!c.moveToFirst()) return null;
+            JSONObject song = new JSONObject(c.getString(1));
+            require(c.getString(0).equals(song.optString("webSongId")), "Catalog song identity mismatch");
+            return song;
+        }
+    }
+
+    synchronized JSONObject randomSong(String sub, String root, String revision) throws Exception {
+        requireScope(sub, root, revision);
+        if (activeCount == 0) return null;
+        long offset = (long) (Math.random() * activeCount);
+        try (Cursor c = database.rawQuery("SELECT web_song_id,payload FROM songs WHERE playable=1 ORDER BY ordinal,id LIMIT 1 OFFSET ?",
+                new String[]{Long.toString(offset)})) {
+            if (!c.moveToFirst()) return null;
+            JSONObject song = new JSONObject(c.getString(1));
+            require(c.getString(0).equals(song.optString("webSongId")), "Catalog song identity mismatch");
+            return song;
+        }
+    }
+
+    synchronized void cleanupObsolete() {
+        if (activeFile == null) return;
+        File[] files = activeFile.getParentFile().listFiles();
+        if (files != null) for (File item : files) {
+            if (!item.equals(activeFile) && item.isFile() &&
+                    (item.getName().endsWith(".sqlite3") || item.getName().endsWith(".part"))) item.delete();
+        }
     }
 
     @Override public synchronized void close() {

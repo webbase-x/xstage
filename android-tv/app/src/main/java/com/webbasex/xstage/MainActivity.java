@@ -47,6 +47,14 @@ public final class MainActivity extends Activity {
     private static final String XSTAGE_PATH_PREFIX = "/xstage";
 
     private WebView webView;
+    private final java.util.concurrent.ExecutorService catalogExecutor =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
+    private final Object catalogLock = new Object();
+    private volatile String catalogAccessToken = "";
+    private volatile long catalogEpoch;
+    private NativeCatalogStore activeCatalog, stagedCatalog;
+    private String activeCatalogCapability = "", stagedCatalogCapability = "";
+    private java.util.concurrent.Future<?> catalogTask;
     private FrameLayout appRoot;
     private ImageView startupBanner;
     private GoogleDeviceAuth googleAuth;
@@ -187,6 +195,7 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onToken(String accessToken, long expiresInSeconds) {
+                catalogAccessToken = accessToken;
                 callJavascript("window.XStageReceiveAndroidToken&&window.XStageReceiveAndroidToken(" +
                         JSONObject.quote(accessToken) + "," + expiresInSeconds + ");");
             }
@@ -199,6 +208,8 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onSignedOut() {
+                catalogAccessToken = "";
+                resetNativeCatalog();
                 callJavascript("window.XStageAndroidSignedOut&&window.XStageAndroidSignedOut();");
             }
         });
@@ -531,6 +542,9 @@ public final class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         startupHandler.removeCallbacksAndMessages(null);
+        catalogAccessToken = "";
+        resetNativeCatalog();
+        catalogExecutor.shutdownNow();
         releasePlaybackAudioFocus();
         if (googleAuth != null) googleAuth.close();
         if (updateManager != null) updateManager.close();
@@ -561,7 +575,127 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void resetNativeCatalog() {
+        synchronized (catalogLock) {
+            catalogEpoch++;
+            if (catalogTask != null) catalogTask.cancel(true);
+            catalogTask = null;
+            if (activeCatalog != null) activeCatalog.close();
+            if (stagedCatalog != null) stagedCatalog.close();
+            activeCatalog = stagedCatalog = null;
+            activeCatalogCapability = stagedCatalogCapability = "";
+        }
+    }
+
+    private void catalogCallback(String requestId, String kind, JSONObject data) {
+        callJavascript("window.XStageNativeCatalogEvent&&window.XStageNativeCatalogEvent(" +
+                JSONObject.quote(requestId) + "," + JSONObject.quote(kind) + "," +
+                JSONObject.quote(data.toString()) + ");");
+    }
+
+    private JSONObject catalogError(Exception error) {
+        JSONObject data = new JSONObject();
+        try { data.put("error", error.getMessage() == null ? "Native catalog operation failed" : error.getMessage()); }
+        catch (Exception ignored) {}
+        return data;
+    }
+
     public final class AndroidBridge {
+        @JavascriptInterface
+        public void catalogOpen(String requestId, String sub, String root, String db, String file) {
+            if (requestId == null || !requestId.matches("[A-Za-z0-9_-]{8,128}")) return;
+            final String token = catalogAccessToken;
+            if (token.isEmpty()) {
+                catalogCallback(requestId, "error", catalogError(new IllegalStateException("Google session unavailable")));
+                return;
+            }
+            synchronized (catalogLock) {
+                final long epoch = ++catalogEpoch;
+                if (catalogTask != null) catalogTask.cancel(true);
+                if (stagedCatalog != null) stagedCatalog.close();
+                stagedCatalog = null;
+                stagedCatalogCapability = "";
+                catalogTask = catalogExecutor.submit(() -> {
+                    NativeCatalogStore next = new NativeCatalogStore(MainActivity.this);
+                    boolean kept = false;
+                    try {
+                        JSONObject result = next.open(token, sub, root, db, file, (received, total) -> {
+                            if (epoch != catalogEpoch) return;
+                            try {
+                                catalogCallback(requestId, "progress", new JSONObject().put("received", received).put("total", total));
+                            } catch (Exception ignored) {}
+                        });
+                        synchronized (catalogLock) {
+                            if (epoch != catalogEpoch || Thread.currentThread().isInterrupted()) return;
+                            String capability = java.util.UUID.randomUUID().toString();
+                            result.put("capability", capability);
+                            stagedCatalog = next;
+                            stagedCatalogCapability = capability;
+                            kept = true;
+                            catalogCallback(requestId, "ready", result);
+                        }
+                    } catch (Exception e) {
+                        if (epoch == catalogEpoch) catalogCallback(requestId, "error", catalogError(e));
+                    } finally {
+                        if (!kept) next.close();
+                    }
+                });
+            }
+        }
+
+        @JavascriptInterface
+        public boolean catalogActivate(String capability) {
+            synchronized (catalogLock) {
+                if (stagedCatalog == null || capability == null || !capability.equals(stagedCatalogCapability)) return false;
+                if (activeCatalog != null) activeCatalog.close();
+                activeCatalog = stagedCatalog;
+                activeCatalogCapability = stagedCatalogCapability;
+                stagedCatalog = null;
+                stagedCatalogCapability = "";
+                activeCatalog.cleanupObsolete();
+                return true;
+            }
+        }
+
+        @JavascriptInterface
+        public void catalogReset() {
+            resetNativeCatalog();
+        }
+
+        private NativeCatalogStore checkedCatalog(String capability) {
+            if (activeCatalog == null || capability == null || !capability.equals(activeCatalogCapability))
+                throw new IllegalStateException("Native catalog session changed");
+            return activeCatalog;
+        }
+
+        @JavascriptInterface
+        public String catalogSearch(String cap, String sub, String root, String revision, String term, long offset) {
+            synchronized (catalogLock) {
+                try { return checkedCatalog(cap).search(sub, root, revision, term, offset).toString(); }
+                catch (Exception e) { return catalogError(e).toString(); }
+            }
+        }
+
+        @JavascriptInterface
+        public String catalogLookup(String cap, String sub, String root, String revision, String id, String code, String title, String artist) {
+            synchronized (catalogLock) {
+                try {
+                    JSONObject song = checkedCatalog(cap).lookup(sub, root, revision, id, code, title, artist);
+                    return song == null ? "null" : song.toString();
+                } catch (Exception e) { return catalogError(e).toString(); }
+            }
+        }
+
+        @JavascriptInterface
+        public String catalogRandom(String cap, String sub, String root, String revision) {
+            synchronized (catalogLock) {
+                try {
+                    JSONObject song = checkedCatalog(cap).randomSong(sub, root, revision);
+                    return song == null ? "null" : song.toString();
+                } catch (Exception e) { return catalogError(e).toString(); }
+            }
+        }
+
         @JavascriptInterface
         public String memorySnapshot() {
             // Android supplies actual available physical RAM and its low-memory
@@ -633,6 +767,8 @@ public final class MainActivity extends Activity {
 
         @JavascriptInterface
         public void logoutGoogle() {
+            catalogAccessToken = "";
+            resetNativeCatalog();
             googleAuth.logout();
         }
 
