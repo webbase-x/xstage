@@ -2561,7 +2561,7 @@
         box.addEventListener("change",()=>{if(all){if(box.checked)excluded.delete(row.id);else excluded.add(row.id);}else{if(box.checked)selected.add(row.id);else selected.delete(row.id);}controls();});
         td.append(box);tr.append(td);
         for(const value of [row.code,row.title,row.artist,row.issues.map(k=>names[k]||k).join(" · ")+" | "+row.path]){
-          const cell=document.createElement("td");cell.textContent=value;cell.style.overflowWrap="anywhere";tr.append(cell);
+          const cell=document.createElement("td");cell.textContent=value;tr.append(cell);
         }
         tbody.append(tr);
       }
