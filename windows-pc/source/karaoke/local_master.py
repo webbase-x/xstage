@@ -204,7 +204,11 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
         if any(target.with_name(target.name + suffix).exists() for suffix in ("-wal", "-shm", "-journal")):
             raise ValueError("ฐานปลายทางมี journal ค้าง · ไม่ซิงก์จนกว่าจะปิดฐานอย่างปลอดภัย")
     original = _catalog_fingerprint(target, cancel)
-    stage = target.with_name(".export-" + secrets.token_hex(16) + ".sqlite3")
+    cache = home / "CACHE"
+    _safe(cache)
+    cache.mkdir(parents=True, exist_ok=True)
+    stage = cache / (".export-" + secrets.token_hex(16) + ".sqlite3")
+    upload = None
     try:
         snapshot(source, stage)
         validate_shared(root, stage)
@@ -262,6 +266,21 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
             _prepare_replacement(target)
             backup = target.with_name("songs-" + secrets.token_hex(8) + ".sqlite3.bak")
             snapshot(target, backup)
+        # Copy only the changed, complete snapshot to the destination volume.
+        # Keep the final atomic rename on that volume; a local staging file
+        # must never be renamed directly across filesystems.
+        upload = target.with_name(".export-" + secrets.token_hex(16) + ".sqlite3")
+        with stage.open("rb") as incoming, upload.open("xb") as outgoing:
+            while True:
+                stopped()
+                chunk = incoming.read(1024 * 1024)
+                if not chunk:
+                    break
+                outgoing.write(chunk)
+            outgoing.flush()
+            os.fsync(outgoing.fileno())
+        if _catalog_fingerprint(upload, cancel) != staged_fingerprint:
+            raise ValueError("ไฟล์ฐานปลายทางไม่ตรงกับสำเนาที่ตรวจแล้ว")
         stopped()
         _prepare_replacement(target)
         if not overwrite and target.exists():
@@ -269,7 +288,9 @@ def export_portable(home, drive_root, *, overwrite=False, cancel=None, on_unchan
         if _catalog_fingerprint(target, cancel) != original:
             raise ValueError("ฐาน Cloud เปลี่ยนก่อนแทนที่ · ไม่เขียนทับ")
         stopped()
-        os.replace(stage, target)
+        os.replace(upload, target)
         return target
     finally:
         stage.unlink(missing_ok=True)
+        if upload is not None:
+            upload.unlink(missing_ok=True)
