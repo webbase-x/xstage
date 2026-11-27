@@ -2392,6 +2392,7 @@ function resetNativeCatalogClient(){
   try{window.XStageAndroid?.catalogReset?.();}catch{}
 }
 function activateNativeCatalog(data,pointer,sub,root,dbId){
+  if(data?.previewOnly===true||pointer?.previewOnly===true)throw Object.assign(Error('ดัชนีค้นหาไม่ใช่ฐานพร้อมเล่น'),{code:'CATALOG_LOAD_FAILED'});
   if(!window.XStageAndroid.catalogActivate(data.capability))
     throw Object.assign(Error('ฐานใหม่ยังไม่พร้อมใช้งาน'),{code:'CATALOG_LOAD_FAILED'});
   state.nativeCatalog={capability:data.capability,revision:data.revision,count:data.count,sub:String(sub),root:String(root)};
@@ -2484,7 +2485,7 @@ async function activeDriveCatalog(dbId,token){
   return direct.length?{pointer:await selectVerifiedCatalog(direct[0],dbId,token)}:null;
 }
 async function pollPublishedCatalog(){
-  if(!state.token||!state.libraryRootId||isRetiredDriveRoot(state.libraryRootId)||state.catalogPolling)return;
+  if(!state.token||!state.libraryRootId||isRetiredDriveRoot(state.libraryRootId)||state.catalogPolling||androidTvCatalogRetryPending)return;
   const authId=state.authId,token=state.token,rootId=state.libraryRootId,sub=state.accountSub;
   const sameLibrary=()=>authId===state.authId&&state.token===token&&
     state.libraryRootId===rootId&&state.accountSub===sub;
@@ -2795,6 +2796,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     if(!readPlaybackResumeState())ui.search.focus();
   }catch(error){
     hideCatalogLoading();
+    if(error?.preview)throw error;
     if(instant&&state.token===token&&authId===state.authId){
       // Initial Android login requires LIVE Google Drive verification;
       // cached songs must not silently bypass authorization.
