@@ -86,6 +86,38 @@ try{
     assert.ok(g.dock.bottom<=height+2&&g.dock.left>=0&&g.dock.right<=width+2,
       'Expanded dropdown must not overflow the screen: '+JSON.stringify(g));
     if(width===390){
+      // Exercise production rendering with synthetic private catalog only.
+      await page.evaluate(()=>{
+        state.token='simulated-token';
+        state.songs=Array.from({length:17},(_,i)=>({code:'T'+String(i).padStart(3,'0'),title:'เพลงจำลอง '+i,artist:'ศิลปิน'}));
+        const search=document.getElementById('search');
+        search.value='เพลงจำลอง';search.dispatchEvent(new Event('input',{bubbles:true}));
+      });
+      const count=()=>page.locator('#songs .song-item').count();
+      assert.equal(await count(),5,'Exactly five initial DOM rows');
+      assert.equal(await page.locator('#songs').evaluate(el=>getComputedStyle(el).scrollbarWidth),'none');
+      const original=await page.locator('#songs .song-item').first().evaluate(el=>{el.dataset.original='1';return el.id;});
+      await page.locator('#songs').evaluate(el=>{
+        el.scrollTop=el.scrollHeight;el.dispatchEvent(new Event('scroll'));
+      });
+      await page.waitForFunction(()=>document.querySelectorAll('#songs .song-item').length>=10);
+      assert.equal(await page.locator('#songs .song-item[data-original="1"]').count(),1,'Existing rows must not be rebuilt');
+      assert.equal(await page.locator('#songs .song-item').first().getAttribute('id'),original);
+      for(let attempt=0;attempt<4&&(await count())<17;attempt++){
+        await page.locator('#songs').evaluate(el=>{
+          el.scrollTop=el.scrollHeight;el.dispatchEvent(new Event('scroll'));
+        });
+      }
+      assert.equal(await count(),17,'Every match must be reachable, without duplicates');
+      await page.locator('#songs').evaluate(el=>el.dispatchEvent(new WheelEvent('wheel',{deltaY:100})));
+      assert.equal(await count(),17,'No duplicate page after reaching the end');
+      await page.evaluate(()=>{
+        const search=document.getElementById('search');
+        search.value='T016';search.dispatchEvent(new Event('input',{bubbles:true}));
+      });
+      assert.equal(await count(),1,'Changing query discards old pages');
+      assert.match(await page.locator('#songs .song-item').first().textContent(),/T016/);
+      await page.evaluate(()=>{state.token='';state.songs=[];document.getElementById('search').value='';renderSongs();});
       await page.evaluate(()=>{
         document.getElementById('pc-search').classList.remove('pc-expanded');
         document.documentElement.style.setProperty('--xs-search-keyboard-inset','220px');

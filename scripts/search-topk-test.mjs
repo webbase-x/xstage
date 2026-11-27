@@ -39,3 +39,22 @@ for(const [query,limit] of [['เพลง',5],['เพลงรัก',5],['A00
 }
 assert.equal(ctx.__rank(songs,'').total,0,'Empty search must not list the library');
 console.log('PASS: 100,000-song Top-K ranking, exact match counts and stable remote results');
+
+ // The same stable ranking is paginated without retaining a second list of
+ // song objects. A 100,000-match query must expose every song exactly once.
+ const pagerFactory=vm.runInNewContext(source.slice(start,end)+'\ncreateSearchPager;',{window:{}});
+ for(const query of ['เพลง','เพลงรัก','A000042','ศิลปิน 7','ไม่มีเพลงนี้','']){
+   const expected=query?scoreFull(query,100000).results.map(x=>x.song):[];
+   const pager=pagerFactory(songs,query);
+   assert.equal(pager.loaded,0);
+   assert.equal(pager.total,expected.length);
+   let count=0;
+   while(pager.hasMore){
+     const page=pager.next();
+     assert.ok(page.length>0&&page.length<=5);
+     for(const song of page)assert.equal(song,expected[count++]);
+   }
+   assert.equal(count,expected.length);
+   assert.equal(pager.next().length,0);
+ }
+ console.log('PASS: progressive five-song pages, all 100,000 matches reachable in stable order');
