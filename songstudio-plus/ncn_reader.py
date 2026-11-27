@@ -15,8 +15,9 @@ import unicodedata
 
 MIDI_SUFFIXES = (".mid", ".midi")
 # Observed on legacy NCN collections: these markers are not proof of MIDI.
+OBSERVED_SMF_MARKER = bytes.fromhex("58 26 22 A6")
 LEGACY_SMF_PREFIXES = frozenset((
-    b"TECH", b"MTdd", b"eThd", b"#$%&", b"#nu$", b"-4Hd",
+    b"TECH", b"MTdd", b"eThd", b"#$%&", b"#nu$", b"-4Hd", OBSERVED_SMF_MARKER,
 ))
 STANDARD_SMF_PREFIXES = frozenset((b"MThd", b"NCN1", b"Lock", b"Good"))
 TEXT_SUFFIXES = (".lyr", ".lrc")
@@ -238,6 +239,7 @@ def midi_events(midi: Path, *, include_duration=False, raw_data=None):
         raise ValueError("ไฟล์ MIDI สั้นเกินไปหรือส่วนหัวไม่สมบูรณ์")
     signature = data[:4]
     alternative = signature not in STANDARD_SMF_PREFIXES
+    strict_variant=signature==OBSERVED_SMF_MARKER
     if alternative and (signature not in LEGACY_SMF_PREFIXES
                         or not _valid_substituted_smf(data)):
         found = signature.hex(" ").upper()
@@ -292,7 +294,7 @@ def midi_events(midi: Path, *, include_duration=False, raw_data=None):
                 pos += 1
                 count_bytes, pos = _varlen(data, pos, end)
                 payload = data[pos:pos+count_bytes]
-                if len(payload) != count_bytes:
+                if len(payload) != count_bytes or (strict_variant and pos+count_bytes>end):
                     raise ValueError("MIDI meta payload ไม่สมบูรณ์")
                 pos += count_bytes
                 if tag == 0x51 and count_bytes == 3:
@@ -310,7 +312,10 @@ def midi_events(midi: Path, *, include_duration=False, raw_data=None):
                 count_bytes, pos = _varlen(data, pos, end)
                 pos += count_bytes
             elif 0x80 <= opcode <= 0xef:
-                pos += 1 if (opcode & 0xf0) in (0xc0, 0xd0) else 2
+                size=1 if (opcode & 0xf0) in (0xc0, 0xd0) else 2
+                if strict_variant and (pos+size>end or any(b>=128 for b in data[pos:pos+size])):
+                    raise ValueError("Invalid legacy MIDI channel payload")
+                pos += size
             elif opcode in (0xf1, 0xf3):
                 pos += 1
             elif opcode == 0xf2:
@@ -322,10 +327,14 @@ def midi_events(midi: Path, *, include_duration=False, raw_data=None):
             if pos > end:
                 raise ValueError("MIDI event เกินขอบเขต track")
             order += 1
+        if strict_variant and (not found_eot or pos!=end or data[end-3:end]!=b"\xff\x2f\x00"):
+            raise ValueError("Legacy MIDI track geometry mismatch")
         if alternative and not found_eot:
             raise ValueError("ส่วนหัว MIDI พิเศษไม่มี End of Track ครบตามมาตรฐาน")
         max_tick = max(max_tick, tick)
         offset = end
+    if strict_variant and offset!=len(data):
+        raise ValueError("Legacy MIDI contains unparsed trailing data")
     # When multiple tracks specify a tempo at the same tick, choose the
     # last event deterministically. Standard MIDI default is 120 BPM.
     tempo_map = {}
@@ -407,7 +416,7 @@ def to_lrc(lines):
 
 
 def ncn_document(companions, *, header_rows=4, metadata_override=None,
-                 lyric_data=None, cursor_data=None, midi_info=None):
+                 lyric_data=None, cursor_data=None, midi_info=None, blank_markers_override=None):
     """NCN24 MIDI/LYR/CUR synchronisation, adapted from X-Stage Karaoke PC.
 
     A CUR entry represents one *CP874 source byte*, not a Unicode grapheme.
@@ -496,6 +505,8 @@ def ncn_document(companions, *, header_rows=4, metadata_override=None,
     # otherwise keep the established nonblank-line convention.
     blanks=sum(1 for part in body if not part.strip())
     blank_markers=(blanks>0 and len(positions)==needed(body)+blanks)
+    if blank_markers_override is not None:
+        blank_markers=bool(blank_markers_override)
     if blank_markers:
         warnings.append("CUR มีตำแหน่งบรรทัดว่างตามต้นฉบับ")
     division, tempo_map, _, midi_duration = (midi_info if midi_info is not None else midi_events(

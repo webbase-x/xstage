@@ -23,7 +23,7 @@ LABELS = {
     "นักร้องนำ":"artist","composer":"composer","ผู้แต่ง":"composer",
     "arranger":"arranger","ผู้เรียบเรียง":"arranger",
 }
-KEY = re.compile(r"(?:[A-G](?:#|b|♯|♭)?(?:m|maj|min|major|minor)?|[-+]?\d{1,2})",re.I)
+KEY = re.compile(r"(?:[A-G](?:#|b|♯|♭)?(?:m|maj|min|major|minor)?(?:[679]|11|13)?|[-+]?\d{1,2})",re.I)
 
 def clean(value, code):
     value=value.strip()
@@ -39,7 +39,9 @@ VENDOR_CREDIT = re.compile(r"^(?:nick[\s_-]*karaoke(?:\s+professional)?|extreme[
 
 def is_credit(line):
     value=line.strip(" \t.…·•*_-~=<>[]()")
-    return bool(CREDIT_LABEL.match(value) or VENDOR_CREDIT.fullmatch(value))
+    # Explicit vendor names observed in legacy NCN boundary credits.
+    vendor=re.fullmatch(r"(?:(?:music[\s_-]+)?by[\s_-]+)?(?:nick[\s_-]*karaoke|นิค[\s_-]*คาราโอเกะ|เต่า[\s_-]*คาราโอเกะ)(?:[\s_-]+\d{2,4}[- ]?\d{3}[- ]?\d{3,4})?",value,re.I)
+    return bool(CREDIT_LABEL.match(value) or VENDOR_CREDIT.fullmatch(value) or vendor or re.fullmatch(r"GMM[\s_-]+Grammy",value,re.I))
 
 def label_value(line):
     m=re.fullmatch(r"\s*[@#]?\s*([^:=：]+?)\s*[:=：]\s*(.*?)\s*",line)
@@ -66,7 +68,7 @@ def identify_header(lyr,cur,code, *, lyric_data=None,cursor_data=None,midi_tags=
     # arbitrary beginning lyrics until the CUR count happens to fit.
     cuts={}
     if len(rows)>4 and (KEY.fullmatch(rows[2].strip()) or
-                         (not rows[2].strip() and not rows[3].strip())):
+                         (not rows[2].strip() and rows[3].strip() in ("","."))):
         if not any(label_value(x)[0] for x in rows[:4]):
             cuts[4]={"title":rows[0],"artist":rows[1],"key":rows[2]}
     meta={}
@@ -114,7 +116,7 @@ def identify_header(lyr,cur,code, *, lyric_data=None,cursor_data=None,midi_tags=
                 exact=count in (needed,needed+blanks)
                 # Surplus is safe only for independently identified headers
                 # with no ambiguity about blank-line CUR consumption.
-                surplus=count>needed and blanks==0
+                surplus=count>needed+blanks
                 if needed and (exact or surplus):
                     actual=[x for x in body if x.strip()]
                     details={"header_credit":[x for x in rows[:cut] if is_credit(x)],
@@ -139,6 +141,13 @@ def identify_header(lyr,cur,code, *, lyric_data=None,cursor_data=None,midi_tags=
         if priority==rank and not any(x[0]==signature for x in unique):
             unique.append((signature,result))
     if len(unique)!=1:
+        # Classic NCN has a documented four-row metadata header. Retain
+        # measured credits at row five rather than silently shifting all
+        # subsequent CUR slots. Only a unique exact shorter layout can
+        # take precedence over this full-body convention.
+        anchored=[x for x in unique if x[1][0]==4 and 4 in cuts and not any(label_value(y)[0] for y in rows[:4])]
+        if len(anchored)==1 and rank==1:
+            return anchored[0][1]
         raise ValueError("Unknown or ambiguous metadata/CUR layout; no guessing")
     return unique[0][1]
 
@@ -224,33 +233,114 @@ def measured_boundaries(doc,duration):
             next_at=cues[j+1]["start"] if j+1<len(cues) else end
             cue["duration"]=round(next_at-cue["start"],6)
 
+def normalize_cursor_trailer(raw):
+    """Recognise the observed exact vendor suffix; never trim arbitrary bytes."""
+    suffix=b"www.patongbusiness.com"
+    if raw.endswith(b"\xff"+suffix):
+        data=raw[:-len(suffix)]
+        if len(data)%2==1:
+            return data, ["CUR vendor text trailer excluded from parsing"]
+    return raw, []
+
+def normalize_lyric_trailer(raw,cursor):
+    """Recover only an unambiguous text prefix before a padded binary appendix."""
+    try:
+        raw.split(b"\x1a",1)[0].decode("cp874")
+        return raw, []
+    except UnicodeError:
+        pass
+    matches=[]
+    count=len(cursor)//2
+    for m in re.finditer(rb"(?:\r\n){3,}[ \t]{20,}",raw):
+        prefix=raw[:m.start()]
+        try:
+            rows=prefix.decode("cp874").replace("\r\n","\n").replace("\r","\n").split("\n")
+        except UnicodeError:
+            continue
+        if len(rows)<=4 or not (KEY.fullmatch(rows[2].strip()) or
+                                  not rows[2].strip()):
+            continue
+        needed=sum(1+len(line.encode("cp874")) for line in rows[4:] if line.strip())
+        if needed>0 and count in (needed,needed+1):
+            matches.append(prefix)
+    if len(matches)==1:
+        return matches[0], ["LYR padded binary appendix excluded from parsing"]
+    return raw, []
+
 def convert_one(parts,dest,code,cancel=None):
     midi,lyr,cur=(Path(parts[x]) for x in ("midi","lyrics","cursor"))
     raw,ms=bounded_read(midi,64*1024*1024)
     lyric,ls=bounded_read(lyr,1024*1024)
     cursor,cs=bounded_read(cur,2*1024*1024)
+    cursor, cursor_warnings=normalize_cursor_trailer(cursor)
+    lyric, lyric_warnings=normalize_lyric_trailer(lyric,cursor)
     midi_info=reader.midi_events(midi,include_duration=True,raw_data=raw)
+    midi_normalized=raw[:4]==reader.OBSERVED_SMF_MARKER
+    original_media_hash=hashlib.sha256(raw).hexdigest() if midi_normalized else None
+    if midi_normalized:
+        # These observed files have complete standard tracks and only a
+        # non-standard file marker. Export standard SMF in the XMID payload
+        # for PC/Web compatibility. Never touch source files or decrypt data.
+        raw=b"MThd"+raw[4:]
+        if reader.midi_events(midi,include_duration=True,raw_data=raw)!=midi_info:
+            raise ValueError("MIDI header normalization changed parsed events")
     tags=explicit_midi_tags(midi_info[2],parts["code"])
     cut,metadata,expected,encoding,details,body=identify_header(lyr,cur,parts["code"],
         lyric_data=lyric,cursor_data=cursor,midi_tags=tags)
-    # Only the in-memory parsing view omits proven untimed footer credits.
-    # Original MID/LYR/CUR bytes remain untouched, and credit text is reported.
-    parsing_lyric=lyric
-    if details["footer_credit"]:
-        original_rows=lyric.split(b"\x1a",1)[0].decode(encoding).replace("\r\n","\n").replace("\r","\n").split("\n")
-        parsing_lyric=("\n".join(original_rows[:cut]+body)+"\n").encode(encoding)
-    doc=reader.ncn_document(parts,header_rows=cut,metadata_override=metadata,
-        lyric_data=parsing_lyric,cursor_data=cursor,midi_info=midi_info)
+    # Retry only by removing a known final credit. Its invalid/absent
+    # positions never shift the earlier lyric. The original bytes are intact.
+    original_rows=lyric.split(b"\x1a",1)[0].decode(encoding).replace("\r\n","\n").replace("\r","\n").split("\n")
+    def parse_body(candidate, reconstruct, blank_override=None):
+        parsing_lyric=("\n".join(original_rows[:cut]+candidate)+"\n").encode(encoding) if reconstruct else lyric
+        parsed=reader.ncn_document(parts,header_rows=cut,metadata_override=metadata,
+            lyric_data=parsing_lyric,cursor_data=cursor,midi_info=midi_info,blank_markers_override=blank_override)
+        info=parsed["metadata"]
+        if not info.get("timingComplete") or any("ย้อนกลับ" in w or "เกินความยาว" in w for w in info.get("timingWarnings",[])):
+            raise ValueError("Incomplete or inconsistent CUR")
+        if [line["text"] for line in parsed["lines"]]!=[x for x in candidate if x.strip()]:
+            raise ValueError("Decoded lyric differs from original")
+        measured_boundaries(parsed,midi_info[3])
+        return parsed
+    def parse_checked(candidate,reconstruct):
+        needed=sum(1+len(x.encode("cp874")) for x in candidate if x.strip())
+        blanks=sum(not x.strip() for x in candidate)
+        if not blanks or len(cursor)//2<=needed+blanks:
+            return parse_body(candidate,reconstruct)
+        valid=[]
+        for mode in (False,True):
+            try:
+                valid.append(parse_body(candidate,reconstruct,mode))
+            except ValueError:
+                pass
+        if not valid:
+            raise ValueError("Neither blank-line CUR alignment is valid")
+        if len(valid)>1 and valid[0]["lines"]!=valid[1]["lines"]:
+            raise ValueError("Ambiguous blank-line CUR alignment")
+        return valid[0]
     def verify_sources():
         if any(file_stamp(p)!=stamp for p,stamp in ((midi,ms),(lyr,ls),(cur,cs))):
             raise ValueError("NCN component changed during conversion")
+    try:
+        doc=parse_checked(body,bool(details["footer_credit"]))
+    except ValueError:
+        candidate=list(body)
+        removed=[]
+        while candidate and is_credit(candidate[-1]):
+            removed.append(candidate.pop())
+            while candidate and not candidate[-1].strip():
+                candidate.pop()
+        if not removed or not any(x.strip() for x in candidate):
+            raise
+        doc=parse_checked(candidate,True)
+        details["footer_credit"]=list(reversed(removed))+details["footer_credit"]
+        details["warnings"].append("Untimed or inconsistent final vendor credit excluded from timed lyrics")
+    details["warnings"].extend(cursor_warnings+lyric_warnings)
+    if midi_normalized:
+        details["warnings"].append("Validated legacy SMF marker normalized in XMID only")
+        details["original_midi_sha256"]=original_media_hash
+        details["midi_header_normalized"]=True
     info=doc["metadata"]
-    if not info.get("timingComplete") or any("ย้อนกลับ" in w or "เกินความยาว" in w for w in info.get("timingWarnings",[])):
-        raise ValueError("Incomplete or inconsistent CUR")
-    if [line["text"] for line in doc["lines"]]!=expected:
-        raise ValueError("Decoded lyric differs from original")
     verify_sources()
-    measured_boundaries(doc,midi_info[3])
     validated=core.valid_lines(doc)
     if not validated:
         raise ValueError("No timed lyrics")
@@ -382,7 +472,126 @@ def plan_codes(root,out,mids):
         stage.unlink(missing_ok=True)
     return plan
 
-def convert_folder(source,destination,progress=None,cancel=None):
+# Resume is a local verification cache, never a song database.
+# Bump this revision when parsing/output semantics change.
+RESUME_REVISION=2
+RESUME_LIMIT=128*1024*1024
+
+def resume_key(midi):
+    return os.path.normcase(str(midi))
+
+def resume_stamp(parts,dest,code):
+    return {"revision":RESUME_REVISION,"code":code,
+            "inputs":[[os.path.normcase(str(parts[k])),list(file_stamp(Path(parts[k])))]
+                      for k in ("midi","lyrics","cursor")],
+            "output":[os.path.normcase(str(dest)),list(file_stamp(dest))]}
+
+def load_resume(out):
+    cached={}
+    snapshot=out/".ncn-resume.json"
+    try:
+        if snapshot.exists():
+            data=json.loads(bounded_read(snapshot,RESUME_LIMIT)[0].decode("utf-8"))
+            if data.get("revision")==RESUME_REVISION and isinstance(data.get("records"),dict):
+                cached=data["records"]
+    except (OSError,ValueError,TypeError,AttributeError):
+        pass
+    # The latest report is flushed as each song completes, so a crash
+    # before snapshot publication can still recover completed work.
+    try:
+        reports=[p for p in out.glob("ncn-conversion-*.jsonl") if not p.is_symlink() and p.is_file()]
+        if reports:
+            latest=max(reports,key=lambda p:p.stat().st_mtime_ns)
+            if latest.stat().st_size<=RESUME_LIMIT:
+                with latest.open("r",encoding="utf-8") as stream:
+                    for line in stream:
+                        try:
+                            row=json.loads(line)
+                            if row.get("resume") and row.get("status") in ("converted","skipped"):
+                                cached[resume_key(row["source"])]=row["resume"]
+                            elif row.get("status")=="failed":
+                                cached.pop(resume_key(row["source"]),None)
+                        except (ValueError,TypeError,KeyError,AttributeError):
+                            continue
+    except (OSError,ValueError):
+        pass
+    return cached
+
+def previous_report_results(out):
+    """Explicit failed-only mode can reuse a v0.1.46 report without stamps."""
+    try:
+        reports=[p for p in out.glob("ncn-conversion-*.jsonl") if not p.is_symlink() and p.is_file()]
+        if not reports:
+            return {},None,0
+        latest=max(reports,key=lambda p:p.stat().st_mtime_ns)
+        stamp=file_stamp(latest)
+        if stamp[2]>RESUME_LIMIT:
+            return {},None,0
+        rows={}
+        with latest.open("r",encoding="utf-8") as stream:
+            for line in stream:
+                try:
+                    row=json.loads(line)
+                    key=resume_key(row["source"])
+                    if row.get("status") in ("converted","skipped"):
+                        rows[key]={k:row.get(k) for k in ("code","destination","original_midi_sha256")}
+                    else:
+                        rows.pop(key,None)
+                except (ValueError,TypeError,KeyError,AttributeError):
+                    continue
+        if file_stamp(latest)!=stamp:
+            return {},None,0
+        return rows,str(latest),stamp[3]
+    except (OSError,ValueError):
+        return {},None,0
+
+def verify_report_skip(old,before,parts,dest,code,report_time):
+    # A previous successful report is not a verified parser cache. Only
+    # explicit failed-only mode can use it, and every retained output must
+    # independently pass its embedded metadata and media digest checks.
+    if not old or not before or old.get("code")!=code or not isinstance(old.get("destination"),str):
+        return None
+    if os.path.normcase(old["destination"])!=os.path.normcase(str(dest)):
+        return None
+    if any(max(x[1][3:5])>report_time for x in before["inputs"]+[before["output"]]):
+        return None
+    try:
+        info=core.read_xfile(dest,verify_media=True)
+        if info["code"]!=code:
+            return None
+        with Path(parts["midi"]).open("rb") as stream:
+            source_sha=hashlib.file_digest(stream,"sha256").hexdigest()
+        original=old.get("original_midi_sha256")
+        if source_sha!=(original or info["mediaSha256"]) or resume_stamp(parts,dest,code)!=before:
+            return None
+        return {"status":"skipped","report_only":True,"original_midi_sha256":original}
+    except (OSError,ValueError,KeyError):
+        return None
+
+def save_resume(out,cached):
+    target=out/".ncn-resume.json"
+    if target.is_symlink():
+        return False
+    stage=None
+    try:
+        fd,name=tempfile.mkstemp(prefix=".ncn-resume-",suffix=".tmp",dir=out)
+        stage=Path(name)
+        with os.fdopen(fd,"w",encoding="utf-8") as stream:
+            json.dump({"revision":RESUME_REVISION,"records":cached},stream,ensure_ascii=False,separators=(",",":"))
+            stream.flush();os.fsync(stream.fileno())
+        if stage.stat().st_size>RESUME_LIMIT:
+            return False
+        os.replace(stage,target)
+        return True
+    except (OSError,ValueError,TypeError):
+        return False
+    finally:
+        if stage is not None:
+            stage.unlink(missing_ok=True)
+
+def convert_folder(source,destination,progress=None,cancel=None,mode="retry"):
+    if mode not in ("retry","failed_only","verify"):
+        raise ValueError("Unknown NCN conversion mode")
     if not isinstance(source,str) or not source.strip() or not isinstance(destination,str) or not destination.strip():
         raise ValueError("Select source and destination folders")
     root=Path(source).expanduser().resolve(strict=True)
@@ -396,12 +605,14 @@ def convert_folder(source,destination,progress=None,cancel=None):
         return {"cancelled":True,"done":0}
     out.mkdir(parents=True,exist_ok=True)
     with output_lock(out):
-        return _convert_locked(root,out,mids,index,progress,cancel)
+        return _convert_locked(root,out,mids,index,progress,cancel,mode)
 
-def _convert_locked(root,out,mids,index,progress,cancel):
+def _convert_locked(root,out,mids,index,progress,cancel,mode="retry"):
+    cached=load_resume(out)
+    prior,prior_path,prior_time=previous_report_results(out) if mode=="failed_only" else ({},None,0)
     report=out/("ncn-conversion-"+uuid.uuid4().hex+".jsonl")
     stats={"done":0,"total":len(mids),"converted":0,"skipped":0,"failed":0,"report":str(report),
-           "with_credits":0,"with_warnings":0,"errors":{}}
+           "with_credits":0,"with_warnings":0,"fast_resumed":0,"report_skipped":0,"previous_report":prior_path,"errors":{}}
     codes=plan_codes(root,out,mids)
     last_progress=0.0
     outputs=defaultdict(list)
@@ -423,17 +634,53 @@ def _convert_locked(root,out,mids,index,progress,cancel):
                     raise ValueError("Ambiguous case-insensitive output")
                 dest=matches[0] if matches else out/(code+".xmid")
                 row["destination"]=str(dest)
-                row.update(convert_one(companions(midi,index),dest,code,cancel))
+                parts=companions(midi,index)
+                key=resume_key(midi)
+                before=None
+                if dest.exists() and not dest.is_symlink():
+                    try:
+                        before=resume_stamp(parts,dest,code)
+                    except (OSError,ValueError,KeyError):
+                        pass
+                old=cached.get(key)
+                if (mode!="verify" and before is not None and isinstance(old,dict)
+                        and old.get("stamp")==before and resume_stamp(parts,dest,code)==before):
+                    row.update(status="skipped",fast_resume=True,resume=old,
+                               cached_with_credits=bool(old.get("credits")),
+                               cached_with_warnings=bool(old.get("warnings")))
+                    stats["fast_resumed"]+=1
+                elif mode=="failed_only" and (retained:=verify_report_skip(prior.get(key),before,parts,dest,code,prior_time)):
+                    # Do not certify this as a current-parser cache entry.
+                    cached.pop(key,None)
+                    row.update(retained)
+                    stats["report_skipped"]+=1
+                else:
+                    cached.pop(key,None)
+                    inputs_before=[[os.path.normcase(str(parts[k])),list(file_stamp(Path(parts[k])))]
+                                   for k in ("midi","lyrics","cursor")]
+                    row.update(convert_one(parts,dest,code,cancel))
+                    if row["status"] in ("converted","skipped"):
+                        try:
+                            stamp=resume_stamp(parts,dest,code)
+                            if stamp["inputs"]==inputs_before:
+                                record={"stamp":stamp,
+                                        "credits":bool(row.get("header_credit") or row.get("footer_credit")),
+                                        "warnings":bool(row.get("warnings") or row.get("unused_cursor_values"))}
+                                cached[key]=record
+                                row["resume"]=record
+                        except (OSError,ValueError,KeyError):
+                            pass
                 if row["status"]=="cancelled":
                     break
                 stats[row["status"]]+=1
-                if row.get("header_credit") or row.get("footer_credit"):
+                if row.get("header_credit") or row.get("footer_credit") or row.get("cached_with_credits"):
                     stats["with_credits"]+=1
-                if row.get("warnings") or row.get("unused_cursor_values"):
+                if row.get("warnings") or row.get("unused_cursor_values") or row.get("cached_with_warnings"):
                     stats["with_warnings"]+=1
                 if not matches:
                     outputs[code].append(dest)
             except (ValueError,OSError,OverflowError,KeyError) as exc:
+                cached.pop(resume_key(midi),None)
                 row.update(status="failed",error=str(exc))
                 stats["failed"]+=1
                 reason=str(exc) if isinstance(exc,ValueError) else type(exc).__name__
@@ -448,4 +695,5 @@ def _convert_locked(root,out,mids,index,progress,cancel):
             if progress and (now-last_progress>=.2 or stats["done"]==stats["total"]):
                 progress(stats,midi.name)
                 last_progress=now
+    stats["resume_saved"]=save_resume(out,cached)
     return dict(stats,cancelled=bool(cancel and cancel.is_set()))
