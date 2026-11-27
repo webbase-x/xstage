@@ -62,11 +62,11 @@ def _relative(raw, root):
 
 
 def migrate(source_db, source_songs, home, *, progress=None, cancel=None,
-            cache_dir=None, full_verify=False, publish=True):
+            cache_dir=None, full_verify=False, publish=True, cloud_index=None):
     source = Path(source_db).resolve(strict=True)
-    songs = Path(source_songs).resolve(strict=True)
+    songs = Path(source_songs).resolve(strict=True) if cloud_index is None else None
     home = Path(home).resolve(strict=True)
-    if not songs.is_dir() or kind(source) != "pc":
+    if (cloud_index is None and not songs.is_dir()) or kind(source) != "pc":
         raise ValueError("กรุณาเลือกฐาน PC เดิมและโฟลเดอร์เพลง XMID/XSK")
     _safe(source)
     validate_sqlite_sidecars(source.parent, (source.name,))
@@ -116,8 +116,20 @@ def migrate(source_db, source_songs, home, *, progress=None, cancel=None,
             # A separate cursor over the same read transaction supplies old
             # metadata. Verified package cache remains reusable after cancel.
             originals = src.execute("SELECT * FROM songs ORDER BY id")
-            for relative, row, cached in b._verified_rows(entries(), songs, {},
-                    cache_dir, cancel, full_verify, False):
+            if cloud_index is None:
+                verified = b._verified_rows(entries(), songs, {},
+                    cache_dir, cancel, full_verify, False)
+            else:
+                # Drive reports package MD5 and size, not inner MIDI metadata.
+                # Never download packages or fabricate MIDI fingerprints here.
+                from .cloud_legacy_migration import resolve_legacy, cloud_record
+                def cloud_rows():
+                    for old in src.execute("SELECT * FROM songs ORDER BY id"):
+                        b._stop(cancel)
+                        relative, media = resolve_legacy(old["path"], cloud_index)
+                        yield relative, cloud_record(relative, media, dict(old)), False
+                verified = cloud_rows()
+            for relative, row, cached in verified:
                 old = dict(next(originals))
                 b._stop(cancel)
                 legacy_id = old["id"]
@@ -154,8 +166,11 @@ def migrate(source_db, source_songs, home, *, progress=None, cancel=None,
                 # Preserve duplicate tracks (including identical MIDI).
                 # Shared-v1 permits NULL MIDI fingerprint with package MD5.
                 row.pop("midiHash",None)
-                row["pendingDriveLink"] = True
-                row[b.file_kind(row)]["fileId"] = ""
+                if cloud_index is None:
+                    row["pendingDriveLink"] = True
+                    row[b.file_kind(row)]["fileId"] = ""
+                else:
+                    row.pop("pendingDriveLink",None)
                 out.execute(b.INSERT, (number,count,ident,"SONGS/"+relative,"MIDI",
                     unicodedata.normalize("NFC"," ".join(str(row.get(k,"")) for k in
                         ("code","title","artist","firstLyric","rhythm"))).lower(),
@@ -199,7 +214,7 @@ def migrate(source_db, source_songs, home, *, progress=None, cancel=None,
             b._stop(cancel)
             os.replace(stage,dest)
         return dict(scanned=count,accepted=count,duplicates=0,reused=reused,
-                    pending_drive_ids=count,generation=generation,
+                    pending_drive_ids=count if cloud_index is None else 0,generation=generation,
                     root=str(home),database=str(dest),legacy_migration=True)
     finally:
         stage.unlink(missing_ok=True)
