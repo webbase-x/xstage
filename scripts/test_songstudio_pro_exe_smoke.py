@@ -97,6 +97,7 @@ def main():
     if not result["ok"]:
         if log.exists():
             print(log.read_text(encoding="utf-8",errors="replace")[-5000:],flush=True)
+        print("Smoke evidence:", json.dumps(result,ensure_ascii=True),flush=True)
         raise SystemExit("Packaged EXE native WebView smoke test failed")
 
 if __name__ == "__main__":
