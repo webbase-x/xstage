@@ -57,7 +57,7 @@ export async function showHybridExperiment(options){
     if(!current()){await session.reader?.close();return;}
     const p=session.probe;
     stats.textContent='HTTP '+p.status+(p.bytes?' · '+p.bytes.toLocaleString()+' ไบต์':'')+(Number.isFinite(p.ms)?' · '+Math.round(p.ms)+' ms':'');
-    if(!p.ok){status.textContent='ยังไม่อนุมัติ Range: '+p.reason;return;}
+    if(!p.ok){status.textContent=(p.transportOk?'HTTP Range และตรวจรุ่นไฟล์ผ่าน · ยังไม่เปิด SQL: ':'ยังไม่อนุมัติ Range: ')+p.reason;return;}
     status.textContent='ผ่านการตรวจ Range · '+session.reader.schema.kind;
     search.disabled=submit.disabled=false;search.focus();
   }catch(e){if(current())status.textContent='ทดสอบไม่สำเร็จ: '+String(e.message||e);}
