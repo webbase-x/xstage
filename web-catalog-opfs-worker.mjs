@@ -1,7 +1,7 @@
 /* Dedicated worker for the staged OPFS catalog API.
  * No OAuth tokens or Drive URLs cross this boundary. */
 import {importRevision,searchPage,lookupSong,randomSong} from './web-catalog-opfs-core.mjs';
-const SQLITE_URL='https://cdn.jsdelivr.net/npm/@sqlite.org/sqlite-wasm@3.53.4-build1/dist/index.mjs';
+const SQLITE_URL='https://cdn.jsdelivr.net/npm/@sqlite.org/sqlite-wasm@3.54.1-build1/dist/index.mjs';
 let pool,ownerKey,active=null,staged=null,tail=Promise.resolve();
 const fail=message=>{throw new Error(message);};
 async function getPool(owner){
@@ -9,7 +9,7 @@ async function getPool(owner){
   if(pool){if(owner!==ownerKey)fail('Catalog owner changed');return pool;}
   const {default:sqlite3InitModule}=await import(SQLITE_URL);
   const sqlite3=await sqlite3InitModule();
-  pool=await sqlite3.installOpfsSAHPoolVfs({name:'xstage-catalog-'+owner,directory:'xstage-sql-pool-v1/'+owner,initialCapacity:8,clearOnInit:false});
+  pool=await sqlite3.installOpfsSAHPoolVfs({name:'xstage-catalog-'+owner,directory:'xstage-sql-pool-v1-'+owner,initialCapacity:8,clearOnInit:false});
   ownerKey=owner;
   return pool;
 }
