@@ -1004,7 +1004,7 @@
       if(job?.kind==="ncn-direct"){
         const n=job.progress||{}, result=job.result||{};
         const s=Object.assign({},n,result);
-        text("ncn-progress", (job.error||job.message||"")+" · "+number(s.done)+" / "+number(s.total)+" · สำเร็จ "+number(s.converted)+" · มีไฟล์เดิม "+number(s.skipped)+" (Fast Resume "+number(s.fast_resumed)+") · ผิดพลาด "+number(s.failed));
+        text("ncn-progress", (job.error||job.message||"")+" · "+number(s.done)+" / "+number(s.total)+" · สำเร็จ "+number(s.converted)+" · มีไฟล์เดิม "+number(s.skipped)+" (Fast Resume "+number(s.fast_resumed)+" / รายงานเดิม "+number(s.report_skipped)+") · ผิดพลาด "+number(s.failed));
         $("ncn-progress-bar").max=Math.max(1,Number(s.total||0));
         $("ncn-progress-bar").value=Number(s.done||0);
         text("ncn-report",s.report?"รายงาน: "+s.report:"");

@@ -517,6 +517,57 @@ def load_resume(out):
         pass
     return cached
 
+def previous_report_results(out):
+    """Explicit failed-only mode can reuse a v0.1.46 report without stamps."""
+    try:
+        reports=[p for p in out.glob("ncn-conversion-*.jsonl") if not p.is_symlink() and p.is_file()]
+        if not reports:
+            return {},None,0
+        latest=max(reports,key=lambda p:p.stat().st_mtime_ns)
+        stamp=file_stamp(latest)
+        if stamp[2]>RESUME_LIMIT:
+            return {},None,0
+        rows={}
+        with latest.open("r",encoding="utf-8") as stream:
+            for line in stream:
+                try:
+                    row=json.loads(line)
+                    key=resume_key(row["source"])
+                    if row.get("status") in ("converted","skipped"):
+                        rows[key]={k:row.get(k) for k in ("code","destination","original_midi_sha256")}
+                    else:
+                        rows.pop(key,None)
+                except (ValueError,TypeError,KeyError,AttributeError):
+                    continue
+        if file_stamp(latest)!=stamp:
+            return {},None,0
+        return rows,str(latest),stamp[3]
+    except (OSError,ValueError):
+        return {},None,0
+
+def verify_report_skip(old,before,parts,dest,code,report_time):
+    # A previous successful report is not a verified parser cache. Only
+    # explicit failed-only mode can use it, and every retained output must
+    # independently pass its embedded metadata and media digest checks.
+    if not old or not before or old.get("code")!=code or not isinstance(old.get("destination"),str):
+        return None
+    if os.path.normcase(old["destination"])!=os.path.normcase(str(dest)):
+        return None
+    if any(max(x[1][3:5])>report_time for x in before["inputs"]+[before["output"]]):
+        return None
+    try:
+        info=core.read_xfile(dest,verify_media=True)
+        if info["code"]!=code:
+            return None
+        with Path(parts["midi"]).open("rb") as stream:
+            source_sha=hashlib.file_digest(stream,"sha256").hexdigest()
+        original=old.get("original_midi_sha256")
+        if source_sha!=(original or info["mediaSha256"]) or resume_stamp(parts,dest,code)!=before:
+            return None
+        return {"status":"skipped","report_only":True,"original_midi_sha256":original}
+    except (OSError,ValueError,KeyError):
+        return None
+
 def save_resume(out,cached):
     target=out/".ncn-resume.json"
     if target.is_symlink():
@@ -539,7 +590,7 @@ def save_resume(out,cached):
             stage.unlink(missing_ok=True)
 
 def convert_folder(source,destination,progress=None,cancel=None,mode="retry"):
-    if mode not in ("retry","verify"):
+    if mode not in ("retry","failed_only","verify"):
         raise ValueError("Unknown NCN conversion mode")
     if not isinstance(source,str) or not source.strip() or not isinstance(destination,str) or not destination.strip():
         raise ValueError("Select source and destination folders")
@@ -558,9 +609,10 @@ def convert_folder(source,destination,progress=None,cancel=None,mode="retry"):
 
 def _convert_locked(root,out,mids,index,progress,cancel,mode="retry"):
     cached=load_resume(out)
+    prior,prior_path,prior_time=previous_report_results(out) if mode=="failed_only" else ({},None,0)
     report=out/("ncn-conversion-"+uuid.uuid4().hex+".jsonl")
     stats={"done":0,"total":len(mids),"converted":0,"skipped":0,"failed":0,"report":str(report),
-           "with_credits":0,"with_warnings":0,"fast_resumed":0,"errors":{}}
+           "with_credits":0,"with_warnings":0,"fast_resumed":0,"report_skipped":0,"previous_report":prior_path,"errors":{}}
     codes=plan_codes(root,out,mids)
     last_progress=0.0
     outputs=defaultdict(list)
@@ -591,12 +643,17 @@ def _convert_locked(root,out,mids,index,progress,cancel,mode="retry"):
                     except (OSError,ValueError,KeyError):
                         pass
                 old=cached.get(key)
-                if (mode=="retry" and before is not None and isinstance(old,dict)
+                if (mode!="verify" and before is not None and isinstance(old,dict)
                         and old.get("stamp")==before and resume_stamp(parts,dest,code)==before):
                     row.update(status="skipped",fast_resume=True,resume=old,
                                cached_with_credits=bool(old.get("credits")),
                                cached_with_warnings=bool(old.get("warnings")))
                     stats["fast_resumed"]+=1
+                elif mode=="failed_only" and (retained:=verify_report_skip(prior.get(key),before,parts,dest,code,prior_time)):
+                    # Do not certify this as a current-parser cache entry.
+                    cached.pop(key,None)
+                    row.update(retained)
+                    stats["report_skipped"]+=1
                 else:
                     cached.pop(key,None)
                     inputs_before=[[os.path.normcase(str(parts[k])),list(file_stamp(Path(parts[k])))]

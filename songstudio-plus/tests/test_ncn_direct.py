@@ -353,3 +353,27 @@ class ObservedMidiAndAlignmentTests(unittest.TestCase):
             for data in (legacy[:-1],legacy+b"trailing",b"????"+standard[4:]):
                 with self.assertRaises(ValueError):
                     direct.reader.midi_events(midi,raw_data=data,include_duration=True)
+
+
+class PriorReportRetryTests(unittest.TestCase):
+    def test_failed_only_mode_reuses_old_report_without_parser_cache(self):
+        import json
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["title","artist","C",""],body="abc")
+            first=direct.convert_folder(str(root),str(out))
+            self.assertEqual(first["converted"],1)
+            # Simulate report from v0.1.46: status/code/path but no stamp.
+            (out/".ncn-resume.json").unlink()
+            report=Path(first["report"])
+            row=json.loads(report.read_text(encoding="utf-8"))
+            row.pop("resume",None)
+            report.write_text(json.dumps(row)+"\n",encoding="utf-8")
+            original=direct.convert_one
+            with patch.object(direct,"convert_one",wraps=original) as convert:
+                result=direct.convert_folder(str(root),str(out),mode="failed_only")
+                self.assertEqual((result["report_skipped"],result["fast_resumed"],convert.call_count),(1,0,0),result)
+            with patch.object(direct,"convert_one",wraps=original) as convert:
+                full=direct.convert_folder(str(root),str(out),mode="verify")
+                self.assertEqual((full["report_skipped"],full["skipped"],convert.call_count),(0,1,1),full)

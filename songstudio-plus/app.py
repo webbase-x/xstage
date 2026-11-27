@@ -148,7 +148,7 @@ class State:
                 if kind=="ncn-direct" and isinstance(result,dict):
                     self.diagnostic("ncn.summary",job=job_id,status=job["status"],
                         elapsed_seconds=round(time.monotonic()-job["started_at"],2),
-                        **{k:result.get(k) for k in ("total","done","converted","skipped","failed","fast_resumed","report","errors")})
+                        **{k:result.get(k) for k in ("total","done","converted","skipped","failed","fast_resumed","report_skipped","report","errors")})
                 self.diagnostic("job.finish",kind=kind,job=job_id,status=job["status"])
             except Exception as e:
                 with self.lock:
@@ -193,7 +193,7 @@ class State:
         if job.get("kind")=="ncn-direct" and moment-job.get("_ncn_logged_at",-1e9)>=20:
             job["_ncn_logged_at"]=moment
             self.diagnostic("ncn.progress",job=job.get("id"),source=str(message)[:180],
-                **{k:summary.get(k,0) for k in ("done","total","converted","skipped","failed","fast_resumed","files_per_second")})
+                **{k:summary.get(k,0) for k in ("done","total","converted","skipped","failed","fast_resumed","report_skipped","files_per_second")})
         if log_progress:
             self.diagnostic("job.progress",kind="import",job=job.get("id"),
                             files_seen=summary.get("files_seen",0),

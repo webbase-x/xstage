@@ -155,8 +155,8 @@
           <div class="input-wrap"><input id="ncn-dest" type="text" spellcheck="false"><button id="ncn-dest-pick" class="browse-btn" type="button">เลือกโฟลเดอร์</button></div>
           <p class="field-hint">ค้นหาทุกโฟลเดอร์ย่อย · ตรวจหัวข้อมูลและ CUR · ข้ามรูปแบบที่ไม่แน่ชัด · เก็บรายงาน JSONL</p>
           <label class="field-label" for="ncn-mode">รูปแบบการแปลง</label>
-          <select id="ncn-mode"><option value="retry">แปลงใหม่/ลองรายการผิดพลาด · ข้ามไฟล์ที่ยืนยันแล้วและไม่เปลี่ยน</option><option value="verify">ตรวจสอบทุกเพลงใหม่ทั้งหมด · ไม่เขียนทับไฟล์เดิม</option></select>
-          <p class="field-hint">การตรวจแบบรวดเร็วใช้ขนาด เวลาแก้ไข และตัวระบุไฟล์ที่ผ่านการตรวจครั้งก่อน หากต้องการตรวจ SHA-256 และข้อมูลทั้งหมดใหม่ ให้เลือกตรวจสอบทุกเพลง</p>
+          <select id="ncn-mode"><option value="failed_only">ลองเฉพาะรายการผิดพลาดจากรายงานล่าสุดและเพลงใหม่</option><option value="retry" selected>แปลงใหม่/ลองรายการผิดพลาด · ข้ามไฟล์ที่ยืนยันแล้วและไม่เปลี่ยน</option><option value="verify">ตรวจสอบทุกเพลงใหม่ทั้งหมด · ไม่เขียนทับไฟล์เดิม</option></select>
+          <p class="field-hint">การตรวจแบบรวดเร็วใช้ขนาด เวลาแก้ไข และตัวระบุไฟล์ที่ผ่านการตรวจครั้งก่อน โหมดลองเฉพาะรายการผิดพลาดใช้รายงานล่าสุดและตรวจความสมบูรณ์ของ XMID เดิม ไม่ตรวจเนื้อร้องเดิมซ้ำหากไฟล์ไม่เปลี่ยนตามเวลาแก้ไข หากต้องการตรวจ SHA-256 และข้อมูลทั้งหมดใหม่ ให้เลือกตรวจสอบทุกเพลง</p>
           <button class="primary-btn full" id="ncn-start" type="button" disabled>เริ่มแปลง NCN to XMID</button>
           <button class="quiet-btn" id="ncn-stop" type="button" disabled>หยุดอย่างปลอดภัย</button>
           <p id="ncn-progress" role="status" aria-live="polite">ยังไม่ได้เริ่ม</p>
