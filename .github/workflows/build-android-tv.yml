@@ -157,6 +157,17 @@ jobs:
         run: |
           gradle -p android-tv clean assembleDebug assembleRelease bundleRelease --stacktrace
 
+      - name: Verify APK test update identity against published build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s android-tv/tools -p 'test_verify_test_update.py' -v
+          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          CERT="$(python android-tv/tools/verify_test_update.py "$TOOLS/aapt" "$TOOLS/apksigner" android-tv/app/build/outputs/apk/debug/app-debug.apk)"
+          [[ "$CERT" =~ ^[a-f0-9]{64}$ ]]
+          echo "APK_SIGNER_SHA256=$CERT" >> "$GITHUB_ENV"
+          echo "Sideload APK package, versionCode, signature and previous update identity verified."
+
       - name: Verify launcher banner, icon and splash inside built APK
         shell: bash
         run: |
@@ -257,7 +268,7 @@ jobs:
           cp android-tv/app/build/outputs/apk/debug/app-debug.apk "downloads/${APK_NAME}"
           sha256sum "downloads/${APK_NAME}" > "downloads/${APK_NAME}.sha256"
           python - <<'PY'
-          import hashlib, json, pathlib
+          import hashlib, json, os, pathlib
           meta=json.load(open('version.json',encoding='utf-8'))
           apk_name=f"X-Stage-Karaoke-Android-v{meta['version']}-build{meta['build']}.apk"
           apk=pathlib.Path('downloads')/apk_name
@@ -267,6 +278,7 @@ jobs:
             'build':meta['build'],
             'file':apk.name,
             'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
+            'signer_sha256':os.environ['APK_SIGNER_SHA256'],
             'source_commit':'${{ github.sha }}',
             'note':'Android TV/tablet test APK signed with the stable public X-Stage test key for in-place sideload updates; production Google Play signing is separate.'
           }
