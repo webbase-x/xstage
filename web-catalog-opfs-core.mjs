@@ -22,7 +22,17 @@ export function chunkSource(file,onProgress=()=>{}){
     return bytes;
   };
 }
-export function openReadOnly(pool,name){
+export function validateCatalogBinding(meta,source){
+  const verified=meta.pcSchema==='verified-compact-v1';
+  if(!verified&&!source)return;
+  if(!verified||!source||meta.mediaIdentity!=='xstage-verified-compact-v1'||
+    !/^[a-f0-9]{32}$/.test(source.md5)||meta.sourceMD5!==source.md5||
+    String(source.size)!==meta.sourceBytes||!/^\d+$/.test(meta.verifiedCount||'')||
+    Number(meta.verifiedCount)<1||Number(meta.rejectedCount)!==0||
+    meta.expectedCount!==meta.verifiedCount)
+    fail('Verified index missing, incomplete or stale; verify original XMID files again');
+}
+export function openReadOnly(pool,name,source=null){
   const db=new pool.OpfsSAHPoolDb(name,'r');
   try{
     db.exec('PRAGMA query_only=ON; PRAGMA cache_size=-8192; PRAGMA mmap_size=0; PRAGMA trusted_schema=OFF;');
@@ -30,12 +40,14 @@ export function openReadOnly(pool,name){
     const meta=Object.fromEntries(rows(db,'SELECT key,value FROM catalog_meta'));
     if(meta.format!==FORMAT||meta.schemaVersion!=='1'||meta.kind!=='snapshot'||!meta.generation)
       fail('Unsupported SQLite catalog');
+    validateCatalogBinding(meta,source);
     const columns=new Set(rows(db,'PRAGMA table_info(songs)').map(row=>row[1]));
     for(const col of ['id','web_song_id','search','playable','payload','code','title','artist'])
       if(!columns.has(col))fail('Missing SQLite column: '+col);
     const count=scalar(db,'SELECT count(*) FROM songs WHERE playable=1');
     if(!Number.isSafeInteger(count)||count<0)fail('Invalid catalog count');
-    return {db,count,generation:meta.generation};
+    if(source&&String(count)!==meta.verifiedCount)fail('Verified song count mismatch');
+    return {db,count,generation:meta.generation,meta};
   }catch(error){db.close();throw error;}
 }
 function decode(row){
@@ -71,18 +83,18 @@ export function lookupSong(db,id='',code='',title='',artist=''){
 export function randomSong(db){
   return decode(rows(db,'SELECT web_song_id,payload FROM songs WHERE playable=1 ORDER BY random() LIMIT 1')[0]);
 }
-export async function importRevision(pool,file,md5,size,onProgress){
+export async function importRevision(pool,file,md5,size,onProgress,source=null){
   const name=revisionName(md5,size);
   if(file.size!==size)fail('Catalog size changed');
   // A caller must first verify MD5 of the source file using the streaming
   // web-catalog-disk adapter. The VFS import may change SQLite journal flags.
   if(pool.getFileNames().includes(name)){
-    try{return {...openReadOnly(pool,name),name,fromDisk:true};}
+    try{return {...openReadOnly(pool,name,source),name,fromDisk:true};}
     catch{pool.unlink(name);}
   }
   try{
     const written=await pool.importDb(name,chunkSource(file,onProgress));
     if(written!==size)fail('Incomplete SQLite import');
-    return {...openReadOnly(pool,name),name,fromDisk:false};
+    return {...openReadOnly(pool,name,source),name,fromDisk:false};
   }catch(error){pool.unlink(name);throw error;}
 }
