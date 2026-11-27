@@ -55,3 +55,40 @@ for(const failure of ['http200','etag','range','overflow','truncated']){
  assert.throws(()=>catalogSchema(['songs'],['id']));
 }
 console.log('PASS: strict 206, revision guards, byte budgets, LRU, indexed five-row queries, PC preview only');
+
+import {portableXmidPath,createPathResolver} from '../experiments/hybrid-sqlite/path-resolver.mjs';
+import {probeGoogleRange} from '../experiments/hybrid-sqlite/google-live.mjs';
+{
+ const d='D:\\xstagesong\\xmid\\0\\00074652.xmid',g='G:\\My Drive\\XStageKaraoke\\SONGS\\MIDI\\XMID\\0\\00074652.xmid';
+ assert.deepEqual(portableXmidPath(d),portableXmidPath(g));
+ assert.deepEqual(portableXmidPath(d),['SONGS','MIDI','XMID','0','00074652.xmid']);
+ assert.throws(()=>portableXmidPath('XMID/../bad.xmid'));
+ const files=['SONGS','MIDI','XMID','0','00074652.xmid'];
+ let calls=0,active=true,duplicate=false;
+ const resolver=createPathResolver({rootId:'root',current:()=>active,list:async q=>{
+   calls++;const i=files.findIndex(n=>q.includes("name='"+n+"'"));
+   const parent=i===0?'root':'id'+(i-1);
+   assert.ok(q.includes("'"+parent+"' in parents"));
+   const f={name:files[i],id:'id'+i,parents:[parent],mimeType:i===4?'application/octet-stream':'application/vnd.google-apps.folder',size:'116527',md5Checksum:'a'.repeat(32)};
+   return duplicate&&i===4?[f,{...f,id:'another'}]:[f];
+ }});
+ const first=await resolver(d);assert.equal(first.fileId,'id4');assert.equal(first.identityVerified,false);assert.equal(calls,5);
+ const second=await resolver(g);assert.equal(second.fileId,first.fileId);assert.equal(calls,6);
+ duplicate=true;await assert.rejects(resolver(d),/Duplicate/);
+ active=false;await assert.rejects(resolver(d),/Library changed/);
+}
+{
+ const header=new Uint8Array(65536);header.set(new TextEncoder().encode('SQLite format 3\0'));header[18]=header[19]=1;
+ for(const kind of ['ok','missing-etag','wal','full','changed']){
+   let count=0;header[18]=header[19]=kind==='wal'?2:1;
+   const result=await probeGoogleRange({fileId:'mock',token:'mock',size:65536,fetcher:async(url,opts)=>{
+     count++;assert.equal(opts.headers.Range,'bytes=0-65535');
+     if(count>1)assert.equal(opts.headers['If-Match'],'"r1"');
+     return new Response(header,{status:kind==='full'?200:206,headers:{'Content-Range':'bytes 0-65535/65536',...(kind==='missing-etag'?{}:{ETag:kind==='changed'&&count>1?'"r2"':'"r1"'})}});
+   }}).catch(error=>({ok:false,error:error.message}));
+   assert.equal(result.ok,kind==='ok',kind);
+   if(kind==='wal')assert.equal(result.wal,true);
+   assert.equal(count,['ok','changed'].includes(kind)?2:1);
+ }
+}
+console.log('PASS: selected-root XMID mapping, duplicate/identity safety, Google Range and WAL rejection');
