@@ -28,7 +28,7 @@ export function validateCatalogBinding(meta,source){
   if(!verified||!source||meta.mediaIdentity!=='xstage-verified-compact-v1'||
     !/^[a-f0-9]{32}$/.test(source.md5)||meta.sourceMD5!==source.md5||
     String(source.size)!==meta.sourceBytes||!/^\d+$/.test(meta.verifiedCount||'')||
-    Number(meta.verifiedCount)<1||Number(meta.rejectedCount)!==0||
+    !Number.isSafeInteger(Number(meta.verifiedCount))||Number(meta.verifiedCount)<1||meta.rejectedCount!=='0'||
     meta.expectedCount!==meta.verifiedCount)
     fail('Verified index missing, incomplete or stale; verify original XMID files again');
 }
@@ -47,6 +47,10 @@ export function openReadOnly(pool,name,source=null){
     const count=scalar(db,'SELECT count(*) FROM songs WHERE playable=1');
     if(!Number.isSafeInteger(count)||count<0)fail('Invalid catalog count');
     if(source&&String(count)!==meta.verifiedCount)fail('Verified song count mismatch');
+    if(source){
+      const bad=scalar(db,"SELECT count(*) FROM songs WHERE playable=1 AND (json_valid(payload)<>1 OR coalesce(json_extract(payload,'$.verifiedOriginal'),0)<>1 OR coalesce(length(json_extract(payload,'$.xmid.sha256')),0)<>64 OR coalesce(length(json_extract(payload,'$.xmid.md5Checksum')),0)<>32 OR coalesce(json_extract(payload,'$.xmid.size'),0)<1)");
+      if(bad!==0)fail('Unverified media in playable catalog');
+    }
     return {db,count,generation:meta.generation,meta};
   }catch(error){db.close();throw error;}
 }
