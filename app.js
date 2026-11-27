@@ -3720,14 +3720,15 @@ async function prepareXskPlayback(song,token,signal,onStatus=()=>{},prefetch=fal
   const packed=await response.blob();
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   onStatus('กำลังตรวจและแยก XMID/XSK2 ในหน่วยความจำ…');
-  if(song.verifiedOriginal===true&&(!isXmid||!song.xmid?.sha256||!(/^[a-f0-9]{32}$/.test(song.xmid.md5Checksum||''))))throw Error('XMID ไม่มีหลักฐานต้นฉบับครบถ้วน');
-  if(isXmid&&song.xmid?.sha256){
-    const expected=String(song.xmid.sha256);
-    if(!/^[a-f0-9]{64}$/.test(expected)||packed.size!==Number(song.xmid.size)||packed.size>97*1048576)throw Error('XMID ไม่ตรงขนาดที่ยืนยัน');
-    const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await packed.arrayBuffer())),b=>b.toString(16).padStart(2,'0')).join('');
-    if(digest!==expected)throw Error('SHA-256 ของ XMID ไม่ตรงไฟล์ต้นฉบับ');
+  let unpacked;
+  if(song.verifiedOriginal===true){
+    if(!isXmid||typeof window.XStageXmid?.openVerifiedPackage!=='function')throw Error('ระบบตรวจ XMID ต้นฉบับไม่พร้อม');
+    unpacked=await window.XStageXmid.openVerifiedPackage(packed,song,signal);
+  }else if(isXmid&&song.xmid?.sha256){
+    throw Error('ฐาน XMID มีหลักฐานต้นฉบับไม่สมบูรณ์');
+  }else{
+    unpacked=await (isXmid?window.XStageXmid:window.XStageXsk).openPackage(packed);
   }
-  const unpacked=await (isXmid?window.XStageXmid:window.XStageXsk).openPackage(packed);
   if(signal?.aborted)throw new DOMException('ยกเลิก','AbortError');
   // Never play a different song under a stale catalog title/code.
   // A distinct MIDI may share an embedded code with another export. The
