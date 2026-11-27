@@ -180,3 +180,30 @@ await testSlowDriveAndDuplicatePopupError();
 await testExplicitRetryAndTimeout();
 await testPendingOnRefocusAndPopupClosed();
 console.log('PASS: Safari OAuth refocus, slow callback, delayed Drive verification, retry, timeout, popup error and update guard');
+
+
+async function testUserInfoFallback(){
+  const source=between('async function googleAccountResponse(', 'function driveError(');
+  const endpoints=['https://openidconnect.googleapis.com/v1/userinfo','https://www.googleapis.com/oauth2/v3/userinfo'];
+  const calls=[];
+  let replies=[];
+  const context=vm.createContext({DOMException,requestHeaders:token=>({Authorization:'Bearer '+token}),
+    googleFetch:async(url,opts,label,retries)=>{
+      calls.push(url);assert.equal(opts.headers.Authorization,'Bearer fake');assert.equal(opts.cache,'no-store');assert.equal(retries,0);
+      const reply=replies.shift();if(reply instanceof Error)throw reply;return reply;
+    }});
+  const request=vm.runInContext(source+'\ngoogleAccountResponse',context);
+  for(const first of [new Error('timeout'),{status:503},{status:429}]){
+    calls.length=0;replies=[first,{status:200,ok:true}];
+    assert.equal((await request('fake')).status,200);assert.deepEqual(calls,endpoints);
+  }
+  for(const status of [200,401,403]){
+    calls.length=0;replies=[{status}];assert.equal((await request('fake')).status,status);assert.deepEqual(calls,[endpoints[0]]);
+  }
+  calls.length=0;replies=[new Error('timeout'),new Error('timeout fallback')];
+  await assert.rejects(request('fake'),/timeout fallback/);assert.deepEqual(calls,endpoints);
+  const controller=new AbortController();controller.abort();calls.length=0;
+  await assert.rejects(request('fake',controller.signal),{name:'AbortError'});assert.equal(calls.length,0);
+}
+await testUserInfoFallback();
+console.log('PASS: Google UserInfo alternate endpoint, transient retry, authoritative denial and abort');
