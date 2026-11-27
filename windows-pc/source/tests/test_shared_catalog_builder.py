@@ -60,6 +60,35 @@ class SharedPcBuilderTests(unittest.TestCase):
         (self.songs/"10001.xmid").write_bytes(
             _xmid("10001","เพลงทดสอบ","ศิลปิน",self.midi))
 
+    def test_metadata_and_identity_match_portable_schema(self):
+        from karaoke.shared_catalog_builder import _pc_id
+        # 100 BPM, G major, end of track.
+        events = bytes.fromhex("00 ff 51 03 09 27 c0 00 ff 59 02 01 00 00 ff 2f 00")
+        midi = self.midi[:14] + b"MTrk" + struct.pack(">I", len(events)) + events
+        packed = _xsk("10003", "เพลงทดสอบข้อมูล", "ศิลปิน", midi)
+        # XSK provides its lyric in JSON; metadata extraction is independent of dedup.
+        (self.songs / "10001.xmid").unlink()
+        path = self.songs / "10003.xsk"
+        path.write_bytes(packed)
+        cache = Path(self.tmp.name) / "cache"
+        build(self.root, cache_dir=cache, deduplicate=False)
+        expected = "browser/xsk/" + hashlib.md5(packed).hexdigest()
+        with closing(sqlite3.connect(self.root / "DB/songs.sqlite3")) as db:
+            row = db.execute("SELECT id,web_song_id,first_lyric,key_signature,bpm,search,payload FROM songs").fetchone()
+            self.assertEqual(row[:4], (_pc_id(expected), expected, "ทดสอบ", "G"))
+            self.assertAlmostEqual(float(row[4]), 100)
+            self.assertIn("ทดสอบ", row[5])
+            payload = json.loads(row[6])
+            self.assertEqual(payload["firstLyric"], row[2])
+            self.assertEqual(payload["keySignature"], row[3])
+            self.assertEqual(payload["bpm"], row[4])
+            self.assertNotIn("blob", payload)
+        build(self.root, cache_dir=cache, deduplicate=True)
+        with closing(sqlite3.connect(self.root / "DB/songs.sqlite3")) as db:
+            self.assertEqual(db.execute("SELECT web_song_id FROM songs").fetchone()[0], expected)
+        self.assertTrue(list((self.root / "BACKUP").glob("*.sqlite3.bak")))
+        self.assertFalse(list((self.root / "DB").glob("*.bak")))
+
     def test_local_only_portable_snapshot_without_drive(self):
         from karaoke.local_master import activate
         home = Path(self.tmp.name) / "Installed"
