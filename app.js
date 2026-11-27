@@ -2440,7 +2440,7 @@ async function activeDriveCatalog(dbId,token){
   return direct.length?{pointer:directCatalogPointer(direct[0])}:null;
 }
 async function pollPublishedCatalog(){
-  if(new URLSearchParams(location.search).get('hybrid')==='1')return;
+  if(typeof location!=='undefined'&&new URLSearchParams(location.search).get('hybrid')==='1')return;
   if(!state.token||!state.libraryRootId||isRetiredDriveRoot(state.libraryRootId)||state.catalogPolling)return;
   const authId=state.authId,token=state.token,rootId=state.libraryRootId,sub=state.accountSub;
   const sameLibrary=()=>authId===state.authId&&state.token===token&&
