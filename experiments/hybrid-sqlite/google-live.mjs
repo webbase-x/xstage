@@ -30,11 +30,14 @@ export async function probeGoogleRange({fileId,token,size,current=()=>true,fetch
     const wal=body[18]===2||body[19]===2;
     // Refuse a WAL-mode standalone file until the producer certifies a
     // checkpointed snapshot. Reading the main file alone can be stale.
-    if(wal)return {ok:false,status,etag,wal,bytes:body.length,ms:performance.now()-started,reason:'WAL header: checkpointed immutable snapshot must be certified'};
     const conditional=new RangeSource({size,etag,readResponse:read,requestLimit:1,byteLimit:65536});
-    const t=performance.now();await conditional.read(0,new Uint8Array(100));conditional.close();assertCurrent();
-    return {ok:true,status,etag,wal,bytes:body.length*2,ms:performance.now()-started,conditionalMs:performance.now()-t};
-  }finally{clearTimeout(timer);if(!current())controller.abort();}
+    const t=performance.now();
+    try{await conditional.read(0,new Uint8Array(100));}finally{conditional.close();}
+    assertCurrent();
+    const result={transportOk:true,status,etag,wal,bytes:body.length*2,ms:performance.now()-started,conditionalMs:performance.now()-t};
+    if(wal)return {...result,ok:false,reason:'WAL header: checkpointed immutable snapshot must be certified'};
+    return {...result,ok:true};
+  }finally{clearTimeout(timer);controller.abort();}
 }
 export async function openGoogleExperiment({pointer,token,current,list,rootId,retiredRoots,fetcher=fetch}){
   const size=Number(pointer.contentBytes),fileId=pointer.catalogFileId;
