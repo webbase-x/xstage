@@ -14,6 +14,7 @@ import {chromium} from 'playwright';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const mime={'.html':'text/html;charset=utf-8','.js':'application/javascript;charset=utf-8',
+  '.mjs':'application/javascript;charset=utf-8','.wasm':'application/wasm',
   '.css':'text/css;charset=utf-8','.json':'application/json;charset=utf-8',
   '.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'};
 const server=http.createServer((req,res)=>{
@@ -476,6 +477,16 @@ try{
   assert.deepEqual(activeDbFiles().map(x=>x.name),['songs.sqlite3'],
     'Pausing must preserve the previously published SQLite database');
   await page.reload({waitUntil:'domcontentloaded'});
+  // Require the real disk-backed reader to open the imported SQLite file;
+  // the importer may not hide a player failure by opening its menu early.
+  try{
+    await page.waitForFunction(()=>document.getElementById('song-total')?.textContent?.includes('4 เพลง')||
+      document.body.textContent.includes('SQLite ในเครื่อง ·'),null,{timeout:90000});
+  }catch(error){
+    throw new Error('Disk catalog after reload: '+JSON.stringify({
+      errors:scriptErrors,status:await page.locator('#mobile-menu-status').textContent()
+    }),{cause:error});
+  }
   await openDriveImporter();
   await page.locator('#cloud-import-start:not([disabled])').waitFor();
   assert.equal((await page.locator('#cloud-import-start').textContent()).trim(),'เริ่ม');
