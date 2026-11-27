@@ -372,10 +372,8 @@ async function catalogMetadata(opened){
       const midi=await opened.midi.arrayBuffer();
       const parsed=runtime.parseMidi(midi);
       result.keySignature||=clean(parsed.keySignature,40);
-      const tempos=parsed.tempoMap||[];
-      const point=tempos[0]?.tick===0&&tempos[0]?.tempo===500000&&tempos.length>1?tempos[1]:tempos[0];
-      if(!result.bpm&&Number.isFinite(point?.tempo)&&point.tempo>0)
-        result.bpm=String(Math.round(6000000000/point.tempo)/100);
+      if(!result.bpm&&Number.isFinite(parsed.initialBpm)&&parsed.initialBpm>0)
+        result.bpm=String(Math.round(parsed.initialBpm*100)/100);
     }catch{/* Optional musical metadata must not reject a verified package. */}
   }
   return result;
