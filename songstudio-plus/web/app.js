@@ -1004,10 +1004,11 @@
       if(job?.kind==="ncn-direct"){
         const n=job.progress||{}, result=job.result||{};
         const s=Object.assign({},n,result);
-        text("ncn-progress", (job.error||job.message||"")+" · "+number(s.done)+" / "+number(s.total)+" · สำเร็จ "+number(s.converted)+" · มีไฟล์เดิม "+number(s.skipped)+" · ข้าม/ผิดพลาด "+number(s.failed));
-        $("ncn-progress-bar").max=Math.max(1,Number(s.total||0));
-        $("ncn-progress-bar").value=Number(s.done||0);
-        text("ncn-report",s.report?"รายงาน: "+s.report:"");
+        const percent=s.total?Math.min(100,Math.max(0,100*Number(s.done||0)/Number(s.total))):0;
+        text("ncn-progress", (job.error||job.message||"")+" · "+number(s.done)+" / "+number(s.total)+" ("+percent.toFixed(2)+"%) · สำเร็จ "+number(s.converted)+" · มีไฟล์เดิม "+number(s.skipped)+" · ข้าม (ตรวจไม่ผ่าน) "+number(s.rejected)+" · ข้อผิดพลาด "+number(Math.max(0,Number(s.failed||0)-Number(s.rejected||0))));
+        $("ncn-progress-bar").max=100;
+        $("ncn-progress-bar").value=percent;
+        text("ncn-report",s.log_folder?"CSV / สรุป: "+s.log_folder+"\nJSONL: "+s.report:s.report?"รายงาน: "+s.report:"");
         const reasons=Object.entries(s.errors||{}).sort((a,b)=>b[1]-a[1]);
         text("ncn-errors","มีเครดิต "+number(s.with_credits)+" · มีคำเตือน "+number(s.with_warnings)+"\n"+reasons.map(([reason,count])=>number(count)+" · "+reason).join("\n"));
       }
