@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {chunkSource,revisionName,CHUNK_BYTES,searchPage,lookupSong,importRevision} from '../web-catalog-opfs-core.mjs';
+import {chunkSource,revisionName,CHUNK_BYTES,searchPage,lookupSong,importRevision,validateCatalogBinding} from '../web-catalog-opfs-core.mjs';
 const id='a'.repeat(32),size=256*1024*1024+123;
 let peak=0,total=0,calls=0;
 const file={size,slice(start,end){const n=end-start;peak=Math.max(peak,n);return {async arrayBuffer(){calls++;return new ArrayBuffer(n);}};}};
@@ -46,3 +46,11 @@ assert.deepEqual(unlinked,[]);
 await assert.rejects(importRevision({...pool,importDb:async()=>12},file,id,size),/Incomplete/);
 assert.deepEqual(unlinked,[revisionName(id,size)]);
 console.log('PASS: simulated chunk source 256 MiB–2 GiB, bounded import, read-only paging, lookup and failed import cleanup; not a real browser OPFS test');
+
+const source={md5:'b'.repeat(32),size:201338880};
+const meta={pcSchema:'verified-compact-v1',mediaIdentity:'xstage-verified-compact-v1',sourceMD5:source.md5,sourceBytes:String(source.size),verifiedCount:'13',expectedCount:'13',rejectedCount:'0'};
+assert.doesNotThrow(()=>validateCatalogBinding(meta,source));
+for(const bad of [{...meta,sourceMD5:'c'.repeat(32)},{...meta,sourceBytes:'101'},{...meta,rejectedCount:'1'},{...meta,expectedCount:'14'},{...meta,verifiedCount:'0'},{...meta,mediaIdentity:'unverified-preview-only'}])assert.throws(()=>validateCatalogBinding(bad,source),/incomplete or stale/);
+assert.throws(()=>validateCatalogBinding(meta,null),/incomplete or stale/);
+assert.throws(()=>validateCatalogBinding({pcSchema:'shared-v1'},source),/incomplete or stale/);
+console.log('PASS: sidecar accepts only complete catalog bound to original MD5 and byte count');
