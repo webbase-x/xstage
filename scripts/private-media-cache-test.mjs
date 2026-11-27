@@ -40,3 +40,39 @@ assert.equal(await request('owner:root:c',{cacheOnly:true,media:{...media,md5Che
 const abort=new AbortController();abort.abort();
 await assert.rejects(request('owner:root:a',{signal:abort.signal}),{name:'AbortError'});
 console.log('PASS: persistent private song cache reuses MD5/size, scopes accounts/roots, rejects corrupt and cancelled transfers');
+
+// OPFS simulation models a retained prefix across a short response and
+// reopens a new writable handle with its previously committed contents.
+const disk=new Map();
+function folder(path){
+  return {getDirectoryHandle:async name=>folder(path+'/'+name),
+    removeEntry:async name=>{disk.delete(path+'/'+name);},
+    getFileHandle:async name=>{
+      const key=path+'/'+name;
+      if(!disk.has(key))disk.set(key,new Uint8Array());
+      return {getFile:async()=>new Blob([disk.get(key)]),
+        createWritable:async({keepExistingData})=>{
+          let buffer=keepExistingData?disk.get(key).slice():new Uint8Array(),pos=0;
+          return {seek:async offset=>{pos=offset;},
+            write:async data=>{
+              const result=new Uint8Array(Math.max(buffer.length,pos+data.length));
+              result.set(buffer);result.set(data,pos);pos+=data.length;buffer=result;
+            },
+            close:async()=>disk.set(key,buffer),abort:async()=>{}};
+        }};
+    }};
+}
+context.navigator.storage.getDirectory=async()=>folder('');
+context.navigator.locks={request:async(_key,fn)=>fn()};
+const offsets=[];
+const rangeFetcher=async offset=>{
+  offsets.push(offset);
+  if(!offset)return new Response(bytes.slice(0,6));
+  return new Response(bytes.slice(offset),{status:206,headers:{
+    'Content-Range':'bytes '+offset+'-'+(bytes.length-1)+'/'+bytes.length}});
+};
+await assert.rejects(request('owner:resume',{rangeFetcher}),/interrupted/);
+assert.equal(await (await request('owner:resume',{rangeFetcher})).text(),'MIDI test payload');
+assert.deepEqual(offsets,[0,6]);
+assert.equal(disk.size,0,'partial removed only after full verified cache commit');
+console.log('PASS: media prefix survives interrupted download, HTTP 206 resumes and verifies');

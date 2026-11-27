@@ -1666,7 +1666,7 @@ async function selectedDriveRootById(id, token) {
 }
 async function privateFile(id, token, opts = {}) {
   const r = await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`, {
-    headers: requestHeaders(token), cache:'no-store',signal:opts.signal
+    headers: {...requestHeaders(token),...(opts.range?{Range:opts.range}:{})}, cache:'no-store',signal:opts.signal
   },'Google Drive');
   if (!r.ok) throw driveError(r.status, 'ไฟล์เพลงส่วนตัว');
   return r;
@@ -1685,14 +1685,14 @@ function diskPreloadCount(){
 }
 function privateMediaFile(media,token,opts={}){
   const id=getFileId(media),cache=window.XStagePrivateMediaCache;
-  const fetcher=()=>privateFile(id,token,opts);
+  const fetcher=(offset=0)=>privateFile(id,token,{...opts,range:offset>0?'bytes='+offset+'-':undefined});
   if(!cache?.available()||!state.accountSub||!state.libraryRootId||isRetiredDriveRoot(state.libraryRootId))
     return opts.cacheOnly?Promise.resolve(null):fetcher();
   const sub=state.accountSub,root=state.libraryRootId;
   const owner=libraryCacheOwner(sub,root);
   const current=()=>state.token===token&&state.accountSub===sub&&state.libraryRootId===root&&!isRetiredDriveRoot(root);
   const pinned=[state.current,...state.queue.slice(0,diskPreloadCount())].flatMap(queuedMediaParts);
-  return cache.getOrFetch({owner,media,fetcher,signal:opts.signal,current,pinned,cacheOnly:!!opts.cacheOnly});
+  return cache.getOrFetch({owner,media,fetcher,rangeFetcher:fetcher,signal:opts.signal,current,pinned,cacheOnly:!!opts.cacheOnly});
 }
 // High-throughput private Drive reads for bounded media files. Parallel
 // requests are permitted only when Google returns *exact* 206 byte ranges.

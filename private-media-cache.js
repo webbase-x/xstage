@@ -54,11 +54,86 @@ async function reserve(cache,bytes,protectedKeys){
   }
   return total+bytes<=quota&&bytes<=free;
 }
-async function fill(cache,key,media,fetcher,signal,current,protectedKeys){
+// Preserve a partial raw file on OPFS when a verified range transport is available.
+// Cross-tab lock scopes the writer to the account/root and content revision.
+// No token, URL or unverified bytes enter the playable CacheStorage entry.
+async function resumeRaw(owner,media,rangeFetcher,signal,current){
+  if(!rangeFetcher||!scope.navigator?.storage?.getDirectory||!scope.navigator?.locks?.request)return null;
+  const name=await cacheName(owner),size=Number(media.size),expected=String(media.md5Checksum).toLowerCase();
+  const root=await scope.navigator.storage.getDirectory();
+  const partials=await root.getDirectoryHandle('xstage-media-partials-v1',{create:true});
+  const dir=await partials.getDirectoryHandle(name,{create:true});
+  const filename=expected+'-'+size+'.part';
+  return scope.navigator.locks.request(name+':'+filename,async()=>{
+    check(signal,current);
+    const handle=await dir.getFileHandle(filename,{create:true});
+    let file=await handle.getFile();
+    let received=file.size<=size?file.size:0;
+    let digest=new scope.XStageImportCore.MD5();
+    if(received){
+      const prefix=file.stream().getReader();
+      try{
+        while(true){
+          check(signal,current);
+          const {done,value}=await prefix.read();
+          if(done)break;
+          digest.append(value);
+        }
+      }finally{try{prefix.releaseLock();}catch{}}
+    }
+    let response=null,out=null,reader=null;
+    try{
+      if(received<size){
+        response=await rangeFetcher(received);
+        check(signal,current);
+        if(received&&response.status===200){received=0;digest=new scope.XStageImportCore.MD5();}
+        else if(received&&(
+          response.status!==206||response.headers.get('Content-Range')!=='bytes '+received+'-'+(size-1)+'/'+size))
+          throw Error('Private media resume range mismatch');
+        else if(!received&&response.status!==200)throw Error('Private media download status mismatch');
+        const advertised=Number(response.headers.get('Content-Length')||0);
+        if(advertised&&advertised!==size-received)throw Error('Private media resume size mismatch');
+        if(!response.body?.getReader)return null;
+        out=await handle.createWritable({keepExistingData:received>0});
+        if(received)await out.seek(received);
+        reader=response.body.getReader();
+        while(true){
+          check(signal,current);
+          const {done,value}=await reader.read();
+          if(done)break;
+          if(received+value.byteLength>size)throw Error('Private media size mismatch');
+          await out.write(value);
+          digest.append(value);received+=value.byteLength;
+        }
+        await out.close();out=null;
+      }
+      check(signal,current);
+      if(received!==size)throw Error('Private media download interrupted');
+      if(digest.end()!==expected){
+        await dir.removeEntry(filename);
+        throw Error('Private media MD5/size mismatch');
+      }
+      file=await handle.getFile();
+      if(file.size!==size)throw Error('Private media stored size mismatch');
+      return {response:new scope.Response(file.stream(),{status:200,headers:{
+        'Content-Type':response?.headers?.get('Content-Type')||'application/octet-stream',
+        'Content-Length':String(size)}}),remove:()=>dir.removeEntry(filename)};
+    }catch(error){
+      // Commit only the bounded partial prefix on interruption. It is never
+      // exposed as a playable file until full MD5/size validation succeeds.
+      if(out){try{await out.close();}catch{try{await out.abort();}catch{}}}
+      throw error;
+    }finally{
+      if(reader){try{void reader.cancel().catch(()=>{});}catch{}try{reader.releaseLock();}catch{}}
+    }
+  });
+}
+async function fill(cache,key,media,fetcher,signal,current,protectedKeys,owner,rangeFetcher){
   const size=Number(media.size),expected=String(media.md5Checksum).toLowerCase();
   if(!await reserve(cache,size,protectedKeys))return false;
   check(signal,current);
-  const response=await fetcher();
+  const partial=await resumeRaw(owner,media,rangeFetcher,signal,current);
+  const response=partial?.response||await fetcher();
   if(!response?.body?.pipeThrough||!response.ok)return false;
   let streamError=null,received=0;
   const hash=new scope.XStageImportCore.MD5();
@@ -84,6 +159,7 @@ async function fill(cache,key,media,fetcher,signal,current,protectedKeys){
   try{
     await cache.put(key,new scope.Response(verified,{status:200,headers}));
     check(signal,current);
+    if(partial)try{await partial.remove();}catch{}
     return true;
   }catch(error){
     if(streamError)throw streamError;
@@ -92,7 +168,7 @@ async function fill(cache,key,media,fetcher,signal,current,protectedKeys){
     return false;
   }
 }
-async function getOrFetch({owner,media,fetcher,signal,current=()=>true,pinned=[],cacheOnly=false}){
+async function getOrFetch({owner,media,fetcher,rangeFetcher,signal,current=()=>true,pinned=[],cacheOnly=false}){
   check(signal,current);
   if(!owner||!available()||!cacheable(media))return cacheOnly?null:fetcher();
   let name,cache,key;
@@ -111,7 +187,7 @@ async function getOrFetch({owner,media,fetcher,signal,current=()=>true,pinned=[]
   const workKey=name+':'+key;
   let job=pending.get(workKey);
   if(!job){
-    job=fill(cache,key,media,fetcher,signal,current,protect);
+    job=fill(cache,key,media,fetcher,signal,current,protect,owner,rangeFetcher);
     pending.set(workKey,job);
   }
   try{
