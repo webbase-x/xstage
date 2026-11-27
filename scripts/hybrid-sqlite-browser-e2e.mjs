@@ -15,6 +15,8 @@ try{
 db=sqlite3.connect(sys.argv[1])
 db.executescript("CREATE TABLE songs(id INTEGER PRIMARY KEY, path TEXT UNIQUE,code TEXT,title TEXT COLLATE NOCASE,artist TEXT,search TEXT,playable INTEGER); CREATE INDEX songs_code ON songs(code); CREATE INDEX songs_title ON songs(title COLLATE NOCASE,id); CREATE VIRTUAL TABLE song_fts USING fts5(search,content='songs',content_rowid='id',tokenize='trigram'); CREATE TABLE padding(data BLOB);")
 db.executemany("INSERT INTO songs VALUES (?,?,?,?,?,?,1)",[(i,'XMID/0/'+str(i)+'.xmid',str(i),'รักทดสอบ '+str(i),'ศิลปิน','รักทดสอบ '+str(i)+' ศิลปิน') for i in range(1,24)])
+db.executemany("INSERT INTO songs VALUES (?,?,?,?,?,?,1)",[(i+100,'G:/My Drive/XStageKaraoke/SONGS/MIDI/XMID/0/'+str(i)+'.xmid',str(i),'รักทดสอบ '+str(i),'ศิลปิน','รักทดสอบ '+str(i)+' ศิลปิน') for i in range(1,24)])
+db.execute("INSERT INTO songs VALUES (301,'XMID/1/1.xmid','1','รักทดสอบ 1','ศิลปิน','รักทดสอบ 1 ศิลปิน',1)")
 db.execute("INSERT INTO song_fts(song_fts) VALUES ('rebuild')")
 db.execute("INSERT INTO padding VALUES (zeroblob(?))",(200*1024*1024,))
 db.commit()
@@ -52,11 +54,14 @@ db.close()`,db],{timeout:120000});
   const reader=await openRangeCatalog({SQLite,module,FacadeVFS,sourceOptions:{size,etag:'"fixture-v1"',readResponse:(start,end,{signal,etag})=>fetch('/fixture.sqlite3',{headers:{Range:'bytes='+start+'-'+end,'If-Match':etag},signal})}});
   try{
    const a=await reader.search('รัก'),b=await reader.search('รัก',{cursor:a.cursor}),c=await reader.search('1'),d=await reader.search('ร',{mode:'title'});
-   return {schema:reader.schema,pages:[a.songs.length,b.songs.length],ids:[...a.songs,...b.songs].map(x=>x.id),code:c.songs[0]?.code,titleCount:d.songs.length,stats:reader.stats()};
+   const codes=[];let cursor=null;for(let n=0;n<6;n++){const p=await reader.search('รัก',{cursor});codes.push(...p.songs.map(x=>x.id));if(!p.hasMore)break;cursor=p.cursor;}
+   return {allIds:codes,codeIds:c.songs.map(x=>x.id),schema:reader.schema,pages:[a.songs.length,b.songs.length],ids:[...a.songs,...b.songs].map(x=>x.id),code:c.songs[0]?.code,titleCount:d.songs.length,stats:reader.stats()};
   }finally{await reader.close();}
  },size);
  assert.equal(result.schema.kind,'pc-local');assert.equal(result.schema.fts,true);
  assert.deepEqual(result.pages,[5,5]);assert.equal(new Set(result.ids).size,10);
+ assert.deepEqual(result.codeIds,[1,301],'Different portable path with same code must remain');
+ assert.deepEqual(result.allIds,[...Array.from({length:23},(_,i)=>i+1),301],'Dedup across every page; do not collapse distinct XMID paths');
  assert.equal(result.code,'1');assert.equal(result.titleCount,5);
  assert.equal(requests,result.stats.requests);assert.equal(bytes,result.stats.bytes);
  assert.ok(bytes<size/10,'Indexed queries must not fetch the entire DB');
