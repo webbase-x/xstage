@@ -219,6 +219,8 @@ def convert_one(parts,dest,code,cancel=None):
     if dest.is_symlink():
         raise ValueError("Destination symlink is not permitted")
     if dest.exists():
+        if not dest.is_file():
+            raise ValueError("Destination is not a regular file")
         with dest.open("rb") as existing:
             same=existing.read(len(header))==header
         if not same:
@@ -347,6 +349,10 @@ def _convert_locked(root,out,mids,index,progress,cancel):
     stats={"done":0,"total":len(mids),"converted":0,"skipped":0,"failed":0,"report":str(report)}
     codes=plan_codes(root,out,mids)
     last_progress=0.0
+    outputs=defaultdict(list)
+    for path in out.iterdir():
+        if path.suffix.casefold()==".xmid":
+            outputs[path.stem.casefold()].append(path)
     with report.open("x",encoding="utf-8") as log:
         for midi in mids:
             if cancel is not None and cancel.is_set():
@@ -357,12 +363,17 @@ def _convert_locked(root,out,mids,index,progress,cancel):
                 if code is None:
                     raise ValueError("Duplicate NCN code; not overwritten")
                 row["code"]=code
-                dest=out/(code+".xmid")
+                matches=outputs.get(code,[])
+                if len(matches)>1:
+                    raise ValueError("Ambiguous case-insensitive output")
+                dest=matches[0] if matches else out/(code+".xmid")
                 row["destination"]=str(dest)
                 row.update(convert_one(companions(midi,index),dest,code,cancel))
                 if row["status"]=="cancelled":
                     break
                 stats[row["status"]]+=1
+                if not matches:
+                    outputs[code].append(dest)
             except (ValueError,OSError,OverflowError,KeyError) as exc:
                 row.update(status="failed",error=str(exc))
                 stats["failed"]+=1

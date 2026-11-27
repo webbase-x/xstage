@@ -119,3 +119,41 @@ class DirectHardeningTests(unittest.TestCase):
             self.assertEqual(existing.read_bytes(),b"user content")
             with self.assertRaises(ValueError):
                 direct.convert_folder(str(root),str(root/"out"))
+
+
+    def test_explicit_midi_metadata_missing_lyr_artist(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            midi=fixture(root,["Title: title","Artist: ","Key: C"],body="ทดสอบ")
+            data=midi.read_bytes()
+            label=b"Artist: Real Singer"
+            event=b"\x00\xff\x01"+bytes([len(label)])+label
+            track=event+data[22:]
+            midi.write_bytes(data[:18]+struct.pack(">I",len(track))+track)
+            result=direct.convert_folder(str(root),str(out))
+            self.assertEqual(result["converted"],1,result)
+            import json
+            row=json.loads(Path(result["report"]).read_text(encoding="utf-8"))
+            self.assertEqual(row["artist"],"Real Singer")
+
+    def test_actual_10000_synthetic_conversions_and_resume(self):
+        import time
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"in";out=Path(d)/"out"
+            first=fixture(root,["ชื่อจริง","ศิลปินจริง","C",""])
+            triplet={ext:first.with_suffix(ext).read_bytes() for ext in (".mid",".lyr",".cur")}
+            for number in range(2,10001):
+                for ext,data in triplet.items():
+                    (root/(f"{number:05d}"+ext)).write_bytes(data)
+            start=time.monotonic()
+            result=direct.convert_folder(str(root),str(out))
+            elapsed=time.monotonic()-start
+            self.assertEqual((result["converted"],result["failed"]),(10000,0),result)
+            self.assertEqual(len(list(out.glob("*.xmid"))),10000)
+            self.assertFalse(list(Path(d).rglob("*.sqlite*")))
+            self.assertEqual(first.read_bytes(),triplet[".mid"])
+            start=time.monotonic()
+            resumed=direct.convert_folder(str(root),str(out))
+            resume_elapsed=time.monotonic()-start
+            self.assertEqual((resumed["skipped"],resumed["failed"]),(10000,0),resumed)
+            print(f"NCN_SYNTHETIC_BENCHMARK count=10000 convert_seconds={elapsed:.3f} resume_seconds={resume_elapsed:.3f}",flush=True)
