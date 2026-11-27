@@ -2307,7 +2307,7 @@ async function restoreWebQueue(){
   queueDiskOwner=owner;
   return true;
 }
-function webCatalogPager(rawTerm){
+function webCatalogPager(rawTerm,favoriteIds=null){
   const session=state.webCatalog,term=normalizeSearchText(rawTerm);
   let cursor=null,total=0,loaded=0,more=!!term,busy=false;
   return {web:true,get total(){return total;},get loaded(){return loaded;},get hasMore(){return more;},get busy(){return busy;},
@@ -2315,7 +2315,7 @@ function webCatalogPager(rawTerm){
       if(busy||!more||session!==state.webCatalog)return [];
       busy=true;
       try{
-        const page=await session.client.search(term,cursor);
+        const page=await session.client.search(term,cursor,favoriteIds);
         if(session!==state.webCatalog)return [];
         total=page.total;cursor=page.cursor;more=page.hasMore;
         const songs=page.songs.filter(playable);loaded+=songs.length;return songs;
@@ -3263,8 +3263,8 @@ window.XStageRankSearch=(songs,rawTerm,limit=5)=>
 // Each query scans the normalized index once. Only compact integer positions
 // are retained in score buckets; song rows are constructed five at a time.
 const SEARCH_PAGE_SIZE=5;
-function createSearchPager(songs,rawTerm){
-  if(typeof state!=='undefined'&&state.webCatalog&&songs===state.songs)return webCatalogPager(rawTerm);
+function createSearchPager(songs,rawTerm,favoriteIds=null){
+  if(typeof state!=='undefined'&&state.webCatalog&&songs===state.songs)return webCatalogPager(rawTerm,favoriteIds);
   if(typeof state!=='undefined'&&state.nativeCatalog&&songs===state.songs)return nativeCatalogPager(rawTerm);
   const term=normalizeSearchText(rawTerm),words=term.split(' ').filter(Boolean);
   const index=indexedSongs(songs),buckets=Array.from({length:11},()=>[]);
@@ -3338,7 +3338,7 @@ function clearSearchAfterChoice(){
   else document.activeElement?.blur?.();
   restoreViewportAfterKeyboard();
 }
-function renderSongs(songs=state.songs) {
+function renderSongs(songs=state.songs,favoriteIds=null) {
   liveSearchPager=null;
   ui.songs.replaceChildren();ui.songs.scrollTop=0;
   const rawTerm=ui.search.value.trim();
@@ -3369,7 +3369,7 @@ function renderSongs(songs=state.songs) {
     return;
   }
   setLiveSearchExpanded(true);
-  liveSearchPager={pager:createSearchPager(songs,term),term,highlightTerm,source:state.songs,authId:state.authId};
+  liveSearchPager={pager:createSearchPager(songs,term,favoriteIds),term,highlightTerm,source:state.songs,authId:state.authId};
   state.shown=[];state.selectedIndex=0;
   if(!liveSearchPager.pager.web&&!liveSearchPager.pager.total){
     ui.resultCount.textContent='พบ 0 เพลง';
