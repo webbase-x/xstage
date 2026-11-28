@@ -158,8 +158,13 @@ def scan(root,cancel):
     for folder,dirs,names in os.walk(root,followlinks=False):
         if cancel is not None and cancel.is_set():
             break
-        dirs[:]=sorted(d for d in dirs if not (Path(folder)/d).is_symlink())
+        def safe_directory(name):
+            path=Path(folder)/name
+            return not path.is_symlink() and not getattr(path,"is_junction",lambda:False)()
+        dirs[:]=sorted(d for d in dirs if safe_directory(d))
         for name in sorted(names):
+            if cancel is not None and cancel.is_set():
+                return [],defaultdict(list)
             path=Path(folder)/name
             ext=path.suffix.casefold()
             if path.is_symlink() or ext not in (".mid",".midi",".lyr",".cur"):
