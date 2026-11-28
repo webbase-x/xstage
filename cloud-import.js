@@ -119,8 +119,38 @@ class Drive {
     }
     return response;
   }
+  // Only idempotent reads may be retried here. Uploads retain their own
+  // resumable protocol; never replay POST/PATCH on a network failure.
+  async retryRead(operation){
+    for(let attempt=0;;attempt++){
+      this.assertLive();
+      try{return await operation();}
+      catch(error){
+        this.assertLive();
+        if(error?.code==='XSTAGE_AUTH_REQUIRED'||error?.name==='AbortError')throw error;
+        const transient=error?.code==='XSTAGE_DRIVE_TRANSIENT'||error?.name==='TypeError'||error?.name==='NetworkError';
+        if(!transient)throw error;
+        if(attempt>=2){
+          if(error?.code==='XSTAGE_DRIVE_TRANSIENT'){error.code='XSTAGE_DRIVE_RETRIES_EXHAUSTED';throw error;}
+          const failure=Error('Google Drive เชื่อมต่อขัดข้องหลังลอง 3 ครั้ง · '+String(error?.message||error));
+          failure.code='XSTAGE_DRIVE_RETRIES_EXHAUSTED';throw failure;
+        }
+        await new Promise(resolve=>setTimeout(resolve,350*(2**attempt)));
+      }
+    }
+  }
   async fetch(url,options={}){
-    const response=await this.signedFetch(url,options);
+    const read=String(options.method||'GET').toUpperCase()==='GET'&&!options.body;
+    const request=async()=>{
+      const response=await this.signedFetch(url,options);
+      if(read&&(response.status===408||response.status===429||response.status>=500)){
+        try{void response.body?.cancel()?.catch(()=>{});}catch{}
+        const error=Error('Google Drive ไม่ตอบสนองหรือจำกัดคำขอ (HTTP '+response.status+')');
+        error.code='XSTAGE_DRIVE_TRANSIENT';throw error;
+      }
+      return response;
+    };
+    const response=await (read?this.retryRead(request):request());
     if(!response.ok){
       if(response.status===401)fail('Google ไม่ยืนยันสิทธิ์ Drive หลังต่ออายุ · กดเชื่อม Google แล้วทำต่อ');
       if(response.status===403)fail('ไม่มีสิทธิ์เขียน/อ่าน XStageKaraoke ใน Google Drive นี้ · ตรวจบัญชีและ drive.file');
@@ -136,7 +166,9 @@ class Drive {
       const params=new URLSearchParams({q,fields:'nextPageToken,files(id,name,mimeType,size,md5Checksum,createdTime,modifiedTime,ownedByMe,parents)',
         pageSize:'1000'});
       if(next)params.set('pageToken',next);
-      const result=await (await this.fetch(API+'?'+params)).json();
+      // If the response body disconnects, replay this page, never the
+      // previous pages. Malformed JSON remains a hard failure.
+      const result=await this.retryRead(async()=>(await this.fetch(API+'?'+params)).json());
       if(!result || (result.files!=null&&!Array.isArray(result.files)) ||
          (result.nextPageToken!=null&&typeof result.nextPageToken!=='string'))
         fail('Google Drive ส่งรายการไฟล์ที่มีโครงสร้างไม่ถูกต้อง');
@@ -276,6 +308,9 @@ class Drive {
     return document;
   }
   async getSqlite(id){
+    return this.retryRead(()=>this.readSqliteOnce(id));
+  }
+  async readSqliteOnce(id){
     const response=await this.fetch(API+'/'+driveId(id)+'?alt=media');
     const max=192*1048576;
     if(Number(response.headers.get('Content-Length')||0)>max)
@@ -513,7 +548,7 @@ function chooseImportRoot(roots,activeRootId){
     fail('ไม่สามารถนำเข้าไปยังโฟลเดอร์ที่ไม่ได้เป็นเจ้าของโดยไม่ได้อนุญาต');
   return selected?.id||'';
 }
-async function loadCatalog(drive,root,{verifyChecksum=false}={}){
+async function loadCatalog(drive,root,{verifyChecksum=false,cacheOwner='',check=()=>{}}={}){
   const children=await drive.listChildren(root);
   const dbDirs=children.filter(x=>x.name===driveLayout.db&&x.mimeType===MIME_FOLDER);
   if(dbDirs.length>1)fail('พบโฟลเดอร์ DB ซ้ำใน XStageKaraoke');
@@ -529,7 +564,31 @@ async function loadCatalog(drive,root,{verifyChecksum=false}={}){
   if(canonical.length>1)fail('พบ songs.sqlite3 ซ้ำใน DB · ไม่เลือกไฟล์โดยคาดเดา');
   if(canonical.length){
     if(!scope.XStageDriveSQLite)fail('ไม่พบตัวอ่าน SQLite3');
-    const bytes=await drive.getSqlite(canonical[0].id);
+    const entry=canonical[0];
+    const size=Number(entry.size),md5=String(entry.md5Checksum||'').toLowerCase();
+    if(size>192*1048576)fail('ฐานข้อมูล SQLite3 ใหญ่เกิน 192 MB');
+    let bytes;
+    // Reuse the same verified OPFS catalog as the player, scoped to the
+    // authenticated owner. Always resolve the current Drive file first.
+    if(verifyChecksum&&cacheOwner&&/^[a-f0-9]{32}$/.test(md5)&&Number.isSafeInteger(size)&&size>=100&&scope.XStageWebCatalogDisk?.available?.()){
+      try{
+        const cached=await scope.XStageWebCatalogDisk.getOrFetch({
+          owner:cacheOwner,pointer:{contentMD5:md5,contentBytes:size},
+          fetcher:()=>drive.fetch(API+'/'+driveId(entry.id)+'?alt=media'),
+          current:()=>{check();return true;}
+        });
+        check();
+        if(cached?.file)bytes=new Uint8Array(await cached.file.arrayBuffer());
+      }catch(error){
+        check();
+        // Unsupported/private storage or quota failures must not block
+        // the bounded legacy reader.
+        if(error?.name==='AbortError')throw error;
+        if(error?.code==='XSTAGE_DRIVE_RETRIES_EXHAUSTED'||error?.code==='XSTAGE_AUTH_REQUIRED')throw error;
+      }
+    }
+    if(!bytes)bytes=await drive.getSqlite(entry.id);
+    check();
     if(verifyChecksum){
       const expected=String(canonical[0].md5Checksum||'').toLowerCase();
       if(!/^[a-f0-9]{32}$/.test(expected))fail('Drive ไม่ส่ง MD5 ของฐานเพลง · ยังยืนยันฐานล่าสุดไม่ได้');

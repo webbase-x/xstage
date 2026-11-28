@@ -103,7 +103,9 @@ async function countSourceFiles(drive,start,check=()=>{},collect=null,progress=n
   const counts={total:0,xmid:0,xsk:0,sf2:0,sf3:0,fx:0,other:0,folders:0,songs:0,midi:0,audio:0,video:0,sidecars:0,empty:0};
   // Bound breadth/concurrency, not nesting depth. Every real descendant is visited.
   let cursor=0;
-  const workers=8;
+  const mobile=/iPhone|iPad|iPod|Android/i.test(scope.navigator?.userAgent||'')||
+    (scope.navigator?.platform==='MacIntel'&&Number(scope.navigator?.maxTouchPoints)>1);
+  const workers=mobile?2:4;
   while(cursor<folders.length){
     check();
     const batch=[];
@@ -115,7 +117,7 @@ async function countSourceFiles(drive,start,check=()=>{},collect=null,progress=n
       if(visited.size>MAX_FOLDERS)fail('จำนวนโฟลเดอร์เกินขอบเขต');
       batch.push({id,path});
     }
-    await Promise.all(batch.map(async ({id,path})=>{
+    const outcomes=await Promise.allSettled(batch.map(async ({id,path})=>{
       const entries=await drive.listChildren(id);
       check();
       for(const item of entries){
@@ -153,6 +155,8 @@ async function countSourceFiles(drive,start,check=()=>{},collect=null,progress=n
       counts.folders++;
       progress?.({...counts});
     }));
+    const failed=outcomes.find(outcome=>outcome.status==='rejected');
+    if(failed)throw failed.reason;
   }
   return counts;
 }
@@ -340,7 +344,7 @@ function createWorkflow(options={}){
     const sig=db.length&&packageSignature(db[0]);
     const key=sig?JSON.stringify([s.sub,s.rootId,db[0].id,sig]):'';
     if(key&&catalogCache?.key===key)return catalogCache.value;
-    const value=await scope.XStageCloudImport.loadCatalog(drive,s.rootId,{verifyChecksum:true});check();
+    const value=await scope.XStageCloudImport.loadCatalog(drive,s.rootId,{verifyChecksum:true,cacheOwner:s.sub,check});check();
     if(key&&value.pointer?.catalogFileId===db[0].id&&String(value.pointer.catalogMd5).toLowerCase()===String(db[0].md5Checksum).toLowerCase())catalogCache={key,value};
     return value;
   }
@@ -377,17 +381,24 @@ function createWorkflow(options={}){
           const node=countNodes[kind],choice=choices[kind];
           if(!choice?.id){if(node)node.textContent='ยังไม่เลือกโฟลเดอร์';return null;}
           if(node)node.textContent='กำลังตรวจนับ…';
+          let lastPartial=null;
           try{
             const meta=await verifyFolder(drive,choice.id,s.rootId,kind);check();
             if(kind==='music')canonicalMusic=meta.name==='SONGS'&&meta.parents?.includes(s.rootId);
             const c=await countSourceFiles(drive,choice.id,check,kind==='music'?file=>musicFiles.push(file):null,partial=>{
-              check();
+              check();lastPartial=partial;
               if(node&&kind==='music')node.textContent='ตรวจแล้ว '+format(partial.songs)+' เพลง · '+format(partial.folders)+' โฟลเดอร์ · ยังไม่ครบ';
             });check();
             const n=kind==='music'?c.songs:kind==='soundfont'?c.sf2+c.sf3:c.fx;
             if(node)node.textContent=(kind==='music'?format(n)+' เพลง (ตามไฟล์หลัก) · XMID/XSK '+format(c.xmid+c.xsk)+' · MIDI/EMK '+format(c.midi)+' · เสียง '+format(c.audio)+' · วิดีโอ '+format(c.video)+' · '+format(c.folders)+' โฟลเดอร์':format(n)+' ไฟล์'+(c.total!==n?' · ทั้งหมด '+format(c.total)+' ไฟล์':''))+(options.hasFullRead?.()?'':' · เท่าที่มีสิทธิ์');
             return c;
-          }catch(error){if(seq===scanSequence&&!busy&&node)node.textContent='ตรวจนับไม่ครบ';throw error;}
+          }catch(error){
+            if(seq===scanSequence&&!busy&&node){
+              const partial=lastPartial&&kind==='music'?' · พบแล้ว '+format(lastPartial.songs)+' เพลง / '+format(lastPartial.folders)+' โฟลเดอร์':'';
+              node.textContent='ตรวจนับไม่ครบ'+partial+' · '+String(error?.message||error);
+            }
+            throw error;
+          }
         }),
         catalogForCheck(drive,s,check).then(value=>{
           check();
@@ -404,7 +415,7 @@ function createWorkflow(options={}){
       if(db.status!=='fulfilled'){if(dbCount)dbCount.textContent='ตรวจฐานไม่สำเร็จ';compareStatus('ยังยืนยันฐานเพลงไม่ได้ · '+String(db.reason?.message||db.reason),'unknown');return;}
       const {rows,pointer}=db.value;
       if(dbCount)dbCount.textContent=format(rows.size)+' รายการ'+(pointer?'':' · ยังไม่มีฐาน');
-      if(!choices.music?.id||results[0].status!=='fulfilled'){compareStatus('ยังตรวจคลังเพลงไม่ครบ','unknown');return;}
+      if(!choices.music?.id||results[0].status!=='fulfilled'){compareStatus('ยังตรวจคลังเพลงไม่ครบ'+(results[0].reason?' · '+String(results[0].reason?.message||results[0].reason):''),'unknown');return;}
       compareStatus('กำลังเปรียบเทียบไฟล์เพลงกับฐานข้อมูล…','checking');
       let checkpoint=null;
       try{
@@ -432,7 +443,7 @@ function createWorkflow(options={}){
       }
     }).finally(()=>{
       finished=true;clearTimeout(stallTimer);
-      if(scanTask===task){scanTask=null;if(sameSession(s))lastScan={key,at:Date.now()};}
+      if(scanTask===task){scanTask=null;if(sameSession(s))lastScan={key,at:Date.now(),complete:comparisonState==='equal'||comparisonState==='different'};}
     });
     scanTask=task;return task.promise;
   }
