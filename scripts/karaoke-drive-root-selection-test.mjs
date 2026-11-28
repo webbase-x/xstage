@@ -60,3 +60,12 @@ assert.ok(imp.includes('publishSingleCatalog')&&imp.includes('songs.sqlite3')&&
   !imp.includes("pushSqlite('catalog-delta-"),
   'Browser must publish one app-authorized SQLite catalog without legacy delta files');
 console.log('PASS: distinct duplicate folders, verified import target, no legacy cache/resume, same-code playback isolation');
+
+const startup=app.slice(app.indexOf('async function openDrive('),app.indexOf('const XSTAGE_TV_POPUP_HELP_ID'));
+assert.ok(startup.includes('selectedDriveRootById(preferredRootId,token)')&&startup.includes('loadLatestCachedCatalog(account.sub,preferredRootId)')&&startup.includes('if(selectedRoot&&rootCached){'));
+assert.ok(startup.indexOf('applyInstantCatalog(instant)')<startup.indexOf('await rootsTask'));
+assert.ok(startup.indexOf('applyInstantCatalog(instant)')<startup.indexOf('discoverDefaults()'));
+assert.ok(startup.includes('if(!instant)await layoutTask')&&startup.includes('warmStartBusy()'));
+assert.ok(app.includes('else tx.oncomplete=()=>resolve(request.result)'));
+assert.ok(!startup.includes('if(!applyInstantCatalog(instant))'));
+console.log('PASS: verified warm start before listing, transactional cache and playback-safe refresh');
