@@ -19,7 +19,7 @@ The long-term target is an IDM / aria2 / yt-dlp / JDownloader-class application 
 1. Preserve installed users' data, existing output media and prior working capabilities.
 2. Compile and run deterministic .NET integration tests on GitHub Actions Windows runner, including failure/recovery cases.
 3. Validate real downloaded bytes for HTTP, full media streams using FFprobe/FFmpeg, and verified SHA-256 for update binaries. Do not mark partial media Completed.
-4. Package verified self-contained Windows EXE; require successful GitHub Release asset publication and matching public update manifest.
+4. Development gate: package and verify a self-contained Windows EXE in development CI without public release. Separate release gate: only on explicit user authorization, verify GitHub Release asset publication and matching public update manifest.
 5. Clearly distinguish CI verification from real-device field testing. If field testing is absent, state that explicitly.
 6. Progress is visible; no silent indefinite waits, hidden failures, automatic execution of downloaded files or bypassing protected media.
 
@@ -46,7 +46,7 @@ The long-term target is an IDM / aria2 / yt-dlp / JDownloader-class application 
 - SQLite checkpoints must be transactional. Never delete the original legacy JSON or an existing completed file as part of migration/retry.
 - Limit site rate/fragment concurrency and honor retry windows. Reject unsafe, expired or unauthorized media URLs instead of bypassing authentication.
 - UI sorting and filtering must not mutate the queue, overwrite files or cause actions on the wrong job.
-- Release every milestone independently with tests and verifiable EXE checksum; proceed to the next implementation only after the preceding gate passes.
+- Proceed to the next implementation only after the preceding development gate passes. Do not bump version/build, create tags/releases or publish Setup EXE without explicit user authorization.
 
 ### Google Drive transfer extension (development)
 - Public file-share URL normalization with resource-key preservation; existing HTTP Range probing, retry, resume and concurrency apply when supported by Drive. Reject folder URLs and HTML permission/confirmation pages instead of saving them as completed files. No cookie import or quota bypass. Pending Windows CI, large-file confirmation handling, authorized private Drive API integration and real throughput tests.
@@ -124,3 +124,8 @@ The long-term target is an IDM / aria2 / yt-dlp / JDownloader-class application 
 
 ### Milestone 03 integration — 2026-11-25
 - Development CI 45571047914, 45571321221 and 45571909086 all succeeded. Safe retirement test verified physical partial offset resume and final SHA-256; measured 1/8/32 ranges fast 754.1/2020.0/2220.3 KiB/s. Integrated with current main preserving concurrent roadmap and unrelated project changes. Main CI pending; begin 04.1 only after it passes. No release/version change; physical field tests outstanding.
+
+
+### Development checkpoint — 2026-11-28
+- Base main: `6cf8e19a7fa200a19d4b7ded31a01e3344eeaeba`. Historical development CI [46059658877](https://github.com/webbase-x/xstage/actions/runs/46059658877) rechecked: build job completed successfully. This does not establish CI success for the current base.
+- Pending: broaden development branch trigger, confirm current Windows development CI, then implement and verify 04.1–04.5 against existing named queues and SQLite recovery. Preserve manual pause and test simulated clock, power/network faults, reopen and SHA-256. No release or field-test claim.
