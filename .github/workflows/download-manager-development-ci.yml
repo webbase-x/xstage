@@ -3,9 +3,10 @@ name: Download Manager development CI (no release)
 on:
   workflow_dispatch:
   push:
-    branches: [main, 'dev/download-manager-ci-only']
+    branches: [main, 'dev/download-manager-*']
     paths:
       - 'download-manager/**'
+      - 'DOWNLOAD_MANAGER_ROADMAP.md'
       - '.github/workflows/download-manager-development-ci.yml'
 
 permissions:
