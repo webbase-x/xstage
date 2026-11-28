@@ -1,10 +1,10 @@
 {
   "name": "X-Stage Karaoke Android Test APK (TV + Tablet)",
-  "version": "1.0.225",
-  "build": 1225,
-  "file": "X-Stage-Karaoke-Android-v1.0.225-build1225.apk",
-  "sha256": "5427f925df12c1de5e8c846eed9f9439f22e5ec89098efa7bc9d028845e2ed1a",
+  "version": "1.0.226",
+  "build": 1226,
+  "file": "X-Stage-Karaoke-Android-v1.0.226-build1226.apk",
+  "sha256": "6d710f38ea2025c1898ade25b98789019f2f636e620a01221bdd2b91b033da16",
   "signer_sha256": "41d6b32475cc9097300320f21ff16e8a2c2c713b40cac773ad6f2b1a6498a9bb",
-  "source_commit": "19c89e80c62d4cd5b5edc68e7b69be052a111b48",
+  "source_commit": "f2e2196d0ef20a933427251fd1a603730a8b8d06",
   "note": "Android TV/tablet test APK signed with the stable public X-Stage test key for in-place sideload updates; production Google Play signing is separate."
 }
