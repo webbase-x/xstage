@@ -38,6 +38,21 @@ class DirectTests(unittest.TestCase):
 
 
 class DirectHardeningTests(unittest.TestCase):
+    def test_bounded_read_rejects_substituted_open_descriptor(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            source=Path(d)/"source.mid"
+            other=Path(d)/"other.mid"
+            source.write_bytes(b"original")
+            other.write_bytes(b"replaced")
+            self.assertEqual(direct.bounded_read(source, 32)[0], b"original")
+            real_open=Path.open
+            def substituted(path, *args, **kwargs):
+                return real_open(other if path == source else path, *args, **kwargs)
+            with patch.object(Path, "open", substituted):
+                with self.assertRaisesRegex(ValueError, "changed during read"):
+                    direct.bounded_read(source, 32)
+
     def test_bom_and_thai_labels(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d)/"in";out=Path(d)/"out"
