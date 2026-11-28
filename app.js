@@ -96,7 +96,7 @@ function appUpdateElements(){
   };
 }
 function playbackBusyForUpdate(){
-  return !!(state.loading||state.current&&player.src&&!player.ended&&(!player.paused||state.queue.length||state.medley));
+  return !!(state.loading||state.current&&player.src&&!player.ended&&(!player.paused||state.queue.length||state.medley||(state.resumeAfterInterruption&&!state.userPaused&&!state.userStopped)));
 }
 let webUpdateStageBuild=0,webUpdateStageReady=false,webUpdateStagePromise=null;
 let webUpdateStageFinished=false,webUpdateManualMessage='',webUpdateStageController=null;
@@ -6108,6 +6108,8 @@ const xstageDriveFolders=window.XStageDriveFolders?.init({
 });
 
 window.XStageSoftRefresh=async function(){
+  // A gesture must not reload an in-flight sign-in, database build or media load.
+  if(window.XStageDriveBuildBusy||state.authRecovering||webGoogleAuthFlow||state.loading)return true;
   if(state.current||player.src){
     savePlaybackResumeState();
     renderSongs();renderQueue();updateTransport();
