@@ -327,6 +327,53 @@ console.log('PASS: explicit shared PC/Online SQLite rebuild ignores legacy rows 
    await scan;
    FakeDrive.prototype.listChildren=listBeforeSlow;
  }
- assert.match(element('xstage-drive-count-music').textContent,/ไฟล์/);
+ assert.match(element('xstage-drive-count-music').textContent,/เพลง/);
  assert.equal(published,priorScanPublications,'Inventory checks must never publish a database');
  console.log('PASS: SQLite count is independent of a slow SONGS listing');
+
+ // Count all descendants, including sibling trees and a path deeper than 12 levels.
+ const deepRoot='deepRoot123',chain=Array.from({length:18},(_,i)=>'deepFolder'+String(i).padStart(3,'0'));
+ const folder=(id,name)=>({id,name,mimeType:folderMime});
+ const tree=new Map([
+   [deepRoot,[folder(chain[0],'MIDI'),folder('sibling123','Other'),{id:'rootSong123',name:'root.XMID'}]],
+   ['sibling123',[{id:'siblingSong123',name:'other.xsk'}]]
+ ]);
+ for(let i=0;i<chain.length;i++)tree.set(chain[i],i+1<chain.length?
+   [folder(chain[i+1],'level'+i)]:[{id:'deepSong123',name:'deep.XMID'},{id:'shortcut123',name:'link.xmid',mimeType:'application/vnd.google-apps.shortcut'}]);
+ const visitedFolders=[],found=[],updates=[];
+ const recursiveDrive={listChildren:async id=>{visitedFolders.push(id);return tree.get(id)||[];}};
+ const recursive=await window.XStageDriveFolders.countSourceFiles(recursiveDrive,deepRoot,()=>{},file=>found.push(file),c=>updates.push(c));
+ assert.equal(recursive.xmid,2);
+ assert.equal(recursive.xsk,1);
+ assert.equal(recursive.folders,20);
+ assert.equal(new Set(visitedFolders).size,20);
+ assert.ok(found.some(f=>f.relative.startsWith('MIDI/level0/')&&f.relative.endsWith('/deep.XMID')));
+ assert.ok(found.some(f=>f.relative==='Other/other.xsk'));
+ assert.equal(updates.at(-1).folders,20);
+ const walked=await window.XStageDriveFolders.walkMusic(recursiveDrive,deepRoot,()=>{},()=>{});
+ assert.deepEqual([...walked.files.map(f=>f.id)].sort(),found.map(f=>f.id).sort());
+ assert.equal(walked.otherCount,1);
+ console.log('PASS: complete SONGS inventory and rebuild include root, siblings and 18 nested folders');
+
+ // NCN uses a MIDI primary file plus LYR/CUR sidecars, often in separate trees.
+ const formatRoot='formatRoot123',folderMap=new Map([
+   [formatRoot,[folder('ncnSong123','Song'),folder('ncnLyric123','Lyric'),folder('ncnCursor123','Cursor'),folder('audioDir123','Audio'),folder('videoDir123','Video'),{id:'emkSong123',name:'legacy.EMK',size:'512'},{id:'xmidSong123',name:'song.XMID',size:'512'}]],
+   ['ncnSong123',[{id:'midiSong123',name:'0001.MID',size:'128'},{id:'karSong123',name:'other.KAR',size:'128'}]],
+   ['ncnLyric123',[{id:'lyricSong123',name:'0001.LYR'},{id:'lyricOther123',name:'orphan.LRC',mimeType:'audio/mpeg'}]],
+   ['ncnCursor123',[{id:'cursorSong123',name:'0001.CUR'}]],
+   ['audioDir123',[{id:'mp3Song123',name:'a.MP3',size:'128'},{id:'flacSong123',name:'b.FLAC'},{id:'otherAudio123',name:'unknown.extension',mimeType:'audio/x-custom'},{id:'emptySong123',name:'empty.mp3',size:'0'},{id:'bankSound123',name:'instrument.sf2'}]],
+   ['videoDir123',[{id:'mp4Song123',name:'karaoke.MP4',mimeType:'video/mp4'},{id:'subFile123',name:'karaoke.srt'}]]
+ ]);
+ const formatDrive={listChildren:async id=>folderMap.get(id)||[]};
+ const formatInventory=await window.XStageDriveFolders.countSourceFiles(formatDrive,formatRoot);
+ assert.equal(formatInventory.songs,8,'NCN sidecars must not inflate song count');
+ assert.equal(formatInventory.midi,3);
+ assert.equal(formatInventory.audio,3);
+ assert.equal(formatInventory.video,1);
+ assert.equal(formatInventory.xmid,1);
+ assert.equal(formatInventory.sidecars,5);
+ assert.equal(formatInventory.empty,1);
+ const formatWalk=await window.XStageDriveFolders.walkMusic(formatDrive,formatRoot,()=>{},()=>{});
+ assert.equal(formatWalk.files.length,1,'Only validated package formats enter existing DB builder');
+ assert.equal(formatWalk.otherSongs,7);
+ console.log('PASS: primary MIDI/audio/video inventory counts NCN once and excludes lyric, cursor, font and empty files');
