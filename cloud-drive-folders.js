@@ -92,7 +92,7 @@ async function verifyFolder(drive,id,root,kind){
   fail('โฟลเดอร์ต้องอยู่ภายในคลังหลัก XStageKaraoke ที่เลือกเท่านั้น');
 }
 // Metadata only; do not download, copy or modify any file during inventory.
-async function countSourceFiles(drive,start,check=()=>{},collect=null){
+async function countSourceFiles(drive,start,check=()=>{},collect=null,progress=null){
   const folders=[{id:start,depth:0,path:''}],visited=new Set(),files=new Set();
   const counts={total:0,xmid:0,xsk:0,sf2:0,sf3:0,fx:0,other:0};
   while(folders.length){
@@ -129,6 +129,7 @@ async function countSourceFiles(drive,start,check=()=>{},collect=null){
       else counts.other++;
       }
     }
+    progress?.(counts);
   }
   return counts;
 }
@@ -321,7 +322,9 @@ function createWorkflow(options={}){
   const rebuildButton=$('xstage-drive-rebuild-db');
   const countNodes=Object.fromEntries(KIND.map(k=>[k,$('xstage-drive-count-'+k)]));
   const dbCount=$('xstage-drive-db-count'),comparison=$('xstage-drive-compare-status');
-  let scanTask=null,comparisonState='unknown',catalogCache=null,scanTimer=null;
+  let scanTask=null,comparisonState='unknown',catalogCache=null,scanTimer=null,lastScan=null;
+  const AUTO_SCAN_TTL=120000,SCAN_STALL_MS=60000;
+  const scanKey=(s,choices)=>JSON.stringify([s.sub,s.rootId,...KIND.map(k=>choices[k]?.id||''),!!options.hasFullRead?.()]);
   const format=n=>Number(n).toLocaleString('th-TH');
   function compareStatus(message,state='unknown'){comparisonState=state;if(comparison){comparison.textContent=message;comparison.setAttribute?.('data-state',state);}render();}
   async function catalogForCheck(drive,s,check){
@@ -342,12 +345,20 @@ function createWorkflow(options={}){
     if(busy||!layoutReady)return;
     let s;try{s=session();}catch{return;}
     const choices=readSelections(s.sub,s.rootId);
-    const key=JSON.stringify([s.sub,s.rootId,...KIND.map(k=>choices[k]?.id||''),!!options.hasFullRead?.()]);
+    const key=scanKey(s,choices);
     if(scanTask?.key===key)return scanTask.promise;
     const seq=++scanSequence;
+    let stallTimer=null,finished=false,stalled=false,rejectStall;
+    const stalledPromise=new Promise((_,reject)=>{rejectStall=reject;});
+    const touch=()=>{
+      if(finished)return;
+      clearTimeout(stallTimer);
+      stallTimer=setTimeout(()=>{stalled=true;rejectStall(new Error('Google Drive ไม่ตอบสนอง · กดตรวจใหม่เพื่อลองอีกครั้ง'));},SCAN_STALL_MS);
+    };
     const check=()=>{
-      if(busy||seq!==scanSequence||!sameSession(s)||KIND.some(k=>readSelections(s.sub,s.rootId)[k]?.id!==choices[k]?.id))
-        fail('เปลี่ยนบัญชีหรือคลังแล้ว');
+      if(stalled||busy||seq!==scanSequence||!sameSession(s)||KIND.some(k=>readSelections(s.sub,s.rootId)[k]?.id!==choices[k]?.id))
+        fail('หยุดตรวจหรือเปลี่ยนบัญชี/คลังแล้ว');
+      touch();
     };
     const drive=new scope.XStageCloudImport.Drive(()=>options.session()?.token,check);
     drive.ensureAuth=force=>options.ensureAuth?.(force);
@@ -356,7 +367,8 @@ function createWorkflow(options={}){
     if(dbCount)dbCount.textContent='กำลังตรวจ…';
     const musicFiles=[];
     let canonicalMusic=false;
-    task.promise=(async()=>{
+    touch();
+    const work=(async()=>{
       const results=await Promise.allSettled([
         ...KIND.map(async kind=>{
           const node=countNodes[kind],choice=choices[kind];
@@ -365,13 +377,24 @@ function createWorkflow(options={}){
           try{
             const meta=await verifyFolder(drive,choice.id,s.rootId,kind);check();
             if(kind==='music')canonicalMusic=meta.name==='SONGS'&&meta.parents?.includes(s.rootId);
-            const c=await countSourceFiles(drive,choice.id,check,kind==='music'?file=>musicFiles.push(file):null);check();
+            const c=await countSourceFiles(drive,choice.id,check,kind==='music'?file=>musicFiles.push(file):null,partial=>{
+              check();
+              if(node&&kind==='music')node.textContent='ตรวจแล้ว '+format(partial.xmid+partial.xsk)+' ไฟล์ · ยังไม่ครบ';
+            });check();
             const n=kind==='music'?c.xmid+c.xsk:kind==='soundfont'?c.sf2+c.sf3:c.fx;
             if(node)node.textContent=format(n)+' ไฟล์'+(c.total!==n?' · ทั้งหมด '+format(c.total)+' ไฟล์':'')+(options.hasFullRead?.()?'':' · เท่าที่มีสิทธิ์');
             return c;
           }catch(error){if(seq===scanSequence&&!busy&&node)node.textContent='ตรวจนับไม่ครบ';throw error;}
         }),
-        catalogForCheck(drive,s,check)
+        catalogForCheck(drive,s,check).then(value=>{
+          check();
+          if(dbCount)dbCount.textContent=format(value.rows.size)+' รายการ'+(value.pointer?'':' · ยังไม่มีฐาน');
+          return value;
+        },error=>{
+          check();
+          if(dbCount)dbCount.textContent='ตรวจฐานไม่สำเร็จ';
+          throw error;
+        })
       ]);
       check();
       const db=results[3];
@@ -379,6 +402,7 @@ function createWorkflow(options={}){
       const {rows,pointer}=db.value;
       if(dbCount)dbCount.textContent=format(rows.size)+' รายการ'+(pointer?'':' · ยังไม่มีฐาน');
       if(!choices.music?.id||results[0].status!=='fulfilled'){compareStatus('ยังตรวจคลังเพลงไม่ครบ','unknown');return;}
+      compareStatus('กำลังเปรียบเทียบไฟล์เพลงกับฐานข้อมูล…','checking');
       let checkpoint=null;
       try{
         checkpoint=await (options.openCheckpoint||openCheckpoint)();
@@ -394,15 +418,29 @@ function createWorkflow(options={}){
         compareStatus('แนะนำให้อัปเดตฐานเพลง · ไฟล์รอตรวจ '+format(result.newFiles)+
           ' · รายการเดิมนอกคลัง/เปลี่ยน '+format(result.stale)+(result.duplicateRows?' · แถวซ้ำ '+format(result.duplicateRows):'')+detail,'different');
       }finally{checkpoint?.close?.();}
-    })().catch(error=>{if(seq===scanSequence&&!busy&&sameSession(s))compareStatus('ตรวจไม่ครบ · '+String(error.message||error),'unknown');})
-      .finally(()=>{if(scanTask===task)scanTask=null;});
+    })();
+    task.promise=Promise.race([work,stalledPromise]).catch(error=>{
+      if(seq===scanSequence&&!busy&&sameSession(s)){
+        ++scanSequence;
+        for(const node of Object.values(countNodes))if(node&&/^(กำลังตรวจนับ|ตรวจแล้ว .*ยังไม่ครบ)/.test(node.textContent))node.textContent='ตรวจนับไม่ครบ · ลองใหม่';
+        if(dbCount&&dbCount.textContent==='กำลังตรวจ…')dbCount.textContent='ตรวจฐานไม่สำเร็จ';
+        compareStatus('ตรวจไม่ครบ · '+String(error.message||error),'unknown');
+      }
+    }).finally(()=>{
+      finished=true;clearTimeout(stallTimer);
+      if(scanTask===task){scanTask=null;if(sameSession(s))lastScan={key,at:Date.now()};}
+    });
     scanTask=task;return task.promise;
   }
   function scheduleScan(){
-    if(!$('cloud-import-dialog')?.open||busy||scope.document?.hidden)return;
+    if(!$('cloud-import-dialog')?.open||busy||scope.document?.hidden||scanTask)return;
+    const recent=()=>{
+      try{const s=session();return layoutReady&&lastScan?.key===scanKey(s,readSelections(s.sub,s.rootId))&&Date.now()-lastScan.at<AUTO_SCAN_TTL;}
+      catch{return false;}
+    };
+    if(recent())return;
     if(scanTimer)clearTimeout(scanTimer);
-    if(!scanTask&&comparisonState==='equal')compareStatus('กำลังยืนยันข้อมูลล่าสุด…','checking');
-    scanTimer=setTimeout(()=>{scanTimer=null;if($('cloud-import-dialog')?.open&&!busy)void discoverDefaults().then(ok=>{if(ok)void scanCounts();});},250);
+    scanTimer=setTimeout(()=>{scanTimer=null;if($('cloud-import-dialog')?.open&&!busy&&!scanTask&&!recent())void discoverDefaults().then(ok=>{if(ok)void scanCounts();});},250);
   }
   scanButton?.addEventListener('click',()=>void scanCounts());
   function session(){
@@ -509,7 +547,7 @@ function createWorkflow(options={}){
     }
     const work=async()=>{
       if(busy)return;
-      ++scanSequence;scanTask=null;comparisonState='unknown';
+      ++scanSequence;scanTask=null;lastScan=null;comparisonState='unknown';
       busy=true;scope.XStageDriveBuildBusy=true;controller=new AbortController();stopRequested=false;publishing=false;
       activeJob={session:initial,folder:chosen.id};markPaused(initial,chosen.id,false);
       setFreshPending(initial,fresh);setPending(initial,chosen.id);render();
@@ -748,10 +786,10 @@ function createWorkflow(options={}){
     }
   }
   for(const event of ['xstage:auth-ready','xstage:auth-refreshed','xstage:librarychange',
-    'xstage:auth-cleared'])scope.addEventListener?.(event,()=>{if(event==='xstage:librarychange'||event==='xstage:auth-cleared'){closeFolderMenu();layoutReady=false;++scanSequence;scanTask=null;comparisonState='unknown';catalogCache=null;for(const n of Object.values(countNodes))if(n)n.textContent='';if(dbCount)dbCount.textContent='—';if(comparison)comparison.textContent='';}render();resume();scheduleScan();});
+    'xstage:auth-cleared'])scope.addEventListener?.(event,()=>{if(event==='xstage:librarychange'||event==='xstage:auth-cleared'){closeFolderMenu();layoutReady=false;++scanSequence;scanTask=null;lastScan=null;comparisonState='unknown';catalogCache=null;for(const n of Object.values(countNodes))if(n)n.textContent='';if(dbCount)dbCount.textContent='—';if(comparison)comparison.textContent='';}render();resume();scheduleScan();});
   scope.addEventListener?.('xstage:drive-sources-open',()=>{
     render();
-    if(!busy){comparisonState='unknown';render();scheduleScan();}
+    if(!busy)scheduleScan();
   });
   for(const event of ['online','pageshow','focus'])scope.addEventListener?.(event,()=>{resume();scheduleScan();});
   scope.document?.addEventListener?.('visibilitychange',()=>{resume();scheduleScan();});

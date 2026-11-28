@@ -304,3 +304,29 @@ assert.ok(lastRows.every(row=>row.originalRelativePath&&row.xmid?.fileId),
 assert.match(element('xstage-drive-folder-status').textContent,/สร้างฐานเสร็จ/);
 console.log('PASS: explicit shared PC/Online SQLite rebuild ignores legacy rows without deleting media');
 
+
+ // A slow SONGS listing must not hide the independently available SQLite count.
+ existingRows=[...lastRows];
+ await workflow.discoverDefaults();
+ const listBeforeSlow=FakeDrive.prototype.listChildren;
+ let releaseMusic;
+ const musicGate=new Promise(resolve=>{releaseMusic=resolve;});
+ FakeDrive.prototype.listChildren=async function(id){
+   if(id===music)await musicGate;
+   return listBeforeSlow.call(this,id);
+ };
+ const priorScanPublications=published;
+ const scan=workflow.scanCounts();
+ try{
+   for(let i=0;i<100&&!element('xstage-drive-db-count').textContent.includes('รายการ');i++)
+     await new Promise(resolve=>setTimeout(resolve,1));
+   assert.match(element('xstage-drive-db-count').textContent,/4 รายการ/,'SQLite count should appear before SONGS enumeration finishes');
+   assert.match(element('xstage-drive-count-music').textContent,/กำลังตรวจนับ/);
+ }finally{
+   releaseMusic();
+   await scan;
+   FakeDrive.prototype.listChildren=listBeforeSlow;
+ }
+ assert.match(element('xstage-drive-count-music').textContent,/ไฟล์/);
+ assert.equal(published,priorScanPublications,'Inventory checks must never publish a database');
+ console.log('PASS: SQLite count is independent of a slow SONGS listing');
