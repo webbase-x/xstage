@@ -38,6 +38,22 @@ class DirectTests(unittest.TestCase):
 
 
 class DirectHardeningTests(unittest.TestCase):
+    def test_scan_cancel_inside_single_directory(self):
+        from unittest.mock import Mock, patch
+        cancel=Mock()
+        cancel.is_set.side_effect=[False, False, True]
+        with patch.object(direct.os,"walk",return_value=[("root",[],["a.mid","b.mid"])]):
+            mids,index=direct.scan(Path("root"),cancel)
+        self.assertEqual(mids,[])
+        self.assertFalse(index)
+
+    def test_scan_prunes_junction(self):
+        from unittest.mock import patch
+        dirs=["normal","junction"]
+        with patch.object(direct.os,"walk",return_value=[("root",dirs,[])]), patch.object(Path,"is_symlink",return_value=False), patch.object(Path,"is_junction",lambda p:p.name=="junction",create=True):
+            direct.scan(Path("root"),None)
+        self.assertEqual(dirs,["normal"])
+
     def test_bounded_read_rejects_substituted_open_descriptor(self):
         from unittest.mock import patch
         with tempfile.TemporaryDirectory() as d:
