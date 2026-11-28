@@ -197,8 +197,17 @@ def bounded_read(path,limit):
     before=file_stamp(path)
     if before[2]>limit:
         raise ValueError("NCN component exceeds size limit")
+    def descriptor_stamp(stream):
+        info=os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError("NCN component changed during read")
+        return (info.st_dev,info.st_ino,info.st_size,info.st_mtime_ns,info.st_ctime_ns)
     with path.open("rb") as stream:
+        if descriptor_stamp(stream)!=before:
+            raise ValueError("NCN component changed during read")
         raw=stream.read(limit+1)
+        if descriptor_stamp(stream)!=before:
+            raise ValueError("NCN component changed during read")
     if len(raw)>limit or len(raw)!=before[2] or file_stamp(path)!=before:
         raise ValueError("NCN component changed during read")
     return raw,before
