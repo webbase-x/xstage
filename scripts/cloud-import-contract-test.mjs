@@ -400,6 +400,36 @@ try {
   assert.equal(paginationRequests,2);
 } finally { ctx.fetch=originalFetch; }
 
+// iOS Safari reports a disconnected request as TypeError: Load failed.
+const previousRetryFetch=ctx.fetch;
+try{
+  let calls=0;
+  ctx.fetch=async()=>{
+    calls++;
+    if(calls===1)throw new TypeError('Load failed');
+    if(calls===2)return reply(503,{error:'busy'});
+    return reply(200,{files:[{id:'retryFile123'}]});
+  };
+  const retryDrive=new Drive(()=> 'token',()=>{});
+  assert.equal((await retryDrive.list("'root' in parents")).length,1);
+  assert.equal(calls,3,'Transient GET failures must retry at most twice');
+  calls=0;
+  ctx.fetch=async()=>{calls++;throw new TypeError('Load failed');};
+  await assert.rejects(retryDrive.list("'root' in parents"),/หลังลอง 3 ครั้ง/);
+  assert.equal(calls,3,'An exhausted request must not be retried by the body wrapper');
+  calls=0;
+  await assert.rejects(retryDrive.fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',body:'{}'}),/Load failed/);
+  assert.equal(calls,1,'A failed write must never be replayed by generic retry');
+  calls=0;
+  ctx.fetch=async()=>{
+    calls++;
+    if(calls===1)return {ok:true,status:200,headers:{get:()=>null},arrayBuffer:async()=>{throw new TypeError('Load failed');}};
+    return {ok:true,status:200,headers:{get:()=>null},arrayBuffer:async()=>new Uint8Array([1,2,3]).buffer};
+  };
+  assert.equal((await retryDrive.getSqlite('sqlite12345')).length,3);
+  assert.equal(calls,2,'An interrupted SQLite body must retry without returning partial bytes');
+}finally{ctx.fetch=previousRetryFetch;}
+
 // An upload may exceed Google's short-lived access token lifetime. The first
 // HTTP 401 must renew the same account, then retry exactly that request once.
 const beforeRenewFetch=ctx.fetch;
