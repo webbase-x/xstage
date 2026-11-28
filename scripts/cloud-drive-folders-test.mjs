@@ -330,3 +330,27 @@ console.log('PASS: explicit shared PC/Online SQLite rebuild ignores legacy rows 
  assert.match(element('xstage-drive-count-music').textContent,/ไฟล์/);
  assert.equal(published,priorScanPublications,'Inventory checks must never publish a database');
  console.log('PASS: SQLite count is independent of a slow SONGS listing');
+
+ // Count all descendants, including sibling trees and a path deeper than 12 levels.
+ const deepRoot='deepRoot123',chain=Array.from({length:18},(_,i)=>'deepFolder'+String(i).padStart(3,'0'));
+ const folder=(id,name)=>({id,name,mimeType:folderMime});
+ const tree=new Map([
+   [deepRoot,[folder(chain[0],'MIDI'),folder('sibling123','Other'),{id:'rootSong123',name:'root.XMID'}]],
+   ['sibling123',[{id:'siblingSong123',name:'other.xsk'}]]
+ ]);
+ for(let i=0;i<chain.length;i++)tree.set(chain[i],i+1<chain.length?
+   [folder(chain[i+1],'level'+i)]:[{id:'deepSong123',name:'deep.XMID'},{id:'shortcut123',name:'link.xmid',mimeType:'application/vnd.google-apps.shortcut'}]);
+ const visitedFolders=[],found=[],updates=[];
+ const recursiveDrive={listChildren:async id=>{visitedFolders.push(id);return tree.get(id)||[];}};
+ const recursive=await window.XStageDriveFolders.countSourceFiles(recursiveDrive,deepRoot,()=>{},file=>found.push(file),c=>updates.push(c));
+ assert.equal(recursive.xmid,2);
+ assert.equal(recursive.xsk,1);
+ assert.equal(recursive.folders,20);
+ assert.equal(new Set(visitedFolders).size,20);
+ assert.ok(found.some(f=>f.relative.startsWith('MIDI/level0/')&&f.relative.endsWith('/deep.XMID')));
+ assert.ok(found.some(f=>f.relative==='Other/other.xsk'));
+ assert.equal(updates.at(-1).folders,20);
+ const walked=await window.XStageDriveFolders.walkMusic(recursiveDrive,deepRoot,()=>{},()=>{});
+ assert.deepEqual([...walked.files.map(f=>f.id)].sort(),found.map(f=>f.id).sort());
+ assert.equal(walked.otherCount,1);
+ console.log('PASS: complete SONGS inventory and rebuild include root, siblings and 18 nested folders');
