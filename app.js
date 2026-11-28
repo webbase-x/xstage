@@ -54,7 +54,7 @@ const state = {
   medley: false, medleyCache: null, medleyPrefetch: null,
   medleyUpcoming: null, medleyPoolSource: null, medleyPool: [], medleyRecent: [],
   userStopped: false, userPaused:false, resumeAfterInterruption:false, visualScale: 1,
-  catalogPointerId:'',catalogGeneration:'',catalogPolling:false,catalogCache:new Map(),
+  catalogPointerId:'',catalogGeneration:'',catalogPolling:false,catalogStartupAuthId:null,catalogCache:new Map(),
   nativeCatalog:null,nativeCatalogDeferred:null,
   diskQueueTimer:null,diskQueueTask:null,diskQueueReady:new Set(),diskQueueFailed:new Set(),
   libraryRootId:'',libraryRootCanShare:false,libraryRootOwnedByMe:false,libraryRootOwnerEmail:'',availableLibraries:[],
@@ -854,9 +854,11 @@ async function catalogStorage(action,key,value){
     const tx=db.transaction(CATALOG_DB_STORE,action==='get'?'readonly':'readwrite');
     const store=tx.objectStore(CATALOG_DB_STORE);
     const request=action==='get'?store.get(key):action==='delete'?store.delete(key):store.put(value,key);
-    request.onsuccess=()=>resolve(request.result);
+    if(action==='get')request.onsuccess=()=>resolve(request.result);
+    else tx.oncomplete=()=>resolve(request.result);
     request.onerror=()=>reject(request.error);
     tx.onerror=()=>reject(tx.error);
+    tx.onabort=()=>reject(tx.error||Error('IndexedDB transaction aborted'));
   });}finally{db.close();}
 }
 const LIBRARY_PREF_KEY='xstage-library-choice-v1';
@@ -2337,7 +2339,7 @@ async function activeDriveCatalog(dbId,token){
   return direct.length?{pointer:directCatalogPointer(direct[0])}:null;
 }
 async function pollPublishedCatalog(){
-  if(!state.token||!state.libraryRootId||isRetiredDriveRoot(state.libraryRootId)||state.catalogPolling)return;
+  if(!state.token||!state.libraryRootId||isRetiredDriveRoot(state.libraryRootId)||state.catalogPolling||state.catalogStartupAuthId===state.authId)return;
   const authId=state.authId,token=state.token,rootId=state.libraryRootId,sub=state.accountSub;
   const sameLibrary=()=>authId===state.authId&&state.token===token&&
     state.libraryRootId===rootId&&state.accountSub===sub;
@@ -2476,29 +2478,45 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
   ui.resultCount.textContent='กำลังเปิดฐานเพลง';
   showCatalogLoading('เข้าสู่ระบบสำเร็จ','กำลังตรวจฐานเพลงในเครื่อง…',6);
 
-  // On a fresh library contract, NEVER display stale XStageSong catalogs
-  // from an account-only/legacy root cache before confirming XStageKaraoke.
+  // Verify the remembered Folder ID before showing its account-scoped cache.
   const preferredRootId=readPreferredLibraryRoot(account.sub);
   let instant=null;
   if(authId!==state.authId)return;
-  if(!applyInstantCatalog(instant)){
-    showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังค้นหาคลัง '+driveLayout.root+'…',12);
-    setStatus('เข้าสู่ระบบสำเร็จ · กำลังดาวน์โหลดฐานเพลงครั้งแรก…','success');
-  }
-
+  state.catalogStartupAuthId=authId;
+  showCatalogLoading('กำลังเปิดคลังเพลง','กำลังตรวจสิทธิ์คลังและฐานเพลงในเครื่อง…',12);
   try{
-    const defaultRoots=(await driveList("name='"+driveLayout.root+
-      "' and mimeType='application/vnd.google-apps.folder' and trashed=false",token))
-      .filter(root=>!isRetiredDriveRoot(root.id));
+    const rootsTask=driveList("name='"+driveLayout.root+
+      "' and mimeType='application/vnd.google-apps.folder' and trashed=false",token)
+      .then(roots=>({roots}),error=>({error}));
     let selectedRoot=null;
     if(preferredRootId){
-      try{selectedRoot=await selectedDriveRootById(preferredRootId,token);}
-      catch(error){console.warn('Selected Google Drive library is not accessible:',error?.message||error);}
+      const [verifiedRoot,rootCached]=await Promise.all([
+        selectedDriveRootById(preferredRootId,token).catch(error=>{
+          console.warn('Selected Google Drive library is not accessible:',error?.message||error);
+          return null;
+        }),
+        nativeCatalogBridgeAvailable()?null:loadLatestCachedCatalog(account.sub,preferredRootId)
+      ]);
+      if(authId!==state.authId)return;
+      selectedRoot=verifiedRoot;
+      if(selectedRoot&&rootCached){
+        state.libraryRootId=selectedRoot.id;
+        state.libraryRootOwnedByMe=!!selectedRoot.ownedByMe;
+        state.libraryRootCanShare=!!selectedRoot.capabilities?.canShare;
+        state.libraryRootOwnerEmail=String(selectedRoot.owners?.[0]?.emailAddress||'');
+        setSharedLibraryGate(false);
+        instant=rootCached;
+        applyInstantCatalog(instant);
+      }
     }
+    const discovered=await rootsTask;
+    if(authId!==state.authId)return;
+    if(discovered.error)throw discovered.error;
+    const defaultRoots=discovered.roots.filter(root=>!isRetiredDriveRoot(root.id));
     // Any custom name must have been explicitly selected by its Folder ID.
     const roots=[...defaultRoots];
     if(selectedRoot&&!roots.some(item=>item.id===selectedRoot.id))roots.push(selectedRoot);
-    if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','พบคลังเพลง · กำลังตรวจ DB/songs.sqlite3…',24);
+    if(!instant)showCatalogLoading('กำลังเปิดคลังเพลง','พบคลังเพลง · กำลังตรวจฐานในเครื่อง…',24);
     if(authId!==state.authId)return;
     if(!roots.length){
       // A verified empty Drive is NOT a valid cached library. An account
@@ -2549,11 +2567,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       state.manifest=null;state.songs=[];state.shown=[];renderSongs();
     }
     state.libraryRootId=root.id;
-    // Validate/repair the fixed layout before using any previously saved source.
-    try{await xstageDriveFolders?.discoverDefaults();}catch(error){console.warn('Standard Drive layout:',error.message);}
-    if(authId!==state.authId)return;
-    void window.XStageBrowserMidi?.refreshFonts({token,rootId:root.id,sub:account.sub,ownedByMe:!!root.ownedByMe})
-      .catch(error=>console.warn('SoundFont selector:',error.message));
+    // A verified root-scoped catalog can open before layout discovery.
     state.libraryRootOwnedByMe=!!root.ownedByMe;
     state.libraryRootCanShare=!!root.capabilities?.canShare;
     state.libraryRootOwnerEmail=String(root.owners?.[0]?.emailAddress||'');
@@ -2570,8 +2584,16 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     const cacheOwner=libraryCacheOwner(account.sub,root.id);
     if(!instant&&!nativeCatalogBridgeAvailable()){
       const rootCached=await loadLatestCachedCatalog(account.sub,root.id);
+      if(authId!==state.authId)return;
       if(rootCached){instant=rootCached;applyInstantCatalog(instant);}
     }
+    const layoutTask=(async()=>{
+      try{await xstageDriveFolders?.discoverDefaults();}catch(error){console.warn('Standard Drive layout:',error.message);}
+    })();
+    if(!instant)await layoutTask;
+    if(authId!==state.authId)return;
+    void window.XStageBrowserMidi?.refreshFonts({token,rootId:root.id,sub:account.sub,ownedByMe:!!root.ownedByMe})
+      .catch(error=>console.warn('SoundFont selector:',error.message));
     // DB/songs.sqlite3 is the only permitted catalog; never query JSON pointers.
     const dbDirs=await driveList(`'${root.id}' in parents and name='DB' and mimeType='application/vnd.google-apps.folder' and trashed=false`,token);
     if(dbDirs.length>1)throw Error('พบ DB ซ้ำใน '+String(root.name||'คลังเพลง'));
@@ -2580,7 +2602,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       ?await driveList(`'${dbId}' in parents and name='songs.sqlite3' and trashed=false`,token)
       :[];
     if(canonical.length>1)throw Error('พบ songs.sqlite3 ซ้ำใน DB');
-    if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังอ่านฐาน SQLite3 จาก DB โดยตรง…',34);
+    if(!instant)showCatalogLoading('กำลังเปิดคลังเพลง','กำลังตรวจรุ่นฐาน SQLite3…',34);
     if(!canonical.length){
       // A newly created XStageKaraoke may contain only empty category folders or
       // a SoundFont uploaded first. It is not a broken catalog. Discard the
@@ -2622,7 +2644,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       });
       if(authId!==state.authId||state.libraryRootId!==root.id)return;
       activateNativeCatalog(data,pointer,account.sub,root.id,dbId);
-      restorePersistentQueue();renderSongs();renderQueue();
+      if(!state.queue.length&&!playbackHasActiveIntent())restorePersistentQueue();
+    renderSongs();renderQueue();
       ui.libraryState.textContent='SQLite ในเครื่อง · '+libraryLabel(root);
       hideCatalogLoading();
       setAndroidTvStageAccess(true,account.sub);
@@ -2631,7 +2654,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       if(!readPlaybackResumeState())ui.search.focus();
       return;
     }
-    if(!instant)showCatalogLoading('เตรียมใช้งานครั้งแรก','กำลังดาวน์โหลดเฉพาะฐานรายชื่อเพลง…',42);
+    if(!instant)showCatalogLoading('กำลังเปิดคลังเพลง','กำลังตรวจฐานรายชื่อเพลงที่บันทึกไว้…',42);
     if(authId!==state.authId)return;
 
     const sameAsInstant=!!instant&&
@@ -2641,6 +2664,12 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
 
     let catalog=instant?.catalog||null;
     let downloaded=false;
+    const warmStartBusy=()=>!!instant&&(state.queue.length||state.loading||playbackHasActiveIntent());
+    if(!sameAsInstant&&warmStartBusy()){
+      state.catalogDbDirId=dbId;
+      setStatus('ใช้ฐานเพลงเดิม · จะอัปเดตฐานใหม่หลังเล่นเพลงเสร็จ','success');
+      return;
+    }
     if(!sameAsInstant){
       if(!instant)showCatalogLoading('กำลังเตรียมฐานเพลงครั้งแรก','ดาวน์โหลดเฉพาะข้อมูลค้นหาเพลง · ยังไม่โหลดไฟล์ M4A',42);
       else setStatus(`กำลังอัปเดตฐานเพลงเบื้องหลัง · ยังใช้ ${num(state.songs.length)} เพลงเดิมได้ตามปกติ`);
@@ -2660,8 +2689,14 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
         await saveCachedCatalog(cacheOwner,pointer,catalog);
       }else{
         void saveCachedCatalog(cacheOwner,pointer,catalog);
+        if(warmStartBusy()){
+          state.catalogDbDirId=dbId;
+          setStatus('ดาวน์โหลดฐานใหม่แล้ว · จะสลับฐานหลังเล่นเพลงเสร็จ','success');
+          return;
+        }
       }
     }
+    if(authId!==state.authId)return;
 
     state.manifest=catalog;
     state.catalogPointerId='';
@@ -2680,7 +2715,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
     ui.resultCount.textContent=ui.search.value.trim() ? ui.resultCount.textContent : 'พิมพ์เพื่อค้นหาเพลง';
     if(!instant)showCatalogLoading('พร้อมใช้งาน','ฐานเพลงครั้งแรกพร้อมแล้ว',100);
     hideCatalogLoading();
-    void saveCachedCatalog(cacheOwner,pointer,catalog);
+    // Already committed on download; unchanged snapshots need no rewrite.
     const duplicateRoots=roots.filter(x=>x.name===root.name).length;
     setStatus(`เชื่อมต่อแล้ว · ${num(state.songs.length)} เพลง · ${libraryLabel(root)}${duplicateRoots>1?' · พบ XStageKaraoke ชื่อซ้ำ '+duplicateRoots+' โฟลเดอร์ · เปลี่ยนได้ที่เมนูเลือกคลัง':''}${downloaded?' (อัปเดตฐานล่าสุดแล้ว)':sameAsInstant?' (ฐานในเครื่องเป็นรุ่นล่าสุด)':''}`,'success');
     setAndroidTvStageAccess(true,account.sub);
@@ -2699,6 +2734,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       return;
     }
     throw error;
+  }finally{
+    if(state.catalogStartupAuthId===authId)state.catalogStartupAuthId=null;
   }
 }
 const XSTAGE_TV_POPUP_HELP_ID='xstage-tv-popup-help';
@@ -5150,7 +5187,7 @@ function ensureAndroidTvQrLibrary(){
     if(stale)stale.remove();
     const script=document.createElement('script');
     script.id='xstage-qrcode';
-    script.src='./assets/vendor/qrcode.min.js?v=1225';
+    script.src='./assets/vendor/qrcode.min.js?v=1226';
     script.async=true;
     let done=false;
     const finish=error=>{
