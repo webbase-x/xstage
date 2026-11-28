@@ -385,7 +385,7 @@ function createWorkflow(options={}){
               if(node&&kind==='music')node.textContent='ตรวจแล้ว '+format(partial.songs)+' เพลง · '+format(partial.folders)+' โฟลเดอร์ · ยังไม่ครบ';
             });check();
             const n=kind==='music'?c.songs:kind==='soundfont'?c.sf2+c.sf3:c.fx;
-            if(node)node.textContent=(kind==='music'?format(n)+' เพลง · XMID/XSK '+format(c.xmid+c.xsk)+' · MIDI/EMK '+format(c.midi)+' · เสียง '+format(c.audio)+' · วิดีโอ '+format(c.video)+' · '+format(c.folders)+' โฟลเดอร์':format(n)+' ไฟล์'+(c.total!==n?' · ทั้งหมด '+format(c.total)+' ไฟล์':''))+(options.hasFullRead?.()?'':' · เท่าที่มีสิทธิ์');
+            if(node)node.textContent=(kind==='music'?format(n)+' เพลง (ตามไฟล์หลัก) · XMID/XSK '+format(c.xmid+c.xsk)+' · MIDI/EMK '+format(c.midi)+' · เสียง '+format(c.audio)+' · วิดีโอ '+format(c.video)+' · '+format(c.folders)+' โฟลเดอร์':format(n)+' ไฟล์'+(c.total!==n?' · ทั้งหมด '+format(c.total)+' ไฟล์':''))+(options.hasFullRead?.()?'':' · เท่าที่มีสิทธิ์');
             return c;
           }catch(error){if(seq===scanSequence&&!busy&&node)node.textContent='ตรวจนับไม่ครบ';throw error;}
         }),
@@ -509,7 +509,7 @@ function createWorkflow(options={}){
     for(const kind of KIND){
       if(nodes[kind])nodes[kind].textContent=pref[kind]?.name||
         (valid?FIXED_NAMES[kind]+' · รอตั้งค่า':'เชื่อม Google Drive ก่อน');
-      if(nodes[kind]&&pref[kind]?.id&&kind==='music')nodes[kind].textContent='SONGS / MIDI';
+      if(nodes[kind]&&pref[kind]?.id&&kind==='music')nodes[kind].textContent='SONGS · ทุกโฟลเดอร์ย่อย';
       const button=$('xstage-drive-folder-'+kind);
       if(button){
         button.disabled=busy||!valid||!!discoverTask;
