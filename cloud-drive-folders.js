@@ -11,6 +11,12 @@ const STORE='xstage-drive-source-folders-v1';
 const KIND=['music','soundfont','fx'];
 const FIXED_NAMES={music:'SONGS',soundfont:'SOUNDFONT',fx:'FX'};
 const MAX_FILES=300000,MAX_FOLDERS=20000,MAX_DEPTH=12;
+// Align primary media with Karaoke PC; additional common audio/video containers
+// are inventory candidates only, not a promise of decoder or lyric support.
+const MIDI_MEDIA=new Set(['mid','midi','kar','emk']);
+const AUDIO_MEDIA=new Set(['wav','mp3','wma','m4a','aac','flac','ogg','oga','opus','aif','aiff','alac','ape','amr','m4b','ac3','mka','au','w64','wv','mp2','dsf','dff']);
+const VIDEO_MEDIA=new Set(['mp4','avi','mpg','mpeg','wmv','mkv','mov','webm','m4v','ts','mts','m2ts','3gp','flv','vob','asf']);
+const SIDECAR_MEDIA=new Set(['lyr','cur','lrc','srt','ass','ssa','vtt','txt','json','xml','nfo','cue','cdg','sf2','sf3','sfz','dls','png','jpg','jpeg','webp','gif','bmp','pdf','zip','rar','7z']);
 const isId=id=>/^[A-Za-z0-9_-]{5,256}$/.test(String(id||''));
 const retired=new Set(scope.XSTAGE_RETIRED_DRIVE_ROOT_IDS||[]);
 const fail=message=>{throw Error(message);};
@@ -94,7 +100,7 @@ async function verifyFolder(drive,id,root,kind){
 // Metadata only; do not download, copy or modify any file during inventory.
 async function countSourceFiles(drive,start,check=()=>{},collect=null,progress=null){
   const folders=[{id:start,path:''}],visited=new Set(),files=new Set();
-  const counts={total:0,xmid:0,xsk:0,sf2:0,sf3:0,fx:0,other:0,folders:0};
+  const counts={total:0,xmid:0,xsk:0,sf2:0,sf3:0,fx:0,other:0,folders:0,songs:0,midi:0,audio:0,video:0,sidecars:0,empty:0};
   // Bound breadth/concurrency, not nesting depth. Every real descendant is visited.
   let cursor=0;
   const workers=8;
@@ -124,12 +130,25 @@ async function countSourceFiles(drive,start,check=()=>{},collect=null,progress=n
         counts.total++;
         const name=String(item.name||'');
         const ext=name.split('.').pop().toLowerCase();
-        if(item.mimeType==='application/vnd.google-apps.shortcut')counts.other++;
-        else if(['xmid','xsk','sf2','sf3'].includes(ext)){
-          counts[ext]++;
-          if(ext==='xmid'||ext==='xsk')collect?.({...item,ext,relative:path+name});
-        }else if(/^audio\//.test(item.mimeType||'')||/\.(wav|mp3|m4a|aac|ogg|flac|opus)$/i.test(name))counts.fx++;
-        else counts.other++;
+        const mime=String(item.mimeType||'').toLowerCase();
+        if(mime==='application/vnd.google-apps.shortcut'){counts.other++;continue;}
+        const empty=item.size!=null&&String(item.size)!==''&&Number(item.size)===0;
+        if(ext==='sf2'||ext==='sf3'){counts[ext]++;counts.sidecars++;continue;}
+        if(SIDECAR_MEDIA.has(ext)){counts.other++;counts.sidecars++;continue;}
+        if(ext==='xmid'||ext==='xsk'){
+          if(empty){counts.other++;counts.empty++;continue;}
+          counts[ext]++;counts.songs++;
+          collect?.({...item,ext,relative:path+name});
+        }else if(MIDI_MEDIA.has(ext)){
+          counts.other++;
+          if(empty)counts.empty++;else{counts.midi++;counts.songs++;}
+        }else if(AUDIO_MEDIA.has(ext)||mime.startsWith('audio/')){
+          counts.fx++;
+          if(empty)counts.empty++;else{counts.audio++;counts.songs++;}
+        }else if(VIDEO_MEDIA.has(ext)||mime.startsWith('video/')){
+          counts.other++;
+          if(empty)counts.empty++;else{counts.video++;counts.songs++;}
+        }else counts.other++;
       }
       counts.folders++;
       progress?.({...counts});
@@ -143,7 +162,7 @@ async function walkMusic(drive,start,check,progress){
     c=>progress?.('สแกน '+c.folders+' โฟลเดอร์ · พบ XMID/XSK '+files.length+' ไฟล์'));
   // Stable package order despite concurrent Drive responses.
   files.sort((a,b)=>a.relative<b.relative?-1:a.relative>b.relative?1:a.id<b.id?-1:a.id>b.id?1:0);
-  return {files,otherCount:counts.total-files.length,folders:counts.folders};
+  return {files,otherCount:counts.total-files.length,otherSongs:counts.songs-files.length,folders:counts.folders};
 }
 // Persistent verified metadata, not audio, credentials or a second SQLite catalog.
 // Reuse only when Drive ID, package checksum, size and format are unchanged.
@@ -363,10 +382,10 @@ function createWorkflow(options={}){
             if(kind==='music')canonicalMusic=meta.name==='SONGS'&&meta.parents?.includes(s.rootId);
             const c=await countSourceFiles(drive,choice.id,check,kind==='music'?file=>musicFiles.push(file):null,partial=>{
               check();
-              if(node&&kind==='music')node.textContent='ตรวจแล้ว '+format(partial.xmid+partial.xsk)+' ไฟล์ · '+format(partial.folders)+' โฟลเดอร์ · ยังไม่ครบ';
+              if(node&&kind==='music')node.textContent='ตรวจแล้ว '+format(partial.songs)+' เพลง · '+format(partial.folders)+' โฟลเดอร์ · ยังไม่ครบ';
             });check();
-            const n=kind==='music'?c.xmid+c.xsk:kind==='soundfont'?c.sf2+c.sf3:c.fx;
-            if(node)node.textContent=format(n)+' ไฟล์'+(kind==='music'?' · '+format(c.folders)+' โฟลเดอร์':'')+(c.total!==n?' · ทั้งหมด '+format(c.total)+' ไฟล์':'')+(options.hasFullRead?.()?'':' · เท่าที่มีสิทธิ์');
+            const n=kind==='music'?c.songs:kind==='soundfont'?c.sf2+c.sf3:c.fx;
+            if(node)node.textContent=(kind==='music'?format(n)+' เพลง · XMID/XSK '+format(c.xmid+c.xsk)+' · MIDI/EMK '+format(c.midi)+' · เสียง '+format(c.audio)+' · วิดีโอ '+format(c.video)+' · '+format(c.folders)+' โฟลเดอร์':format(n)+' ไฟล์'+(c.total!==n?' · ทั้งหมด '+format(c.total)+' ไฟล์':''))+(options.hasFullRead?.()?'':' · เท่าที่มีสิทธิ์');
             return c;
           }catch(error){if(seq===scanSequence&&!busy&&node)node.textContent='ตรวจนับไม่ครบ';throw error;}
         }),
@@ -392,12 +411,13 @@ function createWorkflow(options={}){
         checkpoint=await (options.openCheckpoint||openCheckpoint)();
         const result=await compareCatalog(musicFiles,rows,checkpoint,s,choices.music.id,check,canonicalMusic);
         check();
-        const detail=' · เพลงตรงฐาน '+format(result.matchedRows)+' · ไฟล์ซ้ำ '+format(result.duplicates);
+        const otherSongs=results[0].value.songs-musicFiles.length;
+        const detail=' · XMID/XSK ตรงฐาน '+format(result.matchedRows)+' · ไฟล์ซ้ำ '+format(result.duplicates)+(otherSongs?' · เพลงรูปแบบอื่น '+format(otherSongs)+' (ยังไม่นำเข้าด้วยตัวสร้างนี้)':'');
         if(!options.hasFullRead?.()||result.uncertain){
           compareStatus('ยังยืนยันทั้งหมดไม่ได้ · ตรวจเฉพาะไฟล์ที่เข้าถึงได้หรือมี MD5'+detail,'unknown');return;
         }
         if(pointer&&result.equal){
-          compareStatus('ตรงกันแล้ว'+detail+(result.other?' · ฐานรูปแบบอื่น '+format(result.other):''),'equal');return;
+          compareStatus('XMID/XSK ตรงกันแล้ว'+detail+(result.other?' · ฐานรูปแบบอื่น '+format(result.other):''),'equal');return;
         }
         compareStatus('แนะนำให้อัปเดตฐานเพลง · ไฟล์รอตรวจ '+format(result.newFiles)+
           ' · รายการเดิมนอกคลัง/เปลี่ยน '+format(result.stale)+(result.duplicateRows?' · แถวซ้ำ '+format(result.duplicateRows):'')+detail,'different');
