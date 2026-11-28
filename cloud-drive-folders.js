@@ -141,6 +141,8 @@ async function walkMusic(drive,start,check,progress){
   const files=[];
   const counts=await countSourceFiles(drive,start,check,file=>files.push(file),
     c=>progress?.('สแกน '+c.folders+' โฟลเดอร์ · พบ XMID/XSK '+files.length+' ไฟล์'));
+  // Stable package order despite concurrent Drive responses.
+  files.sort((a,b)=>a.relative<b.relative?-1:a.relative>b.relative?1:a.id<b.id?-1:a.id>b.id?1:0);
   return {files,otherCount:counts.total-files.length,folders:counts.folders};
 }
 // Persistent verified metadata, not audio, credentials or a second SQLite catalog.
