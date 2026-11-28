@@ -1473,6 +1473,13 @@ function showCatalogLoading(title,detail,progress=null){
     if(ui.catalogProgressValue)ui.catalogProgressValue.textContent=value+'%';
   }
   if(ui.catalogLoading)ui.catalogLoading.hidden=false;
+  // During first native login the catalog overlay is behind the auth dialog.
+  // Mirror progress into that visible dialog, never into active playback.
+  const authPanel=$('android-tv-auth-panel');
+  if(authPanel&&!authPanel.hidden&&document.documentElement.classList.contains('xstage-native-auth-pending')){
+    const status=$('android-tv-auth-status');
+    if(status)status.textContent=[title,detail,progress!=null&&Number.isFinite(Number(progress))?Math.max(0,Math.min(100,Math.round(Number(progress))))+'%':''].filter(Boolean).join(' · ');
+  }
 }
 function hideCatalogLoading(){
   if(ui.catalogLoading)ui.catalogLoading.hidden=true;
@@ -2559,6 +2566,9 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       setSearchAvailability(false);ui.songTotal.textContent='0 เพลง';
       ui.resultCount.textContent='กรุณาเลือกคลังหลัก';
       setSharedLibraryGate(true,preferredRootId?'คลังหลักเดิมไม่สามารถเข้าถึงได้ · เลือกใหม่เอง':'พบหลายคลัง · กรุณาเลือกโฟลเดอร์หลักก่อน');
+      // The account and live listing are verified; only the empty selection
+      // gate is exposed, never songs belonging to a previous root.
+      setAndroidTvStageAccess(true,account.sub);
       return;
     }
     if(preferredRootId&&String(root.id)!==preferredRootId&&instant){
@@ -5148,6 +5158,7 @@ function androidTvAuthPanel(){
     if(versionText)versionText.textContent='v'+String(window.XSTAGE_RELEASE?.version||'');
   }
   $('android-tv-auth-retry')?.addEventListener('click',()=>{
+    if(androidTvLoginInProgress)return;
     $('android-tv-auth-retry').hidden=true;
     if(androidTvCatalogRetryPending && state.token && state.accountSub){
       if(state.tokenExpiresAt>Date.now()+30000)
@@ -5177,6 +5188,7 @@ function androidTvAuthPanel(){
   return panel;
 }
 let androidTvQrLibraryPromise=null;
+let androidTvQrRenderSequence=0;
 function ensureAndroidTvQrLibrary(){
   if(typeof QRCode!=='undefined')return Promise.resolve();
   if(androidTvQrLibraryPromise)return androidTvQrLibraryPromise;
@@ -5204,6 +5216,7 @@ function ensureAndroidTvQrLibrary(){
 }
 window.XStageEnsureQrLibrary=ensureAndroidTvQrLibrary;
 async function renderAndroidTvLoginQr(url){
+  const sequence=++androidTvQrRenderSequence;
   const canvas=$('android-tv-auth-qr');
   const wait=$('android-tv-auth-qr-wait');
   if(!canvas)return;
@@ -5211,14 +5224,17 @@ async function renderAndroidTvLoginQr(url){
   if(wait){wait.hidden=false;wait.textContent='กำลังสร้าง QR…';}
   try{
     await ensureAndroidTvQrLibrary();
+    if(sequence!==androidTvQrRenderSequence)return;
     canvas.width=248;canvas.height=248;
     await QRCode.toCanvas(canvas,String(url||'https://www.google.com/device'),{
       width:248,margin:2,errorCorrectionLevel:'M',
       color:{dark:'#07131f',light:'#ffffff'}
     });
+    if(sequence!==androidTvQrRenderSequence)return;
     canvas.hidden=false;
     if(wait)wait.hidden=true;
   }catch{
+    if(sequence!==androidTvQrRenderSequence)return;
     if(wait){wait.hidden=false;wait.textContent='เปิด google.com/device บนมือถือ แล้วกรอกรหัสด้านขวา';}
   }
 }
@@ -5227,6 +5243,9 @@ function showAndroidTvAuthPanel(){
   setAndroidTvStageAccess(false);
   panel.hidden=false;
   notifyAndroidTvLoginReady();
+  ++androidTvQrRenderSequence;
+  $('android-tv-auth-title').textContent='เข้าสู่ระบบ Google ผ่านมือถือ';
+  $('android-tv-auth-url').textContent='https://www.google.com/device';
   $('android-tv-auth-code').textContent='----';
   $('android-tv-auth-status').textContent='กำลังเตรียมรหัส…';
   $('android-tv-auth-retry').hidden=true;
@@ -5236,6 +5255,7 @@ function showAndroidTvAuthPanel(){
   setTimeout(()=>$('android-tv-auth-cancel')?.focus?.(),20);
 }
 function hideAndroidTvAuthPanel(){
+  ++androidTvQrRenderSequence;
   const panel=$('android-tv-auth-panel');
   if(panel)panel.hidden=true;
 }
@@ -5287,10 +5307,19 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
   if(androidTvLoginCancelled)return;
   clearAndroidTvLoginWatchdog();
   if(!token)return;
+  androidTvLoginInProgress=true;
   const existingSub=state.token&&state.accountSub?state.accountSub:'';
   // Silent background refresh must never place a full-screen dialog on lyrics.
-  if(!existingSub){
+  if(!androidTvVerifiedConnectionSub||androidTvCatalogRetryPending){
+    ++androidTvQrRenderSequence;
     androidTvAuthPanel().hidden=false;
+    $('android-tv-auth-title').textContent='กำลังเปิดคลังเพลง Google Drive';
+    $('android-tv-auth-url').textContent='ไม่ต้องสแกน QR ใหม่';
+    $('android-tv-auth-code').textContent='SQLite';
+    const qr=$('android-tv-auth-qr');if(qr)qr.hidden=true;
+    const wait=$('android-tv-auth-qr-wait');
+    if(wait){wait.hidden=false;wait.textContent='กำลังตรวจสอบบัญชีและเตรียมฐานเพลง…';}
+    $('android-tv-auth-retry').hidden=true;
     $('android-tv-auth-status').textContent='กำลังตรวจสอบบัญชีและสิทธิ์ Google Drive…';
   }
   ui.login.disabled=ui.gateLogin.disabled=true;
@@ -5308,7 +5337,11 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
     }
   }catch(error){
     if(authId===state.authId){
-      if(['CATALOG_TOO_LARGE','CATALOG_LOAD_FAILED'].includes(error?.code)&&state.token&&state.accountSub&&state.libraryRootId){
+      // Once the current token's account is verified, a listing/network/DB
+      // failure is not a failed Google login. Keep that account and retry.
+      if(state.token===token&&state.accountSub&&(!androidTvVerifiedConnectionSub||
+        ['CATALOG_TOO_LARGE','CATALOG_LOAD_FAILED'].includes(error?.code))){
+        if(error?.driveStatus===401)state.tokenExpiresAt=0;
         androidTvCatalogRetryPending=true;
         androidTvRefreshingSession=false;
         clearPendingAuth();
@@ -5338,8 +5371,10 @@ window.XStageReceiveAndroidToken=async(token,expiresIn=3600)=>{
       window.XStageAndroidAuthError(error?.message||'เปิด Google Drive ไม่สำเร็จ');
     }
   }finally{
-    androidTvLoginInProgress=false;
-    if(authId===state.authId)ui.login.disabled=ui.gateLogin.disabled=false;
+    if(authId===state.authId){
+      androidTvLoginInProgress=false;
+      ui.login.disabled=ui.gateLogin.disabled=false;
+    }
   }
 };
 window.XStageAndroidSignedOut=()=>{
