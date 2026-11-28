@@ -323,3 +323,52 @@ assert.ok(parityFix.includes('#lyrics')&&parityFix.includes('z-index:90!importan
 assert.ok(nativeMeter.includes("document.getElementById('stage-viz-right')")&&
   nativeMeter.includes('view.mirror?LEVELS-1-index:index'),
   'TV must paint both visual meters from live media-capture FFT levels');
+
+ // Execute first-login catalog progress and post-account error recovery.
+{
+  const ids=new Map();
+  const el=id=>{if(!ids.has(id))ids.set(id,{hidden:false,textContent:''});return ids.get(id);};
+  const ui={catalogLoadingTitle:{},catalogLoadingDetail:{},catalogProgress:{},catalogProgressValue:{},catalogLoading:{}};
+  let pending=true;
+  const render=new Function('ui','$','document',
+    segment(app,'function showCatalogLoading(','function hideCatalogLoading(')+'\nreturn showCatalogLoading;')(
+      ui,el,{documentElement:{classList:{contains:()=>pending}}});
+  render('ดาวน์โหลดฐานเพลง','10 / 20',50);
+  assert.equal(el('android-tv-auth-status').textContent,'ดาวน์โหลดฐานเพลง · 10 / 20 · 50%');
+  pending=false;render('background','refresh',99);
+  assert.equal(el('android-tv-auth-status').textContent,'ดาวน์โหลดฐานเพลง · 10 / 20 · 50%');
+}
+{
+  const source=segment(app,'window.XStageReceiveAndroidToken=async','window.XStageAndroidSignedOut=');
+  const make=new Function('state','ui','$','window','openDrive','document',`
+    let androidTvLoginCancelled=false,androidTvLoginInProgress=false,androidTvRefreshingSession=false,
+        androidTvVerifiedConnectionSub='',androidTvCatalogRetryPending=false,androidTvQrRenderSequence=0;
+    const clearAndroidTvLoginWatchdog=()=>{},androidTvAuthPanel=()=>$('android-tv-auth-panel'),
+      setStatus=()=>{},savePendingAuth=()=>{},clearPendingAuth=()=>{},
+      hideAndroidTvAuthPanel=()=>{$('android-tv-auth-panel').hidden=true;},
+      setAndroidTvStageAccess=()=>{},clearActiveAuth=()=>{throw Error('must not clear verified account');},
+      resetPrivate=()=>{throw Error('must not reset verified account');};
+    ${source}
+    return {receive:window.XStageReceiveAndroidToken,pending:()=>androidTvCatalogRetryPending,busy:()=>androidTvLoginInProgress};
+  `);
+  for(const status of [503,401]){
+    const ids=new Map(),el=id=>{if(!ids.has(id))ids.set(id,{});return ids.get(id);};
+    const state={authId:0,token:'',accountSub:'',libraryRootId:'',tokenExpiresAt:0};
+    const ui={login:{},gateLogin:{}};
+    const win={XStageAndroidAuthError:()=>{throw Error('catalog error must not become login error');}};
+    let attempt=0;
+    const f=make(state,ui,el,win,async(token)=>{
+      state.token=token;state.accountSub='verified';state.tokenExpiresAt=Date.now()+600000;
+      if(++attempt===1)throw Object.assign(Error('Drive listing unavailable'),{driveStatus:status});
+    },{documentElement:{classList:{contains:()=>false}}});
+    await f.receive('access-token');
+    assert.equal(state.accountSub,'verified');assert.equal(f.pending(),true);assert.equal(f.busy(),false);
+    assert.equal(el('android-tv-auth-retry').hidden,false);
+    assert.match(el('android-tv-auth-status').textContent,/Drive listing unavailable/);
+    if(status===401)assert.equal(state.tokenExpiresAt,0);
+    await f.receive('access-token');
+    assert.equal(f.pending(),false);assert.equal(f.busy(),false);
+    assert.equal(el('android-tv-auth-panel').hidden,true);
+  }
+}
+console.log('PASS: native login shows SQLite progress, retains verified account on catalog/listing failure and retries');
