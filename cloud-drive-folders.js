@@ -93,73 +93,55 @@ async function verifyFolder(drive,id,root,kind){
 }
 // Metadata only; do not download, copy or modify any file during inventory.
 async function countSourceFiles(drive,start,check=()=>{},collect=null,progress=null){
-  const folders=[{id:start,depth:0,path:''}],visited=new Set(),files=new Set();
-  const counts={total:0,xmid:0,xsk:0,sf2:0,sf3:0,fx:0,other:0};
-  while(folders.length){
+  const folders=[{id:start,path:''}],visited=new Set(),files=new Set();
+  const counts={total:0,xmid:0,xsk:0,sf2:0,sf3:0,fx:0,other:0,folders:0};
+  // Bound breadth/concurrency, not nesting depth. Every real descendant is visited.
+  let cursor=0;
+  const workers=8;
+  while(cursor<folders.length){
     check();
     const batch=[];
-    while(folders.length&&batch.length<4){
-      const {id,depth,path}=folders.shift();
+    while(cursor<folders.length&&batch.length<workers){
+      const {id,path}=folders[cursor++];
       if(!isId(id)||retired.has(id))fail('พบโฟลเดอร์ที่ไม่อนุญาต');
       if(visited.has(id))continue;
       visited.add(id);
       if(visited.size>MAX_FOLDERS)fail('จำนวนโฟลเดอร์เกินขอบเขต');
-      batch.push({id,depth,path});
+      batch.push({id,path});
     }
-    const pages=await Promise.all(batch.map(x=>drive.listChildren(x.id)));
-    check();
-    for(let page=0;page<pages.length;page++){
-      const {depth,path}=batch[page];
-      for(const item of pages[page]){
-      if(!isId(item.id)||retired.has(item.id))fail('พบ File ID ที่ไม่อนุญาต');
-      if(item.mimeType===FOLDER){
-        if(depth>=MAX_DEPTH)fail('โครงสร้างโฟลเดอร์ลึกเกินขอบเขต');
-        folders.push({id:item.id,depth:depth+1,path:path+item.name+'/'});
-        continue;
+    await Promise.all(batch.map(async ({id,path})=>{
+      const entries=await drive.listChildren(id);
+      check();
+      for(const item of entries){
+        if(!isId(item.id)||retired.has(item.id))fail('พบ File ID ที่ไม่อนุญาต');
+        if(item.mimeType===FOLDER){
+          folders.push({id:item.id,path:path+item.name+'/'});
+          continue;
+        }
+        if(files.has(item.id))continue;
+        files.add(item.id);
+        if(files.size>MAX_FILES)fail('จำนวนไฟล์เกินขอบเขต');
+        counts.total++;
+        const name=String(item.name||'');
+        const ext=name.split('.').pop().toLowerCase();
+        if(item.mimeType==='application/vnd.google-apps.shortcut')counts.other++;
+        else if(['xmid','xsk','sf2','sf3'].includes(ext)){
+          counts[ext]++;
+          if(ext==='xmid'||ext==='xsk')collect?.({...item,ext,relative:path+name});
+        }else if(/^audio\//.test(item.mimeType||'')||/\.(wav|mp3|m4a|aac|ogg|flac|opus)$/i.test(name))counts.fx++;
+        else counts.other++;
       }
-      if(files.has(item.id))continue;
-      files.add(item.id);
-      if(files.size>MAX_FILES)fail('จำนวนไฟล์เกินขอบเขต');
-      counts.total++;
-      const name=String(item.name||'');
-      const ext=name.split('.').pop().toLowerCase();
-      if(item.mimeType==='application/vnd.google-apps.shortcut')counts.other++;
-      else if(['xmid','xsk','sf2','sf3'].includes(ext)){counts[ext]++;if(ext==='xmid'||ext==='xsk')collect?.({...item,ext,relative:path+name});}
-      else if(/^audio\//.test(item.mimeType||'')||/\.(wav|mp3|m4a|aac|ogg|flac|opus)$/i.test(name))counts.fx++;
-      else counts.other++;
-      }
-    }
-    progress?.(counts);
+      counts.folders++;
+      progress?.({...counts});
+    }));
   }
   return counts;
 }
 async function walkMusic(drive,start,check,progress){
-  const folders=[{id:start,path:'',depth:0}],seen=new Set();
-  const files=[];let count=0;
-  while(folders.length){
-    check();
-    const folder=folders.shift();
-    if(seen.has(folder.id)||retired.has(folder.id))fail('พบโฟลเดอร์วนซ้ำหรือคลังที่ยกเลิก');
-    seen.add(folder.id);
-    if(seen.size>MAX_FOLDERS)fail('จำนวนโฟลเดอร์เพลงมากเกินขอบเขตการตรวจ');
-    const children=await drive.listChildren(folder.id);
-    for(const item of children){
-      if(!isId(item.id))fail('Google Drive คืน File ID ไม่ถูกต้อง');
-      if(item.mimeType===FOLDER){
-        if(folder.depth>=MAX_DEPTH)fail('โครงสร้างเพลงลึกเกิน 12 ชั้น');
-        if(retired.has(item.id))fail('พบคลังที่ถูกยกเลิกภายในรายการที่เลือก');
-        folders.push({id:item.id,path:folder.path+item.name+'/',depth:folder.depth+1});
-      }else{
-        count++;
-        if(count>MAX_FILES)fail('จำนวนไฟล์เกิน 300,000 รายการ');
-        const ext=String(item.name||'').split('.').pop().toLowerCase();
-        if(item.mimeType!=='application/vnd.google-apps.shortcut'&&(ext==='xmid'||ext==='xsk'))
-          files.push({...item,relative:folder.path+item.name,ext});
-      }
-    }
-    if(seen.size%10===0)progress?.('สแกน '+seen.size+' โฟลเดอร์ · พบ XMID/XSK '+files.length+' ไฟล์');
-  }
-  return {files,otherCount:count-files.length,folders:seen.size};
+  const files=[];
+  const counts=await countSourceFiles(drive,start,check,file=>files.push(file),
+    c=>progress?.('สแกน '+c.folders+' โฟลเดอร์ · พบ XMID/XSK '+files.length+' ไฟล์'));
+  return {files,otherCount:counts.total-files.length,folders:counts.folders};
 }
 // Persistent verified metadata, not audio, credentials or a second SQLite catalog.
 // Reuse only when Drive ID, package checksum, size and format are unchanged.
@@ -379,10 +361,10 @@ function createWorkflow(options={}){
             if(kind==='music')canonicalMusic=meta.name==='SONGS'&&meta.parents?.includes(s.rootId);
             const c=await countSourceFiles(drive,choice.id,check,kind==='music'?file=>musicFiles.push(file):null,partial=>{
               check();
-              if(node&&kind==='music')node.textContent='ตรวจแล้ว '+format(partial.xmid+partial.xsk)+' ไฟล์ · ยังไม่ครบ';
+              if(node&&kind==='music')node.textContent='ตรวจแล้ว '+format(partial.xmid+partial.xsk)+' ไฟล์ · '+format(partial.folders)+' โฟลเดอร์ · ยังไม่ครบ';
             });check();
             const n=kind==='music'?c.xmid+c.xsk:kind==='soundfont'?c.sf2+c.sf3:c.fx;
-            if(node)node.textContent=format(n)+' ไฟล์'+(c.total!==n?' · ทั้งหมด '+format(c.total)+' ไฟล์':'')+(options.hasFullRead?.()?'':' · เท่าที่มีสิทธิ์');
+            if(node)node.textContent=format(n)+' ไฟล์'+(kind==='music'?' · '+format(c.folders)+' โฟลเดอร์':'')+(c.total!==n?' · ทั้งหมด '+format(c.total)+' ไฟล์':'')+(options.hasFullRead?.()?'':' · เท่าที่มีสิทธิ์');
             return c;
           }catch(error){if(seq===scanSequence&&!busy&&node)node.textContent='ตรวจนับไม่ครบ';throw error;}
         }),
