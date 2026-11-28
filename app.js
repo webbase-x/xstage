@@ -2644,8 +2644,7 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       });
       if(authId!==state.authId||state.libraryRootId!==root.id)return;
       activateNativeCatalog(data,pointer,account.sub,root.id,dbId);
-      if(!state.queue.length&&!playbackHasActiveIntent())restorePersistentQueue();
-    renderSongs();renderQueue();
+      restorePersistentQueue();renderSongs();renderQueue();
       ui.libraryState.textContent='SQLite ในเครื่อง · '+libraryLabel(root);
       hideCatalogLoading();
       setAndroidTvStageAccess(true,account.sub);
@@ -2709,7 +2708,8 @@ async function openDrive(token, authId, tokenExpiresAt=0, expectedSub='', reuseE
       renderSongs();
     }
     // Only restore persisted private IDs after the library was verified.
-    restorePersistentQueue();renderQueue();
+    if(!state.queue.length&&!playbackHasActiveIntent())restorePersistentQueue();
+    renderQueue();
     setSearchAvailability(true);
     ui.libraryState.textContent='Google Drive · '+libraryLabel(root)+' · พร้อมใช้งาน';
     ui.resultCount.textContent=ui.search.value.trim() ? ui.resultCount.textContent : 'พิมพ์เพื่อค้นหาเพลง';
